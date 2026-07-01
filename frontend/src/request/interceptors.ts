@@ -3,7 +3,6 @@ import { getToken } from '@/utils/auth'
 import type { PlusInternalRequestConfig, RequestConfig } from './types'
 import { createRequestSignal, removeRequestController } from './cancel'
 import { getRequestCache, setRequestCache } from './cache'
-import { decryptResponseData, encryptRequestData } from './crypto'
 import { checkRepeatSubmit } from './repeatSubmit'
 import { handleResponseError, transformResponse } from './transform'
 import {
@@ -17,8 +16,6 @@ import {
 } from './utils'
 
 const AUTHORIZATION_HEADER = 'Authorization'
-const CLIENT_ID_HEADER = 'clientid'
-const clientId = import.meta.env.VITE_APP_CLIENT_ID || ''
 
 export function setupInterceptors(service: AxiosInstance): void {
   service.interceptors.request.use(
@@ -33,11 +30,6 @@ export function setupInterceptors(service: AxiosInstance): void {
         requestConfig.headers.set(AUTHORIZATION_HEADER, `Bearer ${token}`)
       }
 
-      // clientid 注入
-      if (clientId) {
-        requestConfig.headers.set(CLIENT_ID_HEADER, clientId)
-      }
-
       // GET 参数拼接到 URL
       normalizeGetParams(requestConfig)
 
@@ -45,9 +37,6 @@ export function setupInterceptors(service: AxiosInstance): void {
       if (checkRepeatSubmit(requestConfig)) {
         return Promise.reject(new Error('数据正在处理，请勿重复提交'))
       }
-
-      // 请求加密
-      encryptRequestData(requestConfig)
 
       // FormData 删除 Content-Type
       normalizeFormDataHeaders(requestConfig)
@@ -88,9 +77,6 @@ export function setupInterceptors(service: AxiosInstance): void {
   service.interceptors.response.use(
     (response) => {
       const config = response.config as RequestConfig
-
-      // 响应解密
-      decryptResponseData(response)
 
       // GET 缓存写入
       if (
