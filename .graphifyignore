@@ -37,8 +37,6 @@ __pycache__/
 # Test artifacts
 coverage/
 .pytest_cache/
-htmlcov/
 
 # Docker
 docker/
-mongo_data/
