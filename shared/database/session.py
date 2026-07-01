@@ -1,4 +1,5 @@
 import logging
+import time
 from collections.abc import Generator
 
 from sqlalchemy import create_engine, text
@@ -24,16 +25,35 @@ def connect_postgres() -> None:
 
     logger.info("Connecting to PostgreSQL: %s", _mask_url(sync_url))
 
-    _engine = create_engine(
-        sync_url,
-        pool_size=config.pool_size,
-        max_overflow=config.max_overflow,
-        pool_pre_ping=True,
-    )
+    last_exception = None
+    for attempt in range(1, config.max_retries + 1):
+        try:
+            _engine = create_engine(
+                sync_url,
+                pool_size=config.pool_size,
+                max_overflow=config.max_overflow,
+                pool_pre_ping=True,
+                connect_args={"connect_timeout": config.connect_timeout},
+            )
+            # Verify connection
+            with _engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
 
-    _SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
+            _SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
+            logger.info("PostgreSQL connected (attempt %d).", attempt)
+            return
+        except Exception as exc:
+            last_exception = exc
+            logger.warning(
+                "PostgreSQL connection attempt %d/%d failed: %s",
+                attempt, config.max_retries, exc,
+            )
+            if attempt < config.max_retries:
+                time.sleep(config.retry_delay)
 
-    logger.info("PostgreSQL connected successfully.")
+    raise RuntimeError(
+        f"PostgreSQL connection failed after {config.max_retries} attempts"
+    ) from last_exception
 
 
 def get_session_factory() -> sessionmaker:
