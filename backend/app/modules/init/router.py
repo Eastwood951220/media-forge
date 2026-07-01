@@ -52,6 +52,7 @@ def test_postgres(body: PostgresTestRequest) -> ConnectionTestResult:
         engine = create_engine(
             sync_url,
             connect_args={"connect_timeout": body.connect_timeout},
+            options="-c timezone=Asia/Shanghai",
         )
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
@@ -128,6 +129,7 @@ def save_config(body: InitConfigRequest) -> InitConfigResponse:
         engine = create_engine(
             maintenance_url,
             connect_args={"connect_timeout": body.postgresConnectTimeout},
+            options="-c timezone=Asia/Shanghai",
         )
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
@@ -145,6 +147,7 @@ def save_config(body: InitConfigRequest) -> InitConfigResponse:
             maintenance_url,
             isolation_level="AUTOCOMMIT",
             connect_args={"connect_timeout": body.postgresConnectTimeout},
+            options="-c timezone=Asia/Shanghai",
         )
         with maint_engine.connect() as conn:
             result = conn.execute(
@@ -167,6 +170,7 @@ def save_config(body: InitConfigRequest) -> InitConfigResponse:
         target_engine = create_engine(
             sync_db_url,
             connect_args={"connect_timeout": body.postgresConnectTimeout},
+            options="-c timezone=Asia/Shanghai",
         )
         Base.metadata.create_all(bind=target_engine)
 

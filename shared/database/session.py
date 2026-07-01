@@ -34,6 +34,7 @@ def connect_postgres() -> None:
                 max_overflow=config.max_overflow,
                 pool_pre_ping=True,
                 connect_args={"connect_timeout": config.connect_timeout},
+                options="-c timezone=Asia/Shanghai",
             )
             # Verify connection
             with _engine.connect() as conn:
