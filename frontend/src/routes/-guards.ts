@@ -1,10 +1,8 @@
 import { redirect } from '@tanstack/react-router'
-import { useAuthStore } from '@/stores/useAuthStore'
+import { isLoggedIn } from '@/stores/useAuthStore'
 
 export function requireAuth() {
-  const { isAuthenticated } = useAuthStore.getState()
-
-  if (!isAuthenticated) {
+  if (!isLoggedIn()) {
     const currentPath = window.location.pathname + window.location.search
 
     throw redirect({
@@ -15,9 +13,7 @@ export function requireAuth() {
 }
 
 export function redirectIfAuthenticated() {
-  const { isAuthenticated } = useAuthStore.getState()
-
-  if (isAuthenticated) {
+  if (isLoggedIn()) {
     throw redirect({ to: '/' })
   }
 }

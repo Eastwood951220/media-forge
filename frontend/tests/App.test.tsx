@@ -29,9 +29,6 @@ describe('App auth routing', () => {
       token: '',
       isAuthenticated: false,
       userInfo: null,
-      roles: [],
-      permissions: [],
-      hasUserInfo: false,
     })
   })
 

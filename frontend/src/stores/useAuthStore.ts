@@ -12,10 +12,7 @@ type UserInfo = {
 type AuthState = {
   token: string
   userInfo: UserInfo | null
-  roles: string[]
-  permissions: string[]
   isAuthenticated: boolean
-  hasUserInfo: boolean
   setLoginState: (token: string, userInfo?: UserInfo | null) => void
   logout: () => void
 }
@@ -26,20 +23,14 @@ export const useAuthStore = create<AuthState>()(
       (set) => ({
         token: getToken() ?? '',
         userInfo: null,
-        roles: [],
-        permissions: [],
         isAuthenticated: Boolean(getToken()),
-        hasUserInfo: false,
 
         setLoginState: (token, userInfo) => {
           setToken(token)
           set({
             token,
             userInfo: userInfo ?? null,
-            roles: [],
-            permissions: [],
             isAuthenticated: true,
-            hasUserInfo: Boolean(userInfo),
           })
         },
 
@@ -48,10 +39,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             token: '',
             userInfo: null,
-            roles: [],
-            permissions: [],
             isAuthenticated: false,
-            hasUserInfo: false,
           })
         },
       }),
@@ -65,3 +53,9 @@ export const useAuthStore = create<AuthState>()(
     ),
   ),
 )
+
+/** Check if user is logged in — token from cookie must exist AND state must agree. */
+export function isLoggedIn(): boolean {
+  const { token, isAuthenticated } = useAuthStore.getState()
+  return Boolean(token) && isAuthenticated
+}
