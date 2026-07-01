@@ -10,7 +10,9 @@ from backend.app.core.config import get_settings
 from backend.app.core.dependencies import close_redis
 from backend.app.modules.auth.router import router as auth_router
 from backend.app.modules.health.router import router as health_router
+from backend.app.modules.init.router import router as init_router
 from shared.database.session import close_postgres, connect_postgres
+from shared.runtime_config import load_runtime_config
 from shared.logging.handlers import JSONLHandler
 
 # -- Logging setup --
@@ -43,6 +45,8 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Starting Media Forge backend v%s", settings.app_version)
 
     # Startup
+    # Load runtime config (database.conf / redis.conf) into env
+    load_runtime_config()
     connect_postgres()
     logger.info("PostgreSQL connected.")
 
@@ -73,6 +77,7 @@ app.add_middleware(
 )
 
 # Routers
+app.include_router(init_router)
 app.include_router(auth_router)
 app.include_router(health_router)
 
