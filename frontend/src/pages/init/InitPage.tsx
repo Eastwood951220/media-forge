@@ -128,10 +128,10 @@ function InitPage() {
           onFinish={(values) => { void handleFinish(values) }}
           initialValues={{
             databaseHost: 'localhost',
-            databasePort: 5432,
-            databaseName: 'mediaforge',
-            databaseUser: 'postgres',
-            databasePassword: 'postgres',
+            databasePort: 54329,
+            databaseName: 'jav',
+            databaseUser: 'admin',
+            databasePassword: 'admin123',
             postgresConnectTimeout: 5,
             postgresPoolSize: 5,
             postgresMaxOverflow: 10,

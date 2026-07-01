@@ -7,7 +7,7 @@ class PostgresConfig:
     database_url: str = field(
         default_factory=lambda: os.getenv(
             "DATABASE_URL",
-            "postgresql+asyncpg://postgres:postgres@localhost:5432/mediaforge",
+            "postgresql+asyncpg://admin:admin123@localhost:54329/jav",
         )
     )
     connect_timeout: int = field(
