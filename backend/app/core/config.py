@@ -22,7 +22,7 @@ class Settings:
         )
     )
     log_dir: str = field(
-        default_factory=lambda: os.getenv("LOG_DIR", "logs")
+        default_factory=lambda: os.getenv("LOG_DIR", "data/logs")
     )
     redis_url: str = field(
         default_factory=lambda: os.getenv(
