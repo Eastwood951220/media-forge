@@ -13,7 +13,7 @@ from backend.app.modules.health.router import router as health_router
 from backend.app.modules.init.router import router as init_router
 from shared.database.session import close_postgres, connect_postgres
 from shared.runtime_config import load_runtime_config, runtime_config_exists
-from shared.logging.handlers import JSONLHandler
+import os
 
 # -- Logging setup --
 
@@ -22,18 +22,20 @@ settings = get_settings()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
 # Console handler
 console_handler = logging.StreamHandler(sys.stderr)
-console_handler.setFormatter(
-    logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-)
+console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-# JSONL file handler
-jsonl_handler = JSONLHandler(
-    log_dir=settings.log_dir, filename="backend.jsonl", component="backend"
+# Plain text file handler
+os.makedirs(settings.log_dir, exist_ok=True)
+file_handler = logging.FileHandler(
+    os.path.join(settings.log_dir, "backend.log"), encoding="utf-8"
 )
-logger.addHandler(jsonl_handler)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 
 # -- Lifespan --
