@@ -1,4 +1,4 @@
-import './app.css'
+import './styles/app.css'
 import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { routeTree } from './routeTree.gen'
 import { queryClient } from './lib/query-client'
