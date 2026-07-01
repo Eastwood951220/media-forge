@@ -4,8 +4,10 @@ from fastapi import APIRouter, HTTPException, status
 from redis import Redis
 from sqlalchemy import create_engine, text
 
+from backend.app.core.security import get_password_hash
 from backend.app.modules.init.schemas import InitConfigRequest, InitConfigResponse
 from pydantic import BaseModel, Field
+from shared.database.models.base import Base
 from shared.runtime_config import (
     load_runtime_config,
     runtime_config_exists,
@@ -41,9 +43,10 @@ class RedisTestRequest(BaseModel):
 
 @router.post("/test-postgres", response_model=ConnectionTestResult)
 def test_postgres(body: PostgresTestRequest) -> ConnectionTestResult:
+    # Connect to postgres maintenance DB (always exists)
     sync_url = (
         f"postgresql+psycopg://{body.user}:{body.password}"
-        f"@{body.host}:{body.port}/{body.database}"
+        f"@{body.host}:{body.port}/postgres"
     )
     try:
         engine = create_engine(
@@ -116,20 +119,80 @@ def save_config(body: InitConfigRequest) -> InitConfigResponse:
     else:
         redis_url = f"redis://{body.redisHost}:{body.redisPort}/0"
 
-    # Validate PostgreSQL connection
+    # Validate PostgreSQL connectivity via postgres maintenance DB
+    maintenance_url = (
+        f"postgresql+psycopg://{body.databaseUser}:{body.databasePassword}"
+        f"@{body.databaseHost}:{body.databasePort}/postgres"
+    )
     try:
         engine = create_engine(
-            sync_db_url,
+            maintenance_url,
             connect_args={"connect_timeout": body.postgresConnectTimeout},
         )
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         engine.dispose()
     except Exception as exc:
-        logger.warning("Init: PostgreSQL validation failed: %s", exc)
+        logger.warning("Init: PostgreSQL connection failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"PostgreSQL connection failed: {exc}",
+        ) from exc
+
+    # Create database if it doesn't exist
+    try:
+        maint_engine = create_engine(
+            maintenance_url,
+            isolation_level="AUTOCOMMIT",
+            connect_args={"connect_timeout": body.postgresConnectTimeout},
+        )
+        with maint_engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
+                {"dbname": body.databaseName},
+            )
+            if result.fetchone() is None:
+                conn.execute(text(f'CREATE DATABASE "{body.databaseName}"'))
+                logger.info("Created database: %s", body.databaseName)
+        maint_engine.dispose()
+    except Exception as exc:
+        logger.warning("Init: database creation failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to create database: {exc}",
+        ) from exc
+
+    # Create tables and seed admin user in target database
+    try:
+        target_engine = create_engine(
+            sync_db_url,
+            connect_args={"connect_timeout": body.postgresConnectTimeout},
+        )
+        Base.metadata.create_all(bind=target_engine)
+
+        with target_engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT id FROM users WHERE username = 'admin'")
+            )
+            if result.fetchone() is None:
+                conn.execute(
+                    text(
+                        "INSERT INTO users (id, username, hashed_password, role) "
+                        "VALUES (gen_random_uuid(), 'admin', :pw, 'admin')"
+                    ),
+                    {"pw": get_password_hash("admin123")},
+                )
+                conn.commit()
+                logger.info("Admin user created (admin / admin123).")
+            else:
+                logger.info("Admin user already exists, skipping.")
+
+        target_engine.dispose()
+    except Exception as exc:
+        logger.warning("Init: table/user creation failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to initialize database tables: {exc}",
         ) from exc
 
     # Validate Redis connection
