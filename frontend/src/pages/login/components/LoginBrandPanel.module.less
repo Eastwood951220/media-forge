@@ -1,0 +1,86 @@
+.panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 80px 64px;
+  height: 100%;
+}
+
+.logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #006AFF, #3399FF);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 28px;
+  box-shadow: 0 4px 16px rgba(0, 106, 255, 0.3);
+
+  .logoIcon {
+    color: white;
+    font-size: 24px;
+    font-weight: 700;
+  }
+}
+
+.name {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1E293B;
+  margin: 0 0 12px;
+  letter-spacing: -0.5px;
+
+  :global([data-theme="dark"]) & {
+    color: #F1F5F9;
+  }
+}
+
+.tagline {
+  font-size: 15px;
+  color: #64748B;
+  margin: 0 0 40px;
+  line-height: 1.6;
+
+  :global([data-theme="dark"]) & {
+    color: #94A3B8;
+  }
+}
+
+.features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.featureItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #475569;
+
+  :global([data-theme="dark"]) & {
+    color: #94A3B8;
+  }
+}
+
+.featureDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #006AFF;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px rgba(0, 106, 255, 0.3);
+}
+
+@media (max-width: 768px) {
+  .panel {
+    display: none;
+  }
+}
