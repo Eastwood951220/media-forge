@@ -1,6 +1,9 @@
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+TZ = ZoneInfo("Asia/Shanghai")
 
 
-def utc_now() -> datetime:
-    """Return current UTC datetime."""
-    return datetime.now(tz=timezone.utc)
+def now() -> datetime:
+    """Return current datetime in Asia/Shanghai timezone."""
+    return datetime.now(tz=TZ)

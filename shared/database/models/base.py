@@ -1,9 +1,11 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import DateTime, MetaData, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+TZ = ZoneInfo("Asia/Shanghai")
 
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
@@ -29,11 +31,11 @@ class TimestampMixin:
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(tz=timezone.utc),
+        default=lambda: datetime.now(tz=TZ),
         server_default=func.now(),
     )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         default=None,
-        onupdate=lambda: datetime.now(tz=timezone.utc),
+        onupdate=lambda: datetime.now(tz=TZ),
     )
