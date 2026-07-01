@@ -21,9 +21,6 @@ export interface RequestConfig extends AxiosRequestConfig {
   /** 单接口自定义重复提交间隔。 */
   repeatSubmitInterval?: number
 
-  /** true 时对 POST/PUT 请求体执行 AES + RSA 加密。 */
-  isEncrypt?: boolean
-
   /** true 时直接返回 AxiosResponse。 */
   isReturnNativeResponse?: boolean
 
