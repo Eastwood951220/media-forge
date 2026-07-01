@@ -1,33 +1,27 @@
 import { useState, useEffect } from 'react'
 import './styles/app.css'
-import { createRouter, RouterProvider } from '@tanstack/react-router'
-import { routeTree } from './routeTree.gen'
+import { RouterProvider } from '@tanstack/react-router'
+import { router } from './routes'
 import { queryClient } from './lib/query-client'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useThemeStore } from '@/stores/useThemeStore'
 import { Spin } from 'antd'
-
-const router = createRouter({
-  routeTree,
-  context: {
-    queryClient,
-  },
-  defaultPreload: 'intent',
-})
-
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router
-  }
-}
 
 function App() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const darkMode = useThemeStore((s) => s.darkMode)
+  const primaryColor = useThemeStore((s) => s.primaryColor)
   const [ready, setReady] = useState(false)
+
+  // Sync data-theme to <html> for Tailwind dark mode + CSS custom properties
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? 'dark' : 'light'
+    document.documentElement.style.setProperty('--app-primary-color', primaryColor)
+  }, [darkMode, primaryColor])
 
   useEffect(() => {
     if (isAuthenticated) {
-      // Future: loadUserInfo() will be called here
       setReady(true)
     } else {
       setReady(true)
