@@ -1,9 +1,10 @@
 import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router'
 import { ConfigProvider, App as AntApp, theme } from 'antd'
 import { useThemeStore } from '@/stores/useThemeStore'
-import { redirectIfAuthenticated, requireAuth } from './-guards'
+import { redirectIfAuthenticated, requireAuth, requireInit } from './-guards'
 import LoginPage from '@/pages/login/LoginPage'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
+import InitPage from '@/pages/init/InitPage'
 
 // Root route — ConfigProvider with theme algorithm
 const rootRoute = createRootRoute({
@@ -40,16 +41,26 @@ const loginRoute = createRoute({
   }),
 })
 
+// Init route — first-time setup page
+const initRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/init',
+  component: InitPage,
+})
+
 // Index route — protected, requires authentication
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  beforeLoad: requireAuth,
+  beforeLoad: async () => {
+    await requireInit()
+    requireAuth()
+  },
   component: DashboardPage,
 })
 
 // Build route tree
-const routeTree = rootRoute.addChildren([loginRoute, indexRoute])
+const routeTree = rootRoute.addChildren([initRoute, loginRoute, indexRoute])
 
 // Create router
 export const router = createRouter({
