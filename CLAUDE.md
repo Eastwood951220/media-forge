@@ -51,13 +51,19 @@ doc/         # Documentation
 
 **Setup:**
 ```bash
-docker compose up -d                    # Start PostgreSQL 18 + Redis 8
 source .venv/bin/activate
 pip install -r backend/requirements.txt
 cd backend
+uvicorn app.main:app --reload --port 8000
+```
+
+On first run, the frontend will redirect to `/init` where you can configure
+PostgreSQL and Redis connections. After saving, restart the backend to connect.
+
+Once initialized:
+```bash
 alembic upgrade head                     # Run migrations
 python scripts/init_db.py                # Create admin user
-uvicorn app.main:app --reload --port 8000
 ```
 
 **Scripts** (run from `backend/`):
