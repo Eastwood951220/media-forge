@@ -3,28 +3,27 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { createMemoryHistory } from '@tanstack/react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { routeTree } from '../src/routeTree.gen'
+import { router as baseRouter } from '../src/routes'
 import { queryClient } from '../src/lib/query-client'
 import { useAuthStore } from '../src/stores/useAuthStore'
 
 function renderApp(initialPath = '/') {
   const history = createMemoryHistory({ initialEntries: [initialPath] })
-  const router = createRouter({
-    routeTree,
-    context: { queryClient },
+  const testRouter = createRouter({
+    routeTree: (baseRouter as unknown as { routeTree: unknown }).routeTree,
     history,
+    defaultPreload: 'intent',
   })
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <RouterProvider router={testRouter as typeof baseRouter} />
     </QueryClientProvider>,
   )
 }
 
 describe('App auth routing', () => {
   beforeEach(() => {
-    // Reset auth state before each test
     useAuthStore.setState({
       token: '',
       isAuthenticated: false,
