@@ -166,7 +166,7 @@ export function normalizeFormDataHeaders(config: PlusInternalRequestConfig): voi
 
 /** 清理只给前端拦截器消费的控制头。 */
 export function clearInternalHeaders(config: PlusInternalRequestConfig): void {
-  ;['isToken', 'repeatSubmit', 'interval', 'isEncrypt'].forEach((key) => {
+  ;['isToken', 'repeatSubmit', 'interval'].forEach((key) => {
     deleteHeader(config, key)
   })
 }
