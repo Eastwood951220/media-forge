@@ -5,6 +5,7 @@ from redis import Redis
 from sqlalchemy import create_engine, text
 
 from backend.app.modules.init.schemas import InitConfigRequest, InitConfigResponse
+from pydantic import BaseModel, Field
 from shared.runtime_config import (
     load_runtime_config,
     runtime_config_exists,
@@ -14,6 +15,67 @@ from shared.runtime_config import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/init", tags=["init"])
+
+
+class ConnectionTestResult(BaseModel):
+    success: bool
+    message: str
+
+
+class PostgresTestRequest(BaseModel):
+    host: str = Field(default="localhost", min_length=1)
+    port: int = Field(default=5432, ge=1, le=65535)
+    database: str = Field(default="mediaforge", min_length=1)
+    user: str = Field(default="postgres", min_length=1)
+    password: str = Field(default="postgres")
+    connect_timeout: int = Field(default=5, ge=1, le=60)
+
+
+class RedisTestRequest(BaseModel):
+    host: str = Field(default="localhost", min_length=1)
+    port: int = Field(default=6379, ge=1, le=65535)
+    password: str = Field(default="")
+    socket_timeout: int = Field(default=5, ge=1, le=60)
+    connect_timeout: int = Field(default=5, ge=1, le=60)
+
+
+@router.post("/test-postgres", response_model=ConnectionTestResult)
+def test_postgres(body: PostgresTestRequest) -> ConnectionTestResult:
+    sync_url = (
+        f"postgresql+psycopg://{body.user}:{body.password}"
+        f"@{body.host}:{body.port}/{body.database}"
+    )
+    try:
+        engine = create_engine(
+            sync_url,
+            connect_args={"connect_timeout": body.connect_timeout},
+        )
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        engine.dispose()
+        return ConnectionTestResult(success=True, message="PostgreSQL 连接成功")
+    except Exception as exc:
+        return ConnectionTestResult(success=False, message=f"连接失败: {exc}")
+
+
+@router.post("/test-redis", response_model=ConnectionTestResult)
+def test_redis(body: RedisTestRequest) -> ConnectionTestResult:
+    if body.password:
+        redis_url = f"redis://:{body.password}@{body.host}:{body.port}/0"
+    else:
+        redis_url = f"redis://{body.host}:{body.port}/0"
+    try:
+        client = Redis.from_url(
+            redis_url,
+            socket_connect_timeout=body.connect_timeout,
+            socket_timeout=body.socket_timeout,
+            decode_responses=True,
+        )
+        client.ping()
+        client.close()
+        return ConnectionTestResult(success=True, message="Redis 连接成功")
+    except Exception as exc:
+        return ConnectionTestResult(success=False, message=f"连接失败: {exc}")
 
 
 def _get_init_status() -> InitConfigResponse:
