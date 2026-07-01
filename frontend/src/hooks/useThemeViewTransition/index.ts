@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import { useThemeStore } from '@/stores/useThemeStore'
 import type { StartViewTransition, UseThemeViewTransitionOptions } from './types'
 
-const DEFAULT_DURATION = 900
+const DEFAULT_DURATION = 500
 const DEFAULT_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)'
 const TRANSITION_CLASS = 'theme-transition-active'
 
@@ -69,11 +69,6 @@ export function useThemeViewTransition({
       const bottom = window.innerHeight - y
       const maxRadius = Math.hypot(Math.max(x, right), Math.max(y, bottom))
 
-      const oldAnim = root.animate(
-        { opacity: [1, 1] },
-        { duration, pseudoElement: '::view-transition-old(root)' },
-      )
-
       const newAnim = root.animate(
         {
           clipPath: [
@@ -85,7 +80,6 @@ export function useThemeViewTransition({
       )
 
       await newAnim.finished
-      oldAnim.commitStyles()
     } catch (error) {
       console.warn('[theme transition] failed:', error)
     } finally {

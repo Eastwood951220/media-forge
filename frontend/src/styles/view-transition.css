@@ -1,0 +1,15 @@
+/*
+ * Override the browser's default cross-fade for View Transition API.
+ *
+ * The UA default fades ::view-transition-old(root) from opacity 1 → 0
+ * and ::view-transition-new(root) from opacity 0 → 1.
+ *
+ * We replace this with our own clipPath-based reveal (controlled from JS),
+ * so we disable ALL default animations — the old view stays fully opaque
+ * while the new view is gradually revealed on top.
+ */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none !important;
+}

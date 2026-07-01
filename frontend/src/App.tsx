@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './styles/app.css'
+import './styles/view-transition.css'
 import { RouterProvider } from '@tanstack/react-router'
 import { router } from './routes'
 import { queryClient } from './lib/query-client'
