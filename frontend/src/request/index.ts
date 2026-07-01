@@ -2,7 +2,7 @@ import {getToken} from '@/utils/auth'
 import {cancelAllRequests, cancelRequest, cancelRequestGroup, removeRequestController} from './cancel'
 import {getRequestCache} from './cache'
 import {download} from './download'
-import {clientId, service} from './instance'
+import {service} from './instance'
 import {setupInterceptors} from './interceptors'
 import type {ApiResponse, RepeatStrategy, RequestConfig, RequestPendingRecord} from './types'
 import {getRequestKey, getRequestMethod} from './utils'
@@ -18,7 +18,6 @@ export function globalHeaders(): Record<string, string> {
 	
 	return {
 		...(token ? {[AUTHORIZATION_HEADER]: `Bearer ${token}`} : {}),
-		...(clientId ? {clientid: clientId} : {}),
 	}
 }
 
