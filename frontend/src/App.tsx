@@ -7,6 +7,7 @@ import { queryClient } from './lib/query-client'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useThemeStore } from '@/stores/useThemeStore'
+import { checkInitStatus } from './routes/-guards'
 import { Spin } from 'antd'
 
 function App() {
@@ -25,7 +26,9 @@ function App() {
     if (isAuthenticated) {
       setReady(true)
     } else {
-      setReady(true)
+      checkInitStatus().then(() => {
+        setReady(true)
+      })
     }
   }, [isAuthenticated])
 
