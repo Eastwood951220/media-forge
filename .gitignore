@@ -46,9 +46,13 @@ htmlcov/
 
 # Superpowers task tracking (ephemeral session data)
 .superpowers/
+!docs/superpowers
 
 # Graphify knowledge graph output
 graphify-out/
 
 # Docker
 docker/
+
+# Runtime config
+data/

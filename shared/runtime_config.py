@@ -19,7 +19,7 @@ class RuntimeConfigPaths:
     @classmethod
     def from_env(cls) -> "RuntimeConfigPaths":
         configured_dir = os.getenv(CONFIG_DIR_ENV)
-        config_dir = Path(configured_dir).expanduser() if configured_dir else PROJECT_ROOT / "config"
+        config_dir = Path(configured_dir).expanduser() if configured_dir else PROJECT_ROOT / "data"
         return cls(
             config_dir=config_dir,
             database_file=config_dir / "database.conf",
