@@ -12,8 +12,8 @@ from backend.app.modules.auth.router import router as auth_router
 from backend.app.modules.health.router import router as health_router
 from backend.app.modules.init.router import router as init_router
 from shared.database.session import close_postgres, connect_postgres
+from shared.logging.file_log import ensure_log_dir
 from shared.runtime_config import load_runtime_config, runtime_config_exists
-import os
 
 # -- Logging setup --
 
@@ -30,9 +30,9 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 # Plain text file handler
-os.makedirs(settings.log_dir, exist_ok=True)
+ensure_log_dir(settings.log_dir)
 file_handler = logging.FileHandler(
-    os.path.join(settings.log_dir, "backend.log"), encoding="utf-8"
+    f"{settings.log_dir}/backend.log", encoding="utf-8"
 )
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)

@@ -1,6 +1,17 @@
-"""Shared structured logging."""
+"""Shared log management utilities."""
 
-from shared.logging.jsonl import append_jsonl_log, build_log_entry, load_jsonl_logs
-from shared.logging.handlers import JSONLHandler
+from shared.logging.file_log import (
+    append_log,
+    delete_log,
+    ensure_log_dir,
+    load_logs,
+    rotate_log,
+)
 
-__all__ = ["build_log_entry", "append_jsonl_log", "load_jsonl_logs", "JSONLHandler"]
+__all__ = [
+    "append_log",
+    "delete_log",
+    "ensure_log_dir",
+    "load_logs",
+    "rotate_log",
+]
