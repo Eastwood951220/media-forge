@@ -22,3 +22,25 @@ export interface InitConfigRequest {
   redisConnectTimeout: number
   redisMaxConnections: number
 }
+
+export interface ConnectionTestResult {
+  success: boolean
+  message: string
+}
+
+export interface PostgresTestParams {
+  host: string
+  port: number
+  database: string
+  user: string
+  password: string
+  connect_timeout: number
+}
+
+export interface RedisTestParams {
+  host: string
+  port: number
+  password: string
+  socket_timeout: number
+  connect_timeout: number
+}

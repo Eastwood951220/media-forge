@@ -42,7 +42,7 @@
 }
 
 .section {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 
   h3 {
     font-size: 16px;
@@ -63,6 +63,26 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+}
+
+.testBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.testResult {
+  font-size: 13px;
+  line-height: 1.4;
+
+  :global(&.success) {
+    color: #16A34A;
+  }
+
+  :global(&.fail) {
+    color: #EF4444;
+  }
 }
 
 .submitBtn {
