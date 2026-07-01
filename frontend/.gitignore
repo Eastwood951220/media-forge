@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# TanStack Router generated files
+.tanstack/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+*.tsbuildinfo

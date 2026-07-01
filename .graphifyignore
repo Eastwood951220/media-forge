@@ -1,0 +1,66 @@
+# Dependency and virtual environment directories
+.venv/
+venv/
+node_modules/
+frontend/node_modules/
+
+# Generated output, caches, and runtime data
+graphify-out/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.tsbuildinfo
+frontend/dist/
+dist/
+build/
+htmlcov/
+.coverage
+logs/
+run_data/
+mongo_data/
+docker/logs/
+docker/mongo_data/
+frontend/.tanstack/
+
+# IDE, assistant, and local tool state
+.git/
+.idea/
+.vscode/
+.claude/
+.superpowers/
+.DS_Store
+
+# Documentation and reports
+README.md
+docs/
+*.md
+
+# Environment, dependency, build, and deployment config
+.env
+.env.*
+.env.example
+.gitignore
+.graphifyignore
+.dockerignore
+**/.dockerignore
+Dockerfile
+**/Dockerfile
+docker-compose.yml
+Makefile
+requirements.txt
+**/requirements.txt
+package.json
+package-lock.json
+**/package.json
+**/package-lock.json
+tsconfig.json
+tsconfig.node.json
+**/tsconfig.json
+**/tsconfig.node.json
+*.config.*
+nginx.conf
+**/nginx.conf
+docker/
+
+# Python package marker files
+__init__.py
