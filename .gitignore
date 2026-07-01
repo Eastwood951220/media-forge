@@ -1,9 +1,55 @@
-.venv
-.idea
-.superpowers
+# Dependencies
+node_modules/
+frontend/node_modules/
 
-graphify-out
+# Build output
+dist/
+frontend/dist/
 
+# TypeScript incremental build
+*.tsbuildinfo
 
-frontend/dist
-frontend/node_modules
+# TanStack Router generated
+.tanstack/
+frontend/.tanstack/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+coverage/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Superpowers task tracking (ephemeral session data)
+.superpowers/
+
+# Graphify knowledge graph output
+graphify-out/
+
+# Docker
+docker/
+mongo_data/

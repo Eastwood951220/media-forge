@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+.venv/
+
+# Build artifacts
+dist/
+frontend/dist/
+*.tsbuildinfo
+
+# Auto-generated / cache
+.tanstack/
+frontend/.tanstack/
+graphify-out/
+.superpowers/
+
+# Large lock files
+package-lock.json
+frontend/package-lock.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Environment (may contain secrets)
+.env
+.env.*
+!.env.example
+
+# Test artifacts
+coverage/
+.pytest_cache/
+htmlcov/
+
+# Docker
+docker/
+mongo_data/
