@@ -1,0 +1,91 @@
+// AppMain layout styles
+// Navbar height: 50px, TagsView height: 34px
+
+@navbar-height: 50px;
+@tags-height: 34px;
+@content-padding-desktop: 16px;
+@content-padding-mobile: 8px;
+@safe-area-bottom: env(safe-area-inset-bottom, 0px);
+
+.app-main {
+  --content-padding: @content-padding-desktop;
+  position: relative;
+  overflow-y: auto;
+  min-height: calc(100vh - @navbar-height);
+  background-color: var(--ant-color-bg-layout, #f5f5f5);
+  transition: padding-top 0.3s ease;
+}
+
+.app-main--fixed-header {
+  padding-top: @navbar-height;
+}
+
+.app-main--fixed-header-with-tags {
+  padding-top: (@navbar-height + @tags-height);
+}
+
+.app-main--mobile {
+  --content-padding: @content-padding-mobile;
+  padding-bottom: @safe-area-bottom;
+}
+
+.content-area {
+  padding: var(--content-padding);
+  min-height: calc(100vh - @navbar-height - @tags-height);
+}
+
+// PullToRefresh styles
+
+.pull-to-refresh {
+  position: relative;
+  overflow: hidden;
+}
+
+.pull-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 0;
+  overflow: hidden;
+  transition: height 0.2s ease;
+  color: var(--ant-color-text-secondary, #999);
+  font-size: 14px;
+}
+
+.pull-indicator--pulling {
+  height: var(--pull-height, 0px);
+}
+
+.pull-indicator--loading {
+  height: 40px;
+}
+
+.pull-indicator--resetting {
+  height: 0;
+  transition: height 0.3s ease;
+}
+
+.pull-arrow {
+  transition: transform 0.2s ease;
+}
+
+.pull-arrow--flipped {
+  transform: rotate(180deg);
+}
+
+.pull-content {
+  transition: transform 0.2s ease;
+}
+
+.pull-content--pulling {
+  transform: translateY(var(--pull-height, 0px));
+}
+
+.pull-content--loading {
+  transform: translateY(40px);
+}
+
+.pull-content--resetting {
+  transform: translateY(0);
+  transition: transform 0.3s ease;
+}

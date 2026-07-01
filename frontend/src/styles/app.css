@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./mobile-first.css";
 
 /* Global resets and base styles */
 body {

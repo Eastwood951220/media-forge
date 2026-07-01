@@ -1,0 +1,79 @@
+// Sidebar layout styles
+
+@sidebar-width: 210px;
+@sidebar-collapsed-width: 64px;
+@sidebar-bg: #001529;
+@logo-height-desktop: 50px;
+@logo-height-mobile: 46px;
+
+.sidebar {
+  height: 100vh;
+  overflow: hidden;
+
+  :global {
+    .ant-layout-sider-children {
+      display: flex;
+      flex-direction: column;
+    }
+  }
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: @logo-height-desktop;
+  padding: 0 16px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: height 0.2s ease;
+
+  @media (max-width: 767px) {
+    height: @logo-height-mobile;
+  }
+}
+
+.logoText {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.logoTextCollapsed {
+  display: none;
+}
+
+.menuWrap {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+.mobileDrawer {
+  :global {
+    .ant-drawer-body {
+      padding: 0;
+      background: @sidebar-bg;
+    }
+
+    .ant-drawer-content {
+      background: @sidebar-bg;
+    }
+  }
+}

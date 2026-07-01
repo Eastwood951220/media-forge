@@ -5,6 +5,7 @@ import { redirectIfAuthenticated, requireAuth, requireInit } from './-guards'
 import LoginPage from '@/pages/login/LoginPage'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
 import InitPage from '@/pages/init/InitPage'
+import AppLayout from '@/layout'
 
 // Root route — ConfigProvider with theme algorithm
 const rootRoute = createRootRoute({
@@ -48,19 +49,30 @@ const initRoute = createRoute({
   component: InitPage,
 })
 
-// Index route — protected, requires authentication
-const indexRoute = createRoute({
+// Layout route — wraps authenticated pages with AppLayout
+const layoutRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/',
+  id: 'layout',
   beforeLoad: async () => {
     await requireInit()
     requireAuth()
   },
+  component: AppLayout,
+})
+
+// Index route — protected, rendered inside AppLayout
+const indexRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/',
   component: DashboardPage,
 })
 
 // Build route tree
-const routeTree = rootRoute.addChildren([initRoute, loginRoute, indexRoute])
+const routeTree = rootRoute.addChildren([
+  initRoute,
+  loginRoute,
+  layoutRoute.addChildren([indexRoute]),
+])
 
 // Create router
 export const router = createRouter({
