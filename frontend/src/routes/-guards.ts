@@ -1,5 +1,5 @@
 import { redirect } from '@tanstack/react-router'
-import { useAuthStore } from '@/store/useAuthStore'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 export function requireAuth() {
   const { isAuthenticated } = useAuthStore.getState()
@@ -9,7 +9,7 @@ export function requireAuth() {
 
     throw redirect({
       to: '/login',
-      search: currentPath !== '/login' ? { redirect: currentPath } : undefined,
+      search: { redirect: currentPath !== '/login' ? currentPath : undefined },
     })
   }
 }
