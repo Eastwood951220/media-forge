@@ -79,7 +79,6 @@ function LoginForm() {
           <Form.Item name="rememberMe" valuePropName="checked" noStyle>
             <Checkbox>记住密码</Checkbox>
           </Form.Item>
-          <a className={styles.forgotLink}>忘记密码</a>
         </div>
 
         <Form.Item>

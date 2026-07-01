@@ -2,8 +2,7 @@ import styles from './LoginBrandPanel.module.less'
 
 const features = [
   '高效的多媒体文件处理引擎',
-  '智能批量转码与格式转换',
-  '企业级安全与权限管理',
+  '智能批量转码与格式转换'
 ]
 
 function LoginBrandPanel() {
@@ -14,9 +13,7 @@ function LoginBrandPanel() {
       </div>
       <h1 className={styles.name}>Media Forge</h1>
       <p className={styles.tagline}>
-        专业的媒体处理平台，助力企业高效管理
-        <br />
-        和转换所有数字媒体资产
+        专业的媒体处理平台 和转换所有数字媒体资产
       </p>
       <ul className={styles.features}>
         {features.map((text) => (

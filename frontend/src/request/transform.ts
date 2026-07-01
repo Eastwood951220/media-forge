@@ -1,7 +1,7 @@
 import { message, Modal, notification } from 'antd'
 import type { AxiosError, AxiosResponse } from 'axios'
 import { HttpStatus } from '@/enums/RespEnum'
-import { useAuthStore } from '@/store/useAuthStore'
+import { useAuthStore } from '@/stores/useAuthStore.ts'
 import errorCode from '@/request/errorCode'
 import { BusinessError } from './error'
 import type { ApiResponse, RequestConfig } from './types'

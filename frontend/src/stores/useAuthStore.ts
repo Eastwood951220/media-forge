@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
-import { getToken, removeToken, setToken } from '@/utils/auth'
+import { getToken, removeToken, setToken } from '@/utils/auth.ts'
 
 type UserInfo = {
   userId?: number | string
