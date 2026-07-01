@@ -4,6 +4,7 @@ import { Form, Input, Button, Checkbox, message } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'
 import { login } from '@/api/login'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { ThemeModeToggle } from '@/components/ThemeModeToggle'
 import styles from './LoginPage.module.less'
 
 interface LoginFormValues {
@@ -45,6 +46,9 @@ function LoginPage() {
 
   return (
     <div className={styles['login-page']}>
+      <div className={styles['theme-toggle']}>
+        <ThemeModeToggle variant="login" size="middle" />
+      </div>
       <div className={styles['login-card']}>
         <div className={styles['login-title']}>
           <h2>Media Forge</h2>
