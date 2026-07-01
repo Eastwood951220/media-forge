@@ -19,7 +19,7 @@ export const useThemeStore = create<ThemeState>()(
       (set) => ({
         mode: 'light',
         darkMode: false,
-        primaryColor: '#0f3076',
+        primaryColor: '#006AFF',
 
         setMode: (mode) =>
           set({
