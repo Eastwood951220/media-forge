@@ -3,7 +3,7 @@ import type { LoginParams, LoginResult } from './types'
 
 export function login(data: LoginParams): Promise<LoginResult> {
   return request<LoginResult>({
-    url: '/auth/login',
+    url: '/api/auth/login',
     method: 'post',
     data,
     isToken: false,
@@ -13,7 +13,7 @@ export function login(data: LoginParams): Promise<LoginResult> {
 
 export function logout(): Promise<void> {
   return request({
-    url: '/auth/logout',
+    url: '/api/auth/logout',
     method: 'post',
   })
 }

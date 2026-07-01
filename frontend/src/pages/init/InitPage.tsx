@@ -129,7 +129,7 @@ function InitPage() {
           initialValues={{
             databaseHost: 'localhost',
             databasePort: 54329,
-            databaseName: 'jav',
+            databaseName: 'mediaforge',
             databaseUser: 'admin',
             databasePassword: 'admin123',
             postgresConnectTimeout: 5,

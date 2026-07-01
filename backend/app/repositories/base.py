@@ -2,6 +2,7 @@ from typing import TypeVar
 
 from sqlalchemy.orm import Session
 
+from shared.database import Base
 from shared.database.models.base import Base
 
 ModelType = TypeVar("ModelType", bound=Base)
@@ -14,10 +15,10 @@ class BaseRepository:
         self.session = session
         self.model = model
 
-    def get_by_id(self, id: str) -> Base | None:
+    def get_by_id(self, id: str) -> type[Base] | None:
         return self.session.get(self.model, id)
 
-    def get_all(self, *, skip: int = 0, limit: int = 100) -> list[Base]:
+    def get_all(self, *, skip: int = 0, limit: int = 100) -> list[type[Base]]:
         return (
             self.session.query(self.model)
             .offset(skip)

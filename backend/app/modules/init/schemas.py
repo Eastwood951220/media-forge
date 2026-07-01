@@ -11,7 +11,7 @@ class InitConfigRequest(BaseModel):
     # PostgreSQL
     databaseHost: str = Field(default="localhost", min_length=1)
     databasePort: int = Field(default=54329, ge=1, le=65535)
-    databaseName: str = Field(default="jav", min_length=1)
+    databaseName: str = Field(default="mediaforge", min_length=1)
     databaseUser: str = Field(default="admin", min_length=1)
     databasePassword: str = Field(default="admin123")
     postgresConnectTimeout: int = Field(default=5, ge=1, le=60)

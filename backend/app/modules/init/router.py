@@ -27,7 +27,7 @@ class ConnectionTestResult(BaseModel):
 class PostgresTestRequest(BaseModel):
     host: str = Field(default="localhost", min_length=1)
     port: int = Field(default=54329, ge=1, le=65535)
-    database: str = Field(default="jav", min_length=1)
+    database: str = Field(default="mediaforge", min_length=1)
     user: str = Field(default="admin", min_length=1)
     password: str = Field(default="admin123")
     connect_timeout: int = Field(default=5, ge=1, le=60)

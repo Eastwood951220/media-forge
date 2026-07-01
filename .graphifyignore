@@ -40,3 +40,6 @@ coverage/
 
 # Docker
 docker/
+
+#docs
+docs/CloudDrive2_gRPC_API_Guide_zh-CN.md

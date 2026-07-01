@@ -23,6 +23,15 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    port: 18643,
+    proxy: {
+      "/api": {
+        target: "http://localhost:18642",
+        changeOrigin: true,
+      },
+    },
+  },
   css: {
     preprocessorOptions: {
       less: {
