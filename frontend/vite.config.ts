@@ -31,6 +31,10 @@ export default defineConfig({
     },
   },
   css: {
-    preprocessorOptions: {},
+    preprocessorOptions: {
+      less: {
+        javascriptEnabled: true,
+      },
+    },
   },
 })
