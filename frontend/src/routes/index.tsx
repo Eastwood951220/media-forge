@@ -1,18 +1,32 @@
 import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router'
-import { ConfigProvider, App as AntApp } from 'antd'
+import { ConfigProvider, App as AntApp, theme } from 'antd'
+import { useThemeStore } from '@/stores/useThemeStore'
 import { redirectIfAuthenticated, requireAuth } from './-guards'
 import LoginPage from '@/pages/login/LoginPage'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
 
-// Root route — ConfigProvider layout wrapper
+// Root route — ConfigProvider with theme algorithm
 const rootRoute = createRootRoute({
-  component: () => (
-    <ConfigProvider>
-      <AntApp>
-        <Outlet />
-      </AntApp>
-    </ConfigProvider>
-  ),
+  component: function RootLayout() {
+    const darkMode = useThemeStore((state) => state.darkMode)
+    const primaryColor = useThemeStore((state) => state.primaryColor)
+
+    return (
+      <ConfigProvider
+        theme={{
+          algorithm: darkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+          token: {
+            colorPrimary: primaryColor,
+            borderRadius: 8,
+          },
+        }}
+      >
+        <AntApp>
+          <Outlet />
+        </AntApp>
+      </ConfigProvider>
+    )
+  },
 })
 
 // Login route — public, redirects authenticated users away
