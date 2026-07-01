@@ -9,7 +9,7 @@ Media Forge — a full-stack media processing application.
 ## Directory Structure
 
 ```
-backend/     # Server-side application (empty — not yet scaffolded)
+backend/     # FastAPI server (Python 3.12+, PostgreSQL 18, Redis 8)
 frontend/    # React 19 SPA (Vite 8, TypeScript 6, Ant Design 6, Tailwind CSS 4)
 shared/      # Shared Python package (shared/__init__.py exists)
 doc/         # Documentation
@@ -39,3 +39,29 @@ doc/         # Documentation
 - `npm test` — Vitest (single run)
 - `npm run test:ui` — Vitest UI
 - `npm run test:coverage` — Vitest with coverage report
+
+## Backend
+
+**Stack:** Python 3.12+ + FastAPI 0.115 + SQLAlchemy 2.0 + Alembic + asyncpg
+
+- JWT token auth (python-jose + passlib/bcrypt)
+- Redis 8 for task queue
+- Shared utilities in `shared/` package (database session, models, logging)
+- Pytest for testing
+
+**Setup:**
+```bash
+docker compose up -d                    # Start PostgreSQL 18 + Redis 8
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+cd backend
+alembic upgrade head                     # Run migrations
+python scripts/init_db.py                # Create admin user
+uvicorn app.main:app --reload --port 8000
+```
+
+**Scripts** (run from `backend/`):
+- `alembic upgrade head` — Apply database migrations
+- `python scripts/init_db.py` — Create tables + seed admin user
+- `python -m pytest tests/ -v` — Run backend tests
+- `uvicorn app.main:app --reload` — Start development server
