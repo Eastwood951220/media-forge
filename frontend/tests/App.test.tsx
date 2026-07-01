@@ -39,8 +39,8 @@ describe('App auth routing', () => {
     renderApp('/')
 
     await waitFor(() => {
-      expect(screen.getByText(/media forge/i)).toBeInTheDocument()
-      expect(screen.getByText(/媒体处理平台/i)).toBeInTheDocument()
+      expect(screen.getByText(/欢迎回来/i)).toBeInTheDocument()
+      expect(screen.getByText(/请登录您的账户以继续/i)).toBeInTheDocument()
     })
   })
 
