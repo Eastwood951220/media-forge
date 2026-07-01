@@ -1,0 +1,80 @@
+.tagsView {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.scrollContent {
+  height: 100%;
+  padding: 0 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tagsInner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  white-space: nowrap;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #4b5563;
+  font-size: 12px;
+  line-height: 24px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.active {
+  border-color: var(--app-primary-color, #1677ff);
+  background: var(--app-primary-color, #1677ff);
+  color: #ffffff;
+}
+
+.affix {
+  cursor: default;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffffff;
+  flex: 0 0 auto;
+}
+
+.tagTitle {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark {
+  background: #111827;
+  border-color: #1f2937;
+
+  .tag {
+    border-color: #374151;
+    background: #1f2937;
+    color: #9ca3af;
+  }
+
+  .active {
+    border-color: var(--app-primary-color, #1677ff);
+    background: var(--app-primary-color, #1677ff);
+    color: #ffffff;
+  }
+}

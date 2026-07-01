@@ -1,46 +1,36 @@
-import { useEffect } from 'react'
+import { useState } from 'react'
+import { Outlet } from '@tanstack/react-router'
 import { Layout } from 'antd'
-import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { useAppStore } from '@/stores/useAppStore'
-import { useSettingsStore } from '@/stores/useSettingsStore'
-import Sidebar from './components/Sidebar'
-import Navbar from './components/Navbar'
-import TabsView from './components/TabsView'
-import AppMain from './components/AppMain'
-import Settings from './components/Settings'
+import { useThemeStore } from '@/stores/useThemeStore'
+import { LayoutHeader } from './Header'
+import { SideMenu } from './Sidebar'
+import { TagsView } from './TagsView'
 import styles from './index.module.less'
 
-/**
- * Root layout for authenticated pages.
- *
- * Composes Sidebar + Navbar + TabsView + AppMain + Settings,
- * with responsive behaviour driven by useBreakpoint.
- */
-export default function AppLayout() {
-  const { isMobile } = useBreakpoint()
-  const setDevice = useAppStore((s) => s.setDevice)
-  const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed)
-  const fixedHeader = useSettingsStore((s) => s.fixedHeader)
+const { Content } = Layout
 
-  // Sync device type into store
-  useEffect(() => {
-    setDevice(isMobile ? 'mobile' : 'desktop')
-    // Auto-collapse sidebar on mobile
-    if (isMobile) {
-      setSidebarCollapsed(true)
-    }
-  }, [isMobile, setDevice, setSidebarCollapsed])
+export default function AppLayout() {
+  const darkMode = useThemeStore((state) => state.darkMode)
+  const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <Layout className={styles.layout}>
-      <Sidebar />
-      <Layout>
-        {fixedHeader && <div style={{ height: 'var(--navbar-height)' }} />}
-        <Navbar />
-        <TabsView />
-        <AppMain />
+    <Layout className={darkMode ? `${styles.layout} ${styles.dark}` : styles.layout}>
+      <SideMenu collapsed={collapsed} />
+
+      <Layout className={styles.main}>
+        <LayoutHeader
+          darkMode={darkMode}
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+        />
+        <TagsView darkMode={darkMode} />
+
+        <Content className={styles.content}>
+          <div className={styles.pageContainer}>
+            <Outlet />
+          </div>
+        </Content>
       </Layout>
-      <Settings />
     </Layout>
   )
 }

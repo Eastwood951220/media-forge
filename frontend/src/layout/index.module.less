@@ -1,3 +1,31 @@
 .layout {
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  background: #f5f7fb;
+}
+
+.main {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.content {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 16px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.pageContainer {
+  min-width: 0;
+  flex: 1;
+}
+
+.dark {
+  background: #0f172a;
 }
