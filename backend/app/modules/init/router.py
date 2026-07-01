@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, status
 from redis import Redis
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 
 from backend.app.core.security import get_password_hash
 from backend.app.modules.init.schemas import InitConfigRequest, InitConfigResponse
@@ -52,9 +52,9 @@ def test_postgres(body: PostgresTestRequest) -> ConnectionTestResult:
         engine = create_engine(
             sync_url,
             connect_args={"connect_timeout": body.connect_timeout},
-            options="-c timezone=Asia/Shanghai",
         )
         with engine.connect() as conn:
+            conn.execute(text("SET timezone = 'Asia/Shanghai'"))
             conn.execute(text("SELECT 1"))
         engine.dispose()
         return ConnectionTestResult(success=True, message="PostgreSQL 连接成功")
@@ -129,9 +129,9 @@ def save_config(body: InitConfigRequest) -> InitConfigResponse:
         engine = create_engine(
             maintenance_url,
             connect_args={"connect_timeout": body.postgresConnectTimeout},
-            options="-c timezone=Asia/Shanghai",
         )
         with engine.connect() as conn:
+            conn.execute(text("SET timezone = 'Asia/Shanghai'"))
             conn.execute(text("SELECT 1"))
         engine.dispose()
     except Exception as exc:
@@ -147,9 +147,9 @@ def save_config(body: InitConfigRequest) -> InitConfigResponse:
             maintenance_url,
             isolation_level="AUTOCOMMIT",
             connect_args={"connect_timeout": body.postgresConnectTimeout},
-            options="-c timezone=Asia/Shanghai",
         )
         with maint_engine.connect() as conn:
+            conn.execute(text("SET timezone = 'Asia/Shanghai'"))
             result = conn.execute(
                 text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
                 {"dbname": body.databaseName},
@@ -170,8 +170,14 @@ def save_config(body: InitConfigRequest) -> InitConfigResponse:
         target_engine = create_engine(
             sync_db_url,
             connect_args={"connect_timeout": body.postgresConnectTimeout},
-            options="-c timezone=Asia/Shanghai",
         )
+
+        @event.listens_for(target_engine, "connect")
+        def _set_tz(dbapi_conn, _connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("SET timezone = 'Asia/Shanghai'")
+            cursor.close()
+
         Base.metadata.create_all(bind=target_engine)
 
         with target_engine.connect() as conn:

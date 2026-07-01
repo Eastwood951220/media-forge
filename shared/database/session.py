@@ -2,7 +2,7 @@ import logging
 import time
 from collections.abc import Generator
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from shared.database.postgres_config import get_postgres_config
@@ -34,8 +34,13 @@ def connect_postgres() -> None:
                 max_overflow=config.max_overflow,
                 pool_pre_ping=True,
                 connect_args={"connect_timeout": config.connect_timeout},
-                options="-c timezone=Asia/Shanghai",
             )
+            # Set timezone on every new connection
+            @event.listens_for(_engine, "connect")
+            def _set_timezone(dbapi_conn, _connection_record):
+                cursor = dbapi_conn.cursor()
+                cursor.execute("SET timezone = 'Asia/Shanghai'")
+                cursor.close()
             # Verify connection
             with _engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
