@@ -1,6 +1,6 @@
 import Cookies from 'js-cookie'
 
-const TOKEN_KEY = 'Admin-Token'
+const TOKEN_KEY = 'Media-Forge-Token'
 
 export function getToken(): string | null {
   return Cookies.get(TOKEN_KEY) ?? null
