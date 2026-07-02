@@ -8,6 +8,8 @@ import {
   updateCrawlTask,
 } from '@/api/crawlTask'
 import type { CrawlTask } from '@/api/crawlTask/types'
+import { runCrawlTask } from '@/api/crawlerRun'
+import type { CrawlMode } from '@/api/crawlerRun/types'
 import TaskListTable from '@/pages/crawler/tasks/components/TaskListTable.tsx'
 import { useTaskListQueryStore } from './useTaskListQueryStore'
 import styles from './TaskPages.module.less'
@@ -87,6 +89,19 @@ function TaskListPage() {
     [current, fetchTasks, keyword],
   )
 
+  const handleRun = useCallback(
+    async (task: CrawlTask, mode: CrawlMode) => {
+      try {
+        await runCrawlTask(task.id, mode)
+        message.success(`已提交${mode === 'incremental' ? '增量' : '全量'}爬取任务`)
+        navigate({ to: '/crawler/runs' })
+      } catch (error) {
+        message.error('启动爬取任务失败')
+      }
+    },
+    [navigate],
+  )
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -117,6 +132,7 @@ function TaskListPage() {
           onDelete={handleDelete}
           onToggleSkip={handleToggleSkip}
           onSearch={handleSearch}
+          onRun={handleRun}
         />
       </section>
     </div>

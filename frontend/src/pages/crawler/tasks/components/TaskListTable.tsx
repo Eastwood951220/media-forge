@@ -1,7 +1,8 @@
-import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlayCircleOutlined, SearchOutlined } from '@ant-design/icons'
 import { Button, Input, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd'
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table'
 import type { CrawlTask } from '@/api/crawlTask/types.ts'
+import type { CrawlMode } from '@/api/crawlerRun/types.ts'
 import styles from '../TaskPages.module.less'
 
 type TaskListTableProps = {
@@ -17,6 +18,7 @@ type TaskListTableProps = {
   onDelete: (task: CrawlTask) => void
   onToggleSkip: (task: CrawlTask) => void
   onSearch: (keyword: string) => void
+  onRun: (task: CrawlTask, mode: CrawlMode) => void
 }
 
 function TaskListTable({
@@ -32,6 +34,7 @@ function TaskListTable({
   onDelete,
   onToggleSkip,
   onSearch,
+  onRun,
 }: TaskListTableProps) {
   const columns: ColumnsType<CrawlTask> = [
     {
@@ -96,16 +99,42 @@ function TaskListTable({
     {
       title: '操作',
       key: 'actions',
-      width: 130,
+      width: 280,
       align: 'center',
       render: (_, record) => (
         <Space size="small">
+          <Button
+            size="small"
+            type="primary"
+            icon={<PlayCircleOutlined />}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRun(record, 'incremental')
+            }}
+            disabled={record.is_skip}
+          >
+            增量爬取
+          </Button>
+          <Button
+            size="small"
+            icon={<PlayCircleOutlined />}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRun(record, 'full')
+            }}
+            disabled={record.is_skip}
+          >
+            全量爬取
+          </Button>
           <Tooltip title="编辑">
             <Button
               type="text"
               size="small"
               icon={<EditOutlined />}
-              onClick={() => onEdit(record)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(record)
+              }}
               style={{ color: '#1e40af' }}
             />
           </Tooltip>
@@ -115,7 +144,10 @@ function TaskListTable({
               size="small"
               danger
               icon={<DeleteOutlined />}
-              onClick={() => onDelete(record)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(record)
+              }}
             />
           </Tooltip>
         </Space>
