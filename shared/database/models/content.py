@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.database.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -40,7 +40,7 @@ class Movie(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     tags: Mapped[list[str]] = mapped_column(CompatibleARRAY(Text), nullable=False, default=list)
     source_task_names: Mapped[list[str]] = mapped_column(CompatibleARRAY(Text), nullable=False, default=list)
     source_task_id: Mapped[uuid.UUID | None] = mapped_column(
-        String(36), ForeignKey("crawl_tasks.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("crawl_tasks.id", ondelete="SET NULL"), nullable=True, index=True
     )
     cover: Mapped[str] = mapped_column(Text, nullable=False, default="")
     marked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

@@ -18,7 +18,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "movies",
-        sa.Column("source_task_id", sa.String(length=36), nullable=True),
+        sa.Column("source_task_id", sa.Uuid(), nullable=True),
     )
     op.create_foreign_key(
         "fk_movies_source_task_id_crawl_tasks",
