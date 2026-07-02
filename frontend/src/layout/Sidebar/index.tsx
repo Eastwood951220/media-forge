@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { DashboardOutlined, HistoryOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined } from '@ant-design/icons'
+import { DashboardOutlined, HistoryOutlined, PlayCircleOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import { Layout, Menu } from 'antd'
 import type { MenuProps } from 'antd'
 import { useThemeStore } from '@/stores/useThemeStore'
@@ -36,6 +36,18 @@ const menuItems: MenuProps['items'] = [
       },
     ],
   },
+  {
+    key: 'content',
+    icon: <PlayCircleOutlined />,
+    label: '内容管理',
+    children: [
+      {
+        key: '/content/movies',
+        icon: <VideoCameraOutlined />,
+        label: '电影列表',
+      },
+    ],
+  },
 ]
 
 type SideMenuProps = {
@@ -52,9 +64,16 @@ export function SideMenu({ collapsed }: SideMenuProps) {
       ? '/crawler/runs'
       : pathname.startsWith('/crawler/config')
         ? '/crawler/config'
-        : pathname
+        : pathname.startsWith('/content/movies')
+          ? '/content/movies'
+          : pathname
   const selectedKeys = useMemo(() => [selectedKey === '/' ? '/' : selectedKey], [selectedKey])
-  const openKeys = useMemo(() => (pathname.startsWith('/crawler') ? ['crawler'] : []), [pathname])
+  const openKeys = useMemo(() => {
+    const keys: string[] = []
+    if (pathname.startsWith('/crawler')) keys.push('crawler')
+    if (pathname.startsWith('/content')) keys.push('content')
+    return keys
+  }, [pathname])
 
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
     const nextPath = String(key)

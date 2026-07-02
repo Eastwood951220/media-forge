@@ -10,6 +10,7 @@ import TaskListPage from '@/pages/crawler/tasks/TaskListPage'
 import TaskFormPage from '@/pages/crawler/tasks/TaskFormPage'
 import RunListPage from '@/pages/crawler/runs/RunListPage'
 import RunDetailPage from '@/pages/crawler/runs/RunDetailPage'
+import MovieListPage from '@/pages/content/movies/MovieListPage'
 import AppLayout from '@/layout'
 
 const rootRoute = createRootRoute({
@@ -111,6 +112,12 @@ const crawlerRunDetailRoute = createRoute({
   component: RunDetailPage,
 })
 
+const contentMoviesRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/content/movies',
+  component: MovieListPage,
+})
+
 const legacyCrawlTasksRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/crawl-tasks',
@@ -131,6 +138,7 @@ const routeTree = rootRoute.addChildren([
     crawlerTaskEditRoute,
     crawlerRunsRoute,
     crawlerRunDetailRoute,
+    contentMoviesRoute,
     legacyCrawlTasksRoute,
   ]),
 ])
