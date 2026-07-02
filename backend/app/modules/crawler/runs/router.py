@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.modules.crawler.runs.schemas import CrawlRunDetailTaskRead, CrawlRunRead
-from backend.app.modules.crawler.runtime.service import get_runtime_state
+from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from shared.schemas.common import paginated, success
 
 router = APIRouter(prefix="/api/crawler/runs", tags=["crawler-runs"])
@@ -74,3 +74,24 @@ def list_run_tasks(
         rows=[CrawlRunDetailTaskRead.model_validate(r).model_dump(mode="json") for r in rows],
         total=total,
     )
+
+
+@router.post("/{run_id}/stop")
+def stop_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+    try:
+        run = CrawlerRunService(db, get_runtime_state()).stop_run(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return success(data=CrawlRunRead.model_validate(run).model_dump(mode="json"))
+
+
+@router.post("/{run_id}/restart", status_code=status.HTTP_201_CREATED)
+def restart_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+    try:
+        run = CrawlerRunService(db, get_runtime_state()).restart_run(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
+    return success(data=CrawlRunRead.model_validate(run).model_dump(mode="json"))

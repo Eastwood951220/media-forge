@@ -109,3 +109,57 @@ def task_payload() -> dict:
         "is_skip": False,
         "urls": [{"url": "https://javdb.com/actors/a", "url_type": "actors"}],
     }
+
+
+from backend.app.models.crawl_run import CrawlRunDetailTask
+
+
+class RuntimeForStopRestart(FakeRuntime):
+    def __init__(self) -> None:
+        super().__init__()
+        self.stopped = []
+
+    def request_stop(self, run_id: str) -> None:
+        self.stopped.append(run_id)
+
+
+def test_stop_running_run_sets_stop_signal(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="running", crawl_mode="incremental")
+    session.add(run)
+    session.commit()
+    run_id = str(run.id)
+    runtime = RuntimeForStopRestart()
+    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: runtime)
+
+    response = client.post(f"/api/crawler/runs/{run_id}/stop", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert runtime.stopped == [run_id]
+    assert response.json()["data"]["status"] == "stopped"
+
+
+def test_restart_copies_unfinished_subtasks(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="stopped", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    session.add_all([
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="A", source_url="https://a", source_name="A", status="saved", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="B", source_url="https://b", source_name="B", status="crawl_failed", created_at=datetime.now()),
+    ])
+    session.commit()
+    runtime = RuntimeForStopRestart()
+    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: runtime)
+
+    response = client.post(f"/api/crawler/runs/{run.id}/restart", headers=headers)
+
+    assert response.status_code == HTTPStatus.CREATED
+    new_run = response.json()["data"]
+    assert new_run["resumed_from"] == str(run.id)
+    assert runtime.enqueued == [new_run["id"]]
+
+    tasks_response = client.get(f"/api/crawler/runs/{new_run['id']}/tasks", headers=headers)
+    assert [row["code"] for row in tasks_response.json()["rows"]] == ["B"]
