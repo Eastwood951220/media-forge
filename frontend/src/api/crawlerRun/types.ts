@@ -2,6 +2,15 @@ export type CrawlMode = 'incremental' | 'full'
 export type CrawlRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'stopped'
 export type DetailTaskStatus = 'pending_crawl' | 'crawled' | 'crawl_failed' | 'saved' | 'save_failed' | 'skipped'
 
+export interface RunLogEntry {
+  timestamp: string
+  level: 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR' | string
+  component?: string | null
+  event?: string | null
+  message: string
+  context?: Record<string, unknown>
+}
+
 export interface CrawlRun {
   id: string
   task_id: string | null
@@ -16,6 +25,7 @@ export interface CrawlRun {
   resumed_from: string | null
   created_at: string
   updated_at: string | null
+  logs: RunLogEntry[]
 }
 
 export interface CrawlRunDetailTask {
