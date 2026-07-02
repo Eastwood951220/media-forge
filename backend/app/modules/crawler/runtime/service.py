@@ -12,6 +12,11 @@ from shared.database.session import get_session_factory
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
+from backend.app.modules.crawler.runtime.source_task_names import (
+    add_source_task_name_for_code,
+    find_existing_movie_codes,
+    movie_code_exists,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -254,24 +259,33 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
         return None
 
     def on_tasks_batch_created(items: list[dict[str, Any]]) -> None:
+        skipped_count = 0
         for item in items:
+            is_skipped = item.get("status") == "skipped"
+            reason = item.get("reason") if is_skipped else None
             detail = CrawlRunDetailTask(
                 run_id=run.id,
                 task_name=task.name,
                 code=item.get("code"),
                 source_url=item.get("url", ""),
                 source_name=item.get("name", ""),
-                status="pending_crawl",
+                status="skipped" if is_skipped else "pending_crawl",
+                error=reason,
                 created_at=datetime.now(),
             )
             db.add(detail)
             db.flush()
             remember_detail(detail)
+            if is_skipped:
+                skipped_count += 1
+                if add_source_task_name_for_code(db, item.get("code"), task.name):
+                    _append_run_log(str(run.id), f"已存在影片追加任务名: {item.get('code')} -> {task.name}", "INFO", code=item.get("code"))
         progress["total"] += len(items)
+        progress["skipped"] += skipped_count
         runtime.write_progress(str(run.id), progress)
         db.commit()
         if items:
-            _append_run_log(str(run.id), f"创建子任务 {len(items)} 条")
+            _append_run_log(str(run.id), f"创建子任务 {len(items)} 条，跳过 {skipped_count} 条")
 
     def on_item_saved(task_info: dict[str, Any], item_data: dict[str, Any]) -> None:
         detail = find_detail(task_info, item_data)
@@ -312,6 +326,18 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
     def log_callback(message: str, level: str = "INFO") -> None:
         _append_run_log(str(run.id), message, level)
 
+    def db_check_callback(codes: list[str]) -> set[str]:
+        existing_codes = find_existing_movie_codes(db, codes)
+        if existing_codes:
+            _append_run_log(str(run.id), f"列表阶段发现已存在影片 {len(existing_codes)} 条", "INFO")
+        return existing_codes
+
+    def on_detail_check_callback(code: str) -> bool:
+        exists = movie_code_exists(db, code)
+        if exists:
+            _append_run_log(str(run.id), f"详情阶段跳过已存在影片: {code}", "INFO", code=code)
+        return exists
+
     # Execute crawl
     try:
         from scraper.services.movie_service import MovieService
@@ -323,22 +349,26 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             on_item_saved=on_item_saved,
             on_detail_failed=on_detail_failed,
             log_callback=log_callback,
+            db_check_callback=db_check_callback,
+            on_detail_check_callback=on_detail_check_callback,
         )
         total_count = _count_run_detail_tasks(db, run.id)
         saved_count = _count_run_detail_tasks(db, run.id, "saved")
         save_failed_count = _count_run_detail_tasks(db, run.id, "save_failed")
         crawl_failed_count = _count_run_detail_tasks(db, run.id, "crawl_failed")
+        skipped_count = _count_run_detail_tasks(db, run.id, "skipped")
         run.result = {
             **(result or {}),
             "total_tasks": total_count,
             "saved": saved_count,
             "save_failed": save_failed_count,
             "crawl_failed": crawl_failed_count,
+            "skipped_tasks": skipped_count,
         }
         run.status = "completed"
         _append_run_log(
             str(run.id),
-            f"任务完成: 总计={total_count}, 已保存={saved_count}, 入库失败={save_failed_count}, 爬取失败={crawl_failed_count}",
+            f"任务完成: 总计={total_count}, 已保存={saved_count}, 入库失败={save_failed_count}, 爬取失败={crawl_failed_count}, 跳过={skipped_count}",
             "INFO",
         )
     except ImportError:

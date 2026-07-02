@@ -85,6 +85,26 @@ class FailingPersistenceMovieServiceStub:
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
 
+class ListPhaseDedupeMovieServiceStub:
+    def crawl_javdb_task(self, task, **kwargs):
+        existing_codes = kwargs["db_check_callback"](["AAA-010", "AAA-011"])
+        batch = [
+            {"code": "AAA-010", "url": "https://javdb.com/v/aaa010", "name": "AAA 010"},
+            {"code": "AAA-011", "url": "https://javdb.com/v/aaa011", "name": "AAA 011"},
+        ]
+        for item in batch:
+            if item["code"] in existing_codes:
+                item["status"] = "skipped"
+                item["reason"] = "already_exists"
+        kwargs["on_tasks_batch_created"](batch)
+        return {
+            "total_tasks": 2,
+            "completed_tasks": 0,
+            "failed_tasks": 0,
+            "skipped_tasks": 1,
+        }
+
+
 def create_run_with_task(code: str = "task-code") -> tuple[CrawlRun, Runtime]:
     session = TestingSessionLocal()
     user = User(username=f"worker-{code}", hashed_password=get_password_hash("pw"), role="admin")
@@ -196,3 +216,27 @@ def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monke
     refreshed = session.get(CrawlRun, run.id)
     assert refreshed.result["saved"] == 0
     assert refreshed.result["save_failed"] == 1
+
+
+def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> None:
+    from backend.app.modules.crawler.runtime.service import _execute_run
+
+    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: ListPhaseDedupeMovieServiceStub())
+    session = TestingSessionLocal()
+    run, runtime = create_run_with_task("list-dedupe")
+    session.add(Movie(code="AAA-010", source_url="https://javdb.com/v/aaa010", source_task_names=["旧任务"]))
+    session.commit()
+
+    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+
+    skipped = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "AAA-010").one()
+    pending = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "AAA-011").one()
+    movie = session.scalar(select(Movie).where(Movie.code == "AAA-010"))
+
+    assert skipped.status == "skipped"
+    assert skipped.error == "already_exists"
+    assert skipped.saved_at is None
+    assert pending.status == "pending_crawl"
+    assert movie.source_task_names == ["旧任务", run.task_name]
+    refreshed = session.get(CrawlRun, run.id)
+    assert refreshed.result["skipped_tasks"] == 1
