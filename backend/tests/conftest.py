@@ -6,6 +6,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import backend.app.models  # noqa: F401
+import shared.database.models.content  # noqa: F401
 from backend.app.core.dependencies import get_db
 from backend.app.core.security import get_password_hash
 from backend.app.main import app

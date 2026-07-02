@@ -10,7 +10,6 @@ from backend.app.core.config import get_settings
 from backend.app.core.dependencies import close_redis
 from backend.app.core.exception_handlers import register_exception_handlers
 from backend.app.modules.auth.router import router as auth_router
-from backend.app.modules.crawl_tasks.router import router as crawl_tasks_compat_router
 from backend.app.modules.crawler.config.router import router as crawler_config_router
 from backend.app.modules.crawler.tasks.router import router as crawler_tasks_router
 from backend.app.modules.health.router import router as health_router
@@ -97,7 +96,6 @@ app.include_router(auth_router)
 app.include_router(health_router)
 app.include_router(crawler_tasks_router)
 app.include_router(crawler_config_router)
-app.include_router(crawl_tasks_compat_router)
 app.include_router(movies_router)
 
 

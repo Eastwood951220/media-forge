@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 APPLICATION_MODEL_MODULES = (
     "backend.app.models.user",
     "backend.app.models.crawl_task",
+    "backend.app.models.crawl_run",
+    "shared.database.models.content",
 )
 
 
