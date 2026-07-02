@@ -4,9 +4,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.core.dependencies import get_redis
+from shared.database.session import get_session_factory
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
@@ -66,6 +68,11 @@ class CrawlerRunService:
         self.runtime.request_stop(str(run.id))
         run.status = "stopped"
         run.finished_at = datetime.now()
+        # Reset unfinished detail tasks so they can be retried on restart
+        self.db.query(CrawlRunDetailTask).filter(
+            CrawlRunDetailTask.run_id == run.id,
+            CrawlRunDetailTask.status.in_(UNFINISHED_DETAIL_STATUSES),
+        ).update({"status": "pending_crawl", "error": None})
         self.db.commit()
         self.db.refresh(run)
         return run
@@ -86,7 +93,7 @@ class CrawlerRunService:
             .all()
         )
         if not details:
-            raise ValueError("没有未完成的子任务")
+            raise ValueError("没有未完成的子任务，无法重启")
         new_run = CrawlRun(
             task_id=old_run.task_id,
             task_name=old_run.task_name,
@@ -133,7 +140,7 @@ class CrawlerRunService:
                 run_id = self.runtime.claim_next_run()
                 if run_id is None:
                     break
-                process_next_run(type(self.db), self.runtime)
+                process_run(get_session_factory(), self.runtime, run_id)
         finally:
             with _worker_lock:
                 _worker_running = False
@@ -143,7 +150,10 @@ def process_next_run(db_factory: sessionmaker, runtime: CrawlerRuntimeState) -> 
     run_id = runtime.claim_next_run()
     if run_id is None:
         return False
+    return process_run(db_factory, runtime, run_id)
 
+
+def process_run(db_factory: sessionmaker, runtime: CrawlerRuntimeState, run_id: str) -> bool:
     db = db_factory()
     try:
         run = db.get(CrawlRun, uuid.UUID(run_id))
@@ -174,6 +184,41 @@ def process_next_run(db_factory: sessionmaker, runtime: CrawlerRuntimeState) -> 
         db.close()
 
 
+def _append_run_log(run_id: str, message: str, level: str = "INFO", **context: Any) -> None:
+    from backend.app.modules.crawler.runs.logs import append_run_log, build_run_log
+
+    try:
+        append_run_log(run_id, build_run_log(level, message, **context))
+    except Exception as exc:
+        logger.warning("Failed to append crawler run log for %s: %s", run_id, exc)
+
+
+def _persist_crawled_item(db: Session, item_data: dict[str, Any]) -> uuid.UUID:
+    from scraper.database.repositories.movie_magnet_repository import MovieMagnetRepository
+    from scraper.database.repositories.movie_repository import MovieRepository
+
+    movie_doc = dict(item_data)
+    magnets = movie_doc.pop("magnets", []) or []
+    repository = MovieRepository(session=db)
+    magnet_repository = MovieMagnetRepository(session=db)
+    movie_id = repository.upsert_movie(movie_doc)
+    if movie_id is None:
+        raise RuntimeError("movie repository returned no id")
+
+    if magnets:
+        magnet_repository.upsert_many(movie_id, movie_doc, magnets)
+        magnet_repository.auto_select_best_magnet(str(movie_id))
+
+    return movie_id
+
+
+def _count_run_detail_tasks(db: Session, run_id: uuid.UUID, status: str | None = None) -> int:
+    query = db.query(func.count(CrawlRunDetailTask.id)).filter(CrawlRunDetailTask.run_id == run_id)
+    if status is not None:
+        query = query.filter(CrawlRunDetailTask.status == status)
+    return int(query.scalar() or 0)
+
+
 def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> None:
     """Execute a crawler run."""
     from backend.app.models.crawl_task import CrawlTask
@@ -188,8 +233,25 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
         raise ValueError("任务没有URL")
 
     # Track progress
-    progress = {"total": 0, "saved": 0, "failed": 0, "skipped": 0}
-    detail_tasks: dict[str, CrawlRunDetailTask] = {}
+    progress = {"total": 0, "saved": 0, "failed": 0, "skipped": 0, "save_failed": 0}
+    detail_tasks_by_code: dict[str, CrawlRunDetailTask] = {}
+    detail_tasks_by_source_url: dict[str, CrawlRunDetailTask] = {}
+
+    def remember_detail(detail: CrawlRunDetailTask) -> None:
+        if detail.code:
+            detail_tasks_by_code[detail.code] = detail
+        if detail.source_url:
+            detail_tasks_by_source_url[detail.source_url] = detail
+
+    def find_detail(task_info: dict[str, Any], item_data: dict[str, Any] | None = None) -> CrawlRunDetailTask | None:
+        item_data = item_data or {}
+        code = item_data.get("code") or task_info.get("code")
+        source_url = task_info.get("url") or task_info.get("source_url") or item_data.get("source_url")
+        if code and code in detail_tasks_by_code:
+            return detail_tasks_by_code[code]
+        if source_url and source_url in detail_tasks_by_source_url:
+            return detail_tasks_by_source_url[source_url]
+        return None
 
     def on_tasks_batch_created(items: list[dict[str, Any]]) -> None:
         for item in items:
@@ -204,27 +266,40 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             )
             db.add(detail)
             db.flush()
-            if detail.code:
-                detail_tasks[detail.code] = detail
+            remember_detail(detail)
         progress["total"] += len(items)
         runtime.write_progress(str(run.id), progress)
         db.commit()
+        if items:
+            _append_run_log(str(run.id), f"创建子任务 {len(items)} 条")
 
-    def on_item_saved(task_info: dict, item_data: dict) -> None:
-        code = item_data.get("code") or task_info.get("code")
-        detail = detail_tasks.get(code) if code else None
-        if detail:
-            detail.status = "saved"
-            detail.item_data = item_data
-            detail.crawled_at = datetime.now()
-            detail.saved_at = datetime.now()
-        progress["saved"] += 1
+    def on_item_saved(task_info: dict[str, Any], item_data: dict[str, Any]) -> None:
+        detail = find_detail(task_info, item_data)
+        code = item_data.get("code") or task_info.get("code") or "-"
+        try:
+            movie_id = _persist_crawled_item(db, item_data)
+            if detail:
+                detail.status = "saved"
+                detail.item_data = item_data
+                detail.error = None
+                detail.crawled_at = datetime.now()
+                detail.saved_at = datetime.now()
+            progress["saved"] += 1
+            _append_run_log(str(run.id), f"入库成功: {code}", "INFO", code=code, movie_id=str(movie_id))
+        except Exception as exc:
+            if detail:
+                detail.status = "save_failed"
+                detail.item_data = item_data
+                detail.error = str(exc)[:500]
+                detail.crawled_at = datetime.now()
+                detail.saved_at = None
+            progress["save_failed"] += 1
+            _append_run_log(str(run.id), f"入库失败: {code}: {exc}", "ERROR", code=code)
         runtime.write_progress(str(run.id), progress)
         db.commit()
 
-    def on_detail_failed(task_info: dict, error: str) -> None:
-        code = task_info.get("code")
-        detail = detail_tasks.get(code) if code else None
+    def on_detail_failed(task_info: dict[str, Any], error: str) -> None:
+        detail = find_detail(task_info)
         if detail:
             detail.status = "crawl_failed"
             detail.error = error[:500]
@@ -232,6 +307,10 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
         progress["failed"] += 1
         runtime.write_progress(str(run.id), progress)
         db.commit()
+        _append_run_log(str(run.id), f"爬取失败: {task_info.get('code') or task_info.get('url')}: {error}", "ERROR")
+
+    def log_callback(message: str, level: str = "INFO") -> None:
+        _append_run_log(str(run.id), message, level)
 
     # Execute crawl
     try:
@@ -243,11 +322,28 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             on_tasks_batch_created=on_tasks_batch_created,
             on_item_saved=on_item_saved,
             on_detail_failed=on_detail_failed,
+            log_callback=log_callback,
         )
-        run.result = result
+        total_count = _count_run_detail_tasks(db, run.id)
+        saved_count = _count_run_detail_tasks(db, run.id, "saved")
+        save_failed_count = _count_run_detail_tasks(db, run.id, "save_failed")
+        crawl_failed_count = _count_run_detail_tasks(db, run.id, "crawl_failed")
+        run.result = {
+            **(result or {}),
+            "total_tasks": total_count,
+            "saved": saved_count,
+            "save_failed": save_failed_count,
+            "crawl_failed": crawl_failed_count,
+        }
         run.status = "completed"
+        _append_run_log(
+            str(run.id),
+            f"任务完成: 总计={total_count}, 已保存={saved_count}, 入库失败={save_failed_count}, 爬取失败={crawl_failed_count}",
+            "INFO",
+        )
     except ImportError:
         logger.warning("MovieService not available, marking run as completed with stub")
+        _append_run_log(str(run.id), "MovieService 不可用，使用空结果完成运行", "WARNING")
         run.result = {"total_tasks": 0, "completed_tasks": 0, "failed_tasks": 0}
         run.status = "completed"
     except Exception as exc:
