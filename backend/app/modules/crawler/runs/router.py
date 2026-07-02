@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+from backend.app.modules.crawler.runs.logs import load_run_logs
 from backend.app.modules.crawler.runs.schemas import CrawlRunDetailTaskRead, CrawlRunRead
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from shared.schemas.common import paginated, success
@@ -33,10 +34,12 @@ def list_runs(
         query = query.filter(CrawlRun.status == status_filter)
     total = query.count()
     rows = query.order_by(CrawlRun.created_at.desc()).offset(skip).limit(limit).all()
-    return paginated(
-        rows=[CrawlRunRead.model_validate(r).model_dump(mode="json") for r in rows],
-        total=total,
-    )
+    payload_rows = []
+    for row in rows:
+        payload = CrawlRunRead.model_validate(row).model_dump(mode="json")
+        payload["logs"] = []
+        payload_rows.append(payload)
+    return paginated(rows=payload_rows, total=total)
 
 
 @router.get("/{run_id}")
@@ -44,7 +47,9 @@ def get_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends
     run = db.get(CrawlRun, run_id)
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
-    return success(data=CrawlRunRead.model_validate(run).model_dump(mode="json"))
+    payload = CrawlRunRead.model_validate(run).model_dump(mode="json")
+    payload["logs"] = load_run_logs(str(run_id))
+    return success(data=payload)
 
 
 @router.get("/{run_id}/tasks")

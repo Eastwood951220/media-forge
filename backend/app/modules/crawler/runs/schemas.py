@@ -9,6 +9,15 @@ class RunCreateRequest(BaseModel):
     crawl_mode: Literal["incremental", "full"]
 
 
+class RunLogEntry(BaseModel):
+    timestamp: datetime
+    level: str
+    component: str | None = None
+    event: str | None = None
+    message: str
+    context: dict[str, Any] = {}
+
+
 class CrawlRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -25,6 +34,7 @@ class CrawlRunRead(BaseModel):
     resumed_from: uuid.UUID | None
     created_at: datetime
     updated_at: datetime | None
+    logs: list[RunLogEntry] = []
 
 
 class CrawlRunDetailTaskRead(BaseModel):

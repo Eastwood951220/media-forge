@@ -4,6 +4,7 @@ from http import HTTPStatus
 from fastapi.testclient import TestClient
 
 from backend.app.models.crawl_run import CrawlRun
+from backend.app.modules.crawler.runs.logs import append_run_log, build_run_log
 from backend.tests.conftest import TestingSessionLocal
 
 
@@ -101,6 +102,29 @@ def test_run_list_and_detail_endpoints(client: TestClient, admin_user, monkeypat
     assert list_response.json()["total"] == 1
     assert detail_response.json()["data"]["id"] == run_id
     assert tasks_response.json()["rows"] == []
+
+
+def test_run_detail_includes_jsonl_logs(client: TestClient, admin_user, monkeypatch, tmp_path) -> None:
+    from backend.app.modules.crawler.runs import logs as run_logs
+
+    monkeypatch.setattr(run_logs, "RUN_LOG_DIR", str(tmp_path))
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="running", crawl_mode="incremental", queued_at=datetime.now())
+    session.add(run)
+    session.commit()
+    run_id = str(run.id)
+
+    append_run_log(run_id, build_run_log("INFO", "任务开始执行"))
+    append_run_log(run_id, build_run_log("ERROR", "入库失败", code="AAA-001"))
+
+    response = client.get(f"/api/crawler/runs/{run_id}", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()["data"]
+    assert body["id"] == run_id
+    assert [entry["message"] for entry in body["logs"]] == ["任务开始执行", "入库失败"]
+    assert body["logs"][1]["context"] == {"code": "AAA-001"}
 
 
 def task_payload() -> dict:
