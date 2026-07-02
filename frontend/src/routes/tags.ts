@@ -2,6 +2,7 @@ export type RouteTagMeta = {
   title: string
   affix?: boolean
   activeMenu?: string
+  singletonKey?: string
 }
 
 const ROUTE_TAGS: Array<{ pattern: RegExp; meta: RouteTagMeta }> = [
@@ -14,12 +15,20 @@ const ROUTE_TAGS: Array<{ pattern: RegExp; meta: RouteTagMeta }> = [
   },
   {
     pattern: /^\/crawler\/tasks\/[^/]+\/edit$/,
-    meta: { title: '编辑任务', activeMenu: '/crawler/tasks' },
+    meta: {
+      title: '编辑任务',
+      activeMenu: '/crawler/tasks',
+      singletonKey: '/crawler/tasks/:id/edit',
+    },
   },
   { pattern: /^\/crawler\/runs$/, meta: { title: '运行记录', activeMenu: '/crawler/runs' } },
   {
     pattern: /^\/crawler\/runs\/[^/]+$/,
-    meta: { title: '运行详情', activeMenu: '/crawler/runs' },
+    meta: {
+      title: '运行详情',
+      activeMenu: '/crawler/runs',
+      singletonKey: '/crawler/runs/:id',
+    },
   },
   { pattern: /^\/content\/movies$/, meta: { title: '影片列表' } },
 ]
@@ -32,4 +41,8 @@ export function getRouteTagMeta(pathname: string): RouteTagMeta {
 
 export function getFullPath(pathname: string, searchStr: string): string {
   return `${pathname}${searchStr || ''}`
+}
+
+export function getRouteViewKey(pathname: string, searchStr: string): string {
+  return getRouteTagMeta(pathname).singletonKey ?? getFullPath(pathname, searchStr)
 }
