@@ -7,6 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.core.dependencies import CurrentUser, get_db
+from backend.app.modules.crawler.runs.schemas import CrawlRunRead, RunCreateRequest
+from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from backend.app.repositories.crawl_task import CrawlTaskRepository
 from backend.app.schemas.crawl_task import (
     CrawlTaskCreate,
@@ -122,6 +124,28 @@ def get_task(task_id: uuid.UUID, current_user: CurrentUser, db: Session = Depend
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return success(data=_serialize(task).model_dump(mode="json"))
+
+
+@router.post("/{task_id}/run", status_code=status.HTTP_201_CREATED)
+def run_task(
+    task_id: uuid.UUID,
+    data: RunCreateRequest,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    repo = CrawlTaskRepository(db)
+    task = repo.get_owned(task_id, current_user.id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    if task.is_skip:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="禁用任务不能执行")
+    try:
+        run = CrawlerRunService(db, get_runtime_state()).create_run(task, data.crawl_mode)
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Create crawler run failed")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
+    return success(data=CrawlRunRead.model_validate(run).model_dump(mode="json"))
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
