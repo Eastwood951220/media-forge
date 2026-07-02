@@ -38,7 +38,7 @@ class MovieServiceStub:
         ])
         kwargs["on_item_saved"](
             {"code": "AAA-001", "url": "https://javdb.com/v/aaa", "name": "AAA"},
-            {"code": "AAA-001", "source_url": "https://javdb.com/v/aaa", "source_name": "AAA", "source_task_name": [task.name]},
+            {"code": "AAA-001", "source_url": "https://javdb.com/v/aaa", "source_name": "AAA"},
         )
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
@@ -54,7 +54,6 @@ class PersistingMovieServiceStub:
                 "code": "AAA-002",
                 "source_url": "https://javdb.com/v/aaa002",
                 "source_name": "AAA 002",
-                "source_task_name": [task.name],
                 "title": "AAA 002",
                 "magnets": [
                     {
@@ -79,7 +78,6 @@ class FailingPersistenceMovieServiceStub:
                 "code": "AAA-003",
                 "source_url": "https://javdb.com/v/aaa003",
                 "source_name": "AAA 003",
-                "source_task_name": [task.name],
             },
         )
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
@@ -202,7 +200,8 @@ def test_execute_run_persists_movie_before_marking_detail_saved(monkeypatch) -> 
     movie = session.scalar(select(Movie).where(Movie.code == "AAA-002"))
     assert movie is not None
     assert movie.source_url == "https://javdb.com/v/aaa002"
-    assert movie.source_task_names == [run.task_name]
+    # source_task_ids should contain the task ID (compare as strings for SQLite compatibility)
+    assert str(run.task_id) in [str(tid) for tid in movie.source_task_ids]
     magnets = session.scalars(select(MovieMagnet).where(MovieMagnet.movie_id == movie.id)).all()
     assert len(magnets) == 1
 
@@ -240,7 +239,7 @@ def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> No
     monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: ListPhaseDedupeMovieServiceStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("list-dedupe")
-    session.add(Movie(code="AAA-010", source_url="https://javdb.com/v/aaa010", source_task_names=["旧任务"]))
+    session.add(Movie(code="AAA-010", source_url="https://javdb.com/v/aaa010", source_task_ids=[]))
     session.commit()
 
     _execute_run(session, session.get(CrawlRun, run.id), runtime)
@@ -253,7 +252,8 @@ def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> No
     assert skipped.error == "already_exists"
     assert skipped.saved_at is None
     assert pending.status == "pending_crawl"
-    assert movie.source_task_names == ["旧任务", run.task_name]
+    # source_task_ids should contain the run's task_id (compare as strings for SQLite compatibility)
+    assert str(run.task_id) in [str(tid) for tid in movie.source_task_ids]
     refreshed = session.get(CrawlRun, run.id)
     assert refreshed.result["skipped_tasks"] == 1
 
@@ -264,7 +264,7 @@ def test_execute_run_marks_detail_phase_existing_movies_skipped(monkeypatch) -> 
     monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: DetailPhaseDedupeMovieServiceStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("detail-dedupe")
-    session.add(Movie(code="AAA-020", source_url="https://javdb.com/v/aaa020", source_task_names=["旧任务"]))
+    session.add(Movie(code="AAA-020", source_url="https://javdb.com/v/aaa020", source_task_ids=[]))
     session.commit()
 
     _execute_run(session, session.get(CrawlRun, run.id), runtime)
@@ -276,6 +276,7 @@ def test_execute_run_marks_detail_phase_existing_movies_skipped(monkeypatch) -> 
     assert detail.error == "already_exists"
     assert detail.crawled_at is not None
     assert detail.saved_at is None
-    assert movie.source_task_names == ["旧任务", run.task_name]
+    # source_task_ids should contain the run's task_id (compare as strings for SQLite compatibility)
+    assert str(run.task_id) in [str(tid) for tid in movie.source_task_ids]
     refreshed = session.get(CrawlRun, run.id)
     assert refreshed.result["skipped_tasks"] == 1

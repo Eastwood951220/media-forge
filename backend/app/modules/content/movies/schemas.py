@@ -42,8 +42,7 @@ class MovieRead(BaseModel):
     rating: Decimal | None
     actors: list[str]
     tags: list[str]
-    source_task_names: list[str]
-    source_task_id: uuid.UUID | None = None
+    source_task_ids: list[uuid.UUID]
     storage_summary: dict[str, Any]
     raw_detail: dict[str, Any]
     marked: bool

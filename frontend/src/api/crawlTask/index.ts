@@ -4,7 +4,10 @@ import type {
   CrawlTaskCreateParams,
   CrawlTaskStats,
   CrawlTaskUpdateParams,
+  DeleteMode,
+  DeleteTaskResult,
   PaginatedResponse,
+  TaskDictItem,
 } from './types'
 
 const BASE_URL = '/api/crawler/tasks'
@@ -19,6 +22,10 @@ export function getCrawlTasks(params?: {
 
 export function getCrawlTaskStats(): Promise<CrawlTaskStats> {
   return request.get<CrawlTaskStats>(`${BASE_URL}/stats`)
+}
+
+export function getTaskDict(): Promise<TaskDictItem[]> {
+  return request.get<TaskDictItem[]>(`${BASE_URL}/dict`)
 }
 
 export function getCrawlTask(taskId: string): Promise<CrawlTask> {
@@ -36,8 +43,8 @@ export function updateCrawlTask(
   return request.put<CrawlTask>(`${BASE_URL}/${taskId}`, data)
 }
 
-export function deleteCrawlTask(taskId: string): Promise<{deleted_movies: number}> {
-  return request.delete<{deleted_movies: number}>(`${BASE_URL}/${taskId}`)
+export function deleteCrawlTask(taskId: string, mode: DeleteMode = 'task_only'): Promise<DeleteTaskResult> {
+  return request.delete<DeleteTaskResult>(`${BASE_URL}/${taskId}?mode=${mode}`)
 }
 
 export function extractTaskName(url: string, urlType: string): Promise<{ name: string }> {

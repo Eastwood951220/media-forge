@@ -25,7 +25,7 @@ export interface MovieFilterState {
 }
 
 export interface MovieFilterParams {
-    source_task_name?: string;
+    source_task_id?: string;
     search?: string;
     rating_min?: number;
     rating_max?: number;
@@ -54,7 +54,7 @@ function joinValues(values: string[]): string | undefined {
 
 export function buildMovieFilterParams(state: MovieFilterState): MovieFilterParams {
     return {
-        source_task_name: state.selectedTask,
+        source_task_id: state.selectedTask,
         search: state.search.trim() || undefined,
         rating_min: state.ratingMin,
         rating_max: state.ratingMax,

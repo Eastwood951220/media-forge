@@ -9,7 +9,12 @@ from sqlalchemy.orm import Session
 from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.modules.crawler.runs.schemas import CrawlRunRead, RunCreateRequest
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
-from backend.app.modules.crawler.tasks.delete_service import delete_movies_by_task_id
+from backend.app.modules.crawler.tasks.delete_service import (
+    CloudDeleteNotImplemented,
+    UnsupportedDeleteMode,
+    delete_task,
+    VALID_DELETE_MODES,
+)
 from backend.app.repositories.crawl_task import CrawlTaskRepository
 from backend.app.schemas.crawl_task import (
     CrawlTaskCreate,
@@ -91,6 +96,12 @@ def list_tasks(
 def get_stats(current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
     repo = CrawlTaskRepository(db)
     return success(data={"total": repo.count_by_owner(current_user.id)})
+
+
+@router.get("/dict")
+def task_dict(current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+    """Return task ID-to-name mapping for frontend use."""
+    return success(data=CrawlTaskRepository(db).get_dict_by_owner(current_user.id))
 
 
 @router.post("/extract-name")
@@ -203,12 +214,31 @@ def update_task(
 
 
 @router.delete("/{task_id}")
-def delete_task(task_id: uuid.UUID, current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+def delete_task_endpoint(
+    task_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+    mode: str = Query(default="task_only", description="Delete mode: task_only, task_and_movies, task_movies_and_cloud"),
+) -> dict:
     repo = CrawlTaskRepository(db)
     task = repo.get_owned(task_id, current_user.id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    # Cascade delete associated movies
-    deleted_movies = delete_movies_by_task_id(db, task_id)
-    repo.delete(task)
-    return success(msg="删除成功", data={"deleted_movies": deleted_movies})
+
+    if mode not in VALID_DELETE_MODES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid delete mode: {mode}. Valid modes: {', '.join(VALID_DELETE_MODES)}",
+        )
+
+    try:
+        result = delete_task(db, task_id, mode=mode)
+    except CloudDeleteNotImplemented:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Cloud storage cleanup is not yet implemented",
+        )
+    except UnsupportedDeleteMode as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return success(msg="删除成功", data=result.to_dict())

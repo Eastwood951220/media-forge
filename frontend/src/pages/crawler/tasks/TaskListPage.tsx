@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
-import { Button, Modal, message } from 'antd'
+import { Button, Modal, Radio, message } from 'antd'
+import type { RadioChangeEvent } from 'antd'
 import {
   deleteCrawlTask,
   getCrawlTasks,
   updateCrawlTask,
 } from '@/api/crawlTask'
-import type { CrawlTask } from '@/api/crawlTask/types'
+import type { CrawlTask, DeleteMode } from '@/api/crawlTask/types'
 import { runCrawlTask } from '@/api/crawlerRun'
 import type { CrawlMode } from '@/api/crawlerRun/types'
 import TaskListTable from '@/pages/crawler/tasks/components/TaskListTable.tsx'
@@ -57,23 +58,40 @@ function TaskListPage() {
 
   const handleDelete = useCallback(
     (task: CrawlTask) => {
+      let selectedMode: DeleteMode = 'task_only'
+
       Modal.confirm({
         title: '确认删除',
         content: (
           <div>
             <p>确定删除任务「{task.name}」？</p>
-            <p style={{color: '#ff4d4f', fontWeight: 'bold'}}>
-              ⚠️ 此操作将同时删除该任务关联的所有影片数据，且不可撤销！
+            <div style={{margin: '12px 0'}}>
+              <p style={{marginBottom: 8}}>删除模式：</p>
+              <Radio.Group
+                defaultValue="task_only"
+                onChange={(e: RadioChangeEvent) => {
+                  selectedMode = e.target.value as DeleteMode
+                }}
+              >
+                <Radio value="task_only">仅删除任务</Radio>
+                <Radio value="task_and_movies">删除任务和关联影片</Radio>
+              </Radio.Group>
+            </div>
+            <p style={{color: '#ff4d4f', fontSize: 12}}>
+              ⚠️ 删除任务和关联影片将永久删除该任务独占的影片数据，且不可撤销！
             </p>
           </div>
         ),
         okText: '删除',
         okType: 'danger',
         cancelText: '取消',
+        width: 500,
         onOk: async () => {
-          const result = await deleteCrawlTask(task.id)
-          const deletedMovies = result?.deleted_movies ?? 0
-          message.success(`删除成功${deletedMovies > 0 ? `，已删除 ${deletedMovies} 部关联影片` : ''}`)
+          const result = await deleteCrawlTask(task.id, selectedMode)
+          const msg = selectedMode === 'task_and_movies'
+            ? `，已删除 ${result?.deleted_movies ?? 0} 部关联影片`
+            : ''
+          message.success(`删除成功${msg}`)
           void fetchTasks(current, keyword)
         },
       })

@@ -42,7 +42,7 @@ def _sqlite_filter_values(db: Session, filter_type: str) -> list[str]:
 
 
 def _movie_payload(movie: Movie, *, include_magnets: bool = False) -> dict:
-    source_task_names = list(movie.source_task_names or [])
+    source_task_ids = [str(tid) for tid in (movie.source_task_ids or [])]
     payload = {
         "_id": str(movie.id),
         "id": str(movie.id),
@@ -58,9 +58,7 @@ def _movie_payload(movie: Movie, *, include_magnets: bool = False) -> dict:
         "rating": float(movie.rating) if movie.rating is not None else None,
         "actors": list(movie.actors or []),
         "tags": list(movie.tags or []),
-        "source_task_name": source_task_names[0] if source_task_names else "",
-        "source_task_names": source_task_names,
-        "source_task_id": str(movie.source_task_id) if movie.source_task_id else None,
+        "source_task_ids": source_task_ids,
         "marked": bool(movie.marked),
         "storage_summary": movie.storage_summary or {},
         "raw_detail": movie.raw_detail or {},
@@ -104,7 +102,6 @@ def _movie_matches_python(
     movie: Movie,
     *,
     search: str | None,
-    source_task_name: str | None,
     source_task_id: str | None,
     rating_min: float | None,
     rating_max: float | None,
@@ -131,10 +128,10 @@ def _movie_matches_python(
         haystack = " ".join([movie.code or "", movie.source_name or "", movie.director or "", movie.maker or "", movie.series or ""]).lower()
         if needle not in haystack:
             return False
-    if source_task_name and source_task_name not in (movie.source_task_names or []):
-        return False
-    if source_task_id and str(movie.source_task_id) != source_task_id:
-        return False
+    if source_task_id:
+        task_ids = [str(tid) for tid in (movie.source_task_ids or [])]
+        if source_task_id not in task_ids:
+            return False
     if rating_min is not None and (movie.rating is None or float(movie.rating) < rating_min):
         return False
     if rating_max is not None and (movie.rating is None or float(movie.rating) > rating_max):
@@ -181,16 +178,6 @@ def _movie_matches_python(
     return True
 
 
-@router.get("/task-names")
-def list_task_names(_current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
-    if db.bind.dialect.name == "sqlite":
-        names = _unique_sorted([name for movie in db.query(Movie).all() for name in (movie.source_task_names or [])])
-    else:
-        names = list(db.scalars(select(func.unnest(Movie.source_task_names).label("name")).distinct().order_by("name")).all())
-        names = [name for name in names if name]
-    return success(data=[{"name": name} for name in names])
-
-
 @router.get("/filters")
 def list_filters(
     _current_user: CurrentUser,
@@ -220,7 +207,6 @@ def list_movies(
     limit: int = Query(default=20, ge=1, le=100),
     keyword: str | None = Query(default=None, max_length=200),
     search: str | None = Query(default=None, max_length=200),
-    source_task_name: str | None = Query(default=None, max_length=200),
     source_task_id: str | None = Query(default=None, max_length=36),
     sort_by: str = Query(default="created_at"),
     sort_order: int | str = Query(default=-1),
@@ -258,7 +244,6 @@ def list_movies(
         if _movie_matches_python(
             movie,
             search=search_text,
-            source_task_name=source_task_name,
             source_task_id=source_task_id,
             rating_min=rating_min,
             rating_max=rating_max,

@@ -13,7 +13,7 @@ from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
 from backend.app.modules.crawler.runtime.source_task_names import (
-    add_source_task_name_for_code,
+    add_source_task_id_for_code,
     find_existing_movie_codes,
     movie_code_exists,
 )
@@ -278,8 +278,8 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             remember_detail(detail)
             if is_skipped:
                 skipped_count += 1
-                if add_source_task_name_for_code(db, item.get("code"), task.name):
-                    _append_run_log(str(run.id), f"已存在影片追加任务名: {item.get('code')} -> {task.name}", "INFO", code=item.get("code"))
+                if add_source_task_id_for_code(db, item.get("code"), task.id):
+                    _append_run_log(str(run.id), f"已存在影片追加任务ID: {item.get('code')} -> {task.id}", "INFO", code=item.get("code"))
         progress["total"] += len(items)
         progress["skipped"] += skipped_count
         runtime.write_progress(str(run.id), progress)
@@ -290,8 +290,10 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
     def on_item_saved(task_info: dict[str, Any], item_data: dict[str, Any]) -> None:
         detail = find_detail(task_info, item_data)
         code = item_data.get("code") or task_info.get("code") or "-"
+        # Inject source_task_ids into item_data for persistence
+        item_data_with_task_ids = {**item_data, "source_task_ids": [task.id]}
         try:
-            movie_id = _persist_crawled_item(db, item_data)
+            movie_id = _persist_crawled_item(db, item_data_with_task_ids)
             if detail:
                 detail.status = "saved"
                 detail.item_data = item_data
@@ -332,12 +334,12 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             detail.error = "already_exists"
             detail.crawled_at = detail.crawled_at or datetime.now()
             detail.saved_at = None
-        add_source_task_name_for_code(db, code, task.name)
+        add_source_task_id_for_code(db, code, task.id)
         if not was_skipped:
             progress["skipped"] += 1
         runtime.write_progress(str(run.id), progress)
         db.commit()
-        _append_run_log(str(run.id), f"跳过已存在影片并追加任务名: {code}", "INFO", code=code)
+        _append_run_log(str(run.id), f"跳过已存在影片并追加任务ID: {code}", "INFO", code=code)
 
     def log_callback(message: str, level: str = "INFO") -> None:
         _append_run_log(str(run.id), message, level)

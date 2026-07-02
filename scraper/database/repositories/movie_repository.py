@@ -60,8 +60,7 @@ class MovieRepository:
                 rating=document.get("rating"),
                 actors=document.get("actors", []),
                 tags=document.get("tags", []),
-                source_task_names=document.get("source_task_name", []),
-                source_task_id=document.get("source_task_id"),
+                source_task_ids=document.get("source_task_ids", []),
                 cover=document.get("cover", ""),
                 marked=document.get("marked", False),
                 storage_summary=document.get("storage_summary", {}),
@@ -79,8 +78,8 @@ class MovieRepository:
             if close_session:
                 session.close()
 
-    def add_source_task_name(self, code: str, task_name: str) -> tuple[bool, list[str]]:
-        """Add a task name to an existing movie's source_task_name list."""
+    def add_source_task_id(self, code: str, task_id: UUID) -> tuple[bool, list[UUID]]:
+        """Add a task ID to an existing movie's source_task_ids list."""
         if not self.available or not code:
             return False, []
 
@@ -91,15 +90,15 @@ class MovieRepository:
             if not movie:
                 return False, []
 
-            previous_names = list(movie.source_task_names or [])
-            if task_name not in previous_names:
-                movie.source_task_names = previous_names + [task_name]
+            previous_ids = list(movie.source_task_ids or [])
+            if task_id not in previous_ids:
+                movie.source_task_ids = previous_ids + [task_id]
                 session.commit()
-                return True, previous_names
-            return False, previous_names
+                return True, previous_ids
+            return False, previous_ids
         except Exception as exc:
             session.rollback()
-            self.logger.warning("Failed to add source_task_name: %s", exc)
+            self.logger.warning("Failed to add source_task_id: %s", exc)
             return False, []
         finally:
             if close_session:

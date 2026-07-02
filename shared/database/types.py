@@ -53,7 +53,7 @@ class CompatibleARRAY(TypeDecorator):
             return None
         if dialect.name == "postgresql":
             return value
-        return json.dumps(value)
+        return json.dumps(value, default=str)
 
     def process_result_value(self, value: Any, dialect):
         if value is None:

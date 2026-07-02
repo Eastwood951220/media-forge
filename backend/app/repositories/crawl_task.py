@@ -175,3 +175,13 @@ class CrawlTaskRepository(BaseRepository):
             .filter(CrawlTask.id == task_id, CrawlTask.owner_id == owner_id)
             .first()
         )
+
+    def get_dict_by_owner(self, owner_id: uuid.UUID) -> list[dict[str, str]]:
+        """Return task ID-to-name mapping for the owner."""
+        rows = (
+            self.session.query(CrawlTask.id, CrawlTask.name)
+            .filter(CrawlTask.owner_id == owner_id)
+            .order_by(CrawlTask.name.asc())
+            .all()
+        )
+        return [{"id": str(row.id), "name": row.name} for row in rows]

@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useMemo, useReducer, useState} from "react";
 import {App} from "antd";
-import {fetchFilters, fetchTaskNames} from "@/api/movie";
+import {fetchFilters} from "@/api/movie";
+import {getTaskDict} from "@/api/crawlTask";
 import {MOVIE_FILTER_OPTION_TYPE} from "../constants";
 import type {SelectOption} from "@/api/movie/types";
 import {buildMovieFilterParams, type MovieFilterState} from "../utils/movieFilter";
@@ -75,14 +76,14 @@ export function useMovieFilters() {
         setFiltersLoading(true);
         try {
             const [tasks, actors, tags, directors, makers, series] = await Promise.all([
-                fetchTaskNames(),
+                getTaskDict(),
                 fetchFilters(MOVIE_FILTER_OPTION_TYPE.ACTOR),
                 fetchFilters(MOVIE_FILTER_OPTION_TYPE.TAG),
                 fetchFilters(MOVIE_FILTER_OPTION_TYPE.DIRECTOR),
                 fetchFilters(MOVIE_FILTER_OPTION_TYPE.MAKER),
                 fetchFilters(MOVIE_FILTER_OPTION_TYPE.SERIES),
             ]);
-            setTaskOptions(tasks.map((t) => ({value: t.name, label: t.name})));
+            setTaskOptions(tasks.map((t) => ({value: t.id, label: t.name})));
             setActorOptions(toOptions(actors));
             setTagOptions(toOptions(tags));
             setDirectorOptions(toOptions(directors));

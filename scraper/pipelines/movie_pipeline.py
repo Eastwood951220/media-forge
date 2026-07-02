@@ -34,11 +34,7 @@ class MoviePipeline(BasePipeline):
         elif "tags" not in item and item.get("has_chinese_sub"):
             result["tags"] = ["中文字幕"]
 
-        if task_name:
-            result["source_task_name"] = [task_name]
-
-        if task_id:
-            result["source_task_id"] = task_id
+        # Note: source_task_ids is now injected by the runtime service
 
         # Enrich magnet tags from name
         magnets = item.get("magnets")

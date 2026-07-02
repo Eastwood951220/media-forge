@@ -25,7 +25,7 @@ export interface MovieFilterConfigResponse {
 }
 
 export interface MovieQueryParams {
-  source_task_name?: string
+  source_task_id?: string
   search?: string
   page?: number
   limit?: number
@@ -89,6 +89,7 @@ export function fetchFilters(type: FilterType): Promise<string[]> {
 export function fetchMovieFilterConfig(): Promise<MovieFilterConfigResponse> {
   return request.get<MovieFilterConfigResponse>(`${BASE_URL}/filter-config`)
 }
+
 
 export function updateMovieFilterConfig(filters: Record<string, FilterItemConfig>): Promise<{ success: boolean }> {
   return request.put<{ success: boolean }>(`${BASE_URL}/filter-config`, { filters })

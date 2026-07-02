@@ -53,3 +53,20 @@ export interface CrawlTaskUpdateParams {
 export interface CrawlTaskStats {
   total: number
 }
+
+export type DeleteMode = 'task_only' | 'task_and_movies' | 'task_movies_and_cloud'
+
+export interface DeleteTaskResult {
+  deleted_task: boolean
+  deleted_runs: number
+  deleted_detail_tasks: number
+  updated_movies: number
+  deleted_movies: number
+  deleted_magnets: number
+  cloud_delete: string
+}
+
+export interface TaskDictItem {
+  id: string
+  name: string
+}

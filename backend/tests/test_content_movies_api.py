@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 from decimal import Decimal
 from http import HTTPStatus
@@ -14,6 +15,11 @@ def auth_headers(client: TestClient, admin_user) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['data']['access_token']}"}
 
 
+TASK_ID_A = uuid.uuid4()
+TASK_ID_B = uuid.uuid4()
+TASK_ID_C = uuid.uuid4()
+
+
 def seed_movie() -> str:
     session = TestingSessionLocal()
     movie = Movie(
@@ -25,7 +31,7 @@ def seed_movie() -> str:
         rating=Decimal("4.5"),
         actors=["演员A"],
         tags=["标签A"],
-        source_task_names=["任务A"],
+        source_task_ids=[TASK_ID_A],
         cover="https://example.com/cover.jpg",
     )
     session.add(movie)
@@ -41,13 +47,13 @@ def test_list_movies_search_and_source_task(client: TestClient, admin_user) -> N
     headers = auth_headers(client, admin_user)
     seed_movie()
 
-    response = client.get("/api/content/movies?keyword=AAA&source_task_name=任务A", headers=headers)
+    response = client.get(f"/api/content/movies?keyword=AAA&source_task_id={TASK_ID_A}", headers=headers)
 
     assert response.status_code == HTTPStatus.OK
     body = response.json()
     assert body["total"] == 1
     assert body["rows"][0]["code"] == "AAA-001"
-    assert body["rows"][0]["source_task_names"] == ["任务A"]
+    assert str(TASK_ID_A) in body["rows"][0]["source_task_ids"]
 
 
 def test_get_movie_detail_includes_magnets(client: TestClient, admin_user) -> None:
@@ -87,7 +93,7 @@ def test_movie_filter_config_persists_to_json_file(client: TestClient, admin_use
     assert config_path.exists()
 
 
-def test_movie_filter_options_and_task_names(client: TestClient, admin_user) -> None:
+def test_movie_filter_options(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
     seed_movie()
     session = TestingSessionLocal()
@@ -103,19 +109,16 @@ def test_movie_filter_options_and_task_names(client: TestClient, admin_user) -> 
         director="导演B",
         maker="片商B",
         series="系列B",
-        source_task_names=["任务B"],
+        source_task_ids=[TASK_ID_B],
     ))
     session.commit()
     session.close()
 
-    task_response = client.get("/api/content/movies/task-names", headers=headers)
     actor_response = client.get("/api/content/movies/filters?type=actor", headers=headers)
     tag_response = client.get("/api/content/movies/filters?type=tag", headers=headers)
     director_response = client.get("/api/content/movies/filters?type=director", headers=headers)
     invalid_response = client.get("/api/content/movies/filters?type=bad", headers=headers)
 
-    assert task_response.status_code == HTTPStatus.OK
-    assert task_response.json()["data"] == [{"name": "任务A"}, {"name": "任务B"}]
     assert actor_response.json()["data"] == ["演员A", "演员B"]
     assert tag_response.json()["data"] == ["标签A", "标签B"]
     assert director_response.json()["data"] == ["导演B"]
@@ -137,7 +140,7 @@ def seed_filter_movies() -> None:
             director="导演A",
             maker="片商A",
             series="系列A",
-            source_task_names=["任务A"],
+            source_task_ids=[TASK_ID_A],
             storage_summary={"last_status": "completed"},
         ),
         Movie(
@@ -152,7 +155,7 @@ def seed_filter_movies() -> None:
             director="导演B",
             maker="片商B",
             series="系列B",
-            source_task_names=["任务B"],
+            source_task_ids=[TASK_ID_B],
             storage_summary={"last_status": "missing"},
         ),
     ])
@@ -168,7 +171,7 @@ def test_list_movies_supports_original_filter_contract(client: TestClient, admin
         "/api/content/movies",
         params={
             "search": "电影",
-            "source_task_name": "任务A",
+            "source_task_id": str(TASK_ID_A),
             "actors": "演员A",
             "actors_not": "演员B",
             "tags": "标签A",
@@ -195,14 +198,14 @@ def test_list_movies_supports_original_filter_contract(client: TestClient, admin
     assert body["total"] == 1
     assert body["rows"][0]["code"] == "AAA-100"
     assert body["rows"][0]["_id"] == body["rows"][0]["id"]
-    assert body["rows"][0]["source_task_name"] == "任务A"
+    assert str(TASK_ID_A) in body["rows"][0]["source_task_ids"]
 
 
 def test_list_movies_not_stored_filter(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
     session = TestingSessionLocal()
-    session.add(Movie(code="CCC-300", source_url="https://javdb.com/v/ccc300", source_name="无存储", source_task_names=["任务C"], storage_summary={}))
-    session.add(Movie(code="DDD-400", source_url="https://javdb.com/v/ddd400", source_name="已存储", source_task_names=["任务D"], storage_summary={"last_status": "completed"}))
+    session.add(Movie(code="CCC-300", source_url="https://javdb.com/v/ccc300", source_name="无存储", source_task_ids=[TASK_ID_C], storage_summary={}))
+    session.add(Movie(code="DDD-400", source_url="https://javdb.com/v/ddd400", source_name="已存储", source_task_ids=[TASK_ID_C], storage_summary={"last_status": "completed"}))
     session.commit()
     session.close()
 

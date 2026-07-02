@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.database.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -18,10 +18,9 @@ class Movie(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Index("idx_movies_updated_at", "updated_at"),
         Index("idx_movies_release_date", "release_date"),
         Index("idx_movies_rating", "rating"),
-        Index("idx_movies_source_task_id", "source_task_id"),
+        Index("idx_movies_source_task_ids_gin", "source_task_ids", postgresql_using="gin"),
         Index("idx_movies_actors_gin", "actors", postgresql_using="gin"),
         Index("idx_movies_tags_gin", "tags", postgresql_using="gin"),
-        Index("idx_movies_source_task_names_gin", "source_task_names", postgresql_using="gin"),
         Index("idx_movies_storage_summary_gin", "storage_summary", postgresql_using="gin"),
         UniqueConstraint("code", name="uq_movies_code"),
         UniqueConstraint("source_url", name="uq_movies_source_url"),
@@ -38,10 +37,7 @@ class Movie(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     rating: Mapped[Decimal | None] = mapped_column(Numeric(3, 1), nullable=True)
     actors: Mapped[list[str]] = mapped_column(CompatibleARRAY(Text), nullable=False, default=list)
     tags: Mapped[list[str]] = mapped_column(CompatibleARRAY(Text), nullable=False, default=list)
-    source_task_names: Mapped[list[str]] = mapped_column(CompatibleARRAY(Text), nullable=False, default=list)
-    source_task_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("crawl_tasks.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    source_task_ids: Mapped[list[uuid.UUID]] = mapped_column(CompatibleARRAY(Uuid), nullable=False, default=list)
     cover: Mapped[str] = mapped_column(Text, nullable=False, default="")
     marked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     storage_summary: Mapped[dict] = mapped_column(CompatibleJSON, nullable=False, default=dict)

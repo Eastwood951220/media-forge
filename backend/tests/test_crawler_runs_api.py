@@ -130,6 +130,7 @@ def test_run_detail_includes_jsonl_logs(client: TestClient, admin_user, monkeypa
 def task_payload() -> dict:
     return {
         "name": "test-task",
+        "storage_location": "test",
         "is_skip": False,
         "urls": [{"url": "https://javdb.com/actors/a", "url_type": "actors"}],
     }
