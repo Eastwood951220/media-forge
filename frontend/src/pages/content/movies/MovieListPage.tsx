@@ -99,7 +99,7 @@ function MovieListPage() {
         />
       </Card>
 
-      <Card size="default">
+      <Card size="medium">
         <MovieTable
           data={list.data.items}
           total={list.data.total}

@@ -151,7 +151,7 @@ def delete_task(
 
     # Delete the task itself
     db.delete(task)
-    db.flush()
+    db.commit()
 
     logger.info(
         "Deleted task %s (mode=%s): runs=%d, details=%d, updated_movies=%d, deleted_movies=%d, deleted_magnets=%d",
