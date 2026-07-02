@@ -1,8 +1,10 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from backend.app.models.enums import CrawlRunStatus
 from shared.database.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
@@ -28,6 +30,13 @@ class CrawlTask(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         back_populates="task",
         cascade="all, delete-orphan",
         order_by="CrawlTaskUrl.position",
+        lazy="selectin",
+    )
+
+    runs: Mapped[list["CrawlRun"]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="CrawlRun.created_at.desc()",
         lazy="selectin",
     )
 
@@ -60,3 +69,42 @@ class CrawlTaskUrl(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     url_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     task: Mapped[CrawlTask] = relationship(back_populates="urls")
+
+
+class CrawlRun(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Tracks each execution of a crawl task."""
+
+    __tablename__ = "crawl_runs"
+    __table_args__ = (
+        Index("idx_crawl_runs_task_created", "task_id", "created_at"),
+        Index("idx_crawl_runs_owner_created", "owner_id", "created_at"),
+        Index("idx_crawl_runs_owner_status", "owner_id", "status"),
+    )
+
+    task_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("crawl_tasks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=CrawlRunStatus.RUNNING,
+        index=True,
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    total_found: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_pages: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_qualified: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    task: Mapped[CrawlTask] = relationship(back_populates="runs")

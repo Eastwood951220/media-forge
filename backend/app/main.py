@@ -14,6 +14,7 @@ from backend.app.modules.crawl_tasks.router import router as crawl_tasks_compat_
 from backend.app.modules.crawler.config.router import router as crawler_config_router
 from backend.app.modules.crawler.tasks.router import router as crawler_tasks_router
 from backend.app.modules.health.router import router as health_router
+from backend.app.modules.movies.router import router as movies_router
 from backend.app.modules.init.router import router as init_router
 from shared.database.session import close_postgres, connect_postgres
 from shared.logging.file_log import ensure_log_dir
@@ -97,6 +98,7 @@ app.include_router(health_router)
 app.include_router(crawler_tasks_router)
 app.include_router(crawler_config_router)
 app.include_router(crawl_tasks_compat_router)
+app.include_router(movies_router)
 
 
 @app.get("/")
