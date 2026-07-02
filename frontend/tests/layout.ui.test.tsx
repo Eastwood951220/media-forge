@@ -59,8 +59,8 @@ describe('modern console layout', () => {
     useTagsViewStore.getState().resetViews()
     useTagsViewStore.setState({
       visitedViews: [
-        { path: '/', fullPath: '/', title: '仪表盘', closable: false },
-        { path: '/crawler/tasks', fullPath: '/crawler/tasks', title: '任务列表', closable: true },
+        { path: '/', fullPath: '/', cacheKey: '/', title: '仪表盘', closable: false },
+        { path: '/crawler/tasks', fullPath: '/crawler/tasks', cacheKey: '/crawler/tasks', title: '任务列表', closable: true },
       ],
     })
   })

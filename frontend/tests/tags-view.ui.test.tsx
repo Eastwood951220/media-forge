@@ -98,17 +98,19 @@ describe('TagsView', () => {
     const cacheControl = createCacheControl()
     useTagsViewStore.setState({
       visitedViews: [
-        { path: '/', fullPath: '/', title: '仪表盘', closable: false },
-        { path: '/crawler/tasks', fullPath: '/crawler/tasks', title: '任务列表', closable: true },
+        { path: '/', fullPath: '/', cacheKey: '/', title: '仪表盘', closable: false },
+        { path: '/crawler/tasks', fullPath: '/crawler/tasks', cacheKey: '/crawler/tasks', title: '任务列表', closable: true },
         {
           path: '/crawler/tasks/new',
           fullPath: '/crawler/tasks/new?draft=1',
+          cacheKey: '/crawler/tasks/new?draft=1',
           title: '新建任务',
           closable: true,
         },
         {
           path: '/crawler/config',
           fullPath: '/crawler/config',
+          cacheKey: '/crawler/config',
           title: '爬虫配置',
           closable: true,
         },

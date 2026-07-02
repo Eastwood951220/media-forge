@@ -19,7 +19,7 @@ import {
   type UrlType,
   URL_TYPE_LABELS,
 } from './taskUrlUtils'
-import { getFullPath, getRouteViewKey } from '@/routes/tags'
+import { getRouteViewKey } from '@/routes/tags'
 import styles from './TaskPages.module.less'
 
 function UrlEntryCard({
@@ -210,7 +210,6 @@ export default function TaskFormPage() {
 
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const searchStr = useRouterState({ select: (state) => state.location.searchStr ?? '' })
-  const fullPath = getFullPath(pathname, searchStr)
   const cacheKey = getRouteViewKey(pathname, searchStr)
   const removeSelectedView = useTagsViewStore((state) => state.removeSelectedView)
   const cacheControl = useRouteCacheControl()

@@ -32,6 +32,7 @@ describe('crawler task run controls', () => {
       rows: [{
         id: 'task-1',
         name: '任务A',
+        storage_location: 'A',
         urls: [],
         is_skip: false,
         status: 'pending',
