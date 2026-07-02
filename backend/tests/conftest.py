@@ -48,7 +48,9 @@ def client() -> TestClient:
     """TestClient with mocked lifespan to avoid real PostgreSQL/Redis connections."""
     with patch("backend.app.main.connect_postgres"), \
          patch("backend.app.main.close_postgres"), \
-         patch("backend.app.main.close_redis"):
+         patch("backend.app.main.close_redis"), \
+         patch("backend.app.main.get_session_factory"), \
+         patch("backend.app.main.cleanup_interrupted_runs"):
         with TestClient(app) as tc:
             yield tc
 

@@ -11,11 +11,13 @@ from backend.app.core.dependencies import close_redis
 from backend.app.core.exception_handlers import register_exception_handlers
 from backend.app.modules.auth.router import router as auth_router
 from backend.app.modules.crawler.config.router import router as crawler_config_router
+from backend.app.modules.crawler.runs.router import router as crawler_runs_router
+from backend.app.modules.crawler.runtime.service import cleanup_interrupted_runs, get_runtime_state
 from backend.app.modules.crawler.tasks.router import router as crawler_tasks_router
 from backend.app.modules.health.router import router as health_router
 from backend.app.modules.movies.router import router as movies_router
 from backend.app.modules.init.router import router as init_router
-from shared.database.session import close_postgres, connect_postgres
+from shared.database.session import close_postgres, connect_postgres, get_session_factory
 from shared.logging.file_log import ensure_log_dir
 from shared.runtime_config import load_runtime_config, runtime_config_exists
 
@@ -57,6 +59,13 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     if runtime_config_exists():
         connect_postgres()
         logger.info("PostgreSQL connected.")
+
+        # Cleanup interrupted crawler runs on startup
+        factory = get_session_factory()
+        with factory() as session:
+            stopped = cleanup_interrupted_runs(session, get_runtime_state())
+            if stopped:
+                logger.info("Stopped %d interrupted crawler runs.", stopped)
     else:
         logger.warning("Backend not initialized — only init endpoints available.")
 
@@ -96,6 +105,7 @@ app.include_router(auth_router)
 app.include_router(health_router)
 app.include_router(crawler_tasks_router)
 app.include_router(crawler_config_router)
+app.include_router(crawler_runs_router)
 app.include_router(movies_router)
 
 
