@@ -1,192 +1,133 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Drawer, Image, Input, Space, Table, Tag } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
-import { getMovie, getMovies } from '@/api/movie'
-import type { Movie } from '@/api/movie/types'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { Card } from 'antd'
+import { DEFAULT_MOVIE_PAGE } from './constants'
+import type { FilterItemConfig } from '@/api/movie'
+import type { MovieFilterConfig } from '@/api/movie/types'
+import MovieDetailDrawer from './components/MovieDetailDrawer'
+import FilterConfigDrawer from './components/FilterConfigDrawer'
+import MovieFilterBar from './components/MovieFilterBar'
+import MovieTable from './components/MovieTable'
+import { useMovieDetail } from './hooks/useMovieDetail'
+import { useMovieFilterConfig } from './hooks/useMovieFilterConfig'
+import { useMovieFilters } from './hooks/useMovieFilters'
+import { useMovieList } from './hooks/useMovieList'
+import type { MovieFilterState } from './utils/movieFilter'
 
-const PAGE_SIZE = 20
+function parseSortDefault(config: MovieFilterConfig | undefined): { sortBy: string; sortOrder: number } | undefined {
+  const raw = config?.sortBy?.defaultValue
+  if (typeof raw !== 'string' || !raw.includes(':')) return undefined
+  const [field, order] = raw.split(':')
+  const parsed = Number(order)
+  if (!field || (parsed !== 1 && parsed !== -1)) return undefined
+  return { sortBy: field, sortOrder: parsed }
+}
 
 function MovieListPage() {
-  const [movies, setMovies] = useState<Movie[]>([])
-  const [loading, setLoading] = useState(false)
-  const [total, setTotal] = useState(0)
-  const [current, setCurrent] = useState(1)
-  const [keyword, setKeyword] = useState('')
-  const [sourceTaskName, setSourceTaskName] = useState('')
-  const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null)
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  const filters = useMovieFilters()
+  const list = useMovieList(filters.requestParams)
+  const detail = useMovieDetail()
+  const configHook = useMovieFilterConfig()
 
-  const fetchMovies = useCallback(async (page: number) => {
-    setLoading(true)
-    try {
-      const skip = (page - 1) * PAGE_SIZE
-      const data = await getMovies({
-        skip,
-        limit: PAGE_SIZE,
-        keyword: keyword || undefined,
-        source_task_name: sourceTaskName || undefined,
-      })
-      setMovies(data.rows)
-      setTotal(data.total)
-    } finally {
-      setLoading(false)
+  const configSortParsed = useRef(false)
+  useEffect(() => {
+    if (configSortParsed.current) return
+    const sortDefault = parseSortDefault(configHook.config)
+    if (sortDefault) {
+      list.resetSort(sortDefault)
+      configSortParsed.current = true
     }
-  }, [keyword, sourceTaskName])
+  }, [configHook.config, list.resetSort])
+
+  const handleDetailFilterClick = useCallback((field: string, value: string) => {
+    detail.closeDetail()
+    const fieldMap: Record<string, string> = {
+      director: 'selectedDirectors',
+      maker: 'selectedMakers',
+      series: 'selectedSeries',
+      actors: 'selectedActors',
+      tags: 'selectedTags',
+    }
+    const stateKey = fieldMap[field]
+    if (!stateKey) return
+    const current = (filters.form[stateKey as keyof typeof filters.form] as string[]) || []
+    if (!current.includes(value)) {
+      filters.patchForm({ [stateKey]: [...current, value] } as Partial<MovieFilterState>)
+    }
+    list.search()
+  }, [detail, filters, list])
+
+  const handleResetFilters = useCallback(() => {
+    filters.resetFilters()
+    if (configHook.config) {
+      const defaults: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(configHook.config)) {
+        if (key !== 'sortBy' && value?.defaultValue !== undefined) {
+          defaults[key] = value.defaultValue
+        }
+      }
+      if (Object.keys(defaults).length > 0) {
+        filters.patchForm(defaults as Partial<MovieFilterState>)
+      }
+    }
+    list.resetSort(parseSortDefault(configHook.config))
+    list.setPage(DEFAULT_MOVIE_PAGE)
+  }, [configHook.config, filters, list])
 
   useEffect(() => {
-    void fetchMovies(current)
-  }, [current, fetchMovies])
-
-  const handleViewDetail = useCallback(async (movie: Movie) => {
-    try {
-      const detail = await getMovie(movie.id)
-      setSelectedMovie(detail)
-      setDrawerOpen(true)
-    } catch {
-      // ignore
+    const params = new URLSearchParams(window.location.search)
+    const movieId = params.get('id')
+    if (movieId) {
+      detail.showDetail(movieId)
+      const url = new URL(window.location.href)
+      url.searchParams.delete('id')
+      window.history.replaceState({}, '', url.toString())
     }
   }, [])
 
-  const columns: ColumnsType<Movie> = [
-    {
-      title: '封面',
-      dataIndex: 'cover',
-      key: 'cover',
-      width: 80,
-      render: (cover: string) => (
-        cover ? <Image src={cover} width={60} height={80} style={{ objectFit: 'cover' }} /> : '-'
-      ),
-    },
-    {
-      title: '番号',
-      dataIndex: 'code',
-      key: 'code',
-      width: 120,
-    },
-    {
-      title: '名称',
-      dataIndex: 'source_name',
-      key: 'source_name',
-      ellipsis: true,
-    },
-    {
-      title: '评分',
-      dataIndex: 'rating',
-      key: 'rating',
-      width: 80,
-      render: (rating: number | null) => rating?.toFixed(1) ?? '-',
-    },
-    {
-      title: '发行日期',
-      dataIndex: 'release_date',
-      key: 'release_date',
-      width: 110,
-    },
-    {
-      title: '时长',
-      dataIndex: 'duration',
-      key: 'duration',
-      width: 80,
-      render: (d: number) => (d > 0 ? `${d}分钟` : '-'),
-    },
-    {
-      title: '演员',
-      dataIndex: 'actors',
-      key: 'actors',
-      render: (actors: string[]) => (
-        <Space size={4} wrap>
-          {actors.slice(0, 3).map((a) => <Tag key={a}>{a}</Tag>)}
-          {actors.length > 3 && <Tag>+{actors.length - 3}</Tag>}
-        </Space>
-      ),
-    },
-    {
-      title: '来源任务',
-      dataIndex: 'source_task_names',
-      key: 'source_task_names',
-      render: (names: string[]) => (
-        <Space size={4} wrap>
-          {names.map((n) => <Tag key={n} color="blue">{n}</Tag>)}
-        </Space>
-      ),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 80,
-      render: (_, record) => (
-        <a onClick={() => handleViewDetail(record)}>详情</a>
-      ),
-    },
-  ]
+  const filterConfig = useMemo(() => configHook.config as Record<string, FilterItemConfig>, [configHook.config])
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1>电影列表</h1>
-      <Space style={{ marginBottom: 16 }}>
-        <Input.Search
-          placeholder="搜索番号、名称、导演等"
-          allowClear
-          onSearch={(value) => {
-            setKeyword(value)
-            setCurrent(1)
-          }}
-          style={{ width: 250 }}
+    <div>
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <MovieFilterBar
+          filters={filters}
+          sort={{ sortBy: list.sortBy, sortOrder: list.sortOrder, onChange: list.handleSortChange }}
+          filterConfig={filterConfig}
+          onSearch={list.search}
+          onReset={handleResetFilters}
+          onConfigClick={() => configHook.setDrawerOpen(true)}
         />
-        <Input.Search
-          placeholder="来源任务名称"
-          allowClear
-          onSearch={(value) => {
-            setSourceTaskName(value)
-            setCurrent(1)
-          }}
-          style={{ width: 200 }}
+      </Card>
+
+      <Card size="default">
+        <MovieTable
+          data={list.data.items}
+          total={list.data.total}
+          page={list.data.page}
+          pageSize={list.pageSize}
+          loading={list.loading}
+          selectedRowKeys={list.selectedRowKeys}
+          onSelectionChange={list.setSelectedRowKeys}
+          onPageChange={list.handlePageChange}
+          onShowSizeChange={list.handleShowSizeChange}
+          onSortChange={list.handleSortChange}
+          onViewDetail={detail.showDetail}
         />
-      </Space>
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={movies}
-        loading={loading}
-        pagination={{
-          current,
-          total,
-          pageSize: PAGE_SIZE,
-          onChange: setCurrent,
-        }}
+      </Card>
+
+      <MovieDetailDrawer
+        open={detail.open}
+        detail={detail.detail}
+        onClose={detail.closeDetail}
+        onFilterClick={handleDetailFilterClick}
       />
-      <Drawer
-        title={selectedMovie?.source_name || '电影详情'}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        width={600}
-      >
-        {selectedMovie && (
-          <div>
-            <p><strong>番号：</strong>{selectedMovie.code}</p>
-            <p><strong>发行日期：</strong>{selectedMovie.release_date}</p>
-            <p><strong>时长：</strong>{selectedMovie.duration}分钟</p>
-            <p><strong>导演：</strong>{selectedMovie.director || '-'}</p>
-            <p><strong>制作商：</strong>{selectedMovie.maker || '-'}</p>
-            <p><strong>系列：</strong>{selectedMovie.series || '-'}</p>
-            <p><strong>评分：</strong>{selectedMovie.rating?.toFixed(1) ?? '-'}</p>
-            <p><strong>演员：</strong>{selectedMovie.actors.join(', ') || '-'}</p>
-            <p><strong>标签：</strong>{selectedMovie.tags.join(', ') || '-'}</p>
-            {selectedMovie.magnets && selectedMovie.magnets.length > 0 && (
-              <>
-                <h3>磁力链接</h3>
-                {selectedMovie.magnets.map((m) => (
-                  <div key={m.id} style={{ marginBottom: 8 }}>
-                    <Tag>{m.name}</Tag>
-                    {m.size_text && <span>{m.size_text}</span>}
-                    {m.has_chinese_sub && <Tag color="green">中字</Tag>}
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        )}
-      </Drawer>
+
+      <FilterConfigDrawer
+        open={configHook.drawerOpen}
+        onClose={() => configHook.setDrawerOpen(false)}
+        config={filterConfig}
+        onSave={(cfg) => configHook.setConfig(cfg as typeof configHook.config)}
+      />
     </div>
   )
 }
