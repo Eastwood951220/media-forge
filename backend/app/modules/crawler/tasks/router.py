@@ -176,10 +176,11 @@ def update_task(
     return success(data=_serialize(updated).model_dump(mode="json"))
 
 
-@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: uuid.UUID, current_user: CurrentUser, db: Session = Depends(get_db)) -> None:
+@router.delete("/{task_id}")
+def delete_task(task_id: uuid.UUID, current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
     repo = CrawlTaskRepository(db)
     task = repo.get_owned(task_id, current_user.id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     repo.delete(task)
+    return success(msg="删除成功")

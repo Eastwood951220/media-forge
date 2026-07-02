@@ -2,6 +2,7 @@ import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
 import { Button, Input, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd'
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table'
 import type { CrawlTask } from '@/api/crawlTask/types.ts'
+import styles from '../TaskPages.module.less'
 
 type TaskListTableProps = {
   tasks: CrawlTask[]
@@ -39,12 +40,22 @@ function TaskListTable({
       key: 'name',
       width: 220,
       ellipsis: true,
+      render: (name: string) => (
+        <Typography.Text strong style={{ fontSize: 14 }}>
+          {name}
+        </Typography.Text>
+      ),
     },
     {
       title: 'URL 数量',
       key: 'url_count',
       width: 110,
-      render: (_, record) => <Tag>{record.urls?.length ?? 0} 个 URL</Tag>,
+      align: 'center',
+      render: (_, record) => (
+        <Tag color="blue" style={{ margin: 0, borderRadius: 4 }}>
+          {record.urls?.length ?? 0} 个 URL
+        </Tag>
+      ),
     },
     {
       title: 'URL 名称',
@@ -56,7 +67,9 @@ function TaskListTable({
         return (
           <Space size={4} wrap>
             {names.map((name, index) => (
-              <Tag key={`${name}-${index}`}>{name}</Tag>
+              <Tag key={`${name}-${index}`} style={{ borderRadius: 4 }}>
+                {name}
+              </Tag>
             ))}
           </Space>
         )
@@ -67,12 +80,16 @@ function TaskListTable({
       dataIndex: 'is_skip',
       key: 'is_skip',
       width: 100,
+      align: 'center',
       render: (_, record) => (
         <Switch
           checked={!record.is_skip}
           onChange={() => onToggleSkip(record)}
           checkedChildren="启用"
           unCheckedChildren="禁用"
+          style={{
+            backgroundColor: !record.is_skip ? '#1e40af' : undefined,
+          }}
         />
       ),
     },
@@ -80,13 +97,26 @@ function TaskListTable({
       title: '操作',
       key: 'actions',
       width: 130,
+      align: 'center',
       render: (_, record) => (
         <Space size="small">
           <Tooltip title="编辑">
-            <Button type="text" size="small" icon={<EditOutlined />} onClick={() => onEdit(record)} />
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => onEdit(record)}
+              style={{ color: '#1e40af' }}
+            />
           </Tooltip>
           <Tooltip title="删除">
-            <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => onDelete(record)} />
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => onDelete(record)}
+            />
           </Tooltip>
         </Space>
       ),
@@ -104,7 +134,7 @@ function TaskListTable({
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
+      <div className={styles.searchBar}>
         <Input.Search
           placeholder="搜索任务名称"
           allowClear
@@ -112,10 +142,30 @@ function TaskListTable({
           value={keyword}
           onChange={(event) => onKeywordChange(event.target.value)}
           onSearch={onSearch}
-          style={{ maxWidth: 320 }}
+          style={{ borderRadius: 8 }}
         />
       </div>
-      <Table rowKey="id" columns={columns} dataSource={tasks} loading={loading} pagination={pagination} />
+      <Table
+        rowKey="id"
+        columns={columns}
+        dataSource={tasks}
+        loading={loading}
+        pagination={pagination}
+        rowClassName={(record) => (record.is_skip ? styles.disabledRow : '')}
+        style={{ borderRadius: 8 }}
+        onRow={(record) => ({
+          style: {
+            cursor: 'pointer',
+            transition: 'background 0.15s ease',
+          },
+          onClick: (e) => {
+            // Avoid triggering row click when clicking buttons/switch
+            const target = e.target as HTMLElement
+            if (target.closest('.ant-btn') || target.closest('.ant-switch')) return
+            onEdit(record)
+          },
+        })}
+      />
     </div>
   )
 }

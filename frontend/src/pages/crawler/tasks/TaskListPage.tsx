@@ -92,7 +92,7 @@ function TaskListPage() {
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>爬取任务</h1>
-          <p className={styles.subtitle}>管理媒体资源爬取任务</p>
+          <p className={styles.subtitle}>管理 JavDB 媒体资源的爬取任务</p>
         </div>
         <Button
           type="primary"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MinusCircleOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
-import { useNavigate, useParams } from '@tanstack/react-router'
+import { useNavigate, useParams, useRouterState } from '@tanstack/react-router'
 import { App, Button, Card, Col, Form, Input, Row, Select, Switch } from 'antd'
 import {
   createCrawlTask,
@@ -9,6 +9,8 @@ import {
   updateCrawlTask,
 } from '@/api/crawlTask'
 import type { CrawlTaskCreateParams, TaskUrlEntry } from '@/api/crawlTask/types'
+import { useRouteCacheControl } from '@/layout/routeCache'
+import { useTagsViewStore } from '@/stores/useTagsViewStore'
 import {
   buildFinalUrlPreview,
   detectUrlType,
@@ -17,6 +19,7 @@ import {
   type UrlType,
   URL_TYPE_LABELS,
 } from './taskUrlUtils'
+import { getFullPath } from '@/routes/tags'
 import styles from './TaskPages.module.less'
 
 function UrlEntryCard({
@@ -31,7 +34,19 @@ function UrlEntryCard({
   onUrlTypeDetected: (index: number, urlType: UrlType) => void
 }) {
   const { message } = App.useApp()
+  const form = Form.useFormInstance()
   const [extracting, setExtracting] = useState(false)
+
+  // Detect URL type from URL value and sync to form (replaces render-time side effect)
+  useEffect(() => {
+    const url = (form.getFieldValue(['urls', index, 'url']) as string) ?? ''
+    const detected = url ? detectUrlType(url) : null
+    const currentType = form.getFieldValue(['urls', index, 'url_type']) as UrlType | undefined
+
+    if (detected && detected !== currentType) {
+      onUrlTypeDetected(index, detected)
+    }
+  }, [form, index, onUrlTypeDetected])
 
   return (
     <Card
@@ -40,27 +55,35 @@ function UrlEntryCard({
       className={styles.urlCard}
       extra={
         remove ? (
-          <Button type="text" danger icon={<MinusCircleOutlined />} onClick={remove} size="small" />
+          <Button
+            type="text"
+            danger
+            icon={<MinusCircleOutlined />}
+            onClick={remove}
+            size="small"
+            className={styles.urlCardDelete}
+          />
         ) : null
       }
     >
       <Form.Item noStyle shouldUpdate={(prev, cur) => prev.urls?.[index]?.url !== cur.urls?.[index]?.url}>
         {({ getFieldValue }) => {
-          const url = getFieldValue(['urls', index, 'url']) as string
+          const url = (getFieldValue(['urls', index, 'url']) as string) ?? ''
           const detected = url ? detectUrlType(url) : null
-          const currentType = getFieldValue(['urls', index, 'url_type']) as UrlType | undefined
-
-          if (detected && detected !== currentType) {
-            window.setTimeout(() => onUrlTypeDetected(index, detected), 0)
-          }
-
           return (
             <>
               <Form.Item name={[index, 'url']} label="URL" rules={[{ required: true, message: '请输入 URL' }]}>
                 <Input placeholder="https://javdb.com/actors/..." />
               </Form.Item>
               <Form.Item label="URL 类型">
-                <Input value={detected ? URL_TYPE_LABELS[detected] : url ? '无法识别' : '请输入 URL'} disabled />
+                <Input
+                  value={detected ? URL_TYPE_LABELS[detected] : url ? '无法识别' : '请输入 URL'}
+                  disabled
+                  style={{
+                    color: detected ? '#1e40af' : undefined,
+                    fontWeight: detected ? 500 : undefined,
+                  }}
+                />
               </Form.Item>
               <Form.Item name={[index, 'url_type']} hidden>
                 <Input />
@@ -107,7 +130,15 @@ function UrlEntryCard({
           const finalUrl = urlType ? buildFinalUrlPreview(baseUrl, urlType, hasMagnet, hasSub, sortType) : baseUrl
           return (
             <Form.Item label="最终 URL 预览">
-              <Input value={finalUrl} disabled />
+              <Input
+                value={finalUrl}
+                disabled
+                style={{
+                  fontFamily: "'Fira Code', 'Cascadia Code', monospace",
+                  fontSize: 12,
+                  background: 'rgba(148, 163, 184, 0.06)',
+                }}
+              />
             </Form.Item>
           )
         }}
@@ -118,25 +149,34 @@ function UrlEntryCard({
           const urlName = getFieldValue(['urls', index, 'url_name']) as string | undefined
           return urlName ? (
             <Form.Item label="URL 名称">
-              <Input value={urlName} disabled />
+              <Input
+                value={urlName}
+                disabled
+                style={{
+                  color: '#1e40af',
+                  fontWeight: 500,
+                  background: 'rgba(30, 64, 175, 0.04)',
+                }}
+              />
             </Form.Item>
           ) : null
         }}
       </Form.Item>
 
-      <Form.Item noStyle shouldUpdate>
+      <Form.Item noStyle shouldUpdate={(prev, cur) => prev.urls?.[index]?.url !== cur.urls?.[index]?.url}>
         {({ getFieldValue }) => {
-          const url = getFieldValue(['urls', index, 'url']) as string
-          const urlType = getFieldValue(['urls', index, 'url_type']) as string
+          const url = (getFieldValue(['urls', index, 'url']) as string) ?? ''
+          const detected = url ? detectUrlType(url) : null
           return (
             <Button
               icon={<SearchOutlined />}
               loading={extracting}
-              disabled={!url || !urlType}
+              disabled={!url || !detected}
               onClick={async () => {
+                if (!detected) return
                 setExtracting(true)
                 try {
-                  const result = await extractTaskName(url, urlType)
+                  const result = await extractTaskName(url, detected)
                   if (result.name) onNameExtracted(index, result.name)
                   else message.warning('未能提取到名称')
                 } finally {
@@ -163,6 +203,20 @@ export default function TaskFormPage() {
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const title = useMemo(() => (isEdit ? '编辑任务' : '新建任务'), [isEdit])
+
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const searchStr = useRouterState({ select: (state) => state.location.searchStr ?? '' })
+  const fullPath = getFullPath(pathname, searchStr)
+  const removeSelectedView = useTagsViewStore((state) => state.removeSelectedView)
+  const cacheControl = useRouteCacheControl()
+
+  const closeCurrentTag = useCallback(() => {
+    const currentView = useTagsViewStore.getState().visitedViews.find((v) => v.fullPath === fullPath)
+    if (currentView) {
+      removeSelectedView(currentView)
+    }
+    void cacheControl.destroy(fullPath)
+  }, [fullPath, removeSelectedView, cacheControl])
 
   useEffect(() => {
     if (!isEdit || !taskId) return
@@ -257,11 +311,18 @@ export default function TaskFormPage() {
         await createCrawlTask(payload)
         message.success('任务已创建')
       }
+      closeCurrentTag()
       void navigate({ to: '/crawler/tasks' })
     } finally {
       setSubmitting(false)
     }
   }
+
+  const handleCancel = useCallback(() => {
+    form.resetFields()
+    closeCurrentTag()
+    void navigate({ to: '/crawler/tasks' })
+  }, [form, navigate, closeCurrentTag])
 
   return (
     <div className={styles.page}>
@@ -332,7 +393,7 @@ export default function TaskFormPage() {
             <Button type="primary" htmlType="submit" loading={submitting}>
               {isEdit ? '更新' : '创建'}
             </Button>
-            <Button onClick={() => navigate({ to: '/crawler/tasks' })}>取消</Button>
+            <Button onClick={handleCancel}>取消</Button>
           </div>
         </Form>
       </section>

@@ -53,14 +53,6 @@ function expireSession(msg: string): Promise<never> {
   return Promise.reject(new Error(msg))
 }
 
-function getHttpErrorDetail(error: AxiosError): string {
-  const data = error.response?.data
-  if (data && typeof data === 'object' && 'detail' in data) {
-    const detail = (data as { detail?: unknown }).detail
-    if (typeof detail === 'string') return detail
-  }
-  return '无效的会话，或者会话已过期，请重新登录。'
-}
 
 function getResponseErrorPayload(error: AxiosError): {
   msg: string
@@ -166,7 +158,7 @@ export const transformResponse = (response: AxiosResponse<ApiResponse | Paginate
     return Promise.reject(new BusinessError(msg, code, response.data))
   }
 
-  notification.error({ message: msg })
+  notification.error({ description: msg })
   return Promise.reject(new BusinessError(msg, code, response.data))
 }
 

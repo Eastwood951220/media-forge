@@ -1,13 +1,13 @@
 import type { AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
 
 export interface ApiResponse<T = unknown> {
-  code: number
+  code: number | string
   msg: string
   data?: T
 }
 
 export interface PaginatedApiResponse<T = unknown> {
-  code: number
+  code: number | string
   msg: string
   rows: T[]
   total: number
