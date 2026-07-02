@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Table, Tag } from 'antd'
+import { useCallback, useEffect, useState } from 'react'
+import { ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { Button, Space, Table, Tag, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { getCrawlerRuns } from '@/api/crawlerRun'
+import { getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlRun } from '@/api/crawlerRun/types'
 
 const statusLabels: Record<string, { text: string; color: string }> = {
@@ -12,26 +13,49 @@ const statusLabels: Record<string, { text: string; color: string }> = {
   stopped: { text: '已停止', color: 'warning' },
 }
 
+const PAGE_SIZE = 20
+
 function RunListPage() {
   const [runs, setRuns] = useState<CrawlRun[]>([])
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
   const [current, setCurrent] = useState(1)
 
-  useEffect(() => {
-    const fetchRuns = async () => {
-      setLoading(true)
-      try {
-        const skip = (current - 1) * 20
-        const data = await getCrawlerRuns({ skip, limit: 20 })
-        setRuns(data.rows)
-        setTotal(data.total)
-      } finally {
-        setLoading(false)
-      }
+  const fetchRuns = useCallback(async (page: number) => {
+    setLoading(true)
+    try {
+      const skip = (page - 1) * PAGE_SIZE
+      const data = await getCrawlerRuns({ skip, limit: PAGE_SIZE })
+      setRuns(data.rows)
+      setTotal(data.total)
+    } finally {
+      setLoading(false)
     }
-    void fetchRuns()
-  }, [current])
+  }, [])
+
+  useEffect(() => {
+    void fetchRuns(current)
+  }, [current, fetchRuns])
+
+  const handleStop = useCallback(async (run: CrawlRun) => {
+    try {
+      await stopCrawlerRun(run.id)
+      message.success('已停止运行')
+      void fetchRuns(current)
+    } catch {
+      message.error('停止失败')
+    }
+  }, [current, fetchRuns])
+
+  const handleRestart = useCallback(async (run: CrawlRun) => {
+    try {
+      await restartCrawlerRun(run.id)
+      message.success('已重启运行')
+      void fetchRuns(current)
+    } catch {
+      message.error('重启失败')
+    }
+  }, [current, fetchRuns])
 
   const columns: ColumnsType<CrawlRun> = [
     {
@@ -60,6 +84,34 @@ function RunListPage() {
       key: 'created_at',
       render: (time: string) => new Date(time).toLocaleString(),
     },
+    {
+      title: '操作',
+      key: 'actions',
+      render: (_, record) => (
+        <Space>
+          {(record.status === 'queued' || record.status === 'running') && (
+            <Button
+              size="small"
+              danger
+              icon={<StopOutlined />}
+              onClick={() => handleStop(record)}
+            >
+              停止
+            </Button>
+          )}
+          {(record.status === 'stopped' || record.status === 'failed') && (
+            <Button
+              size="small"
+              type="primary"
+              icon={<ReloadOutlined />}
+              onClick={() => handleRestart(record)}
+            >
+              重启
+            </Button>
+          )}
+        </Space>
+      ),
+    },
   ]
 
   return (
@@ -73,7 +125,7 @@ function RunListPage() {
         pagination={{
           current,
           total,
-          pageSize: 20,
+          pageSize: PAGE_SIZE,
           onChange: setCurrent,
         }}
       />

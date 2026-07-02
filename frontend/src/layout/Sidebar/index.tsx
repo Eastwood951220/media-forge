@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { DashboardOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined } from '@ant-design/icons'
+import { DashboardOutlined, HistoryOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import { Layout, Menu } from 'antd'
 import type { MenuProps } from 'antd'
 import { useThemeStore } from '@/stores/useThemeStore'
@@ -25,6 +25,11 @@ const menuItems: MenuProps['items'] = [
         label: '任务列表',
       },
       {
+        key: '/crawler/runs',
+        icon: <HistoryOutlined />,
+        label: '运行记录',
+      },
+      {
         key: '/crawler/config',
         icon: <SettingOutlined />,
         label: '爬虫配置',
@@ -43,9 +48,11 @@ export function SideMenu({ collapsed }: SideMenuProps) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const selectedKey = pathname.startsWith('/crawler/tasks')
     ? '/crawler/tasks'
-    : pathname.startsWith('/crawler/config')
-      ? '/crawler/config'
-      : pathname
+    : pathname.startsWith('/crawler/runs')
+      ? '/crawler/runs'
+      : pathname.startsWith('/crawler/config')
+        ? '/crawler/config'
+        : pathname
   const selectedKeys = useMemo(() => [selectedKey === '/' ? '/' : selectedKey], [selectedKey])
   const openKeys = useMemo(() => (pathname.startsWith('/crawler') ? ['crawler'] : []), [pathname])
 

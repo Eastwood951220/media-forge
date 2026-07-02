@@ -9,6 +9,7 @@ import ConfigPage from '@/pages/crawler/config/ConfigPage'
 import TaskListPage from '@/pages/crawler/tasks/TaskListPage'
 import TaskFormPage from '@/pages/crawler/tasks/TaskFormPage'
 import RunListPage from '@/pages/crawler/runs/RunListPage'
+import RunDetailPage from '@/pages/crawler/runs/RunDetailPage'
 import AppLayout from '@/layout'
 
 const rootRoute = createRootRoute({
@@ -104,6 +105,12 @@ const crawlerRunsRoute = createRoute({
   component: RunListPage,
 })
 
+const crawlerRunDetailRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/crawler/runs/$id',
+  component: RunDetailPage,
+})
+
 const legacyCrawlTasksRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/crawl-tasks',
@@ -123,6 +130,7 @@ const routeTree = rootRoute.addChildren([
     crawlerTaskNewRoute,
     crawlerTaskEditRoute,
     crawlerRunsRoute,
+    crawlerRunDetailRoute,
     legacyCrawlTasksRoute,
   ]),
 ])
