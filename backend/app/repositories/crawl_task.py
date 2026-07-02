@@ -98,10 +98,11 @@ class CrawlTaskRepository(BaseRepository):
         *,
         owner_id: uuid.UUID,
         name: str,
+        storage_location: str,
         is_skip: bool,
         urls: list[TaskUrlEntryCreate],
     ) -> CrawlTask:
-        task = CrawlTask(name=name, is_skip=is_skip, owner_id=owner_id)
+        task = CrawlTask(name=name, storage_location=storage_location, is_skip=is_skip, owner_id=owner_id)
         task.urls = self.build_url_rows(urls)
         self.session.add(task)
         self.session.commit()

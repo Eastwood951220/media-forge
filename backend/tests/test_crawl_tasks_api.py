@@ -15,6 +15,7 @@ def auth_headers(client: TestClient, admin_user) -> dict[str, str]:
 def task_payload() -> dict:
     return {
         "name": "每日演员任务",
+        "storage_location": "每日演员任务",
         "is_skip": False,
         "urls": [
             {
@@ -32,6 +33,7 @@ def task_payload() -> dict:
 def exact_user_payload() -> dict:
     return {
         "name": "巨乳",
+        "storage_location": "巨乳",
         "is_skip": False,
         "urls": [
             {

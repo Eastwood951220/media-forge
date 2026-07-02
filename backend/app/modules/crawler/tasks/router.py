@@ -159,6 +159,7 @@ def create_task(data: CrawlTaskCreate, current_user: CurrentUser, db: Session = 
         created = repo.create_with_urls(
             owner_id=current_user.id,
             name=data.name,
+            storage_location=data.storage_location,
             is_skip=data.is_skip,
             urls=data.urls,
         )

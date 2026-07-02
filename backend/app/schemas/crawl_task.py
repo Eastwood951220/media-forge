@@ -32,6 +32,7 @@ class TaskUrlEntryRead(TaskUrlEntryBase):
 
 class CrawlTaskCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
+    storage_location: str = Field(..., min_length=1, max_length=10)
     urls: list[TaskUrlEntryCreate] = Field(..., min_length=1)
     is_skip: bool = False
 
@@ -46,6 +47,7 @@ class CrawlTaskRead(BaseModel):
     id: uuid.UUID
     _id: uuid.UUID
     name: str
+    storage_location: str
     urls: list[TaskUrlEntryRead]
     is_skip: bool
     status: str

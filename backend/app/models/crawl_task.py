@@ -15,6 +15,7 @@ class CrawlTask(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    storage_location: Mapped[str] = mapped_column(String(10), nullable=False, default="")
     is_skip: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending", index=True)
     task_id: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)

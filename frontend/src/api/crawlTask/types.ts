@@ -15,6 +15,7 @@ export interface CrawlTask {
   id: string
   _id?: string
   name: string
+  storage_location: string
   urls: TaskUrlEntry[]
   is_skip: boolean
   status: string
@@ -38,6 +39,7 @@ export interface PaginatedResponse<T> {
 
 export interface CrawlTaskCreateParams {
   name: string
+  storage_location: string
   urls: TaskUrlEntry[]
   is_skip?: boolean
 }

@@ -205,6 +205,7 @@ export default function TaskFormPage() {
   const [form] = Form.useForm<CrawlTaskCreateParams>()
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [storageLocationManuallyEdited, setStorageLocationManuallyEdited] = useState(false)
   const title = useMemo(() => (isEdit ? '编辑任务' : '新建任务'), [isEdit])
 
   const pathname = useRouterState({ select: (state) => state.location.pathname })
@@ -228,6 +229,7 @@ export default function TaskFormPage() {
       .then((task) => {
         form.setFieldsValue({
           name: task.name,
+          storage_location: task.storage_location,
           is_skip: task.is_skip,
           urls: task.urls.map((entry) => ({
             url: entry.url,
@@ -317,6 +319,7 @@ export default function TaskFormPage() {
 
       const payload: CrawlTaskCreateParams = {
         name: values.name,
+        storage_location: values.storage_location,
         is_skip: values.is_skip ?? false,
         urls: enrichedEntries,
       }
@@ -363,12 +366,39 @@ export default function TaskFormPage() {
           <Row gutter={24}>
             <Col flex="auto">
               <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
-                <Input placeholder="例如：某演员名称" />
+                <Input
+                  placeholder="例如：某演员名称"
+                  onChange={(e) => {
+                    const nextValue = e.target.value
+                    if (!storageLocationManuallyEdited) {
+                      form.setFieldValue('storage_location', nextValue)
+                    }
+                  }}
+                />
               </Form.Item>
             </Col>
             <Col flex="120px">
               <Form.Item name="is_skip" label="启用状态" valuePropName="checked">
                 <Switch checkedChildren="禁用" unCheckedChildren="启用" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={24}>
+            <Col flex="auto">
+              <Form.Item
+                name="storage_location"
+                label="网盘路径"
+                rules={[{ required: true, message: '请输入网盘路径' }]}
+              >
+                <Input
+                  placeholder="例如：VR"
+                  disabled={isEdit}
+                  onChange={() => {
+                    if (!isEdit) {
+                      setStorageLocationManuallyEdited(true)
+                    }
+                  }}
+                />
               </Form.Item>
             </Col>
           </Row>
