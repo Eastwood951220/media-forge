@@ -1,0 +1,38 @@
+.configLayout {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 800px;
+  gap: 24px;
+  align-items: start;
+}
+
+.configLeft,
+.configRight{
+  min-width: 0;
+}
+
+
+
+.formCard {
+  width: 100%;
+}
+
+.cookieActions {
+  display: flex;
+  gap: 8px;
+}
+
+.editorFrame {
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  overflow: hidden;
+
+  :global(.dark) & {
+    border-color: #424242;
+  }
+}
+
+@media (max-width: 960px) {
+  .configLayout {
+    grid-template-columns: 1fr;
+  }
+}

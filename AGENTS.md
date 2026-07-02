@@ -6,6 +6,19 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 Media Forge — a full-stack media processing application.
 
+This project is a refactor and optimization of
+`/Users/eastwood/Code/PycharmProjects/jav-scrapling`.
+
+## Planning Scope
+
+- When writing implementation plans, including plans created with
+  `superpowers:writing-plans`, keep scope anchored to the refactor and
+  optimization goals of the original `jav-scrapling` project.
+- Do not invent or add speculative features, product expansions, or unrelated
+  modules unless the user explicitly requests them.
+- Plans should describe only the work needed to migrate, preserve, improve, or
+  integrate existing behavior, plus directly necessary tests and documentation.
+
 ## Directory Structure
 
 ```
