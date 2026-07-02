@@ -21,12 +21,12 @@ def delete_movies_by_task_id(db: Session, task_id: uuid.UUID | str) -> int:
     Returns:
         Number of movies deleted
     """
-    # Convert to string for comparison since column is String(36)
-    task_id_str = str(task_id)
+    # Ensure task_id is UUID type for comparison
+    task_id_uuid = uuid.UUID(str(task_id)) if not isinstance(task_id, uuid.UUID) else task_id
 
     # Find movies with this source_task_id
     movies = db.scalars(
-        select(Movie).where(Movie.source_task_id == task_id_str)
+        select(Movie).where(Movie.source_task_id == task_id_uuid)
     ).all()
 
     if not movies:
@@ -54,11 +54,11 @@ def delete_movies_by_task_ids(db: Session, task_ids: list[uuid.UUID | str]) -> i
     if not task_ids:
         return 0
 
-    # Convert to strings for comparison since column is String(36)
-    task_id_strings = [str(tid) for tid in task_ids]
+    # Ensure all IDs are UUID type for comparison
+    task_id_uuids = [uuid.UUID(str(tid)) if not isinstance(tid, uuid.UUID) else tid for tid in task_ids]
 
     movies = db.scalars(
-        select(Movie).where(Movie.source_task_id.in_(task_id_strings))
+        select(Movie).where(Movie.source_task_id.in_(task_id_uuids))
     ).all()
 
     if not movies:

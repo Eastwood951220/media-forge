@@ -72,20 +72,19 @@ def test_delete_task_cascades_movies(client: TestClient, admin_user) -> None:
     session.add(task)
     session.flush()
     task_id = str(task.id)
-    task_id_str = str(task.id)
 
     movie1 = Movie(
         code="TEST-001",
         source_url="https://javdb.com/v/test001",
         source_name="测试电影1",
-        source_task_id=task_id_str,
+        source_task_id=task.id,
         source_task_names=["测试任务"],
     )
     movie2 = Movie(
         code="TEST-002",
         source_url="https://javdb.com/v/test002",
         source_name="测试电影2",
-        source_task_id=task_id_str,
+        source_task_id=task.id,
         source_task_names=["测试任务"],
     )
     # Movie without source_task_id (should not be deleted)
@@ -121,8 +120,8 @@ def test_list_movies_filter_by_source_task_id(client: TestClient, admin_user) ->
 
     # Create movies with different source_task_ids
     session = TestingSessionLocal()
-    task_id_1 = str(uuid.uuid4())
-    task_id_2 = str(uuid.uuid4())
+    task_id_1 = uuid.uuid4()
+    task_id_2 = uuid.uuid4()
 
     movie1 = Movie(
         code="TASK1-001",
@@ -152,7 +151,7 @@ def test_list_movies_filter_by_source_task_id(client: TestClient, admin_user) ->
     body = response.json()
     assert body["total"] == 1
     assert body["rows"][0]["code"] == "TASK1-001"
-    assert body["rows"][0]["source_task_id"] == task_id_1
+    assert body["rows"][0]["source_task_id"] == str(task_id_1)
 
 
 def test_movie_payload_includes_source_task_id(client: TestClient, admin_user) -> None:
@@ -160,7 +159,7 @@ def test_movie_payload_includes_source_task_id(client: TestClient, admin_user) -
     headers = auth_headers(client, admin_user)
 
     session = TestingSessionLocal()
-    task_id = str(uuid.uuid4())
+    task_id = uuid.uuid4()
     movie = Movie(
         code="PAYLOAD-001",
         source_url="https://javdb.com/v/payload001",
@@ -177,4 +176,4 @@ def test_movie_payload_includes_source_task_id(client: TestClient, admin_user) -
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()["data"]
-    assert data["source_task_id"] == task_id
+    assert data["source_task_id"] == str(task_id)
