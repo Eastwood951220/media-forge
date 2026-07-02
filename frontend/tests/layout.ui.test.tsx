@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import { createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import { createMemoryHistory } from '@tanstack/react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,8 +33,13 @@ function renderLayout(initialPath = '/') {
     path: '/crawler/tasks',
     component: () => <div>console outlet</div>,
   })
+  const crawlerConfigRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/crawler/config',
+    component: () => <div>console outlet</div>,
+  })
   const router = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, crawlerTasksRoute]),
+    routeTree: rootRoute.addChildren([indexRoute, crawlerTasksRoute, crawlerConfigRoute]),
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   })
 
@@ -69,7 +74,10 @@ describe('modern console layout', () => {
     renderLayout('/crawler/tasks')
 
     expect(await screen.findByText('Media Forge')).toBeInTheDocument()
-    expect(screen.getByText('Operations Console')).toBeInTheDocument()
+    const header = await screen.findByRole('banner')
+    expect(within(header).getByText('任务列表')).toBeInTheDocument()
+    expect(within(header).queryByText('Operations Console')).not.toBeInTheDocument()
+    expect(within(header).queryByText('Media pipeline health')).not.toBeInTheDocument()
     expect(screen.getAllByRole('menu').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('仪表盘').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('爬虫')).toBeInTheDocument()
@@ -77,6 +85,15 @@ describe('modern console layout', () => {
     expect(screen.getByText('爬虫配置')).toBeInTheDocument()
     expect(screen.getByText('console outlet')).toBeInTheDocument()
     expect(screen.queryByLabelText('Open settings')).not.toBeInTheDocument()
+  })
+
+  it('updates the header title from the active route name', async () => {
+    renderLayout('/crawler/config')
+
+    const header = await screen.findByRole('banner')
+    expect(within(header).getByText('爬虫配置')).toBeInTheDocument()
+    expect(within(header).queryByText('Operations Console')).not.toBeInTheDocument()
+    expect(within(header).queryByText('Media pipeline health')).not.toBeInTheDocument()
   })
 
   it('keeps the top header theme-aware in dark mode', async () => {

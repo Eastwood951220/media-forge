@@ -1,9 +1,10 @@
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import { Button, Layout, Space } from 'antd'
 import { ThemeModeToggle } from '@/components/ThemeModeToggle'
 import { logout as logoutApi } from '@/api/login'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { getRouteTagMeta } from '@/routes/tags'
 import styles from './Header.module.less'
 
 const { Header } = Layout
@@ -16,6 +17,8 @@ type LayoutHeaderProps = {
 
 export function LayoutHeader({ darkMode, collapsed, onCollapse }: LayoutHeaderProps) {
   const navigate = useNavigate()
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const pageTitle = getRouteTagMeta(pathname).title
   const userInfo = useAuthStore((state) => state.userInfo)
   const logout = useAuthStore((state) => state.logout)
   const displayName = userInfo?.displayName || userInfo?.username || 'Admin'
@@ -43,8 +46,7 @@ export function LayoutHeader({ darkMode, collapsed, onCollapse }: LayoutHeaderPr
           {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
         </button>
         <div className={styles.titleBlock}>
-          <span className={styles.title}>Operations Console</span>
-          <span className={styles.subtitle}>Media pipeline health</span>
+          <span className={styles.title}>{pageTitle}</span>
         </div>
       </div>
 

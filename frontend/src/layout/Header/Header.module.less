@@ -45,21 +45,19 @@
 
 .titleBlock {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   min-width: 0;
 }
 
 .title {
+  max-width: min(42vw, 360px);
+  overflow: hidden;
   color: #0f172a;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 20px;
-}
-
-.subtitle {
-  color: #64748b;
-  font-size: 12px;
-  line-height: 16px;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .right {
@@ -124,10 +122,6 @@
 
   .title {
     color: #f8fafc;
-  }
-
-  .subtitle {
-    color: #94a3b8;
   }
 
   .user {
