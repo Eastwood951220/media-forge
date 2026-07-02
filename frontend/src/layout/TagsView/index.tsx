@@ -6,7 +6,7 @@ import {
   ReloadOutlined,
   RollbackOutlined,
 } from '@ant-design/icons'
-import { getFullPath, getRouteTagMeta } from '@/routes/tags'
+import { getFullPath, getRouteTagMeta, getRouteViewKey } from '@/routes/tags'
 import type { RouteCacheControl } from '@/layout/routeCache'
 import { useRouteCacheControl } from '@/layout/routeCache'
 import { useTagsViewStore } from '@/stores/useTagsViewStore'
@@ -29,10 +29,10 @@ type ContextMenuState = {
 }
 
 function getRemovedCacheKeys(beforeViews: TagView[], nextViews: TagView[]) {
-  const nextKeys = new Set(nextViews.map((view) => view.fullPath))
+  const nextKeys = new Set(nextViews.map((view) => view.cacheKey))
   return beforeViews
-    .filter((view) => view.closable !== false && !nextKeys.has(view.fullPath))
-    .map((view) => view.fullPath)
+    .filter((view) => view.closable !== false && !nextKeys.has(view.cacheKey))
+    .map((view) => view.cacheKey)
 }
 
 export function TagsView({ darkMode, cacheControl: cacheControlProp }: TagsViewProps) {
@@ -55,8 +55,9 @@ export function TagsView({ darkMode, cacheControl: cacheControlProp }: TagsViewP
   })
 
   const fullPath = getFullPath(pathname, searchStr)
+  const cacheKey = getRouteViewKey(pathname, searchStr)
   const currentMeta = useMemo(() => getRouteTagMeta(pathname), [pathname])
-  const isActive = useCallback((view: TagView) => view.fullPath === fullPath, [fullPath])
+  const isActive = useCallback((view: TagView) => view.cacheKey === cacheKey, [cacheKey])
 
   useEffect(() => {
     // 白名单中的路径不添加到标签页
@@ -67,11 +68,12 @@ export function TagsView({ darkMode, cacheControl: cacheControlProp }: TagsViewP
     addVisitedView({
       path: pathname,
       fullPath,
+      cacheKey,
       title: currentMeta.title,
       closable: pathname !== '/' && !currentMeta.affix,
       query: searchStr ? Object.fromEntries(new URLSearchParams(searchStr)) : undefined,
     })
-  }, [addVisitedView, currentMeta, fullPath, pathname, searchStr])
+  }, [addVisitedView, cacheKey, currentMeta, fullPath, pathname, searchStr])
 
   const closeContextMenu = useCallback(() => {
     setContextMenu((prev) => (prev.visible ? { ...prev, visible: false } : prev))
@@ -84,11 +86,11 @@ export function TagsView({ darkMode, cacheControl: cacheControlProp }: TagsViewP
 
   const navigateAfterClose = useCallback(
     (views: TagView[]) => {
-      if (views.some((view) => view.fullPath === fullPath)) return
+      if (views.some((view) => view.cacheKey === cacheKey)) return
       const last = views.at(-1)
       void navigate({ to: last?.fullPath ?? '/' })
     },
-    [fullPath, navigate],
+    [cacheKey, navigate],
   )
 
   const destroyRemovedCaches = useCallback(
@@ -104,7 +106,7 @@ export function TagsView({ darkMode, cacheControl: cacheControlProp }: TagsViewP
       event?.stopPropagation()
       if (tag.closable === false) return
       const nextViews = removeSelectedView(tag)
-      void cacheControl.destroy(tag.fullPath)
+      void cacheControl.destroy(tag.cacheKey)
       navigateAfterClose(nextViews)
     },
     [cacheControl, navigateAfterClose, removeSelectedView],
@@ -115,7 +117,7 @@ export function TagsView({ darkMode, cacheControl: cacheControlProp }: TagsViewP
       if (event.button === 1 && tag.closable !== false) {
         event.preventDefault()
         const nextViews = removeSelectedView(tag)
-        void cacheControl.destroy(tag.fullPath)
+        void cacheControl.destroy(tag.cacheKey)
         navigateAfterClose(nextViews)
       }
     },
@@ -143,16 +145,16 @@ export function TagsView({ darkMode, cacheControl: cacheControlProp }: TagsViewP
 
   const handleRefresh = useCallback(() => {
     closeContextMenu()
-    cacheControl.refresh(contextMenu.selectedTag?.fullPath ?? fullPath)
+    cacheControl.refresh(contextMenu.selectedTag?.cacheKey ?? cacheKey)
     void navigate({ to: fullPath, replace: true })
-  }, [cacheControl, closeContextMenu, contextMenu.selectedTag, fullPath, navigate])
+  }, [cacheControl, cacheKey, closeContextMenu, contextMenu.selectedTag, fullPath, navigate])
 
   const handleCloseCurrent = useCallback(() => {
     closeContextMenu()
     const tag = contextMenu.selectedTag
     if (!tag || tag.closable === false) return
     const nextViews = removeSelectedView(tag)
-    void cacheControl.destroy(tag.fullPath)
+    void cacheControl.destroy(tag.cacheKey)
     navigateAfterClose(nextViews)
   }, [
     cacheControl,
@@ -229,7 +231,7 @@ export function TagsView({ darkMode, cacheControl: cacheControlProp }: TagsViewP
 
   const selectedTag = contextMenu.selectedTag
   const selectedIndex = selectedTag
-    ? visitedViews.findIndex((view) => view.fullPath === selectedTag.fullPath)
+    ? visitedViews.findIndex((view) => view.cacheKey === selectedTag.cacheKey)
     : -1
   const isFirst = selectedIndex <= 0
   const isLast = selectedIndex === visitedViews.length - 1
@@ -243,9 +245,10 @@ export function TagsView({ darkMode, cacheControl: cacheControlProp }: TagsViewP
           <div className={styles.tagsInner}>
             {visitedViews.map((view) => (
               <span
-                key={view.fullPath}
+                key={view.cacheKey}
                 data-path={view.path}
                 data-full-path={view.fullPath}
+                data-cache-key={view.cacheKey}
                 className={`${styles.tag} ${isActive(view) ? styles.active : ''} ${view.closable === false ? styles.affix : ''}`}
                 onClick={() => void navigate({ to: view.fullPath })}
                 onMouseDown={(event) => handleMouseDown(view, event)}

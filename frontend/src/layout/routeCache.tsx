@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, type PropsWithChildren } from 'react'
 import { Outlet, useRouterState } from '@tanstack/react-router'
 import { KeepAlive, useKeepAliveRef } from 'keepalive-for-react'
-import { getFullPath } from '@/routes/tags'
+import { getRouteViewKey } from '@/routes/tags'
 
 export const ROUTE_CACHE_EXCLUDE_PATHS = ['/login', '/init']
 
@@ -72,7 +72,7 @@ export function RouteKeepAliveOutlet() {
   const aliveRef = useContext(RouteCacheRefContext)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const searchStr = useRouterState({ select: (state) => state.location.searchStr ?? '' })
-  const activeCacheKey = getFullPath(pathname, searchStr)
+  const activeCacheKey = getRouteViewKey(pathname, searchStr)
 
   if (isRouteCacheExcluded(pathname) || !aliveRef) {
     return <Outlet />
