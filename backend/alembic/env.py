@@ -1,10 +1,20 @@
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+# Ensure both backend/ (for app.*) and project root (for shared.*) are importable
+_backend_dir = str(Path(__file__).resolve().parent.parent)
+_project_root = str(Path(_backend_dir).parent)
+for _p in (_backend_dir, _project_root):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from app.models.crawl_task import CrawlTask  # noqa: F401
+from app.models.user import User  # noqa: F401
 from shared.database.models.base import Base
-from backend.app.models.user import User  # noqa: F401 — ensure model is registered
 
 config = context.config
 if config.config_file_name is not None:

@@ -15,15 +15,20 @@ type AuthState = {
   isAuthenticated: boolean
   setLoginState: (token: string, userInfo?: UserInfo | null) => void
   logout: () => void
+  syncFromCookie: () => void
+}
+
+function cookieToken(): string {
+  return getToken() ?? ''
 }
 
 export const useAuthStore = create<AuthState>()(
   devtools(
     persist(
       (set) => ({
-        token: getToken() ?? '',
+        token: cookieToken(),
         userInfo: null,
-        isAuthenticated: Boolean(getToken()),
+        isAuthenticated: Boolean(cookieToken()),
 
         setLoginState: (token, userInfo) => {
           setToken(token)
@@ -42,6 +47,14 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
           })
         },
+
+        syncFromCookie: () => {
+          const token = cookieToken()
+          set({
+            token,
+            isAuthenticated: Boolean(token),
+          })
+        },
       }),
       {
         name: 'media-forge-auth',
@@ -49,6 +62,9 @@ export const useAuthStore = create<AuthState>()(
           token: state.token,
           isAuthenticated: state.isAuthenticated,
         }),
+        onRehydrateStorage: () => (state) => {
+          state?.syncFromCookie()
+        },
       },
     ),
   ),
@@ -56,6 +72,7 @@ export const useAuthStore = create<AuthState>()(
 
 /** Check if user is logged in — token from cookie must exist AND state must agree. */
 export function isLoggedIn(): boolean {
+  const cookie = getToken()
   const { token, isAuthenticated } = useAuthStore.getState()
-  return Boolean(token) && isAuthenticated
+  return Boolean(cookie) && Boolean(token) && isAuthenticated
 }

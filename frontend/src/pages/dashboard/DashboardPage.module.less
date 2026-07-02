@@ -1,0 +1,254 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.eyebrow,
+.panelKicker,
+.metricLabel,
+.metricDetail,
+.statusLabel {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 36px;
+}
+
+.summary {
+  max-width: 560px;
+  margin: 8px 0 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.heroStatus {
+  min-width: 176px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(187, 247, 208, 0.9);
+  border-radius: 8px;
+  background: rgba(240, 253, 244, 0.9);
+  color: #166534;
+}
+
+.heroStatus strong {
+  display: block;
+  color: #14532d;
+  font-size: 14px;
+}
+
+.statusIcon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 18px;
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.metricCard,
+.panel {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.metricCard {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+}
+
+.metricIcon,
+.panelIcon {
+  color: var(--app-primary-color, #006aff);
+}
+
+.metricIcon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: rgba(0, 106, 255, 0.1);
+  font-size: 18px;
+}
+
+.metricValue {
+  display: block;
+  margin-top: 4px;
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 30px;
+}
+
+.metricDetail {
+  display: block;
+  margin-top: 2px;
+}
+
+.workGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+  gap: 14px;
+}
+
+.panel {
+  min-width: 0;
+  padding: 16px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.panelHeader h2 {
+  margin: 2px 0 0;
+  color: #0f172a;
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.panelIcon {
+  font-size: 20px;
+}
+
+.laneList,
+.activityList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.laneRow {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+}
+
+.laneRow strong {
+  color: #0f172a;
+}
+
+.laneRow em {
+  color: #64748b;
+  font-style: normal;
+}
+
+.activityRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.activityDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--app-primary-color, #006aff);
+}
+
+:global(:root[data-theme="dark"]) {
+  .hero,
+  .metricCard,
+  .panel {
+    border-color: rgba(51, 65, 85, 0.9);
+    background: rgba(15, 23, 42, 0.88);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+  }
+
+  .title,
+  .metricValue,
+  .panelHeader h2,
+  .laneRow strong {
+    color: #f8fafc;
+  }
+
+  .summary,
+  .activityRow,
+  .laneRow {
+    color: #cbd5e1;
+  }
+
+  .eyebrow,
+  .panelKicker,
+  .metricLabel,
+  .metricDetail,
+  .statusLabel,
+  .laneRow em {
+    color: #94a3b8;
+  }
+
+  .heroStatus {
+    border-color: rgba(20, 83, 45, 0.9);
+    background: rgba(20, 83, 45, 0.28);
+    color: #bbf7d0;
+  }
+
+  .heroStatus strong {
+    color: #dcfce7;
+  }
+
+  .statusIcon {
+    background: rgba(22, 101, 52, 0.52);
+    color: #bbf7d0;
+  }
+
+  .laneRow {
+    background: rgba(30, 41, 59, 0.78);
+  }
+}

@@ -1,12 +1,16 @@
 import type { AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
 
 export interface ApiResponse<T = unknown> {
-  code?: number | string
-  msg?: string
+  code: number
+  msg: string
   data?: T
-  rows?: T
-  total?: number
-  [key: string]: unknown
+}
+
+export interface PaginatedApiResponse<T = unknown> {
+  code: number
+  msg: string
+  rows: T[]
+  total: number
 }
 
 export type RepeatStrategy = 'reuse' | 'cancel-prev' | 'ignore-new' | 'none'

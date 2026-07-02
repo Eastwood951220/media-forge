@@ -15,5 +15,12 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 })
 
+// Mock ResizeObserver for Ant Design Tabs in jsdom
+globalThis.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 // Mock window.scrollTo for TanStack Router scroll restoration in jsdom
 window.scrollTo = () => {}

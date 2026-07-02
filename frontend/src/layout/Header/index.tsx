@@ -2,6 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import { Button, Layout, Space } from 'antd'
 import { ThemeModeToggle } from '@/components/ThemeModeToggle'
+import { logout as logoutApi } from '@/api/login'
 import { useAuthStore } from '@/stores/useAuthStore'
 import styles from './Header.module.less'
 
@@ -19,9 +20,15 @@ export function LayoutHeader({ darkMode, collapsed, onCollapse }: LayoutHeaderPr
   const logout = useAuthStore((state) => state.logout)
   const displayName = userInfo?.displayName || userInfo?.username || 'Admin'
 
-  const handleLogout = () => {
-    logout()
-    void navigate({ to: '/login', search: { redirect: undefined }, replace: true })
+  const handleLogout = async () => {
+    try {
+      await logoutApi()
+    } catch {
+      // 忽略接口错误，继续清除本地状态
+    } finally {
+      logout()
+      void navigate({ to: '/login', search: { redirect: undefined }, replace: true })
+    }
   }
 
   return (
@@ -35,6 +42,10 @@ export function LayoutHeader({ darkMode, collapsed, onCollapse }: LayoutHeaderPr
         >
           {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
         </button>
+        <div className={styles.titleBlock}>
+          <span className={styles.title}>Operations Console</span>
+          <span className={styles.subtitle}>Media pipeline health</span>
+        </div>
       </div>
 
       <Space size={12} className={styles.right}>
@@ -50,7 +61,7 @@ export function LayoutHeader({ darkMode, collapsed, onCollapse }: LayoutHeaderPr
           title="退出登录"
           shape="circle"
           icon={<LogoutOutlined />}
-          onClick={handleLogout}
+          onClick={() => { void handleLogout() }}
         />
       </Space>
     </Header>

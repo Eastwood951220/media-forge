@@ -1,7 +1,8 @@
 .sider {
   min-width: 0;
   overflow: hidden;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.96);
+  border-right: 1px solid rgba(226, 232, 240, 0.9);
 
   :global(.ant-layout-sider-children) {
     display: flex;
@@ -15,6 +16,7 @@
     width: 100%;
     min-width: 0;
     border-inline-end: 0;
+    background: transparent;
   }
 
   :global(.ant-menu-inline),
@@ -24,16 +26,24 @@
 
   :global(.ant-menu-item),
   :global(.ant-menu-submenu-title) {
-    width: calc(100% - 8px);
-    margin-inline: 4px;
+    width: calc(100% - 16px);
+    height: 40px;
+    margin: 4px 8px;
+    border-radius: 8px;
+  }
+
+  :global(.ant-menu-item-selected) {
+    background: rgba(0, 106, 255, 0.12);
+    color: var(--app-primary-color, #006aff);
+    font-weight: 600;
   }
 }
 
 .collapsed {
   :global(.ant-menu-item),
   :global(.ant-menu-submenu-title) {
-    width: calc(100% - 8px);
-    margin-inline: 4px;
+    width: calc(100% - 16px);
+    margin-inline: 8px;
   }
 }
 
@@ -41,29 +51,33 @@
   height: 64px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   padding: 0 16px;
   flex: 0 0 auto;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.72);
 }
 
 .logoMark {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
   border-radius: 8px;
-  background: var(--app-primary-color, #1677ff);
+  background: #0f172a;
   color: #ffffff;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
 }
 
 .logoText {
   overflow: hidden;
   color: #0f172a;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -72,8 +86,20 @@
   flex: 1 1 auto;
   width: 100%;
   min-width: 0;
+  padding: 10px 0;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.menuWrapper::-webkit-scrollbar {
+  width: 8px;
+}
+
+.menuWrapper::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.28);
+  background-clip: padding-box;
 }
 
 .menu {
@@ -83,10 +109,26 @@
 
 .dark {
   &.sider {
-    background: #111827;
+    background: rgba(15, 23, 42, 0.96);
+    border-right-color: rgba(51, 65, 85, 0.9);
+  }
+
+  .logo {
+    border-bottom-color: rgba(51, 65, 85, 0.9);
+  }
+
+  .logoMark {
+    background: #eff6ff;
+    color: #0f172a;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
   }
 
   .logoText {
     color: #e5e7eb;
+  }
+
+  :global(.ant-menu-item-selected) {
+    background: rgba(59, 130, 246, 0.2);
+    color: #bfdbfe;
   }
 }

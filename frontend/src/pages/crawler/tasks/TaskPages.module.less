@@ -1,0 +1,49 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  margin: 0;
+  color: #111827;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: rgba(15, 23, 42, 0.64);
+  font-size: 14px;
+}
+
+.panel {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.formPanel {
+  padding: 18px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+@media (max-width: 768px) {
+  .header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

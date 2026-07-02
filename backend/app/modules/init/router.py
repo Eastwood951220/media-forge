@@ -13,6 +13,7 @@ from shared.runtime_config import (
     runtime_config_exists,
     write_runtime_config,
 )
+from shared.schemas.common import success
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +42,8 @@ class RedisTestRequest(BaseModel):
     connect_timeout: int = Field(default=5, ge=1, le=60)
 
 
-@router.post("/test-postgres", response_model=ConnectionTestResult)
-def test_postgres(body: PostgresTestRequest) -> ConnectionTestResult:
+@router.post("/test-postgres")
+def test_postgres(body: PostgresTestRequest) -> dict:
     # Connect to postgres maintenance DB (always exists)
     sync_url = (
         f"postgresql+psycopg://{body.user}:{body.password}"
@@ -57,13 +58,13 @@ def test_postgres(body: PostgresTestRequest) -> ConnectionTestResult:
             conn.execute(text("SET timezone = 'Asia/Shanghai'"))
             conn.execute(text("SELECT 1"))
         engine.dispose()
-        return ConnectionTestResult(success=True, message="PostgreSQL 连接成功")
+        return success(data={"success": True, "message": "PostgreSQL 连接成功"})
     except Exception as exc:
-        return ConnectionTestResult(success=False, message=f"连接失败: {exc}")
+        return success(data={"success": False, "message": f"连接失败: {exc}"})
 
 
-@router.post("/test-redis", response_model=ConnectionTestResult)
-def test_redis(body: RedisTestRequest) -> ConnectionTestResult:
+@router.post("/test-redis")
+def test_redis(body: RedisTestRequest) -> dict:
     if body.password:
         redis_url = f"redis://:{body.password}@{body.host}:{body.port}/0"
     else:
@@ -77,9 +78,9 @@ def test_redis(body: RedisTestRequest) -> ConnectionTestResult:
         )
         client.ping()
         client.close()
-        return ConnectionTestResult(success=True, message="Redis 连接成功")
+        return success(data={"success": True, "message": "Redis 连接成功"})
     except Exception as exc:
-        return ConnectionTestResult(success=False, message=f"连接失败: {exc}")
+        return success(data={"success": False, "message": f"连接失败: {exc}"})
 
 
 def _get_init_status() -> InitConfigResponse:
@@ -97,13 +98,13 @@ def _get_init_status() -> InitConfigResponse:
     )
 
 
-@router.get("/config", response_model=InitConfigResponse)
-def get_config() -> InitConfigResponse:
-    return _get_init_status()
+@router.get("/config")
+def get_config() -> dict:
+    return success(data=_get_init_status())
 
 
-@router.post("/config", response_model=InitConfigResponse)
-def save_config(body: InitConfigRequest) -> InitConfigResponse:
+@router.post("/config")
+def save_config(body: InitConfigRequest) -> dict:
     # Build PostgreSQL URL
     db_url = (
         f"postgresql+asyncpg://{body.databaseUser}:{body.databasePassword}"
@@ -244,4 +245,4 @@ def save_config(body: InitConfigRequest) -> InitConfigResponse:
     load_runtime_config(override=True)
 
     logger.info("Init: configuration saved and loaded.")
-    return _get_init_status()
+    return success(data=_get_init_status())

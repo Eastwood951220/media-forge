@@ -1,13 +1,15 @@
-import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router'
+import { createRootRoute, createRoute, createRouter, Outlet, redirect } from '@tanstack/react-router'
 import { ConfigProvider, App as AntApp, theme } from 'antd'
 import { useThemeStore } from '@/stores/useThemeStore'
 import { redirectIfAuthenticated, requireAuth, requireInit } from './-guards'
 import LoginPage from '@/pages/login/LoginPage'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
 import InitPage from '@/pages/init/InitPage'
+import ConfigPage from '@/pages/crawler/config/ConfigPage'
+import TaskListPage from '@/pages/crawler/tasks/TaskListPage'
+import TaskFormPage from '@/pages/crawler/tasks/TaskFormPage'
 import AppLayout from '@/layout'
 
-// Root route — ConfigProvider with theme algorithm
 const rootRoute = createRootRoute({
   component: function RootLayout() {
     const darkMode = useThemeStore((state) => state.darkMode)
@@ -31,7 +33,6 @@ const rootRoute = createRootRoute({
   },
 })
 
-// Login route — public, redirects authenticated users away
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
@@ -42,14 +43,12 @@ const loginRoute = createRoute({
   }),
 })
 
-// Init route — first-time setup page
 const initRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/init',
   component: InitPage,
 })
 
-// Layout route — wraps authenticated pages with AppLayout
 const layoutRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'layout',
@@ -60,21 +59,66 @@ const layoutRoute = createRoute({
   component: AppLayout,
 })
 
-// Index route — protected, rendered inside AppLayout
 const indexRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/',
   component: DashboardPage,
 })
 
-// Build route tree
+const crawlerIndexRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/crawler',
+  beforeLoad: () => {
+    throw redirect({ to: '/crawler/tasks' })
+  },
+})
+
+const crawlerTasksRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/crawler/tasks',
+  component: TaskListPage,
+})
+
+const crawlerConfigRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/crawler/config',
+  component: ConfigPage,
+})
+
+const crawlerTaskNewRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/crawler/tasks/new',
+  component: TaskFormPage,
+})
+
+const crawlerTaskEditRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/crawler/tasks/$id/edit',
+  component: TaskFormPage,
+})
+
+const legacyCrawlTasksRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/crawl-tasks',
+  beforeLoad: () => {
+    throw redirect({ to: '/crawler/tasks' })
+  },
+})
+
 const routeTree = rootRoute.addChildren([
   initRoute,
   loginRoute,
-  layoutRoute.addChildren([indexRoute]),
+  layoutRoute.addChildren([
+    indexRoute,
+    crawlerIndexRoute,
+    crawlerTasksRoute,
+    crawlerConfigRoute,
+    crawlerTaskNewRoute,
+    crawlerTaskEditRoute,
+    legacyCrawlTasksRoute,
+  ]),
 ])
 
-// Create router
 export const router = createRouter({
   routeTree,
   defaultPreload: 'intent',

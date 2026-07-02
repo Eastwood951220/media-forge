@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { DashboardOutlined } from '@ant-design/icons'
+import { DashboardOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import { Layout, Menu } from 'antd'
 import type { MenuProps } from 'antd'
 import { useThemeStore } from '@/stores/useThemeStore'
@@ -14,6 +14,23 @@ const menuItems: MenuProps['items'] = [
     icon: <DashboardOutlined />,
     label: '仪表盘',
   },
+  {
+    key: 'crawler',
+    icon: <SearchOutlined />,
+    label: '爬虫',
+    children: [
+      {
+        key: '/crawler/tasks',
+        icon: <UnorderedListOutlined />,
+        label: '任务列表',
+      },
+      {
+        key: '/crawler/config',
+        icon: <SettingOutlined />,
+        label: '爬虫配置',
+      },
+    ],
+  },
 ]
 
 type SideMenuProps = {
@@ -24,11 +41,17 @@ export function SideMenu({ collapsed }: SideMenuProps) {
   const navigate = useNavigate()
   const darkMode = useThemeStore((state) => state.darkMode)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const selectedKeys = useMemo(() => [pathname === '/' ? '/' : pathname], [pathname])
+  const selectedKey = pathname.startsWith('/crawler/tasks')
+    ? '/crawler/tasks'
+    : pathname.startsWith('/crawler/config')
+      ? '/crawler/config'
+      : pathname
+  const selectedKeys = useMemo(() => [selectedKey === '/' ? '/' : selectedKey], [selectedKey])
+  const openKeys = useMemo(() => (pathname.startsWith('/crawler') ? ['crawler'] : []), [pathname])
 
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
     const nextPath = String(key)
-    if (nextPath !== pathname) {
+    if (nextPath.startsWith('/') && nextPath !== pathname) {
       void navigate({ to: nextPath })
     }
   }
@@ -57,6 +80,7 @@ export function SideMenu({ collapsed }: SideMenuProps) {
           theme={darkMode ? 'dark' : 'light'}
           inlineCollapsed={collapsed}
           selectedKeys={selectedKeys}
+          defaultOpenKeys={openKeys}
           items={menuItems}
           onClick={handleMenuClick}
         />
