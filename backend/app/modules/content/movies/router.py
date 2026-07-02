@@ -7,6 +7,11 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.dependencies import CurrentUser, get_db
 from shared.database.models.content import Movie
+from backend.app.modules.content.movies.filter_config import (
+    MovieFilterConfigPayload,
+    read_movie_filter_config,
+    write_movie_filter_config,
+)
 from backend.app.modules.content.movies.schemas import MovieDetailRead, MovieRead
 from shared.schemas.common import paginated, success
 
@@ -72,6 +77,17 @@ def list_movies(
         rows=[MovieRead.model_validate(r).model_dump(mode="json") for r in rows],
         total=total,
     )
+
+
+@router.get("/filter-config")
+def get_filter_config(_current_user: CurrentUser) -> dict:
+    return success(data=read_movie_filter_config())
+
+
+@router.put("/filter-config")
+def update_filter_config(body: MovieFilterConfigPayload, _current_user: CurrentUser) -> dict:
+    saved = write_movie_filter_config({key: value.model_dump(exclude_none=True) for key, value in body.filters.items()})
+    return success(data={"success": True, "filters": saved["filters"]})
 
 
 @router.get("/{movie_id}")

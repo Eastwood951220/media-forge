@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from shared.database.models.content import Movie, MovieMagnet
 from backend.tests.conftest import TestingSessionLocal
+from backend.app.modules.content.movies import filter_config
 
 
 def auth_headers(client: TestClient, admin_user) -> dict[str, str]:
@@ -59,3 +60,28 @@ def test_get_movie_detail_includes_magnets(client: TestClient, admin_user) -> No
     data = response.json()["data"]
     assert data["id"] == movie_id
     assert data["magnets"][0]["magnet_url"].startswith("magnet:")
+
+
+def test_movie_filter_config_persists_to_json_file(client: TestClient, admin_user, monkeypatch, tmp_path) -> None:
+    headers = auth_headers(client, admin_user)
+    config_path = tmp_path / "movie_filter_config.json"
+    monkeypatch.setattr(filter_config, "FILTER_CONFIG_PATH", config_path)
+
+    initial = client.get("/api/content/movies/filter-config", headers=headers)
+    assert initial.status_code == HTTPStatus.OK
+    assert initial.json()["data"]["_key"] == "default"
+    assert initial.json()["data"]["filters"] == {}
+
+    payload = {
+        "filters": {
+            "actors": {"visible": True, "order": 0, "defaultValue": "演员A"},
+            "sortBy": {"visible": True, "order": 19, "defaultValue": "rating:-1"},
+        }
+    }
+    update = client.put("/api/content/movies/filter-config", json=payload, headers=headers)
+    assert update.status_code == HTTPStatus.OK
+    assert update.json()["data"]["success"] is True
+
+    loaded = client.get("/api/content/movies/filter-config", headers=headers)
+    assert loaded.json()["data"]["filters"] == payload["filters"]
+    assert config_path.exists()
