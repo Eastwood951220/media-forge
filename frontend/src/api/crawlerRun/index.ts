@@ -1,0 +1,53 @@
+import { request } from '@/request'
+import type {
+  CrawlRun,
+  CrawlRunDetailTask,
+  CrawlMode,
+  QueueStatus,
+} from './types'
+import type { PaginatedResponse } from '../crawlTask/types'
+
+const BASE_URL = '/api/crawler/runs'
+
+export function getCrawlerRuns(params?: {
+  skip?: number
+  limit?: number
+  task_id?: string
+  status?: string
+}): Promise<PaginatedResponse<CrawlRun>> {
+  return request.get<PaginatedResponse<CrawlRun>>(BASE_URL, params)
+}
+
+export function getCrawlerRun(runId: string): Promise<CrawlRun> {
+  return request.get<CrawlRun>(`${BASE_URL}/${runId}`)
+}
+
+export function getCrawlerRunTasks(
+  runId: string,
+  params?: {
+    skip?: number
+    limit?: number
+    status?: string
+    keyword?: string
+  },
+): Promise<PaginatedResponse<CrawlRunDetailTask>> {
+  return request.get<PaginatedResponse<CrawlRunDetailTask>>(`${BASE_URL}/${runId}/tasks`, params)
+}
+
+export function stopCrawlerRun(runId: string): Promise<CrawlRun> {
+  return request.post<CrawlRun>(`${BASE_URL}/${runId}/stop`)
+}
+
+export function restartCrawlerRun(runId: string): Promise<CrawlRun> {
+  return request.post<CrawlRun>(`${BASE_URL}/${runId}/restart`)
+}
+
+export function getCrawlerQueueStatus(): Promise<QueueStatus> {
+  return request.get<QueueStatus>(`${BASE_URL}/queue-status`)
+}
+
+export function runCrawlTask(taskId: string, crawlMode: CrawlMode): Promise<CrawlRun> {
+  return request.post<CrawlRun>(`/api/crawler/tasks/${taskId}/run`, {
+    crawl_mode: crawlMode,
+  })
+}

@@ -1,0 +1,41 @@
+export type CrawlMode = 'incremental' | 'full'
+export type CrawlRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'stopped'
+export type DetailTaskStatus = 'pending_crawl' | 'crawled' | 'crawl_failed' | 'saved' | 'save_failed' | 'skipped'
+
+export interface CrawlRun {
+  id: string
+  task_id: string | null
+  task_name: string
+  status: CrawlRunStatus
+  crawl_mode: CrawlMode
+  queued_at: string | null
+  started_at: string | null
+  finished_at: string | null
+  result: Record<string, unknown> | null
+  error: string | null
+  resumed_from: string | null
+  created_at: string
+  updated_at: string | null
+}
+
+export interface CrawlRunDetailTask {
+  id: string
+  run_id: string
+  task_name: string
+  code: string | null
+  source_url: string
+  source_name: string
+  status: DetailTaskStatus
+  error: string | null
+  item_data: Record<string, unknown> | null
+  created_at: string
+  crawled_at: string | null
+  saved_at: string | null
+}
+
+export interface QueueStatus {
+  queue_size: number
+  is_running: boolean
+  current_run_id: string | null
+  stop_requested: boolean
+}
