@@ -120,3 +120,93 @@ def test_movie_filter_options_and_task_names(client: TestClient, admin_user) -> 
     assert tag_response.json()["data"] == ["标签A", "标签B"]
     assert director_response.json()["data"] == ["导演B"]
     assert invalid_response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def seed_filter_movies() -> None:
+    session = TestingSessionLocal()
+    session.add_all([
+        Movie(
+            code="AAA-100",
+            source_url="https://javdb.com/v/aaa100",
+            source_name="高分电影",
+            release_date=date(2026, 1, 10),
+            duration=120,
+            rating=Decimal("4.8"),
+            actors=["演员A", "演员C"],
+            tags=["标签A"],
+            director="导演A",
+            maker="片商A",
+            series="系列A",
+            source_task_names=["任务A"],
+            storage_summary={"last_status": "completed"},
+        ),
+        Movie(
+            code="BBB-200",
+            source_url="https://javdb.com/v/bbb200",
+            source_name="低分电影",
+            release_date=date(2026, 2, 20),
+            duration=90,
+            rating=Decimal("2.2"),
+            actors=["演员B"],
+            tags=["标签B", "标签C"],
+            director="导演B",
+            maker="片商B",
+            series="系列B",
+            source_task_names=["任务B"],
+            storage_summary={"last_status": "missing"},
+        ),
+    ])
+    session.commit()
+    session.close()
+
+
+def test_list_movies_supports_original_filter_contract(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    seed_filter_movies()
+
+    response = client.get(
+        "/api/content/movies",
+        params={
+            "search": "电影",
+            "source_task_name": "任务A",
+            "actors": "演员A",
+            "actors_not": "演员B",
+            "tags": "标签A",
+            "director": "导演A",
+            "maker": "片商A",
+            "series": "系列A",
+            "rating_min": 4,
+            "rating_max": 5,
+            "actors_count_min": 2,
+            "actors_count_max": 2,
+            "release_date_from": "2026-01-01",
+            "release_date_to": "2026-01-31",
+            "storage_status": "completed",
+            "page": 1,
+            "limit": 20,
+            "sort_by": "rating",
+            "sort_order": -1,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert body["total"] == 1
+    assert body["rows"][0]["code"] == "AAA-100"
+    assert body["rows"][0]["_id"] == body["rows"][0]["id"]
+    assert body["rows"][0]["source_task_name"] == "任务A"
+
+
+def test_list_movies_not_stored_filter(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    session.add(Movie(code="CCC-300", source_url="https://javdb.com/v/ccc300", source_name="无存储", source_task_names=["任务C"], storage_summary={}))
+    session.add(Movie(code="DDD-400", source_url="https://javdb.com/v/ddd400", source_name="已存储", source_task_names=["任务D"], storage_summary={"last_status": "completed"}))
+    session.commit()
+    session.close()
+
+    response = client.get("/api/content/movies?storage_status=not_stored", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert [row["code"] for row in response.json()["rows"]] == ["CCC-300"]

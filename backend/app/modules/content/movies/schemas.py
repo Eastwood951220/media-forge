@@ -17,6 +17,13 @@ class MovieMagnetRead(BaseModel):
     has_chinese_sub: bool
     date: str
     selected: bool
+    movie_id: uuid.UUID
+    dedupe_key: str
+    size_mb: Decimal | None
+    file_count: int | None
+    file_text: str
+    tags: list[str]
+    weight: int
 
 
 class MovieRead(BaseModel):
@@ -38,6 +45,7 @@ class MovieRead(BaseModel):
     source_task_names: list[str]
     storage_summary: dict[str, Any]
     raw_detail: dict[str, Any]
+    marked: bool
     created_at: datetime
     updated_at: datetime | None
 
