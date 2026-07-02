@@ -53,7 +53,7 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
             title="影片详情"
             open={open}
             onClose={onClose}
-            width={600}
+            size={600}
         >
             {detail && (
                 <Descriptions column={1} bordered size="small">
@@ -111,7 +111,7 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                             const displaySub = m.has_chinese_sub ? "是" : "否";
                             const displayWeight = m.weight != null ? ` · 权重: ${m.weight}` : "";
                             return (
-                                <Space direction="vertical" size={2}>
+                                <Space vertical size={2}>
                                     <Typography.Text strong>{displayName}</Typography.Text>
                                     <Typography.Text type="secondary">
                                         {displaySize ? `大小: ${displaySize}` : ""}
@@ -133,7 +133,7 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                     </Descriptions.Item>
                     <Descriptions.Item label="磁力链接">
                         {detailMagnetLinks.length > 0 ? (
-                            <Space direction="vertical" size={4} style={{width: "100%"}}>
+                            <Space vertical size={4} style={{width: "100%"}}>
                                 {detailMagnetLinks.map((magnet, index) => (
                                     <Typography.Paragraph
                                         key={`${magnet.magnet}-${index}`}
@@ -163,7 +163,7 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                         if (!locations || locations.length === 0) return null;
                         return (
                             <Descriptions.Item label="存储位置">
-                                <Space direction="vertical" size={4} style={{width: "100%"}}>
+                                <Space vertical size={4} style={{width: "100%"}}>
                                     {locations.map((loc, index) => (
                                         <div
                                             key={`${loc.path}-${index}`}

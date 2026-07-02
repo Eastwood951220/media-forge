@@ -16,6 +16,12 @@ const ROUTE_TAGS: Array<{ pattern: RegExp; meta: RouteTagMeta }> = [
     pattern: /^\/crawler\/tasks\/[^/]+\/edit$/,
     meta: { title: '编辑任务', activeMenu: '/crawler/tasks' },
   },
+  { pattern: /^\/crawler\/runs$/, meta: { title: '运行记录', activeMenu: '/crawler/runs' } },
+  {
+    pattern: /^\/crawler\/runs\/[^/]+$/,
+    meta: { title: '运行详情', activeMenu: '/crawler/runs' },
+  },
+  { pattern: /^\/content\/movies$/, meta: { title: '影片列表' } },
 ]
 
 export function getRouteTagMeta(pathname: string): RouteTagMeta {

@@ -37,16 +37,19 @@ function UrlEntryCard({
   const form = Form.useFormInstance()
   const [extracting, setExtracting] = useState(false)
 
-  // Detect URL type from URL value and sync to form (replaces render-time side effect)
+  // Reactively watch the URL value to detect URL type changes
+  const url = Form.useWatch(['urls', index, 'url'], form) as string | undefined
+
+  // Detect URL type from URL value and sync to form
   useEffect(() => {
-    const url = (form.getFieldValue(['urls', index, 'url']) as string) ?? ''
-    const detected = url ? detectUrlType(url) : null
+    const urlStr = url ?? ''
+    const detected = urlStr ? detectUrlType(urlStr) : null
     const currentType = form.getFieldValue(['urls', index, 'url_type']) as UrlType | undefined
 
     if (detected && detected !== currentType) {
       onUrlTypeDetected(index, detected)
     }
-  }, [form, index, onUrlTypeDetected])
+  }, [url, form, index, onUrlTypeDetected])
 
   return (
     <Card
@@ -252,16 +255,19 @@ export default function TaskFormPage() {
     [form],
   )
 
-  const enrichUrlEntriesWithNames = useCallback(
+  const enrichUrlEntries = useCallback(
     async (urlEntries: TaskUrlEntry[]): Promise<TaskUrlEntry[]> => {
       const enrichedEntries: TaskUrlEntry[] = []
 
       for (const entry of urlEntries) {
-        let urlName = entry.url_name?.trim() ?? ''
+        // Auto-detect url_type if missing
+        const urlType = entry.url_type || detectUrlType(entry.url) || ''
 
-        if (!urlName && entry.url && entry.url_type) {
+        // Auto-fetch url_name if missing
+        let urlName = entry.url_name?.trim() ?? ''
+        if (!urlName && entry.url && urlType) {
           try {
-            const result = await extractTaskName(entry.url, entry.url_type)
+            const result = await extractTaskName(entry.url, urlType as UrlType)
             urlName = result.name?.trim() ?? ''
           } catch {
             urlName = ''
@@ -270,7 +276,7 @@ export default function TaskFormPage() {
 
         enrichedEntries.push({
           url: entry.url,
-          url_type: entry.url_type,
+          url_type: urlType,
           has_magnet: entry.has_magnet ?? false,
           has_chinese_sub: entry.has_chinese_sub ?? false,
           sort_type: entry.sort_type ?? 0,
@@ -296,7 +302,17 @@ export default function TaskFormPage() {
 
     setSubmitting(true)
     try {
-      const enrichedEntries = await enrichUrlEntriesWithNames(urlEntries)
+      const enrichedEntries = await enrichUrlEntries(urlEntries)
+
+      // Validate that all URLs have a detectable type
+      for (const entry of enrichedEntries) {
+        if (!entry.url_type) {
+          message.error(`无法识别 URL 类型: ${entry.url}`)
+          setSubmitting(false)
+          return
+        }
+      }
+
       form.setFieldsValue({ urls: enrichedEntries })
 
       const payload: CrawlTaskCreateParams = {

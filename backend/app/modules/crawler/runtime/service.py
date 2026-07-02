@@ -360,6 +360,7 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
         movie_service = MovieService()
         result = movie_service.crawl_javdb_task(
             task,
+            task_id=str(run.task_id) if run.task_id else None,
             crawl_mode=run.crawl_mode,
             on_tasks_batch_created=on_tasks_batch_created,
             on_item_saved=on_item_saved,

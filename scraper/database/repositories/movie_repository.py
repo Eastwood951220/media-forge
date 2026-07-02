@@ -61,6 +61,7 @@ class MovieRepository:
                 actors=document.get("actors", []),
                 tags=document.get("tags", []),
                 source_task_names=document.get("source_task_name", []),
+                source_task_id=document.get("source_task_id"),
                 cover=document.get("cover", ""),
                 marked=document.get("marked", False),
                 storage_summary=document.get("storage_summary", {}),

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.modules.crawler.runs.schemas import CrawlRunRead, RunCreateRequest
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
+from backend.app.modules.crawler.tasks.delete_service import delete_movies_by_task_id
 from backend.app.repositories.crawl_task import CrawlTaskRepository
 from backend.app.schemas.crawl_task import (
     CrawlTaskCreate,
@@ -206,5 +207,7 @@ def delete_task(task_id: uuid.UUID, current_user: CurrentUser, db: Session = Dep
     task = repo.get_owned(task_id, current_user.id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    # Cascade delete associated movies
+    deleted_movies = delete_movies_by_task_id(db, task_id)
     repo.delete(task)
-    return success(msg="删除成功")
+    return success(msg="删除成功", data={"deleted_movies": deleted_movies})

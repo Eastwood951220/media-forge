@@ -36,8 +36,8 @@ export function updateCrawlTask(
   return request.put<CrawlTask>(`${BASE_URL}/${taskId}`, data)
 }
 
-export function deleteCrawlTask(taskId: string): Promise<void> {
-  return request.delete(`${BASE_URL}/${taskId}`)
+export function deleteCrawlTask(taskId: string): Promise<{deleted_movies: number}> {
+  return request.delete<{deleted_movies: number}>(`${BASE_URL}/${taskId}`)
 }
 
 export function extractTaskName(url: string, urlType: string): Promise<{ name: string }> {

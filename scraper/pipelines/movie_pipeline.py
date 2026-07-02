@@ -3,25 +3,25 @@ from scraper.spiders.javdb.javdb_parser import derive_magnet_tags
 
 
 class MoviePipeline(BasePipeline):
-    def process_items(self, items: list[dict], task_name: str = None) -> list[dict]:
+    def process_items(self, items: list[dict], task_name: str = None, task_id: str = None) -> list[dict]:
         cleaned: list[dict] = []
 
         for item in items:
-            result = self.process_item(item, task_name=task_name)
+            result = self.process_item(item, task_name=task_name, task_id=task_id)
             if result is not None:
                 cleaned.append(result)
 
         return cleaned
 
-    def process_item(self, item: dict, task_name: str = None) -> dict | None:
-        clean_item = self.clean_item(item, task_name=task_name)
+    def process_item(self, item: dict, task_name: str = None, task_id: str = None) -> dict | None:
+        clean_item = self.clean_item(item, task_name=task_name, task_id=task_id)
 
         if not self.is_valid_item(clean_item):
             return None
 
         return clean_item
 
-    def clean_item(self, item: dict, task_name: str = None) -> dict:
+    def clean_item(self, item: dict, task_name: str = None, task_id: str = None) -> dict:
         result = dict(item)
 
         source_name = item.get("source_name")
@@ -36,6 +36,9 @@ class MoviePipeline(BasePipeline):
 
         if task_name:
             result["source_task_name"] = [task_name]
+
+        if task_id:
+            result["source_task_id"] = task_id
 
         # Enrich magnet tags from name
         magnets = item.get("magnets")

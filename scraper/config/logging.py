@@ -22,7 +22,8 @@ def get_logger(name: str) -> logging.Logger:
 
         # JSONL handler for structured logging
         jsonl_handler = JSONLHandler(
-            log_path=LOG_DIR / "scraper.jsonl",
+            log_dir=str(LOG_DIR),
+            filename="scraper.jsonl",
             component="scraper",
         )
         logger.addHandler(jsonl_handler)

@@ -65,6 +65,20 @@ function RunDetailPage() {
     void fetchTasks()
   }, [id, statusFilter, keyword])
 
+  useEffect(() => {
+    if (!id || !run || (run.status !== 'queued' && run.status !== 'running')) return
+
+    const timer = window.setInterval(() => {
+      void getCrawlerRunTasks(id, {
+        limit: 200,
+        status: statusFilter,
+        keyword: keyword || undefined,
+      }).then((data) => setTasks(data.rows))
+    }, 3000)
+
+    return () => window.clearInterval(timer)
+  }, [id, run, statusFilter, keyword])
+
   const columns: ColumnsType<CrawlRunDetailTask> = [
     {
       title: '番号',

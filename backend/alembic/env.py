@@ -5,15 +5,15 @@ from pathlib import Path
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-# Ensure both backend/ (for app.*) and project root (for shared.*) are importable
-_backend_dir = str(Path(__file__).resolve().parent.parent)
-_project_root = str(Path(_backend_dir).parent)
-for _p in (_backend_dir, _project_root):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+# Ensure project root is importable for backend.* and shared.* packages
+_project_root = str(Path(__file__).resolve().parent.parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
-from app.models.crawl_task import CrawlTask, CrawlTaskUrl  # noqa: F401
-from app.models.user import User  # noqa: F401
+from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask  # noqa: F401
+from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl  # noqa: F401
+from backend.app.models.user import User  # noqa: F401
+from shared.database.models.content import Movie, MovieMagnet, MovieFilter  # noqa: F401
 from shared.database.models.base import Base
 
 config = context.config

@@ -111,7 +111,7 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
     const createdAtVisible = filterConfig?.["createdAtFrom"]?.visible !== false || filterConfig?.["createdAtTo"]?.visible !== false;
 
     return (
-        <Space direction="vertical" style={{width: "100%"}} size={8}>
+        <Space vertical style={{width: "100%"}} size={8}>
             <Space wrap>
                 <Select
                     style={{width: 200}}

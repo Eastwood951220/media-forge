@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { useNavigate } from '@tanstack/react-router'
 import { Button, Space, Table, Tag, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
@@ -16,6 +17,7 @@ const statusLabels: Record<string, { text: string; color: string }> = {
 const PAGE_SIZE = 20
 
 function RunListPage() {
+  const navigate = useNavigate()
   const [runs, setRuns] = useState<CrawlRun[]>([])
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
@@ -52,8 +54,9 @@ function RunListPage() {
       await restartCrawlerRun(run.id)
       message.success('已重启运行')
       void fetchRuns(current)
-    } catch {
-      message.error('重启失败')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '重启失败'
+      message.error(msg)
     }
   }, [current, fetchRuns])
 
@@ -89,6 +92,13 @@ function RunListPage() {
       key: 'actions',
       render: (_, record) => (
         <Space>
+          <Button
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => void navigate({ to: `/crawler/runs/${record.id}` })}
+          >
+            详情
+          </Button>
           {(record.status === 'queued' || record.status === 'running') && (
             <Button
               size="small"

@@ -78,7 +78,7 @@ export default function FilterConfigDrawer({open, onClose, config, onSave}: Filt
             title="筛选条件配置"
             open={open}
             onClose={onClose}
-            width={400}
+            size={400}
             footer={
                 <Button type="primary" block onClick={handleSave}>
                     保存配置

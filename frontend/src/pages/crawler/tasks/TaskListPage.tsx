@@ -59,13 +59,21 @@ function TaskListPage() {
     (task: CrawlTask) => {
       Modal.confirm({
         title: '确认删除',
-        content: `确定删除任务「${task.name}」？此操作不可撤销。`,
+        content: (
+          <div>
+            <p>确定删除任务「{task.name}」？</p>
+            <p style={{color: '#ff4d4f', fontWeight: 'bold'}}>
+              ⚠️ 此操作将同时删除该任务关联的所有影片数据，且不可撤销！
+            </p>
+          </div>
+        ),
         okText: '删除',
         okType: 'danger',
         cancelText: '取消',
         onOk: async () => {
-          await deleteCrawlTask(task.id)
-          message.success('删除成功')
+          const result = await deleteCrawlTask(task.id)
+          const deletedMovies = result?.deleted_movies ?? 0
+          message.success(`删除成功${deletedMovies > 0 ? `，已删除 ${deletedMovies} 部关联影片` : ''}`)
           void fetchTasks(current, keyword)
         },
       })
