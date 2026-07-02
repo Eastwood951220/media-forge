@@ -19,7 +19,7 @@ import {
   type UrlType,
   URL_TYPE_LABELS,
 } from './taskUrlUtils'
-import { getFullPath } from '@/routes/tags'
+import { getFullPath, getRouteViewKey } from '@/routes/tags'
 import styles from './TaskPages.module.less'
 
 function UrlEntryCard({
@@ -211,19 +211,22 @@ export default function TaskFormPage() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const searchStr = useRouterState({ select: (state) => state.location.searchStr ?? '' })
   const fullPath = getFullPath(pathname, searchStr)
+  const cacheKey = getRouteViewKey(pathname, searchStr)
   const removeSelectedView = useTagsViewStore((state) => state.removeSelectedView)
   const cacheControl = useRouteCacheControl()
 
   const closeCurrentTag = useCallback(() => {
-    const currentView = useTagsViewStore.getState().visitedViews.find((v) => v.fullPath === fullPath)
+    const currentView = useTagsViewStore.getState().visitedViews.find((v) => v.cacheKey === cacheKey)
     if (currentView) {
       removeSelectedView(currentView)
     }
-    void cacheControl.destroy(fullPath)
-  }, [fullPath, removeSelectedView, cacheControl])
+    void cacheControl.destroy(cacheKey)
+  }, [cacheKey, removeSelectedView, cacheControl])
 
   useEffect(() => {
     if (!isEdit || !taskId) return
+    form.resetFields()
+    setStorageLocationManuallyEdited(false)
     setLoading(true)
     getCrawlTask(taskId)
       .then((task) => {

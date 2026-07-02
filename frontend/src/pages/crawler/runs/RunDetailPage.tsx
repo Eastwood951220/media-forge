@@ -29,12 +29,25 @@ function RunDetailPage() {
   const [keyword, setKeyword] = useState('')
 
   useEffect(() => {
+    setRun(null)
+    setTasks([])
+    setStatusFilter(undefined)
+    setKeyword('')
+  }, [id])
+
+  useEffect(() => {
     if (!id) return
+    let cancelled = false
     const fetchRun = async () => {
       const data = await getCrawlerRun(id)
-      setRun(data)
+      if (!cancelled) {
+        setRun(data)
+      }
     }
     void fetchRun()
+    return () => {
+      cancelled = true
+    }
   }, [id])
 
   useEffect(() => {
@@ -49,6 +62,7 @@ function RunDetailPage() {
 
   useEffect(() => {
     if (!id) return
+    let cancelled = false
     const fetchTasks = async () => {
       setLoading(true)
       try {
@@ -57,12 +71,19 @@ function RunDetailPage() {
           status: statusFilter,
           keyword: keyword || undefined,
         })
-        setTasks(data.rows)
+        if (!cancelled) {
+          setTasks(data.rows)
+        }
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     }
     void fetchTasks()
+    return () => {
+      cancelled = true
+    }
   }, [id, statusFilter, keyword])
 
   useEffect(() => {
