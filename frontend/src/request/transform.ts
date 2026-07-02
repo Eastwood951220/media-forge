@@ -62,6 +62,36 @@ function getHttpErrorDetail(error: AxiosError): string {
   return '无效的会话，或者会话已过期，请重新登录。'
 }
 
+function getResponseErrorPayload(error: AxiosError): {
+  msg: string
+  code?: string | number
+  data?: unknown
+} {
+  const data = error.response?.data
+
+  if (data && typeof data === 'object') {
+    if ('msg' in data) {
+      const wrapped = data as Partial<ApiResponse>
+      const code = wrapped.code ?? error.response?.status
+      const msg = wrapped.msg || errorCode[code as string | number] || errorCode.default
+      return { msg, code, data }
+    }
+
+    if ('detail' in data) {
+      const detail = (data as { detail?: unknown }).detail
+      if (typeof detail === 'string') {
+        return { msg: detail, code: error.response?.status, data }
+      }
+    }
+  }
+
+  return {
+    msg: normalizeNetworkError(error),
+    code: error.response?.status,
+    data,
+  }
+}
+
 export function normalizeNetworkError(error: AxiosError): string {
   const msg = error.message
 
@@ -145,16 +175,16 @@ export function handleResponseError(error: AxiosError): Promise<never> {
     return Promise.reject(error)
   }
 
-  if (error.response?.status === HttpStatus.UNAUTHORIZED) {
-    return expireSession(getHttpErrorDetail(error))
-  }
-
   const requestConfig = error.config as RequestConfig | undefined
-  const msg = normalizeNetworkError(error)
+  const payload = getResponseErrorPayload(error)
+
+  if (error.response?.status === HttpStatus.UNAUTHORIZED) {
+    return expireSession(payload.msg)
+  }
 
   if (requestConfig?.showError !== false) {
-    void message.error(msg, 5)
+    void message.error(payload.msg, 5)
   }
 
-  return Promise.reject(error)
+  return Promise.reject(new BusinessError(payload.msg, payload.code, payload.data))
 }

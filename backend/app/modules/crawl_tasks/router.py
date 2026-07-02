@@ -1,7 +1,7 @@
 """Compatibility routes for the old /api/crawl-tasks prefix.
 
-New frontend code uses /api/crawler/tasks. Keep this prefix temporarily so a
-stale browser tab or cached bundle cannot reproduce the pasted 500 error.
+The restored crawler task API uses /api/crawler/tasks. Keep this prefix for
+stale browser bundles and existing bookmarks.
 """
 
 from fastapi import APIRouter

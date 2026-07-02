@@ -1,6 +1,6 @@
 """Tests for shared.schemas.common response helpers."""
 
-from shared.schemas.common import ApiResponse, PaginatedResponse, paginated, success
+from shared.schemas.common import ApiResponse, PaginatedResponse, failure, paginated, success
 
 
 class TestSuccessFunction:
@@ -121,3 +121,22 @@ class TestPaginatedResponseModel:
         assert data["msg"] == "success"
         assert data["rows"] == rows
         assert data["total"] == 1
+
+
+class TestFailureFunction:
+    """Tests for the failure() helper."""
+
+    def test_failure_returns_dict_with_code_msg_data(self) -> None:
+        result = failure(code=409, msg="任务名称 '巨乳' 已存在")
+
+        assert result["code"] == 409
+        assert result["msg"] == "任务名称 '巨乳' 已存在"
+        assert result["data"] is None
+
+    def test_failure_with_data(self) -> None:
+        data = [{"loc": ["body", "name"], "msg": "Field required"}]
+        result = failure(code=422, msg="请求参数错误", data=data)
+
+        assert result["code"] == 422
+        assert result["msg"] == "请求参数错误"
+        assert result["data"] == data

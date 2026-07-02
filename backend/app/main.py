@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.core.config import get_settings
 from backend.app.core.dependencies import close_redis
+from backend.app.core.exception_handlers import register_exception_handlers
 from backend.app.modules.auth.router import router as auth_router
 from backend.app.modules.crawl_tasks.router import router as crawl_tasks_compat_router
 from backend.app.modules.crawler.config.router import router as crawler_config_router
@@ -76,6 +77,9 @@ app = FastAPI(
     version=settings.app_version,
     lifespan=lifespan,
 )
+
+# Exception handlers
+register_exception_handlers(app)
 
 # CORS
 app.add_middleware(

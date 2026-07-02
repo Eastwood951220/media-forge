@@ -2,12 +2,11 @@ import logging
 
 from fastapi import APIRouter, HTTPException, status
 from redis import Redis
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, text
 
-from backend.app.core.security import get_password_hash
+from backend.app.modules.init.database_bootstrap import bootstrap_application_database
 from backend.app.modules.init.schemas import InitConfigRequest, InitConfigResponse
 from pydantic import BaseModel, Field
-from shared.database.models.base import Base
 from shared.runtime_config import (
     load_runtime_config,
     runtime_config_exists,
@@ -103,119 +102,39 @@ def get_config() -> dict:
     return success(data=_get_init_status())
 
 
+def build_redis_url(body: InitConfigRequest) -> str:
+    if body.redisPassword:
+        return f"redis://:{body.redisPassword}@{body.redisHost}:{body.redisPort}/0"
+    return f"redis://{body.redisHost}:{body.redisPort}/0"
+
+
+def validate_redis_connection(body: InitConfigRequest, redis_url: str) -> None:
+    client = Redis.from_url(
+        redis_url,
+        socket_connect_timeout=body.redisConnectTimeout,
+        socket_timeout=body.redisSocketTimeout,
+        decode_responses=True,
+    )
+    try:
+        client.ping()
+    finally:
+        client.close()
+
+
 @router.post("/config")
 def save_config(body: InitConfigRequest) -> dict:
-    # Build PostgreSQL URL
-    db_url = (
-        f"postgresql+asyncpg://{body.databaseUser}:{body.databasePassword}"
-        f"@{body.databaseHost}:{body.databasePort}/{body.databaseName}"
-    )
-    sync_db_url = (
-        f"postgresql+psycopg://{body.databaseUser}:{body.databasePassword}"
-        f"@{body.databaseHost}:{body.databasePort}/{body.databaseName}"
-    )
-
-    # Build Redis URL
-    if body.redisPassword:
-        redis_url = f"redis://:{body.redisPassword}@{body.redisHost}:{body.redisPort}/0"
-    else:
-        redis_url = f"redis://{body.redisHost}:{body.redisPort}/0"
-
-    # Validate PostgreSQL connectivity via postgres maintenance DB
-    maintenance_url = (
-        f"postgresql+psycopg://{body.databaseUser}:{body.databasePassword}"
-        f"@{body.databaseHost}:{body.databasePort}/postgres"
-    )
     try:
-        engine = create_engine(
-            maintenance_url,
-            connect_args={"connect_timeout": body.postgresConnectTimeout},
-        )
-        with engine.connect() as conn:
-            conn.execute(text("SET timezone = 'Asia/Shanghai'"))
-            conn.execute(text("SELECT 1"))
-        engine.dispose()
+        database_urls = bootstrap_application_database(body)
     except Exception as exc:
-        logger.warning("Init: PostgreSQL connection failed: %s", exc)
+        logger.warning("Init: database bootstrap failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"PostgreSQL connection failed: {exc}",
+            detail=f"Database bootstrap failed: {exc}",
         ) from exc
 
-    # Create database if it doesn't exist
+    redis_url = build_redis_url(body)
     try:
-        maint_engine = create_engine(
-            maintenance_url,
-            isolation_level="AUTOCOMMIT",
-            connect_args={"connect_timeout": body.postgresConnectTimeout},
-        )
-        with maint_engine.connect() as conn:
-            conn.execute(text("SET timezone = 'Asia/Shanghai'"))
-            result = conn.execute(
-                text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
-                {"dbname": body.databaseName},
-            )
-            if result.fetchone() is None:
-                conn.execute(text(f'CREATE DATABASE "{body.databaseName}"'))
-                logger.info("Created database: %s", body.databaseName)
-        maint_engine.dispose()
-    except Exception as exc:
-        logger.warning("Init: database creation failed: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to create database: {exc}",
-        ) from exc
-
-    # Create tables and seed admin user in target database
-    try:
-        target_engine = create_engine(
-            sync_db_url,
-            connect_args={"connect_timeout": body.postgresConnectTimeout},
-        )
-
-        @event.listens_for(target_engine, "connect")
-        def _set_tz(dbapi_conn, _connection_record):
-            cursor = dbapi_conn.cursor()
-            cursor.execute("SET timezone = 'Asia/Shanghai'")
-            cursor.close()
-
-        Base.metadata.create_all(bind=target_engine)
-
-        with target_engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT id FROM users WHERE username = 'admin'")
-            )
-            if result.fetchone() is None:
-                conn.execute(
-                    text(
-                        "INSERT INTO users (id, username, hashed_password, role) "
-                        "VALUES (gen_random_uuid(), 'admin', :pw, 'admin')"
-                    ),
-                    {"pw": get_password_hash("admin123")},
-                )
-                conn.commit()
-                logger.info("Admin user created (admin / admin123).")
-            else:
-                logger.info("Admin user already exists, skipping.")
-
-        target_engine.dispose()
-    except Exception as exc:
-        logger.warning("Init: table/user creation failed: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to initialize database tables: {exc}",
-        ) from exc
-
-    # Validate Redis connection
-    try:
-        client = Redis.from_url(
-            redis_url,
-            socket_connect_timeout=body.redisConnectTimeout,
-            socket_timeout=body.redisSocketTimeout,
-            decode_responses=True,
-        )
-        client.ping()
-        client.close()
+        validate_redis_connection(body, redis_url)
     except Exception as exc:
         logger.warning("Init: Redis validation failed: %s", exc)
         raise HTTPException(
@@ -223,10 +142,9 @@ def save_config(body: InitConfigRequest) -> dict:
             detail=f"Redis connection failed: {exc}",
         ) from exc
 
-    # Write config files
     write_runtime_config({
         "database": {
-            "DATABASE_URL": db_url,
+            "DATABASE_URL": database_urls.async_url,
             "POSTGRES_CONNECT_TIMEOUT": str(body.postgresConnectTimeout),
             "POSTGRES_POOL_SIZE": str(body.postgresPoolSize),
             "POSTGRES_MAX_OVERFLOW": str(body.postgresMaxOverflow),
@@ -241,7 +159,6 @@ def save_config(body: InitConfigRequest) -> dict:
         },
     })
 
-    # Load into environment
     load_runtime_config(override=True)
 
     logger.info("Init: configuration saved and loaded.")

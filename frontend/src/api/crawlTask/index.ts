@@ -39,3 +39,10 @@ export function updateCrawlTask(
 export function deleteCrawlTask(taskId: string): Promise<void> {
   return request.delete(`${BASE_URL}/${taskId}`)
 }
+
+export function extractTaskName(url: string, urlType: string): Promise<{ name: string }> {
+  return request.post<{ name: string }>(`${BASE_URL}/extract-name`, {
+    url,
+    url_type: urlType,
+  })
+}

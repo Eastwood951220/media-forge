@@ -5,9 +5,10 @@ import { Button, Modal, message } from 'antd'
 import {
   deleteCrawlTask,
   getCrawlTasks,
+  updateCrawlTask,
 } from '@/api/crawlTask'
 import type { CrawlTask } from '@/api/crawlTask/types'
-import TaskListTable from '@/pages/crawlTasks/components/TaskListTable'
+import TaskListTable from '@/pages/crawler/tasks/components/TaskListTable.tsx'
 import { useTaskListQueryStore } from './useTaskListQueryStore'
 import styles from './TaskPages.module.less'
 
@@ -77,6 +78,15 @@ function TaskListPage() {
     [setKeyword],
   )
 
+  const handleToggleSkip = useCallback(
+    async (task: CrawlTask) => {
+      await updateCrawlTask(task.id, { is_skip: !task.is_skip })
+      message.success(task.is_skip ? '任务已启用' : '任务已禁用')
+      void fetchTasks(current, keyword)
+    },
+    [current, fetchTasks, keyword],
+  )
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -105,6 +115,7 @@ function TaskListPage() {
           onPageChange={handlePageChange}
           onEdit={(task) => navigate({ to: '/crawler/tasks/$id/edit', params: { id: task.id } })}
           onDelete={handleDelete}
+          onToggleSkip={handleToggleSkip}
           onSearch={handleSearch}
         />
       </section>

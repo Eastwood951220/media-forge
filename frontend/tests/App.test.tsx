@@ -17,8 +17,9 @@ vi.mock('@/api/init', () => ({
 }))
 
 vi.mock('@/api/crawlTask', () => ({
-  getCrawlTasks: vi.fn().mockResolvedValue([]),
+  getCrawlTasks: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
   deleteCrawlTask: vi.fn().mockResolvedValue(undefined),
+  updateCrawlTask: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/api/crawlerConfig', () => ({

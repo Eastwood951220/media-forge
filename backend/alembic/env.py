@@ -12,7 +12,7 @@ for _p in (_backend_dir, _project_root):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from app.models.crawl_task import CrawlTask  # noqa: F401
+from app.models.crawl_task import CrawlTask, CrawlTaskUrl  # noqa: F401
 from app.models.user import User  # noqa: F401
 from shared.database.models.base import Base
 

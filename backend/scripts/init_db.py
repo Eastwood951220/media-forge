@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Initialize database: create tables and default admin user.
+"""Initialize database tables and default data.
 
 Usage:
     python scripts/init_db.py
@@ -10,10 +10,10 @@ import argparse
 import logging
 import sys
 
-from backend.app.core.security import get_password_hash
-from backend.app.models.user import User
-from backend.app.repositories.user import UserRepository
-from shared.database.models.base import Base
+from backend.app.modules.init.database_bootstrap import (
+    create_application_tables,
+    seed_default_admin_user,
+)
 from shared.database.session import connect_postgres, get_session_factory
 
 logger = logging.getLogger(__name__)
@@ -33,26 +33,16 @@ def main() -> None:
     session = factory()
 
     try:
-        # Create all tables
+        engine = session.get_bind()
         logger.info("Creating tables...")
-        Base.metadata.create_all(bind=session.get_bind())
+        create_application_tables(engine)
         logger.info("Tables created.")
 
-        # Create admin user if not exists
-        user_repo = UserRepository(session)
-
-        if user_repo.username_exists(args.username):
-            logger.info("Admin user '%s' already exists. Skipping.", args.username)
-            return
-
-        user = User(
+        seed_default_admin_user(
+            engine,
             username=args.username,
-            hashed_password=get_password_hash(args.password),
-            role="admin",
+            password=args.password,
         )
-        session.add(user)
-        session.commit()
-        logger.info("Admin user created: %s", args.username)
     except Exception:
         session.rollback()
         logger.exception("Failed to initialize database.")

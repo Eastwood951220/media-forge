@@ -43,3 +43,12 @@ def paginated(
         "rows": rows,
         "total": total,
     }
+
+
+def failure(code: int = 500, msg: str = "error", data: Any = None) -> dict:
+    """Build a failed response dict with the standard data wrapper."""
+    return {
+        "code": code,
+        "msg": msg,
+        "data": data,
+    }
