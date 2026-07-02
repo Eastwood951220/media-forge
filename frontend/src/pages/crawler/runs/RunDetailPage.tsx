@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from '@tanstack/react-router'
 import { Card, Descriptions, Input, Select, Space, Table, Tag } from 'antd'
+import RunLogsTimeline from './components/RunLogsTimeline'
 import type { ColumnsType } from 'antd/es/table'
 import { getCrawlerRun, getCrawlerRunTasks } from '@/api/crawlerRun'
 import type { CrawlRun, CrawlRunDetailTask } from '@/api/crawlerRun/types'
@@ -35,6 +36,16 @@ function RunDetailPage() {
     }
     void fetchRun()
   }, [id])
+
+  useEffect(() => {
+    if (!id || !run || (run.status !== 'queued' && run.status !== 'running')) return
+
+    const timer = window.setInterval(() => {
+      void getCrawlerRun(id).then(setRun)
+    }, 3000)
+
+    return () => window.clearInterval(timer)
+  }, [id, run])
 
   useEffect(() => {
     if (!id) return
@@ -127,6 +138,15 @@ function RunDetailPage() {
           pagination={{ pageSize: 50 }}
         />
       </Card>
+
+      {run && (
+        <Card title="运行日志" style={{ marginTop: 16 }}>
+          <RunLogsTimeline
+            logs={run.logs ?? []}
+            isActive={run.status === 'queued' || run.status === 'running'}
+          />
+        </Card>
+      )}
     </div>
   )
 }

@@ -30,6 +30,7 @@ describe('RunListPage', () => {
         resumed_from: null,
         created_at: '2026-07-02T00:00:00',
         updated_at: null,
+        logs: [],
       }],
       total: 1,
     })

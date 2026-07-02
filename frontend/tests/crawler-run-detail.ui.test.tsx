@@ -9,6 +9,21 @@ vi.mock('../src/api/crawlerRun', () => ({
   getCrawlerRunTasks: vi.fn(),
 }))
 
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: (options: { count: number; estimateSize?: (index: number) => number }) => ({
+    getVirtualItems: () => {
+      const items = []
+      for (let i = 0; i < options.count; i++) {
+        const size = options.estimateSize?.(i) ?? 48
+        items.push({ index: i, start: i * size, size, end: (i + 1) * size })
+      }
+      return items
+    },
+    getTotalSize: () => options.count * (options.estimateSize?.(0) ?? 48),
+    measureElement: () => {},
+  }),
+}))
+
 function renderDetailPage() {
   const rootRoute = createRootRoute({ component: () => <RunDetailPage /> })
   const detailRoute = createRoute({
