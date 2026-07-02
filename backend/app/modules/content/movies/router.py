@@ -2,7 +2,7 @@ import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import desc, or_
+from sqlalchemy import func, not_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.dependencies import CurrentUser, get_db
@@ -25,6 +25,51 @@ ALLOWED_SORT_FIELDS = {
     "release_date": Movie.release_date,
     "rating": Movie.rating,
 }
+
+VALID_FILTER_TYPES = {"actor", "tag", "director", "maker", "series"}
+
+
+def _unique_sorted(values: list[str | None]) -> list[str]:
+    return sorted({value for value in values if value})
+
+
+def _sqlite_filter_values(db: Session, filter_type: str) -> list[str]:
+    movies = db.query(Movie).all()
+    if filter_type == "actor":
+        return _unique_sorted([actor for movie in movies for actor in (movie.actors or [])])
+    if filter_type == "tag":
+        return _unique_sorted([tag for movie in movies for tag in (movie.tags or [])])
+    return _unique_sorted([getattr(movie, filter_type) for movie in movies])
+
+
+@router.get("/task-names")
+def list_task_names(_current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+    if db.bind.dialect.name == "sqlite":
+        names = _unique_sorted([name for movie in db.query(Movie).all() for name in (movie.source_task_names or [])])
+    else:
+        names = list(db.scalars(select(func.unnest(Movie.source_task_names).label("name")).distinct().order_by("name")).all())
+        names = [name for name in names if name]
+    return success(data=[{"name": name} for name in names])
+
+
+@router.get("/filters")
+def list_filters(
+    _current_user: CurrentUser,
+    db: Session = Depends(get_db),
+    type: str = Query(..., description="actor, tag, director, maker, series"),
+) -> dict:
+    if type not in VALID_FILTER_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid filter type: {type}")
+    if db.bind.dialect.name == "sqlite":
+        return success(data=_sqlite_filter_values(db, type))
+    if type == "actor":
+        names = db.scalars(select(func.unnest(Movie.actors).label("name")).distinct().order_by("name")).all()
+    elif type == "tag":
+        names = db.scalars(select(func.unnest(Movie.tags).label("name")).distinct().order_by("name")).all()
+    else:
+        column = getattr(Movie, type)
+        names = db.scalars(select(column).where(column != "", column.is_not(None)).distinct().order_by(column.asc())).all()
+    return success(data=[name for name in names if name])
 
 
 @router.get("")

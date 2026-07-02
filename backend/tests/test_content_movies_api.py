@@ -85,3 +85,38 @@ def test_movie_filter_config_persists_to_json_file(client: TestClient, admin_use
     loaded = client.get("/api/content/movies/filter-config", headers=headers)
     assert loaded.json()["data"]["filters"] == payload["filters"]
     assert config_path.exists()
+
+
+def test_movie_filter_options_and_task_names(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    seed_movie()
+    session = TestingSessionLocal()
+    session.add(Movie(
+        code="BBB-002",
+        source_url="https://javdb.com/v/bbb",
+        source_name="第二部电影",
+        release_date=date(2026, 2, 2),
+        duration=90,
+        rating=Decimal("3.5"),
+        actors=["演员B"],
+        tags=["标签B"],
+        director="导演B",
+        maker="片商B",
+        series="系列B",
+        source_task_names=["任务B"],
+    ))
+    session.commit()
+    session.close()
+
+    task_response = client.get("/api/content/movies/task-names", headers=headers)
+    actor_response = client.get("/api/content/movies/filters?type=actor", headers=headers)
+    tag_response = client.get("/api/content/movies/filters?type=tag", headers=headers)
+    director_response = client.get("/api/content/movies/filters?type=director", headers=headers)
+    invalid_response = client.get("/api/content/movies/filters?type=bad", headers=headers)
+
+    assert task_response.status_code == HTTPStatus.OK
+    assert task_response.json()["data"] == [{"name": "任务A"}, {"name": "任务B"}]
+    assert actor_response.json()["data"] == ["演员A", "演员B"]
+    assert tag_response.json()["data"] == ["标签A", "标签B"]
+    assert director_response.json()["data"] == ["导演B"]
+    assert invalid_response.status_code == HTTPStatus.BAD_REQUEST
