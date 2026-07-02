@@ -105,6 +105,22 @@ class ListPhaseDedupeMovieServiceStub:
         }
 
 
+class DetailPhaseDedupeMovieServiceStub:
+    def crawl_javdb_task(self, task, **kwargs):
+        detail_task = {"code": "AAA-020", "url": "https://javdb.com/v/aaa020", "name": "AAA 020"}
+        kwargs["on_tasks_batch_created"]([detail_task])
+        if kwargs["on_detail_check_callback"]("AAA-020"):
+            detail_task["status"] = "skipped"
+            detail_task["reason"] = "already_exists"
+            kwargs["on_item_already_exists"](detail_task)
+        return {
+            "total_tasks": 1,
+            "completed_tasks": 0,
+            "failed_tasks": 0,
+            "skipped_tasks": 1,
+        }
+
+
 def create_run_with_task(code: str = "task-code") -> tuple[CrawlRun, Runtime]:
     session = TestingSessionLocal()
     user = User(username=f"worker-{code}", hashed_password=get_password_hash("pw"), role="admin")
@@ -237,6 +253,29 @@ def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> No
     assert skipped.error == "already_exists"
     assert skipped.saved_at is None
     assert pending.status == "pending_crawl"
+    assert movie.source_task_names == ["旧任务", run.task_name]
+    refreshed = session.get(CrawlRun, run.id)
+    assert refreshed.result["skipped_tasks"] == 1
+
+
+def test_execute_run_marks_detail_phase_existing_movies_skipped(monkeypatch) -> None:
+    from backend.app.modules.crawler.runtime.service import _execute_run
+
+    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: DetailPhaseDedupeMovieServiceStub())
+    session = TestingSessionLocal()
+    run, runtime = create_run_with_task("detail-dedupe")
+    session.add(Movie(code="AAA-020", source_url="https://javdb.com/v/aaa020", source_task_names=["旧任务"]))
+    session.commit()
+
+    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+
+    detail = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "AAA-020").one()
+    movie = session.scalar(select(Movie).where(Movie.code == "AAA-020"))
+
+    assert detail.status == "skipped"
+    assert detail.error == "already_exists"
+    assert detail.crawled_at is not None
+    assert detail.saved_at is None
     assert movie.source_task_names == ["旧任务", run.task_name]
     refreshed = session.get(CrawlRun, run.id)
     assert refreshed.result["skipped_tasks"] == 1

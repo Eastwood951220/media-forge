@@ -323,6 +323,22 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
         db.commit()
         _append_run_log(str(run.id), f"爬取失败: {task_info.get('code') or task_info.get('url')}: {error}", "ERROR")
 
+    def on_item_already_exists(task_info: dict[str, Any]) -> None:
+        detail = find_detail(task_info)
+        code = task_info.get("code")
+        was_skipped = detail is not None and detail.status == "skipped"
+        if detail:
+            detail.status = "skipped"
+            detail.error = "already_exists"
+            detail.crawled_at = detail.crawled_at or datetime.now()
+            detail.saved_at = None
+        add_source_task_name_for_code(db, code, task.name)
+        if not was_skipped:
+            progress["skipped"] += 1
+        runtime.write_progress(str(run.id), progress)
+        db.commit()
+        _append_run_log(str(run.id), f"跳过已存在影片并追加任务名: {code}", "INFO", code=code)
+
     def log_callback(message: str, level: str = "INFO") -> None:
         _append_run_log(str(run.id), message, level)
 
@@ -348,6 +364,7 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             on_tasks_batch_created=on_tasks_batch_created,
             on_item_saved=on_item_saved,
             on_detail_failed=on_detail_failed,
+            on_item_already_exists=on_item_already_exists,
             log_callback=log_callback,
             db_check_callback=db_check_callback,
             on_detail_check_callback=on_detail_check_callback,
