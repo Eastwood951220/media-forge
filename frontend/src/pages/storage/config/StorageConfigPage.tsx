@@ -278,6 +278,13 @@ export default function StorageConfigPage() {
           >
             <InputNumber min={1} max={100} style={{ width: '100%' }} />
           </Form.Item>
+          <Form.Item
+            name="magnet_max_attempts_per_subtask"
+            label="每个子任务最多尝试磁力条数"
+            tooltip="当前磁力下载轮询超过最大次数后，才会尝试下一条磁力；超过此条数后子任务失败"
+          >
+            <InputNumber min={1} max={50} style={{ width: '100%' }} />
+          </Form.Item>
         </Card>
 
         <Card

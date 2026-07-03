@@ -16,6 +16,7 @@ export interface StorageConfig {
   retry_delay_max: number
   max_step_retries: number
   download_max_poll_count: number
+  magnet_max_attempts_per_subtask: number
   minimum_video_size_mb: number
   video_extensions: string[]
 }

@@ -43,6 +43,7 @@ describe('StorageConfigPage', () => {
       retry_delay_max: 30,
       max_step_retries: 3,
       download_max_poll_count: 10,
+      magnet_max_attempts_per_subtask: 5,
       minimum_video_size_mb: 100,
       video_extensions: ['.mp4', '.mkv'],
     })
@@ -64,6 +65,7 @@ describe('StorageConfigPage', () => {
       retry_delay_max: 30,
       max_step_retries: 3,
       download_max_poll_count: 10,
+      magnet_max_attempts_per_subtask: 5,
       minimum_video_size_mb: 100,
       video_extensions: ['.mp4', '.mkv'],
     })
