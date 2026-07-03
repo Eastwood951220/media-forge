@@ -50,8 +50,21 @@ def _cached_filter_values(db: Session, filter_type: str) -> list[str]:
     ).all())
 
 
-def _movie_payload(movie: Movie, *, include_magnets: bool = False) -> dict:
+def _movie_payload(movie: Movie, *, include_magnets: bool = False, db: Session | None = None) -> dict:
     source_task_ids = [str(tid) for tid in (movie.source_task_ids or [])]
+    storage_locations: list[str] = []
+    if db and source_task_ids:
+        from backend.app.models.crawl_task import CrawlTask
+        for task_id_str in source_task_ids:
+            try:
+                task_id = uuid.UUID(task_id_str)
+            except (ValueError, TypeError):
+                continue
+            crawl_task = db.get(CrawlTask, task_id)
+            if crawl_task and crawl_task.storage_location:
+                loc = crawl_task.storage_location
+                if loc not in storage_locations:
+                    storage_locations.append(loc)
     payload = {
         "_id": str(movie.id),
         "id": str(movie.id),
@@ -68,6 +81,7 @@ def _movie_payload(movie: Movie, *, include_magnets: bool = False) -> dict:
         "actors": list(movie.actors or []),
         "tags": list(movie.tags or []),
         "source_task_ids": source_task_ids,
+        "storage_locations": storage_locations,
         "marked": bool(movie.marked),
         "storage_summary": movie.storage_summary or {},
         "raw_detail": movie.raw_detail or {},
@@ -288,7 +302,7 @@ def list_movies(
     total = len(filtered)
     offset = skip if skip is not None else (page - 1) * limit
     page_rows = filtered[offset:offset + limit]
-    return paginated(rows=[_movie_payload(movie, include_magnets=True) for movie in page_rows], total=total)
+    return paginated(rows=[_movie_payload(movie, include_magnets=True, db=db) for movie in page_rows], total=total)
 
 
 @router.get("/filter-config")
@@ -307,4 +321,4 @@ def get_movie(movie_id: uuid.UUID, _current_user: CurrentUser, db: Session = Dep
     movie = db.query(Movie).options(selectinload(Movie.magnets)).filter(Movie.id == movie_id).first()
     if movie is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found")
-    return success(data=_movie_payload(movie, include_magnets=True))
+    return success(data=_movie_payload(movie, include_magnets=True, db=db))

@@ -42,6 +42,7 @@ export interface Movie {
   tags: string[]
   source_task_name?: string
   source_task_names: string[]
+  storage_locations?: string[]
   marked: boolean
   storage_summary: {
     last_status?: string
