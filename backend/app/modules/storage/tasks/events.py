@@ -40,6 +40,16 @@ def publish_storage_sub_updated(owner_id: str, subtask: StorageSubTask) -> None:
     ))
 
 
+def publish_storage_sub_log_appended(owner_id: str, subtask_id: str, entry: dict) -> None:
+    event_bus.publish(make_realtime_event(
+        event="storage.sub.log.appended",
+        scope="storage.sub",
+        owner_id=owner_id,
+        resource_id=subtask_id,
+        payload=entry,
+    ))
+
+
 def publish_movie_storage_updated(db: Session, owner_id: str, movie_id) -> None:
     movie = db.get(Movie, movie_id)
     if movie is None:

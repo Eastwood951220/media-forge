@@ -12,13 +12,28 @@ def _log_path(subtask_id: str) -> Path:
     return root / f"{subtask_id}.jsonl"
 
 
-def write_storage_subtask_log(subtask_id: str, level: str, message: str, context: dict | None = None) -> dict:
+def write_storage_subtask_log(
+    subtask_id: str,
+    level: str,
+    message: str,
+    context: dict | None = None,
+    *,
+    step: str | None = None,
+    step_label: str | None = None,
+    event: str | None = None,
+) -> dict:
     entry = {
         "timestamp": datetime.now().isoformat(),
         "level": level,
         "message": message,
         "context": context or {},
     }
+    if step:
+        entry["step"] = step
+    if step_label:
+        entry["step_label"] = step_label
+    if event:
+        entry["event"] = event
     with _log_path(subtask_id).open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
     return entry
