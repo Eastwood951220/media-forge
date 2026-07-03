@@ -61,6 +61,10 @@ class StorageTaskService:
             self.runtime.request_stop(str(task.id))
         self.db.commit()
         self.db.refresh(task)
+
+        from backend.app.modules.storage.tasks.events import publish_storage_main_updated
+        publish_storage_main_updated(task)
+
         return task
 
     def restart_main_task(self, task_id: uuid.UUID) -> StorageMainTask:
@@ -86,6 +90,10 @@ class StorageTaskService:
             self.runtime.enqueue_main_task(str(task.id))
         self.db.commit()
         self.db.refresh(task)
+
+        from backend.app.modules.storage.tasks.events import publish_storage_main_updated
+        publish_storage_main_updated(task)
+
         return task
 
     def to_main_response(self, task: StorageMainTask) -> dict:
