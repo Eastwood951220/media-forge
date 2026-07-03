@@ -3,7 +3,7 @@ import { useParams } from '@tanstack/react-router'
 import { Card, Descriptions, Input, Select, Space, Table, Tag } from 'antd'
 import RunLogsTimeline from './components/RunLogsTimeline'
 import type { ColumnsType } from 'antd/es/table'
-import { getCrawlerRun, getCrawlerRunTasks } from '@/api/crawlerRun'
+import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks } from '@/api/crawlerRun'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
 import { useCrawlerSSE } from '@/hooks/useCrawlerSSE'
 import type { CrawlerEvent } from '@/api/crawler/sse'
@@ -25,6 +25,7 @@ const statusLabels: Record<string, { text: string; color: string }> = {
 function RunDetailPage() {
   const { id } = useParams({ strict: false })
   const [run, setRun] = useState<CrawlRun | null>(null)
+  const [logs, setLogs] = useState<RunLogEntry[]>([])
   const [tasks, setTasks] = useState<CrawlRunDetailTask[]>([])
   const [loading, setLoading] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
@@ -33,6 +34,7 @@ function RunDetailPage() {
   // Reset state when run ID changes
   useEffect(() => {
     setRun(null)
+    setLogs([])
     setTasks([])
     setStatusFilter(undefined)
     setKeyword('')
@@ -49,6 +51,22 @@ function RunDetailPage() {
       }
     }
     void fetchRun()
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
+  // Initial fetch of logs
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    const fetchLogs = async () => {
+      const data = await getCrawlerRunLogs(id)
+      if (!cancelled) {
+        setLogs(data)
+      }
+    }
+    void fetchLogs()
     return () => {
       cancelled = true
     }
@@ -97,6 +115,11 @@ function RunDetailPage() {
           : prev.finished_at,
       }
     })
+
+    // Reload logs when run completes
+    if (event.status === 'completed' || event.status === 'failed' || event.status === 'stopped') {
+      void getCrawlerRunLogs(id!).then((data) => setLogs(data))
+    }
   }, [id])
 
   const handleTaskStatus = useCallback((event: CrawlerEvent & { type: 'task:status' }) => {
@@ -144,13 +167,7 @@ function RunDetailPage() {
         message: event.message,
         context: event.context,
       }
-      setRun((prev) => {
-        if (!prev) return prev
-        return {
-          ...prev,
-          logs: [...(prev.logs ?? []), logEntry],
-        }
-      })
+      setLogs((prev) => [...prev, logEntry])
     }
   }, [id])
 
@@ -239,7 +256,7 @@ function RunDetailPage() {
       {run && (
         <Card title="运行日志" style={{ marginTop: 16 }}>
           <RunLogsTimeline
-            logs={run.logs ?? []}
+            logs={logs}
             isActive={run.status === 'queued' || run.status === 'running'}
           />
         </Card>

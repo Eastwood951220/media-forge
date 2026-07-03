@@ -2,10 +2,11 @@ import { createMemoryHistory, createRootRoute, createRoute, createRouter, Router
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RunDetailPage from '../src/pages/crawler/runs/RunDetailPage'
-import { getCrawlerRun, getCrawlerRunTasks } from '../src/api/crawlerRun'
+import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks } from '../src/api/crawlerRun'
 
 vi.mock('../src/api/crawlerRun', () => ({
   getCrawlerRun: vi.fn(),
+  getCrawlerRunLogs: vi.fn(),
   getCrawlerRunTasks: vi.fn(),
 }))
 
@@ -54,11 +55,12 @@ describe('RunDetailPage logs', () => {
       resumed_from: null,
       created_at: '2026-07-02T00:00:00Z',
       updated_at: null,
-      logs: [
-        { timestamp: '2026-07-02T00:00:01Z', level: 'INFO', message: '任务开始执行' },
-        { timestamp: '2026-07-02T00:00:02Z', level: 'ERROR', message: '入库失败: AAA-001' },
-      ],
+      logs: [],
     })
+    vi.mocked(getCrawlerRunLogs).mockResolvedValue([
+      { timestamp: '2026-07-02T00:00:01Z', level: 'INFO', message: '任务开始执行' },
+      { timestamp: '2026-07-02T00:00:02Z', level: 'ERROR', message: '入库失败: AAA-001' },
+    ])
     vi.mocked(getCrawlerRunTasks).mockResolvedValue({ rows: [], total: 0 })
   })
 
@@ -75,6 +77,7 @@ describe('RunDetailPage logs', () => {
 
     await screen.findByText('运行日志')
     expect(getCrawlerRun).toHaveBeenCalledWith('run-1')
+    expect(getCrawlerRunLogs).toHaveBeenCalledWith('run-1')
     expect(getCrawlerRunTasks).toHaveBeenCalledWith('run-1', {
       limit: 200,
       status: undefined,

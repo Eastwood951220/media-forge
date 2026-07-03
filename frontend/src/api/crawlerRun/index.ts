@@ -4,6 +4,7 @@ import type {
   CrawlRunDetailTask,
   CrawlMode,
   QueueStatus,
+  RunLogEntry,
 } from './types'
 import type { PaginatedResponse } from '../crawlTask/types'
 
@@ -20,6 +21,10 @@ export function getCrawlerRuns(params?: {
 
 export function getCrawlerRun(runId: string): Promise<CrawlRun> {
   return request.get<CrawlRun>(`${BASE_URL}/${runId}`)
+}
+
+export function getCrawlerRunLogs(runId: string): Promise<RunLogEntry[]> {
+  return request.get<RunLogEntry[]>(`${BASE_URL}/${runId}/logs`)
 }
 
 export function getCrawlerRunTasks(
