@@ -1,4 +1,5 @@
 from datetime import datetime
+from queue import Empty
 
 from sqlalchemy import select
 
@@ -165,6 +166,15 @@ def create_run_with_task(code: str = "task-code") -> tuple[CrawlRun, Runtime]:
     return run, runtime
 
 
+def drain_realtime_events(queue) -> list:
+    events = []
+    while True:
+        try:
+            events.append(queue.get_nowait())
+        except Empty:
+            return events
+
+
 def test_process_next_run_marks_saved(monkeypatch) -> None:
     session = TestingSessionLocal()
     user = User(username="worker-user", hashed_password=get_password_hash("pw"), role="admin")
@@ -233,6 +243,40 @@ def test_execute_run_persists_movie_before_marking_detail_saved(monkeypatch) -> 
     refreshed = session.get(CrawlRun, run.id)
     assert refreshed.result["saved"] == 1
     assert refreshed.result["save_failed"] == 0
+
+
+def test_execute_run_publishes_run_detail_events_to_realtime_bus(monkeypatch) -> None:
+    from backend.app.modules.crawler.runtime.service import _execute_run
+    from backend.app.modules.realtime.bus import event_bus as realtime_bus
+
+    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: PersistingMovieServiceStub())
+    session = TestingSessionLocal()
+    run, runtime = create_run_with_task("realtime")
+    task = session.get(CrawlTask, run.task_id)
+    owner_id = str(task.owner_id)
+    queue = realtime_bus.subscribe(owner_id)
+
+    try:
+        _execute_run(session, session.get(CrawlRun, run.id), runtime)
+        events = drain_realtime_events(queue)
+    finally:
+        realtime_bus.unsubscribe(owner_id, queue)
+
+    event_names = [event.event for event in events]
+    assert "crawler.run.detail.updated" in event_names
+    assert "crawler.run.log.appended" in event_names
+    assert "crawler.run.updated" in event_names
+
+    log_events = [event for event in events if event.event == "crawler.run.log.appended"]
+    assert any(event.payload["run_id"] == str(run.id) and "入库成功" in event.payload["log"]["message"] for event in log_events)
+
+    detail_events = [event for event in events if event.event == "crawler.run.detail.updated"]
+    assert any(
+        event.resource_id == str(run.id)
+        and event.payload["run_id"] == str(run.id)
+        and any(task_payload["status"] == "saved" for task_payload in event.payload["tasks"])
+        for event in detail_events
+    )
 
 
 def test_execute_run_syncs_movie_filters_after_movie_persistence(monkeypatch) -> None:

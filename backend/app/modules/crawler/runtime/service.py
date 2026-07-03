@@ -11,13 +11,6 @@ from backend.app.core.dependencies import get_redis
 from shared.database.session import get_session_factory
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
-from backend.app.modules.crawler.events.bus import event_bus
-from backend.app.modules.crawler.events.schemas import (
-    RunLogEvent,
-    RunProgressEvent,
-    RunStatusEvent,
-    TaskStatusEvent,
-)
 from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
 from backend.app.modules.crawler.runtime.source_task_names import (
     add_source_task_id_for_code,
@@ -87,11 +80,7 @@ class CrawlerRunService:
         ).update({"status": "pending_crawl", "error": None})
         self.db.commit()
         self.db.refresh(run)
-        event_bus.publish(RunStatusEvent(
-            run_id=str(run.id),
-            status="stopped",
-            task_name=run.task_name or "",
-        ))
+        publish_run_updated(self.db, run)
         return run
 
     def restart_run(self, run_id: uuid.UUID) -> CrawlRun:
@@ -181,11 +170,7 @@ def process_run(db_factory: sessionmaker, runtime: CrawlerRuntimeState, run_id: 
         run.status = "running"
         run.started_at = datetime.now()
         db.commit()
-        event_bus.publish(RunStatusEvent(
-            run_id=run_id,
-            status="running",
-            task_name=run.task_name or "",
-        ))
+        publish_run_updated(db, run)
 
         runtime.set_current_run(run_id)
 
@@ -197,12 +182,7 @@ def process_run(db_factory: sessionmaker, runtime: CrawlerRuntimeState, run_id: 
             run.error = str(exc)[:1000]
             run.finished_at = datetime.now()
             db.commit()
-            event_bus.publish(RunStatusEvent(
-                run_id=run_id,
-                status="failed",
-                task_name=run.task_name or "",
-                error=str(exc)[:1000],
-            ))
+            publish_run_updated(db, run)
         finally:
             runtime.set_current_run(None)
             runtime.write_progress(run_id, {})
@@ -212,21 +192,16 @@ def process_run(db_factory: sessionmaker, runtime: CrawlerRuntimeState, run_id: 
         db.close()
 
 
-def _append_run_log(run_id: str, message: str, level: str = "INFO", **context: Any) -> None:
+def _append_run_log(run_id: str, message: str, level: str = "INFO", **context: Any) -> dict[str, Any] | None:
     from backend.app.modules.crawler.runs.logs import append_run_log, build_run_log
 
+    entry = build_run_log(level, message, **context)
     try:
-        append_run_log(run_id, build_run_log(level, message, **context))
+        append_run_log(run_id, entry)
     except Exception as exc:
         logger.warning("Failed to append crawler run log for %s: %s", run_id, exc)
-
-    # Publish SSE event for real-time log streaming
-    event_bus.publish(RunLogEvent(
-        run_id=run_id,
-        level=level,
-        message=message,
-        context=context,
-    ))
+        return None
+    return entry
 
 
 def _run_owner_id(db: Session, run: CrawlRun) -> str | None:
@@ -406,6 +381,7 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
 
     def on_tasks_batch_created(items: list[dict[str, Any]]) -> None:
         skipped_count = 0
+        created_details: list[CrawlRunDetailTask] = []
         for item in items:
             is_skipped = item.get("status") == "skipped"
             reason = item.get("reason") if is_skipped else None
@@ -422,31 +398,18 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             db.add(detail)
             db.flush()
             remember_detail(detail)
+            created_details.append(detail)
             if is_skipped:
                 skipped_count += 1
                 if add_source_task_id_for_code(db, item.get("code"), task.id):
-                    _append_run_log(str(run.id), f"已存在影片追加任务ID: {item.get('code')} -> {task.id}", "INFO", code=item.get("code"))
-            event_bus.publish(TaskStatusEvent(
-                run_id=str(run.id),
-                code=item.get("code"),
-                source_url=item.get("url", ""),
-                status="skipped" if is_skipped else "pending_crawl",
-                error=reason,
-            ))
+                    append_run_log_for_run(db, run, f"已存在影片追加任务ID: {item.get('code')} -> {task.id}", "INFO", code=item.get("code"))
         progress["total"] += len(items)
         progress["skipped"] += skipped_count
         runtime.write_progress(str(run.id), progress)
         db.commit()
-        event_bus.publish(RunProgressEvent(
-            run_id=str(run.id),
-            total=progress["total"],
-            saved=progress["saved"],
-            failed=progress["failed"],
-            skipped=progress["skipped"],
-            save_failed=progress["save_failed"],
-        ))
+        publish_run_detail_updated(db, run, created_details)
         if items:
-            _append_run_log(str(run.id), f"创建子任务 {len(items)} 条，跳过 {skipped_count} 条")
+            append_run_log_for_run(db, run, f"创建子任务 {len(items)} 条，跳过 {skipped_count} 条")
 
     def on_item_saved(task_info: dict[str, Any], item_data: dict[str, Any]) -> None:
         detail = find_detail(task_info, item_data)
@@ -462,13 +425,7 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
                 detail.crawled_at = datetime.now()
                 detail.saved_at = datetime.now()
             progress["saved"] += 1
-            _append_run_log(str(run.id), f"入库成功: {code}", "INFO", code=code, movie_id=str(movie_id))
-            event_bus.publish(TaskStatusEvent(
-                run_id=str(run.id),
-                code=code,
-                source_url=task_info.get("url", ""),
-                status="saved",
-            ))
+            append_run_log_for_run(db, run, f"入库成功: {code}", "INFO", code=code, movie_id=str(movie_id))
         except Exception as exc:
             if detail:
                 detail.status = "save_failed"
@@ -477,24 +434,11 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
                 detail.crawled_at = datetime.now()
                 detail.saved_at = None
             progress["save_failed"] += 1
-            _append_run_log(str(run.id), f"入库失败: {code}: {exc}", "ERROR", code=code)
-            event_bus.publish(TaskStatusEvent(
-                run_id=str(run.id),
-                code=code,
-                source_url=task_info.get("url", ""),
-                status="save_failed",
-                error=str(exc)[:500],
-            ))
+            append_run_log_for_run(db, run, f"入库失败: {code}: {exc}", "ERROR", code=code)
         runtime.write_progress(str(run.id), progress)
-        event_bus.publish(RunProgressEvent(
-            run_id=str(run.id),
-            total=progress["total"],
-            saved=progress["saved"],
-            failed=progress["failed"],
-            skipped=progress["skipped"],
-            save_failed=progress["save_failed"],
-        ))
         db.commit()
+        if detail:
+            publish_run_detail_updated(db, run, [detail])
 
     def on_detail_failed(task_info: dict[str, Any], error: str) -> None:
         detail = find_detail(task_info)
@@ -505,22 +449,9 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
         progress["failed"] += 1
         runtime.write_progress(str(run.id), progress)
         db.commit()
-        event_bus.publish(TaskStatusEvent(
-            run_id=str(run.id),
-            code=task_info.get("code"),
-            source_url=task_info.get("url", ""),
-            status="crawl_failed",
-            error=error[:500],
-        ))
-        event_bus.publish(RunProgressEvent(
-            run_id=str(run.id),
-            total=progress["total"],
-            saved=progress["saved"],
-            failed=progress["failed"],
-            skipped=progress["skipped"],
-            save_failed=progress["save_failed"],
-        ))
-        _append_run_log(str(run.id), f"爬取失败: {task_info.get('code') or task_info.get('url')}: {error}", "ERROR")
+        if detail:
+            publish_run_detail_updated(db, run, [detail])
+        append_run_log_for_run(db, run, f"爬取失败: {task_info.get('code') or task_info.get('url')}: {error}", "ERROR")
 
     def on_item_already_exists(task_info: dict[str, Any]) -> None:
         detail = find_detail(task_info)
@@ -536,36 +467,23 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             progress["skipped"] += 1
         runtime.write_progress(str(run.id), progress)
         db.commit()
-        event_bus.publish(TaskStatusEvent(
-            run_id=str(run.id),
-            code=code,
-            source_url=task_info.get("url", ""),
-            status="skipped",
-            error="already_exists",
-        ))
-        event_bus.publish(RunProgressEvent(
-            run_id=str(run.id),
-            total=progress["total"],
-            saved=progress["saved"],
-            failed=progress["failed"],
-            skipped=progress["skipped"],
-            save_failed=progress["save_failed"],
-        ))
-        _append_run_log(str(run.id), f"跳过已存在影片并追加任务ID: {code}", "INFO", code=code)
+        if detail:
+            publish_run_detail_updated(db, run, [detail])
+        append_run_log_for_run(db, run, f"跳过已存在影片并追加任务ID: {code}", "INFO", code=code)
 
     def log_callback(message: str, level: str = "INFO") -> None:
-        _append_run_log(str(run.id), message, level)
+        append_run_log_for_run(db, run, message, level)
 
     def db_check_callback(codes: list[str]) -> set[str]:
         existing_codes = find_existing_movie_codes(db, codes)
         if existing_codes:
-            _append_run_log(str(run.id), f"列表阶段发现已存在影片 {len(existing_codes)} 条", "INFO")
+            append_run_log_for_run(db, run, f"列表阶段发现已存在影片 {len(existing_codes)} 条", "INFO")
         return existing_codes
 
     def on_detail_check_callback(code: str) -> bool:
         exists = movie_code_exists(db, code)
         if exists:
-            _append_run_log(str(run.id), f"详情阶段跳过已存在影片: {code}", "INFO", code=code)
+            append_run_log_for_run(db, run, f"详情阶段跳过已存在影片: {code}", "INFO", code=code)
         return exists
 
     # Execute crawl
@@ -598,8 +516,8 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             "skipped_tasks": skipped_count,
         }
         run.status = "completed"
-        _append_run_log(
-            str(run.id),
+        append_run_log_for_run(
+            db, run,
             f"任务完成: 总计={total_count}, 已保存={saved_count}, 入库失败={save_failed_count}, 爬取失败={crawl_failed_count}, 跳过={skipped_count}",
             "INFO",
         )
@@ -607,23 +525,18 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             from scraper.database.repositories.filter_repository import sync_movie_filters
 
             sync_result = sync_movie_filters(db)
-            _append_run_log(
-                str(run.id),
+            append_run_log_for_run(
+                db, run,
                 f"筛选列表已同步: 演员={sync_result['actors']}, 标签={sync_result['tags']}, "
                 f"导演={sync_result['directors']}, 片商={sync_result['makers']}, 系列={sync_result['series']}",
                 "INFO",
             )
         except Exception as sync_exc:
             logger.warning("Failed to sync movie filters for run %s: %s", run.id, sync_exc)
-            _append_run_log(str(run.id), f"筛选列表同步失败: {sync_exc}", "WARNING")
-        event_bus.publish(RunStatusEvent(
-            run_id=str(run.id),
-            status="completed",
-            task_name=run.task_name or "",
-        ))
+            append_run_log_for_run(db, run, f"筛选列表同步失败: {sync_exc}", "WARNING")
     except ImportError:
         logger.warning("MovieService not available, marking run as completed with stub")
-        _append_run_log(str(run.id), "MovieService 不可用，使用空结果完成运行", "WARNING")
+        append_run_log_for_run(db, run, "MovieService 不可用，使用空结果完成运行", "WARNING")
         run.result = {"total_tasks": 0, "completed_tasks": 0, "failed_tasks": 0}
         run.status = "completed"
     except Exception as exc:
@@ -631,3 +544,4 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
 
     run.finished_at = datetime.now()
     db.commit()
+    publish_run_updated(db, run)
