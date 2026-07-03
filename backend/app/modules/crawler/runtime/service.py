@@ -25,6 +25,26 @@ from backend.app.modules.crawler.tasks.runtime_status import (
 logger = logging.getLogger(__name__)
 
 UNFINISHED_DETAIL_STATUSES = {"pending_crawl", "crawl_failed", "save_failed"}
+
+
+def _read_incremental_threshold_from_conf() -> int:
+    """Read INCREMENTAL_EXIST_THRESHOLD from crawler.conf."""
+    from scraper.config import settings as cfg
+
+    conf_path = cfg.BASE_DIR / "data" / "configs" / "crawler.conf"
+    if not conf_path.exists():
+        return 0
+    for line in conf_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        if key.strip() == "INCREMENTAL_EXIST_THRESHOLD":
+            try:
+                return int(value.strip())
+            except (ValueError, TypeError):
+                return 0
+    return 0
 RESTARTABLE_DETAIL_STATUSES = UNFINISHED_DETAIL_STATUSES
 TERMINAL_DETAIL_STATUSES = {"saved", "skipped"}
 DETAIL_PHASE_STARTED_STATUSES = {"saved", "crawl_failed", "save_failed"}
@@ -576,10 +596,12 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
                 stop_check=lambda: runtime.is_stop_requested(str(run.id)),
             )
         else:
+            incremental_threshold = _read_incremental_threshold_from_conf()
             result = movie_service.crawl_javdb_task(
                 task,
                 task_id=str(run.task_id) if run.task_id else None,
                 crawl_mode=run.crawl_mode,
+                incremental_threshold=incremental_threshold,
                 on_tasks_batch_created=on_tasks_batch_created,
                 on_item_saved=on_item_saved,
                 on_detail_failed=on_detail_failed,
