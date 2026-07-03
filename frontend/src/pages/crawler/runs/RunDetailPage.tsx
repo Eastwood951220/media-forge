@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from '@tanstack/react-router'
-import { Card, Descriptions, Input, Select, Space, Table, Tag } from 'antd'
+import { StopOutlined } from '@ant-design/icons'
+import { Button, Card, Descriptions, Input, message, Select, Space, Table, Tag } from 'antd'
 import RunLogsTimeline from './components/RunLogsTimeline'
 import type { ColumnsType } from 'antd/es/table'
-import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks } from '@/api/crawlerRun'
+import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
 import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
 import type {
@@ -78,6 +79,16 @@ function RunDetailPage() {
     void fetchLogs()
     void fetchTasks()
   }, [fetchLogs, fetchRun, fetchTasks])
+
+  const handleStop = useCallback(async () => {
+    if (!id) return
+    try {
+      await stopCrawlerRun(id)
+      message.success('已停止运行')
+    } catch {
+      message.error('停止失败')
+    }
+  }, [id])
 
   // Initial fetch effects
   useEffect(() => {
@@ -193,7 +204,23 @@ function RunDetailPage() {
   return (
     <div style={{ padding: 24 }}>
       {run && (
-        <Card title={`运行详情 - ${run.task_name}`} style={{ marginBottom: 16 }}>
+        <Card
+          title={
+            <Space>
+              <span>运行详情 - {run.task_name}</span>
+              {(run.status === 'queued' || run.status === 'running') && (
+                <Button
+                  danger
+                  icon={<StopOutlined />}
+                  onClick={handleStop}
+                >
+                  停止
+                </Button>
+              )}
+            </Space>
+          }
+          style={{ marginBottom: 16 }}
+        >
           <Descriptions column={3}>
             <Descriptions.Item label="状态">
               <Tag color={statusLabels[run.status]?.color}>{statusLabels[run.status]?.text}</Tag>
