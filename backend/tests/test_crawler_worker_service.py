@@ -8,7 +8,7 @@ from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.models.user import User
 from backend.app.modules.crawler.runtime.service import process_next_run
 from backend.tests.conftest import TestingSessionLocal
-from shared.database.models.content import Movie, MovieMagnet
+from shared.database.models.content import Movie, MovieFilter, MovieMagnet
 
 
 class Runtime:
@@ -62,6 +62,28 @@ class PersistingMovieServiceStub:
                         "size_text": "1.2GB",
                     }
                 ],
+            },
+        )
+        return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
+
+
+class FilterSyncMovieServiceStub:
+    def crawl_javdb_task(self, task, **kwargs):
+        kwargs["on_tasks_batch_created"]([
+            {"code": "FILTER-001", "url": "https://javdb.com/v/filter001", "name": "FILTER 001"}
+        ])
+        kwargs["on_item_saved"](
+            {"code": "FILTER-001", "url": "https://javdb.com/v/filter001", "name": "FILTER 001"},
+            {
+                "code": "FILTER-001",
+                "source_url": "https://javdb.com/v/filter001",
+                "source_name": "FILTER 001",
+                "title": "FILTER 001",
+                "actors": ["演员缓存A", "演员缓存B"],
+                "tags": ["标签缓存A"],
+                "director": "导演缓存A",
+                "maker": "片商缓存A",
+                "series": "系列缓存A",
             },
         )
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
@@ -211,6 +233,26 @@ def test_execute_run_persists_movie_before_marking_detail_saved(monkeypatch) -> 
     refreshed = session.get(CrawlRun, run.id)
     assert refreshed.result["saved"] == 1
     assert refreshed.result["save_failed"] == 0
+
+
+def test_execute_run_syncs_movie_filters_after_movie_persistence(monkeypatch) -> None:
+    from backend.app.modules.crawler.runtime.service import _execute_run
+
+    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: FilterSyncMovieServiceStub())
+    session = TestingSessionLocal()
+    run, runtime = create_run_with_task("filter-sync")
+
+    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+
+    rows = session.scalars(select(MovieFilter).order_by(MovieFilter.type.asc(), MovieFilter.name.asc())).all()
+    assert [(row.type, row.name, row.count) for row in rows] == [
+        ("actor", "演员缓存A", 0),
+        ("actor", "演员缓存B", 0),
+        ("director", "导演缓存A", 0),
+        ("maker", "片商缓存A", 0),
+        ("series", "系列缓存A", 0),
+        ("tag", "标签缓存A", 0),
+    ]
 
 
 def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monkeypatch) -> None:

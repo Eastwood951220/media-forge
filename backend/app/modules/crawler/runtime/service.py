@@ -603,6 +603,19 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             f"任务完成: 总计={total_count}, 已保存={saved_count}, 入库失败={save_failed_count}, 爬取失败={crawl_failed_count}, 跳过={skipped_count}",
             "INFO",
         )
+        try:
+            from scraper.database.repositories.filter_repository import sync_movie_filters
+
+            sync_result = sync_movie_filters(db)
+            _append_run_log(
+                str(run.id),
+                f"筛选列表已同步: 演员={sync_result['actors']}, 标签={sync_result['tags']}, "
+                f"导演={sync_result['directors']}, 片商={sync_result['makers']}, 系列={sync_result['series']}",
+                "INFO",
+            )
+        except Exception as sync_exc:
+            logger.warning("Failed to sync movie filters for run %s: %s", run.id, sync_exc)
+            _append_run_log(str(run.id), f"筛选列表同步失败: {sync_exc}", "WARNING")
         event_bus.publish(RunStatusEvent(
             run_id=str(run.id),
             status="completed",
