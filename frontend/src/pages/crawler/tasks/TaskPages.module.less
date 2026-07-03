@@ -157,3 +157,198 @@
     }
   }
 }
+
+/* ===== Stats Bar ===== */
+.statsBar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.statCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: var(--app-surface-color);
+}
+
+.statLabel {
+  color: var(--app-muted-color);
+  font-size: 13px;
+}
+
+.statValue {
+  color: var(--app-text-color);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ===== Task List ===== */
+.taskListShell {
+  padding: 16px;
+}
+
+.taskListToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.taskSearch {
+  max-width: 340px;
+}
+
+.taskGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.taskCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 260px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: var(--app-surface-color);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+
+  &:hover {
+    border-color: rgba(0, 106, 255, 0.42);
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+  }
+}
+
+.taskCardDisabled {
+  opacity: 0.68;
+}
+
+.taskCardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 54px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.taskCardTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskCardBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.taskMetaRow {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.taskMetaLabel {
+  color: var(--app-muted-color);
+  font-size: 12px;
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.taskMetaValue {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-text-color);
+  font-size: 13px;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.urlNameList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.taskCardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.emptyState {
+  padding: 42px 0;
+}
+
+/* ===== Delete Modal ===== */
+.deleteModeRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.deleteModeLabel {
+  font-size: 13px;
+}
+
+.deleteWarning {
+  display: block;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* ===== Card Grid Responsive ===== */
+@media (max-width: 1400px) {
+  .taskGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .taskGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .statsBar {
+    grid-template-columns: 1fr;
+  }
+
+  .taskListToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .taskSearch {
+    width: 100%;
+    max-width: none;
+  }
+
+  .taskGrid {
+    grid-template-columns: 1fr;
+  }
+}
