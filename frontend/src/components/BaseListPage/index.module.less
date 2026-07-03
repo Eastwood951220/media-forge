@@ -1,0 +1,54 @@
+.baseListPage {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.queryCard {
+  flex-shrink: 0;
+}
+
+.hidden {
+  display: none;
+}
+
+.tableCard {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  :global(.ant-card-body) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+  }
+}
+
+.toolbar {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.toolbarLeft,
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tableWrapper {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
