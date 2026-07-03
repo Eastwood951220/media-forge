@@ -20,12 +20,24 @@ type TaskListCardsProps = {
   onRun: (task: CrawlTask, mode: CrawlMode) => void
 }
 
+const taskStatusLabels: Record<string, { text: string; color: string }> = {
+  pending: { text: '等待中', color: 'default' },
+  running: { text: '爬取中', color: 'processing' },
+  success: { text: '已完成', color: 'success' },
+  failed: { text: '失败', color: 'error' },
+}
+
 const runStatusLabels: Record<string, { text: string; color: string }> = {
   queued: { text: '排队中', color: 'default' },
   running: { text: '运行中', color: 'processing' },
   completed: { text: '已完成', color: 'success' },
   failed: { text: '失败', color: 'error' },
   stopped: { text: '已停止', color: 'warning' },
+}
+
+function taskStatusTag(status: string) {
+  const statusConfig = taskStatusLabels[status] ?? { text: status, color: 'default' }
+  return <Tag color={statusConfig.color}>{statusConfig.text}</Tag>
 }
 
 function formatDateTime(value: string | null) {
@@ -72,7 +84,7 @@ function TaskCard({
             {task.name}
           </Typography.Text>
         </Tooltip>
-        <Tag color={task.is_skip ? 'default' : 'success'}>{task.is_skip ? '禁用' : '启用'}</Tag>
+        {taskStatusTag(task.status)}
       </div>
 
       <div className={styles.taskCardBody}>
