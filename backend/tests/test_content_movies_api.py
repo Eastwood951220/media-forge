@@ -5,7 +5,7 @@ from http import HTTPStatus
 
 from fastapi.testclient import TestClient
 
-from shared.database.models.content import Movie, MovieMagnet
+from shared.database.models.content import Movie, MovieFilter, MovieMagnet
 from backend.tests.conftest import TestingSessionLocal
 from backend.app.modules.content.movies import filter_config
 
@@ -123,6 +123,42 @@ def test_movie_filter_options(client: TestClient, admin_user) -> None:
     assert tag_response.json()["data"] == ["标签A", "标签B"]
     assert director_response.json()["data"] == ["导演B"]
     assert invalid_response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_movie_filter_options_prefer_movie_filters_cache(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    session.add(Movie(
+        code="CACHE-001",
+        source_url="https://javdb.com/v/cache001",
+        source_name="缓存回退验证",
+        actors=["电影演员"],
+        tags=["电影标签"],
+        director="电影导演",
+        maker="电影片商",
+        series="电影系列",
+        source_task_ids=[TASK_ID_A],
+    ))
+    session.add(MovieFilter(type="actor", name="缓存演员", count=1))
+    session.add(MovieFilter(type="tag", name="缓存标签", count=1))
+    session.add(MovieFilter(type="director", name="缓存导演", count=1))
+    session.add(MovieFilter(type="maker", name="缓存片商", count=1))
+    session.add(MovieFilter(type="series", name="缓存系列", count=1))
+    session.commit()
+    session.close()
+
+    actor_response = client.get("/api/content/movies/filters?type=actor", headers=headers)
+    tag_response = client.get("/api/content/movies/filters?type=tag", headers=headers)
+    director_response = client.get("/api/content/movies/filters?type=director", headers=headers)
+    maker_response = client.get("/api/content/movies/filters?type=maker", headers=headers)
+    series_response = client.get("/api/content/movies/filters?type=series", headers=headers)
+
+    assert actor_response.status_code == HTTPStatus.OK
+    assert actor_response.json()["data"] == ["缓存演员"]
+    assert tag_response.json()["data"] == ["缓存标签"]
+    assert director_response.json()["data"] == ["缓存导演"]
+    assert maker_response.json()["data"] == ["缓存片商"]
+    assert series_response.json()["data"] == ["缓存系列"]
 
 
 def seed_filter_movies() -> None:

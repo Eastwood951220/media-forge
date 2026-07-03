@@ -6,7 +6,7 @@ from sqlalchemy import func, not_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.dependencies import CurrentUser, get_db
-from shared.database.models.content import Movie
+from shared.database.models.content import Movie, MovieFilter
 from backend.app.modules.content.movies.filter_config import (
     MovieFilterConfigPayload,
     read_movie_filter_config,
@@ -39,6 +39,15 @@ def _sqlite_filter_values(db: Session, filter_type: str) -> list[str]:
     if filter_type == "tag":
         return _unique_sorted([tag for movie in movies for tag in (movie.tags or [])])
     return _unique_sorted([getattr(movie, filter_type) for movie in movies])
+
+
+def _cached_filter_values(db: Session, filter_type: str) -> list[str]:
+    return list(db.scalars(
+        select(MovieFilter.name)
+        .where(MovieFilter.type == filter_type, MovieFilter.name != "")
+        .distinct()
+        .order_by(MovieFilter.name.asc())
+    ).all())
 
 
 def _movie_payload(movie: Movie, *, include_magnets: bool = False) -> dict:
@@ -186,6 +195,11 @@ def list_filters(
 ) -> dict:
     if type not in VALID_FILTER_TYPES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid filter type: {type}")
+
+    cached_names = _cached_filter_values(db, type)
+    if cached_names:
+        return success(data=cached_names)
+
     if db.bind.dialect.name == "sqlite":
         return success(data=_sqlite_filter_values(db, type))
     if type == "actor":
