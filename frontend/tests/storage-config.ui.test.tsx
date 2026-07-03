@@ -26,7 +26,6 @@ function renderPage() {
 describe('StorageConfigPage', () => {
   beforeEach(() => {
     vi.mocked(fetchStorageConfig).mockResolvedValue({
-      enabled: true,
       grpc_host: 'localhost:9798',
       api_token: '************1234',
       api_token_configured: true,
@@ -36,8 +35,6 @@ describe('StorageConfigPage', () => {
       target_folder: '/Movies',
       use_task_subfolder: true,
       auto_create_target_folder: true,
-      single_filename_template: '{code}{ext}',
-      multi_filename_template: '{code}{ext}',
       operation_delay_min: 0.5,
       operation_delay_max: 1.5,
       download_poll_interval_min: 5,
@@ -48,13 +45,8 @@ describe('StorageConfigPage', () => {
       download_max_poll_count: 10,
       minimum_video_size_mb: 100,
       video_extensions: ['.mp4', '.mkv'],
-      excluded_filename_keywords: [],
-      keep_subtitles: true,
-      keep_cover_images: true,
-      delete_empty_folders: true,
     })
     vi.mocked(updateStorageConfig).mockResolvedValue({
-      enabled: true,
       grpc_host: 'localhost:9798',
       api_token: '************9999',
       api_token_configured: true,
@@ -64,8 +56,6 @@ describe('StorageConfigPage', () => {
       target_folder: '/Movies',
       use_task_subfolder: true,
       auto_create_target_folder: true,
-      single_filename_template: '{code}{ext}',
-      multi_filename_template: '{code}{ext}',
       operation_delay_min: 0.5,
       operation_delay_max: 1.5,
       download_poll_interval_min: 5,
@@ -76,10 +66,6 @@ describe('StorageConfigPage', () => {
       download_max_poll_count: 10,
       minimum_video_size_mb: 100,
       video_extensions: ['.mp4', '.mkv'],
-      excluded_filename_keywords: [],
-      keep_subtitles: true,
-      keep_cover_images: true,
-      delete_empty_folders: true,
     })
     vi.mocked(testStorageConnection).mockResolvedValue({
       grpc_reachable: true,
@@ -98,7 +84,6 @@ describe('StorageConfigPage', () => {
 
     expect(await screen.findByText('服务配置')).toBeInTheDocument()
     expect(screen.getByText('目录配置')).toBeInTheDocument()
-    expect(screen.getByText('文件命名')).toBeInTheDocument()
     expect(screen.getByText('任务执行')).toBeInTheDocument()
     expect(screen.getByText('文件筛选')).toBeInTheDocument()
     // API token field should be present

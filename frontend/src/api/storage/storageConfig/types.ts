@@ -1,5 +1,4 @@
 export interface StorageConfig {
-  enabled: boolean
   grpc_host: string
   api_token: string
   api_token_configured: boolean
@@ -9,8 +8,6 @@ export interface StorageConfig {
   target_folder: string
   use_task_subfolder: boolean
   auto_create_target_folder: boolean
-  single_filename_template: string
-  multi_filename_template: string
   operation_delay_min: number
   operation_delay_max: number
   download_poll_interval_min: number
@@ -21,10 +18,6 @@ export interface StorageConfig {
   download_max_poll_count: number
   minimum_video_size_mb: number
   video_extensions: string[]
-  excluded_filename_keywords: string[]
-  keep_subtitles: boolean
-  keep_cover_images: boolean
-  delete_empty_folders: boolean
 }
 
 export type StorageConfigUpdate = Partial<Omit<StorageConfig, 'api_token_configured'>>

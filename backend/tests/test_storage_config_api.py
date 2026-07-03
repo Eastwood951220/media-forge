@@ -23,7 +23,6 @@ def test_storage_config_service_writes_conf_and_masks_token(tmp_path, monkeypatc
 
     response = service.update_config(
         StorageConfigUpdate(
-            enabled=True,
             grpc_host="http://192.168.31.10:9798/",
             api_token="secret-token-1234",
             operation_delay_min=1,
@@ -32,13 +31,11 @@ def test_storage_config_service_writes_conf_and_masks_token(tmp_path, monkeypatc
         )
     )
 
-    assert response["enabled"] is True
     assert response["grpc_host"] == "192.168.31.10:9798"
     assert response["api_token"] == "************1234"
     assert response["api_token_configured"] is True
 
     conf_text = (tmp_path / "storage.conf").read_text(encoding="utf-8")
-    assert "enabled=true\n" in conf_text
     assert "grpc_host=192.168.31.10:9798\n" in conf_text
     assert "api_token=secret-token-1234\n" in conf_text
     assert 'video_extensions=[".mp4", ".mkv"]\n' in conf_text
@@ -150,7 +147,6 @@ def test_storage_config_api_get_and_update_uses_success_envelope(
         "/api/storage/config",
         headers=headers,
         json={
-            "enabled": True,
             "grpc_host": "http://127.0.0.1:19798/",
             "api_token": "secret-token-1234",
             "download_root_folder": "/Downloads",
@@ -160,7 +156,6 @@ def test_storage_config_api_get_and_update_uses_success_envelope(
 
     assert put_response.status_code == HTTPStatus.OK
     data = put_response.json()["data"]
-    assert data["enabled"] is True
     assert data["grpc_host"] == "127.0.0.1:19798"
     assert data["api_token"] == "************1234"
     assert data["api_token_configured"] is True

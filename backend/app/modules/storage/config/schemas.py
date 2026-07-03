@@ -4,8 +4,6 @@ from pydantic import BaseModel, Field
 class StorageConfig(BaseModel):
     """CloudDrive2 storage configuration."""
 
-    enabled: bool = False
-
     grpc_host: str = "localhost:9798"
     api_token: str = ""
     request_timeout_seconds: int = Field(default=60, ge=1)
@@ -15,9 +13,6 @@ class StorageConfig(BaseModel):
     target_folder: str = "/Movies"
     use_task_subfolder: bool = True
     auto_create_target_folder: bool = True
-
-    single_filename_template: str = "{code}{ext}"
-    multi_filename_template: str = "{code}{ext}"
 
     operation_delay_min: float = Field(default=0.5, ge=0)
     operation_delay_max: float = Field(default=1.5, ge=0)
@@ -32,17 +27,11 @@ class StorageConfig(BaseModel):
     video_extensions: list[str] = Field(
         default_factory=lambda: [".mp4", ".mkv", ".avi", ".wmv", ".flv", ".mov"]
     )
-    excluded_filename_keywords: list[str] = Field(default_factory=list)
-
-    keep_subtitles: bool = True
-    keep_cover_images: bool = True
-    delete_empty_folders: bool = True
 
 
 class StorageConfigUpdate(BaseModel):
     """Partial update payload for storage configuration."""
 
-    enabled: bool | None = None
     grpc_host: str | None = None
     api_token: str | None = None
     request_timeout_seconds: int | None = Field(default=None, ge=1)
@@ -51,8 +40,6 @@ class StorageConfigUpdate(BaseModel):
     target_folder: str | None = None
     use_task_subfolder: bool | None = None
     auto_create_target_folder: bool | None = None
-    single_filename_template: str | None = None
-    multi_filename_template: str | None = None
     operation_delay_min: float | None = Field(default=None, ge=0)
     operation_delay_max: float | None = Field(default=None, ge=0)
     download_poll_interval_min: float | None = Field(default=None, ge=0)
@@ -63,10 +50,6 @@ class StorageConfigUpdate(BaseModel):
     download_max_poll_count: int | None = Field(default=None, ge=1)
     minimum_video_size_mb: int | None = Field(default=None, ge=0)
     video_extensions: list[str] | None = None
-    excluded_filename_keywords: list[str] | None = None
-    keep_subtitles: bool | None = None
-    keep_cover_images: bool | None = None
-    delete_empty_folders: bool | None = None
 
 
 class StorageConfigResponse(StorageConfig):

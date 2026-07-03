@@ -8,15 +8,13 @@ import {
   Form,
   Input,
   InputNumber,
-  Space,
-  Switch,
+  Space, Switch,
   Tag,
 } from 'antd'
 import {
   ApiOutlined,
   ClockCircleOutlined,
   CloudOutlined,
-  FileOutlined,
   FilterOutlined,
   FolderOutlined,
 } from '@ant-design/icons'
@@ -197,9 +195,6 @@ export default function StorageConfigPage() {
           title={<SectionTitle icon={<CloudOutlined />} text="服务配置" />}
           className={styles.formCard}
         >
-          <Form.Item name="enabled" label="启用存储模块" valuePropName="checked">
-            <Switch />
-          </Form.Item>
           <Form.Item
             name="grpc_host"
             label="gRPC 主机地址"
@@ -252,18 +247,6 @@ export default function StorageConfigPage() {
         </Card>
 
         <Card
-          title={<SectionTitle icon={<FileOutlined />} text="文件命名" />}
-          className={styles.formCard}
-        >
-          <Form.Item name="single_filename_template" label="单文件命名模板">
-            <Input placeholder="{code}{ext}" />
-          </Form.Item>
-          <Form.Item name="multi_filename_template" label="多文件命名模板">
-            <Input placeholder="{code}{ext}" />
-          </Form.Item>
-        </Card>
-
-        <Card
           title={<SectionTitle icon={<ClockCircleOutlined />} text="任务执行" />}
           className={styles.formCard}
         >
@@ -306,18 +289,6 @@ export default function StorageConfigPage() {
           </Form.Item>
           <Form.Item name="video_extensions" label="视频扩展名" tooltip="输入扩展名后按回车添加">
             <SelectTags placeholder="例如: .mp4, .mkv" />
-          </Form.Item>
-          <Form.Item name="excluded_filename_keywords" label="排除文件名关键词" tooltip="输入关键词后按回车添加">
-            <SelectTags placeholder="例如: sample, trailer" />
-          </Form.Item>
-          <Form.Item name="keep_subtitles" label="保留字幕文件" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="keep_cover_images" label="保留封面图片" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="delete_empty_folders" label="删除空文件夹" valuePropName="checked">
-            <Switch />
           </Form.Item>
         </Card>
 
