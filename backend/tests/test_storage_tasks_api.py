@@ -63,3 +63,83 @@ def test_batch_push_creates_skipped_subtask_for_missing_magnet(client, db_sessio
     payload = response.json()["data"]
     assert payload["total_count"] == 1
     assert payload["skipped_count"] == 1
+
+
+def test_list_and_detail_storage_tasks(client, db_session, auth_headers, test_user):
+    movie = _movie_with_source_and_magnet(db_session, test_user.id, code="abc-321")
+    created = client.post(
+        "/api/storage/tasks/push",
+        json={"movie_id": str(movie.id), "storage_mode": "single", "selected_storage_location": "A"},
+        headers=auth_headers,
+    ).json()["data"]
+
+    listing = client.get("/api/storage/tasks", headers=auth_headers)
+    assert listing.status_code == 200
+    assert listing.json()["data"]["total"] >= 1
+
+    detail = client.get(f"/api/storage/tasks/{created['id']}", headers=auth_headers)
+    assert detail.status_code == 200
+    assert detail.json()["data"]["id"] == created["id"]
+
+    subtasks = client.get(f"/api/storage/tasks/{created['id']}/subtasks", headers=auth_headers)
+    assert subtasks.status_code == 200
+    assert subtasks.json()["data"]["total"] == 1
+
+
+def test_get_subtask_detail(client, db_session, auth_headers, test_user):
+    movie = _movie_with_source_and_magnet(db_session, test_user.id, code="abc-654")
+    created = client.post(
+        "/api/storage/tasks/push",
+        json={"movie_id": str(movie.id), "storage_mode": "single", "selected_storage_location": "A"},
+        headers=auth_headers,
+    ).json()["data"]
+
+    subtasks_resp = client.get(f"/api/storage/tasks/{created['id']}/subtasks", headers=auth_headers)
+    subtask_id = subtasks_resp.json()["data"]["rows"][0]["id"]
+
+    detail = client.get(f"/api/storage/tasks/subtasks/{subtask_id}", headers=auth_headers)
+    assert detail.status_code == 200
+    assert detail.json()["data"]["id"] == subtask_id
+    assert detail.json()["data"]["main_task_id"] == created["id"]
+
+
+def test_subtask_logs_empty(client, auth_headers):
+    fake_id = "00000000-0000-0000-0000-000000000000"
+    resp = client.get(f"/api/storage/tasks/subtasks/{fake_id}/logs", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["data"] == []
+
+
+def test_list_tasks_with_filters(client, db_session, auth_headers, test_user):
+    movie = _movie_with_source_and_magnet(db_session, test_user.id, code="abc-111")
+    created = client.post(
+        "/api/storage/tasks/push",
+        json={"movie_id": str(movie.id), "storage_mode": "single", "selected_storage_location": "A"},
+        headers=auth_headers,
+    ).json()["data"]
+
+    alias = created["alias"]
+
+    filtered = client.get(f"/api/storage/tasks?keyword={alias}", headers=auth_headers)
+    assert filtered.status_code == 200
+    assert filtered.json()["data"]["total"] >= 1
+
+    by_status = client.get("/api/storage/tasks?status=queued", headers=auth_headers)
+    assert by_status.status_code == 200
+    assert by_status.json()["data"]["total"] >= 1
+
+    not_found = client.get("/api/storage/tasks?keyword=nonexistent_alias_xyz", headers=auth_headers)
+    assert not_found.status_code == 200
+    assert not_found.json()["data"]["total"] == 0
+
+
+def test_main_task_not_found(client, auth_headers):
+    fake_id = "00000000-0000-0000-0000-000000000000"
+    resp = client.get(f"/api/storage/tasks/{fake_id}", headers=auth_headers)
+    assert resp.status_code == 404
+
+
+def test_subtask_not_found(client, auth_headers):
+    fake_id = "00000000-0000-0000-0000-000000000000"
+    resp = client.get(f"/api/storage/tasks/subtasks/{fake_id}", headers=auth_headers)
+    assert resp.status_code == 404

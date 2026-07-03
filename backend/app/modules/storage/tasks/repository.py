@@ -24,3 +24,36 @@ class StorageTaskRepository:
         main_task.success_count = sum(1 for task in subtasks if task.status == "completed")
         main_task.failed_count = sum(1 for task in subtasks if task.status == "failed")
         main_task.skipped_count = sum(1 for task in subtasks if task.status == "skipped")
+
+    def list_main_tasks(
+        self,
+        *,
+        page: int,
+        limit: int,
+        status: str | None,
+        keyword: str | None,
+    ) -> tuple[list[StorageMainTask], int]:
+        query = self.db.query(StorageMainTask)
+        if status:
+            query = query.filter(StorageMainTask.status == status)
+        if keyword:
+            pattern = f"%{keyword}%"
+            query = query.filter(StorageMainTask.alias.ilike(pattern))
+        total = query.count()
+        rows = query.order_by(StorageMainTask.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+        return rows, total
+
+    def list_subtasks(
+        self,
+        main_task_id: uuid.UUID,
+        *,
+        page: int,
+        limit: int,
+    ) -> tuple[list[StorageSubTask], int]:
+        query = self.db.query(StorageSubTask).filter(StorageSubTask.main_task_id == main_task_id)
+        total = query.count()
+        rows = query.order_by(StorageSubTask.created_at.asc()).offset((page - 1) * limit).limit(limit).all()
+        return rows, total
+
+    def get_subtask(self, subtask_id: uuid.UUID) -> StorageSubTask | None:
+        return self.db.get(StorageSubTask, subtask_id)

@@ -34,3 +34,37 @@ class StorageMainTaskResponse(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error_message: str | None = None
+
+
+class StorageSubTaskResponse(BaseModel):
+    id: str
+    main_task_id: str
+    movie_id: str
+    movie_code: str
+    movie_title: str
+    status: str
+    step: str
+    storage_mode: str
+    selected_storage_location: str | None = None
+    target_locations: list[str] = []
+    download_path: str = ""
+    target_paths: list[str] = []
+    magnet_attempts: list[dict] = []
+    current_magnet_id: str | None = None
+    current_magnet_url: str = ""
+    renamed_files: list[dict] = []
+    moved_files: list[dict] = []
+    skipped_files: list[dict] = []
+    result: dict = {}
+    skip_reason: str | None = None
+    error_message: str | None = None
+    queued_at: datetime | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class StorageTaskLogResponse(BaseModel):
+    timestamp: str
+    level: str
+    message: str
+    context: dict = {}
