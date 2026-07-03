@@ -1,6 +1,15 @@
 import { useMemo } from 'react'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { DashboardOutlined, HistoryOutlined, PlayCircleOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined, VideoCameraOutlined } from '@ant-design/icons'
+import {
+  CloudOutlined,
+  DashboardOutlined,
+  HistoryOutlined,
+  PlayCircleOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  UnorderedListOutlined,
+  VideoCameraOutlined,
+} from '@ant-design/icons'
 import { Layout, Menu } from 'antd'
 import type { MenuProps } from 'antd'
 import { useThemeStore } from '@/stores/useThemeStore'
@@ -37,6 +46,18 @@ const menuItems: MenuProps['items'] = [
     ],
   },
   {
+    key: 'storage',
+    icon: <CloudOutlined />,
+    label: '存储',
+    children: [
+      {
+        key: '/storage/config',
+        icon: <SettingOutlined />,
+        label: '存储配置',
+      },
+    ],
+  },
+  {
     key: 'content',
     icon: <PlayCircleOutlined />,
     label: '内容管理',
@@ -64,13 +85,16 @@ export function SideMenu({ collapsed }: SideMenuProps) {
       ? '/crawler/runs'
       : pathname.startsWith('/crawler/config')
         ? '/crawler/config'
-        : pathname.startsWith('/content/movies')
-          ? '/content/movies'
-          : pathname
+        : pathname.startsWith('/storage/config')
+          ? '/storage/config'
+          : pathname.startsWith('/content/movies')
+            ? '/content/movies'
+            : pathname
   const selectedKeys = useMemo(() => [selectedKey === '/' ? '/' : selectedKey], [selectedKey])
   const openKeys = useMemo(() => {
     const keys: string[] = []
     if (pathname.startsWith('/crawler')) keys.push('crawler')
+    if (pathname.startsWith('/storage')) keys.push('storage')
     if (pathname.startsWith('/content')) keys.push('content')
     return keys
   }, [pathname])

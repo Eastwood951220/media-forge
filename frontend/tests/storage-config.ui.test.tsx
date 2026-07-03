@@ -134,3 +134,9 @@ describe('StorageConfigPage', () => {
     expect(screen.getAllByText('通过')).toHaveLength(4)
   })
 })
+
+it('exports storage config route in the router tree', async () => {
+  const { router } = await import('../src/routes')
+
+  expect(router.routesByPath['/storage/config']).toBeDefined()
+})
