@@ -15,6 +15,7 @@ from backend.app.modules.crawler.config.router import router as crawler_config_r
 from backend.app.modules.crawler.events.router import router as crawler_events_router
 from backend.app.modules.crawler.runs.router import router as crawler_runs_router
 from backend.app.modules.crawler.runtime.service import cleanup_interrupted_runs, get_runtime_state
+from backend.app.modules.storage.worker.runner import cleanup_interrupted_storage_tasks
 from backend.app.modules.crawler.tasks.router import router as crawler_tasks_router
 from backend.app.modules.realtime.router import router as realtime_router
 from backend.app.modules.health.router import router as health_router
@@ -71,6 +72,13 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             stopped = cleanup_interrupted_runs(session, get_runtime_state())
             if stopped:
                 logger.info("Stopped %d interrupted crawler runs.", stopped)
+
+            # Cleanup interrupted storage tasks on startup
+            from backend.app.core.dependencies import get_redis
+            from backend.app.modules.storage.runtime.redis_state import StorageRuntimeState
+            storage_stopped = cleanup_interrupted_storage_tasks(session, StorageRuntimeState(get_redis()))
+            if storage_stopped:
+                logger.info("Stopped %d interrupted storage tasks.", storage_stopped)
     else:
         logger.warning("Backend not initialized — only init endpoints available.")
 
