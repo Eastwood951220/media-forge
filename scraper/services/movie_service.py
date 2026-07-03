@@ -73,7 +73,7 @@ class MovieService:
         return build_task_result(
             task=task,
             detail_tasks=detail_tasks,
-            items=collected_items,
+            saved_items=collected_items,
             stopped=stopped,
         )
 

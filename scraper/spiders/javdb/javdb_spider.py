@@ -108,6 +108,14 @@ class JavdbSpider(BaseSpider):
                     continue
                 if code:
                     seen_codes.add(code)
+                t["_task_url"] = url_entry.url
+                t["_task_final_url"] = url_entry.final_url or url_entry.url
+                t["_task_url_type"] = url_entry.url_type
+                t["_task_source"] = url_entry.source
+                t["_task_url_name"] = url_entry.url_name
+                t["_task_has_magnet"] = url_entry.has_magnet
+                t["_task_has_chinese_sub"] = url_entry.has_chinese_sub
+                t["_task_sort_type"] = url_entry.sort_type
                 fresh_tasks.append(t)
 
             # DB dedup: check which codes already exist in movies collection
