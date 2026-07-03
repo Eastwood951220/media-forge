@@ -4,7 +4,16 @@ import logging
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
+from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
+
 logger = logging.getLogger(__name__)
+
+
+def _subtask_log(context, level: str, message: str, extra: dict | None = None) -> None:
+    subtask_id = getattr(context.subtask, "id", None)
+    if subtask_id is None:
+        return
+    write_storage_subtask_log(str(subtask_id), level, message, extra or {})
 
 
 def select_main_videos(files: list[dict], config: dict) -> list[dict]:
@@ -52,10 +61,38 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
     download_folder = f"{download_root}/storage_{subtask.id}"
 
     try:
+        _subtask_log(
+            context,
+            "INFO",
+            "准备提交磁力到 CloudDrive2",
+            {
+                "magnet_id": magnet.get("id"),
+                "download_folder": download_folder,
+            },
+        )
         ensure_directory_chain(provider, download_folder)
         result = provider.submit_offline_download(magnet_url, download_folder)
+        _subtask_log(
+            context,
+            "INFO",
+            "CloudDrive2 已接收磁力任务",
+            {
+                "magnet_id": magnet.get("id"),
+                "download_folder": download_folder,
+                "result_paths": getattr(result, "result_paths", []),
+            },
+        )
     except Exception as exc:
         logger.warning("Magnet download failed: %s", exc)
+        _subtask_log(
+            context,
+            "ERROR",
+            f"提交磁力失败: {exc}",
+            {
+                "magnet_id": magnet.get("id"),
+                "download_folder": download_folder,
+            },
+        )
         return False
 
     if not result.success:
@@ -70,11 +107,23 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
 
     found_files = find_existing_video_files(provider, search_terms, search_paths, config)
     if not found_files:
+        _subtask_log(
+            context,
+            "WARNING",
+            "未在下载目录找到可用视频文件",
+            {"magnet_id": magnet.get("id"), "search_paths": search_paths},
+        )
         return False
 
     # Select main videos
     main_videos = select_main_videos(found_files, config)
     if not main_videos:
+        _subtask_log(
+            context,
+            "WARNING",
+            "扫描到文件但未识别到主视频",
+            {"magnet_id": magnet.get("id"), "file_count": len(found_files)},
+        )
         return False
 
     # Build target filenames and move
@@ -101,11 +150,24 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
             renamed_files.append({"original": video["path"], "target": target_path})
         except Exception as exc:
             logger.warning("Failed to move file: %s", exc)
+            _subtask_log(
+                context,
+                "ERROR",
+                f"移动文件失败: {exc}",
+                {"source": video["path"], "target_folder": final_folder},
+            )
             return False
 
     subtask.renamed_files = renamed_files
     subtask.moved_files = renamed_files
     subtask.result = {"status": "success", "files": renamed_files}
+
+    _subtask_log(
+        context,
+        "INFO",
+        "磁力任务处理成功",
+        {"magnet_id": magnet.get("id"), "files": renamed_files},
+    )
 
     return True
 
@@ -120,6 +182,8 @@ def execute_subtask_pipeline(context) -> None:
     subtask.status = "running"
     subtask.step = "prepare"
     subtask.started_at = datetime.now(timezone.utc)
+
+    _subtask_log(context, "INFO", "存储子任务 pipeline 开始", {"movie_id": str(subtask.movie_id)})
 
     # Get magnets for this movie
     from shared.database.models.content import Movie
@@ -157,7 +221,25 @@ def execute_subtask_pipeline(context) -> None:
         subtask.current_magnet_id = magnet.get("id")
         subtask.current_magnet_url = magnet.get("magnet_url", "")
 
+        _subtask_log(
+            context,
+            "INFO",
+            "开始尝试磁力",
+            {
+                "magnet_id": magnet.get("id"),
+                "weight": magnet.get("weight"),
+                "selected": magnet.get("selected"),
+            },
+        )
+
         success = execute_current_magnet_attempt(context, magnet)
+
+        _subtask_log(
+            context,
+            "INFO" if success else "WARNING",
+            "磁力尝试完成" if success else "磁力尝试失败，准备尝试下一条",
+            {"magnet_id": magnet.get("id"), "success": success},
+        )
 
         attempt_record = {
             "magnet_id": magnet.get("id"),
