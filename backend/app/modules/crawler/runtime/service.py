@@ -13,6 +13,7 @@ from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.crawler.events.bus import event_bus
 from backend.app.modules.crawler.events.schemas import (
+    RunLogEvent,
     RunProgressEvent,
     RunStatusEvent,
     TaskStatusEvent,
@@ -218,6 +219,14 @@ def _append_run_log(run_id: str, message: str, level: str = "INFO", **context: A
         append_run_log(run_id, build_run_log(level, message, **context))
     except Exception as exc:
         logger.warning("Failed to append crawler run log for %s: %s", run_id, exc)
+
+    # Publish SSE event for real-time log streaming
+    event_bus.publish(RunLogEvent(
+        run_id=run_id,
+        level=level,
+        message=message,
+        context=context,
+    ))
 
 
 def _persist_crawled_item(db: Session, item_data: dict[str, Any]) -> uuid.UUID:
