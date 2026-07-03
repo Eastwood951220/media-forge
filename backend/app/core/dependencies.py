@@ -9,8 +9,10 @@ from sqlalchemy.orm import Session
 from backend.app.core.config import get_settings
 from backend.app.core.security import decode_access_token
 from backend.app.models.user import User
+from backend.app.modules.storage.config.service import StorageConfigService
 from backend.app.repositories.user import UserRepository
 from shared.database.session import get_session
+from shared.integrations.storage_providers.clouddrive2.factory import CloudDriveClientFactory
 
 security_scheme = HTTPBearer()
 
@@ -41,6 +43,17 @@ def close_redis() -> None:
     if _redis_client:
         _redis_client.close()
         _redis_client = None
+
+
+# -- Storage --
+
+
+def get_clouddrive_client_factory() -> CloudDriveClientFactory:
+    return CloudDriveClientFactory()
+
+
+def get_storage_config_service() -> StorageConfigService:
+    return StorageConfigService(provider_factory=get_clouddrive_client_factory())
 
 
 # -- Auth --

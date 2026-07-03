@@ -5,6 +5,15 @@ import pytest
 from shared.runtime_config import RuntimeConfigPaths
 
 
+def _auth_headers(client, admin_user) -> dict[str, str]:
+    response = client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "admin123"},
+    )
+    token = response.json()["data"]["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_storage_config_service_writes_conf_and_masks_token(tmp_path, monkeypatch):
     from backend.app.modules.storage.config.schemas import StorageConfigUpdate
     from backend.app.modules.storage.config.service import StorageConfigService
@@ -114,3 +123,110 @@ def test_storage_config_service_test_connection_uses_clouddrive_gateway(tmp_path
     assert result.api_authorized is True
     assert result.download_root_exists is True
     assert result.target_folder_accessible is True
+
+
+# -- API tests --
+
+
+def test_storage_config_api_get_and_update_uses_success_envelope(
+    client,
+    admin_user,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    headers = _auth_headers(client, admin_user)
+
+    get_response = client.get("/api/storage/config", headers=headers)
+
+    assert get_response.status_code == HTTPStatus.OK
+    body = get_response.json()
+    assert body["code"] == 200
+    assert body["data"]["grpc_host"] == "localhost:9798"
+    assert body["data"]["api_token"] == ""
+    assert body["data"]["api_token_configured"] is False
+
+    put_response = client.put(
+        "/api/storage/config",
+        headers=headers,
+        json={
+            "enabled": True,
+            "grpc_host": "http://127.0.0.1:19798/",
+            "api_token": "secret-token-1234",
+            "download_root_folder": "/Downloads",
+            "target_folder": "/Movies",
+        },
+    )
+
+    assert put_response.status_code == HTTPStatus.OK
+    data = put_response.json()["data"]
+    assert data["enabled"] is True
+    assert data["grpc_host"] == "127.0.0.1:19798"
+    assert data["api_token"] == "************1234"
+    assert data["api_token_configured"] is True
+    assert (tmp_path / "storage.conf").exists()
+
+
+def test_storage_config_api_returns_400_for_invalid_range(
+    client,
+    admin_user,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+
+    response = client.put(
+        "/api/storage/config",
+        headers=_auth_headers(client, admin_user),
+        json={
+            "operation_delay_min": 5,
+            "operation_delay_max": 1,
+        },
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    body = response.json()
+    assert body["code"] == 400
+    assert "operation_delay_max must be >= operation_delay_min" in body["msg"]
+
+
+def test_storage_config_api_test_endpoint(
+    client,
+    admin_user,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from backend.app.core.dependencies import get_storage_config_service
+    from backend.app.main import app
+    from backend.app.modules.storage.config.schemas import StorageTestResult
+
+    class FakeService:
+        def test_connection(self):
+            return StorageTestResult(
+                grpc_reachable=True,
+                api_authorized=True,
+                download_root_exists=True,
+                target_folder_accessible=True,
+            )
+
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    app.dependency_overrides[get_storage_config_service] = lambda: FakeService()
+    try:
+        response = client.post(
+            "/api/storage/config/test",
+            headers=_auth_headers(client, admin_user),
+        )
+    finally:
+        app.dependency_overrides.pop(get_storage_config_service, None)
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["data"] == {
+        "grpc_reachable": True,
+        "grpc_error": None,
+        "api_authorized": True,
+        "api_error": None,
+        "download_root_exists": True,
+        "download_root_error": None,
+        "target_folder_accessible": True,
+        "target_folder_error": None,
+    }
