@@ -16,6 +16,7 @@ from backend.app.modules.crawler.events.router import router as crawler_events_r
 from backend.app.modules.crawler.runs.router import router as crawler_runs_router
 from backend.app.modules.crawler.runtime.service import cleanup_interrupted_runs, get_runtime_state
 from backend.app.modules.crawler.tasks.router import router as crawler_tasks_router
+from backend.app.modules.realtime.router import router as realtime_router
 from backend.app.modules.health.router import router as health_router
 from backend.app.modules.movies.router import router as movies_router
 from backend.app.modules.init.router import router as init_router
@@ -105,6 +106,7 @@ app.add_middleware(
 app.include_router(init_router)
 app.include_router(auth_router)
 app.include_router(health_router)
+app.include_router(realtime_router)
 app.include_router(crawler_tasks_router)
 app.include_router(crawler_config_router)
 app.include_router(crawler_runs_router)

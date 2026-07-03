@@ -1,6 +1,9 @@
 import json
 from datetime import UTC
 
+from fastapi.testclient import TestClient
+
+from backend.app.core.security import create_access_token
 from backend.app.modules.realtime.bus import RealtimeEventBus
 from backend.app.modules.realtime.schemas import make_realtime_event
 from backend.app.modules.realtime.sse import format_sse_event
@@ -80,3 +83,21 @@ def test_realtime_bus_emits_resync_when_queue_is_full() -> None:
     assert event.owner_id == "user-a"
 
     bus.unsubscribe("user-a", queue)
+
+
+def test_event_stream_rejects_missing_token(client: TestClient) -> None:
+    response = client.get("/api/events/stream")
+
+    assert response.status_code == 401
+
+
+def test_event_stream_rejects_invalid_token(client: TestClient) -> None:
+    response = client.get("/api/events/stream?token=bad-token")
+
+    assert response.status_code == 401
+
+
+def test_event_stream_endpoint_exists_and_requires_auth(client: TestClient) -> None:
+    """Verify the SSE endpoint exists and rejects bad tokens."""
+    response = client.get("/api/events/stream?token=bad")
+    assert response.status_code == 401
