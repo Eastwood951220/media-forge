@@ -73,12 +73,48 @@ def test_execute_current_magnet_attempt_logs_submit_failure(tmp_path, monkeypatc
     class FakeSubtask:
         id: uuid.UUID
         movie_code: str = "ABC-FAIL"
+        step: str = "prepare"
+        download_path: str = ""
+        target_locations: list = None
+        selected_storage_location: str = ""
+        target_paths: list = None
+        renamed_files: list = None
+        moved_files: list = None
+        skipped_files: list = None
+        result: dict = None
 
-    @dataclass
+        def __post_init__(self):
+            if self.target_locations is None:
+                self.target_locations = []
+            if self.target_paths is None:
+                self.target_paths = []
+            if self.renamed_files is None:
+                self.renamed_files = []
+            if self.moved_files is None:
+                self.moved_files = []
+            if self.skipped_files is None:
+                self.skipped_files = []
+            if self.result is None:
+                self.result = {}
+
     class FakeContext:
-        subtask: FakeSubtask
-        config: dict
-        provider: object
+        def __init__(self, subtask, config, provider):
+            self.subtask = subtask
+            self.config = config
+            self.provider = provider
+            self.messages = []
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.messages.append(message)
+            from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
+            write_storage_subtask_log(str(self.subtask.id), level, message, context or {})
+            return {}
+
+        def publish_subtask(self):
+            pass
 
     subtask = FakeSubtask(id=uuid.uuid4())
     context = FakeContext(
@@ -122,6 +158,7 @@ def test_execute_current_magnet_attempt_polls_until_file_appears(monkeypatch, tm
         def __init__(self) -> None:
             self.list_calls = 0
             self.moved: list[tuple[list[str], str]] = []
+            self.files = {}
 
         def ensure_directory(self, path):
             return None
@@ -138,23 +175,67 @@ def test_execute_current_magnet_attempt_polls_until_file_appears(monkeypatch, tm
                 return [] if self.list_calls < 3 else [File()]
             return []
 
+        def find_file(self, path):
+            return self.files.get(path)
+
+        def rename_file(self, old_path, new_name):
+            return None
+
         def move_files(self, source_paths, target_folder):
             self.moved.append((source_paths, target_folder))
+            for src in source_paths:
+                from pathlib import PurePosixPath
+                dst = str(PurePosixPath(target_folder) / PurePosixPath(src).name)
+                self.files[dst] = File()
+            return None
+
+        def delete_file(self, path):
             return None
 
     @dataclass
     class FakeSubtask:
         id: uuid.UUID
         movie_code: str = "ABC-123"
-        renamed_files: list | None = None
-        moved_files: list | None = None
-        result: dict | None = None
+        step: str = "prepare"
+        download_path: str = ""
+        target_locations: list = None
+        selected_storage_location: str = ""
+        target_paths: list = None
+        renamed_files: list = None
+        moved_files: list = None
+        skipped_files: list = None
+        result: dict = None
 
-    @dataclass
+        def __post_init__(self):
+            if self.target_locations is None:
+                self.target_locations = []
+            if self.target_paths is None:
+                self.target_paths = []
+            if self.renamed_files is None:
+                self.renamed_files = []
+            if self.moved_files is None:
+                self.moved_files = []
+            if self.skipped_files is None:
+                self.skipped_files = []
+            if self.result is None:
+                self.result = {}
+
     class FakeContext:
-        subtask: FakeSubtask
-        config: dict
-        provider: object
+        def __init__(self, subtask, config, provider):
+            self.subtask = subtask
+            self.config = config
+            self.provider = provider
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
+            write_storage_subtask_log(str(self.subtask.id), level, message, context or {})
+            return {}
+
+        def publish_subtask(self):
+            pass
 
     provider = PollingProvider()
     subtask = FakeSubtask(id=uuid.uuid4())
@@ -218,12 +299,46 @@ def test_execute_current_magnet_attempt_fails_after_download_poll_limit(monkeypa
     class FakeSubtask:
         id: uuid.UUID
         movie_code: str = "ABC-404"
+        step: str = "prepare"
+        download_path: str = ""
+        target_locations: list = None
+        selected_storage_location: str = ""
+        target_paths: list = None
+        renamed_files: list = None
+        moved_files: list = None
+        skipped_files: list = None
+        result: dict = None
 
-    @dataclass
+        def __post_init__(self):
+            if self.target_locations is None:
+                self.target_locations = []
+            if self.target_paths is None:
+                self.target_paths = []
+            if self.renamed_files is None:
+                self.renamed_files = []
+            if self.moved_files is None:
+                self.moved_files = []
+            if self.skipped_files is None:
+                self.skipped_files = []
+            if self.result is None:
+                self.result = {}
+
     class FakeContext:
-        subtask: FakeSubtask
-        config: dict
-        provider: object
+        def __init__(self, subtask, config, provider):
+            self.subtask = subtask
+            self.config = config
+            self.provider = provider
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
+            write_storage_subtask_log(str(self.subtask.id), level, message, context or {})
+            return {}
+
+        def publish_subtask(self):
+            pass
 
     provider = EmptyProvider()
     subtask = FakeSubtask(id=uuid.uuid4())
@@ -248,4 +363,4 @@ def test_execute_current_magnet_attempt_fails_after_download_poll_limit(monkeypa
     assert success is False
     assert provider.list_calls == 3
     logs = read_storage_subtask_logs(str(subtask.id))
-    assert any("下载轮询达到最大次数" in entry["message"] for entry in logs)
+    assert any("轮询次数超过上限" in entry["message"] for entry in logs)
