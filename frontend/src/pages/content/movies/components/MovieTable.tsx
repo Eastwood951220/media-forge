@@ -4,6 +4,7 @@ import type { Movie } from '@/api/movie/types'
 
 export interface MovieColumnsOptions {
   onViewDetail: (id: string) => void
+  onPush?: (movie: Movie) => void
 }
 
 const storageStatusColor: Record<string, string> = {
@@ -38,7 +39,7 @@ function unique(values: string[] | undefined) {
   return [...new Set(values || [])]
 }
 
-export function createMovieColumns({ onViewDetail }: MovieColumnsOptions): ColumnsType<Movie> {
+export function createMovieColumns({ onViewDetail, onPush }: MovieColumnsOptions): ColumnsType<Movie> {
   return [
     { title: '番号', dataIndex: 'code', key: 'code', width: 120 },
     { title: '标题', dataIndex: 'source_name', key: 'source_name', ellipsis: true },
@@ -102,11 +103,18 @@ export function createMovieColumns({ onViewDetail }: MovieColumnsOptions): Colum
       title: '操作',
       key: 'action',
       fixed: 'right',
-      width: 100,
+      width: 160,
       render: (_: unknown, record) => (
-        <Button type="link" size="small" onClick={() => onViewDetail(record._id)}>
-          详情
-        </Button>
+        <Space size={0}>
+          <Button type="link" size="small" onClick={() => onViewDetail(record._id)}>
+            详情
+          </Button>
+          {onPush && (
+            <Button type="link" size="small" onClick={() => onPush(record)}>
+              推送
+            </Button>
+          )}
+        </Space>
       ),
     },
   ]

@@ -1,5 +1,6 @@
 import type { CrawlTaskRuntimeSnapshot } from '@/api/crawlTask/types'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
+import type { StorageMainTask } from '@/api/storage/storageTasks/types'
 
 export type RealtimeEvent<TPayload = Record<string, unknown>> = {
   id: string
@@ -25,6 +26,22 @@ export type CrawlerRunLogAppendedPayload = {
 
 export type CrawlerTaskStatusUpdatedPayload = CrawlTaskRuntimeSnapshot
 
+export type StorageMainUpdatedPayload = StorageMainTask
+
+export type StorageSubUpdatedPayload = {
+  id: string
+  main_task_id: string
+  movie_id: string
+  status: string
+  step: string
+  error_message?: string | null
+}
+
+export type MovieStorageUpdatedPayload = {
+  movie_id: string
+  storage_summary: Record<string, unknown>
+}
+
 export type RealtimeEventName =
   | 'system.connected'
   | 'system.resync_required'
@@ -33,6 +50,11 @@ export type RealtimeEventName =
   | 'crawler.run.log.appended'
   | 'crawler.queue.updated'
   | 'crawler.task.status.updated'
+  | 'storage.main.updated'
+  | 'storage.sub.updated'
+  | 'storage.sub.log.appended'
+  | 'storage.queue.updated'
+  | 'movie.storage.updated'
 
 export type RealtimeHandler<TPayload = Record<string, unknown>> = (
   event: RealtimeEvent<TPayload>,

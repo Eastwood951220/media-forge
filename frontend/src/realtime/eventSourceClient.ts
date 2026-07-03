@@ -9,6 +9,11 @@ const EVENT_NAMES: RealtimeEventName[] = [
   'crawler.run.log.appended',
   'crawler.queue.updated',
   'crawler.task.status.updated',
+  'storage.main.updated',
+  'storage.sub.updated',
+  'storage.sub.log.appended',
+  'storage.queue.updated',
+  'movie.storage.updated',
 ]
 
 type AnyHandler = RealtimeHandler<Record<string, unknown>>

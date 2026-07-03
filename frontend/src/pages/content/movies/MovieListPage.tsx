@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { Button } from 'antd'
 import { DEFAULT_MOVIE_PAGE } from './constants'
 import BaseListPage from '@/components/BaseListPage'
 import type { FilterItemConfig } from '@/api/movie'
@@ -6,11 +7,13 @@ import type { Movie, MovieFilterConfig } from '@/api/movie/types'
 import FilterConfigDrawer from './components/FilterConfigDrawer'
 import MovieDetailDrawer from './components/MovieDetailDrawer'
 import MovieFilterBar from './components/MovieFilterBar'
+import StoragePushModal from './components/StoragePushModal'
 import { createMovieColumns } from './components/MovieTable'
 import { useMovieDetail } from './hooks/useMovieDetail'
 import { useMovieFilterConfig } from './hooks/useMovieFilterConfig'
 import { useMovieFilters } from './hooks/useMovieFilters'
 import { useMovieList } from './hooks/useMovieList'
+import { useStoragePush } from './hooks/useStoragePush'
 import type { MovieFilterState } from './utils/movieFilter'
 import styles from './MovieListPage.module.less'
 
@@ -40,6 +43,7 @@ function MovieListPage() {
   )
   const list = useMovieList(effectiveParams)
   const detail = useMovieDetail()
+  const push = useStoragePush(list.reload)
 
   const configSortParsed = useRef(false)
   useEffect(() => {
@@ -68,6 +72,10 @@ function MovieListPage() {
     }
     list.search()
   }, [detail, filters, list])
+
+  const handleBulkPush = useCallback(() => {
+    push.openBatchPush(list.data.items, list.selectedRowKeys)
+  }, [push, list.data.items, list.selectedRowKeys])
 
   const handleResetFilters = useCallback(() => {
     filters.resetFilters()
@@ -98,8 +106,8 @@ function MovieListPage() {
   }, [detail])
 
   const columns = useMemo(
-    () => createMovieColumns({ onViewDetail: detail.showDetail }),
-    [detail.showDetail],
+    () => createMovieColumns({ onViewDetail: detail.showDetail, onPush: push.openSinglePush }),
+    [detail.showDetail, push.openSinglePush],
   )
 
   const queryNode = configHook.loaded ? (
@@ -133,6 +141,13 @@ function MovieListPage() {
           showTotal: (count) => `共 ${count} 条`,
         }}
         queryNode={queryNode}
+        toolbarLeft={
+          list.selectedRowKeys.length > 0 ? (
+            <Button type="primary" size="small" onClick={handleBulkPush}>
+              批量推送
+            </Button>
+          ) : undefined
+        }
         onRefresh={listReady ? list.reload : undefined}
         tableProps={{
           onChange: (pagination) => {
@@ -157,6 +172,16 @@ function MovieListPage() {
         onClose={() => configHook.setDrawerOpen(false)}
         config={filterConfig}
         onSave={(cfg) => configHook.setConfig(cfg as typeof configHook.config)}
+      />
+
+      <StoragePushModal
+        open={push.modalOpen}
+        mode={push.pushMode}
+        movies={push.pushMovies}
+        selectedRowKeys={push.selectedKeys}
+        loading={push.submitting}
+        onCancel={push.closeModal}
+        onSubmit={push.submitPush}
       />
     </div>
   )
