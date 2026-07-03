@@ -15,6 +15,7 @@ class RuntimeConfigPaths:
     config_dir: Path
     database_file: Path
     redis_file: Path
+    storage_file: Path
 
     @classmethod
     def from_env(cls) -> "RuntimeConfigPaths":
@@ -24,6 +25,7 @@ class RuntimeConfigPaths:
             config_dir=config_dir,
             database_file=config_dir / "database.conf",
             redis_file=config_dir / "redis.conf",
+            storage_file=config_dir / "storage.conf",
         )
 
 
@@ -51,6 +53,8 @@ def write_runtime_config(
         _write_env_file(active_paths.database_file, sections["database"])
     if "redis" in sections:
         _write_env_file(active_paths.redis_file, sections["redis"])
+    if "storage" in sections:
+        _write_env_file(active_paths.storage_file, sections["storage"])
 
 
 def _read_env_file(path: Path) -> dict[str, str]:
@@ -65,6 +69,7 @@ def read_runtime_config(paths: RuntimeConfigPaths | None = None) -> dict[str, st
     values: dict[str, str] = {}
     values.update(_read_env_file(active_paths.database_file))
     values.update(_read_env_file(active_paths.redis_file))
+    values.update(_read_env_file(active_paths.storage_file))
     return values
 
 

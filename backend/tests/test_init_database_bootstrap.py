@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.pool import StaticPool
 
@@ -8,6 +10,12 @@ from backend.app.modules.init.database_bootstrap import (
     seed_default_admin_user,
 )
 from shared.database.models.base import Base
+from shared.runtime_config import (
+    RuntimeConfigPaths,
+    read_runtime_config,
+    runtime_config_exists,
+    write_runtime_config,
+)
 
 
 def sqlite_engine():
@@ -117,3 +125,65 @@ def test_create_application_tables_repairs_empty_legacy_crawler_task_tables() ->
     assert "legacy_required" not in url_columns
     assert {"status", "task_id", "total_found", "total_qualified"}.issubset(task_columns)
     assert {"position", "url_type", "final_url", "source"}.issubset(url_columns)
+
+
+# -- Runtime config tests --
+
+
+def test_runtime_config_paths_includes_storage_file(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    paths = RuntimeConfigPaths.from_env()
+    assert paths.storage_file == tmp_path / "storage.conf"
+
+
+def test_write_runtime_config_writes_storage_section(tmp_path) -> None:
+    paths = RuntimeConfigPaths(
+        config_dir=tmp_path,
+        database_file=tmp_path / "database.conf",
+        redis_file=tmp_path / "redis.conf",
+        storage_file=tmp_path / "storage.conf",
+    )
+
+    write_runtime_config({"storage": {"enabled": "true", "grpc_host": "192.168.31.10:9798"}}, paths)
+
+    text = (tmp_path / "storage.conf").read_text(encoding="utf-8")
+    assert "enabled=true\n" in text
+    assert "grpc_host=192.168.31.10:9798\n" in text
+
+
+def test_read_runtime_config_reads_storage_file(tmp_path) -> None:
+    paths = RuntimeConfigPaths(
+        config_dir=tmp_path,
+        database_file=tmp_path / "database.conf",
+        redis_file=tmp_path / "redis.conf",
+        storage_file=tmp_path / "storage.conf",
+    )
+    (tmp_path / "database.conf").write_text("DB_HOST=localhost\n", encoding="utf-8")
+    (tmp_path / "redis.conf").write_text("REDIS_HOST=localhost\n", encoding="utf-8")
+    (tmp_path / "storage.conf").write_text(
+        "STORAGE_ENABLED=true\nSTORAGE_HOST=192.168.31.10\n", encoding="utf-8"
+    )
+
+    result = read_runtime_config(paths)
+
+    assert result["DB_HOST"] == "localhost"
+    assert result["REDIS_HOST"] == "localhost"
+    assert result["STORAGE_ENABLED"] == "true"
+    assert result["STORAGE_HOST"] == "192.168.31.10"
+
+
+def test_runtime_config_exists_requires_storage_file(tmp_path) -> None:
+    paths = RuntimeConfigPaths(
+        config_dir=tmp_path,
+        database_file=tmp_path / "database.conf",
+        redis_file=tmp_path / "redis.conf",
+        storage_file=tmp_path / "storage.conf",
+    )
+
+    assert runtime_config_exists(paths) is False
+    (tmp_path / "database.conf").write_text("DB_HOST=localhost\n", encoding="utf-8")
+    assert runtime_config_exists(paths) is False
+    (tmp_path / "redis.conf").write_text("REDIS_HOST=localhost\n", encoding="utf-8")
+    assert runtime_config_exists(paths) is True
+    (tmp_path / "storage.conf").write_text("STORAGE_ENABLED=true\n", encoding="utf-8")
+    assert runtime_config_exists(paths) is True
