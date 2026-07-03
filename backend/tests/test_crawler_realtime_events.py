@@ -38,9 +38,12 @@ def test_publish_run_updated_event_for_owner(admin_user) -> None:
     event_bus.unsubscribe(str(admin_user.id), queue)
     session.close()
 
-    assert [event.event for event in events] == ["crawler.run.updated"]
+    assert [event.event for event in events] == ["crawler.run.updated", "crawler.task.status.updated"]
     assert events[0].resource_id == str(run.id)
     assert events[0].payload["status"] == "running"
+    assert events[1].resource_id == str(task.id)
+    assert events[1].payload["task_id"] == str(task.id)
+    assert events[1].payload["runtime_status"] == "running"
 
 
 def test_publish_detail_updated_event_for_owner(admin_user) -> None:

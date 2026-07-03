@@ -1,26 +1,32 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
 import { Button, Modal, Select, Typography, message } from 'antd'
 import {
   deleteCrawlTask,
   getCrawlTaskRuntimeStatuses,
-  getCrawlTaskStats,
   getCrawlTasks,
   updateCrawlTask,
 } from '@/api/crawlTask'
-import type { CrawlTask, CrawlTaskStats, DeleteMode, TaskRuntimeStatus } from '@/api/crawlTask/types'
-import { runCrawlTask, stopCrawlerRun } from '@/api/crawlerRun'
+import type {
+  CrawlTask,
+  CrawlTaskRuntimeSnapshot,
+  CrawlTaskRuntimeStats,
+  DeleteMode,
+} from '@/api/crawlTask/types'
+import { restartCrawlerRun, runCrawlTask, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlMode } from '@/api/crawlerRun/types'
-import { subscribeRealtime } from '@/realtime/eventSourceClient'
+import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
 import type { CrawlerTaskStatusUpdatedPayload } from '@/realtime/types'
 import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
 import styles from './TaskPages.module.less'
 
-const initialStats: CrawlTaskStats = {
+const initialStats: CrawlTaskRuntimeStats = {
   total: 0,
-  enabled: 0,
-  disabled: 0,
+  idle: 0,
+  running: 0,
+  queued: 0,
+  stopped: 0,
 }
 
 const deleteModeOptions: Array<{ value: DeleteMode; label: string }> = [
@@ -29,29 +35,25 @@ const deleteModeOptions: Array<{ value: DeleteMode; label: string }> = [
   { value: 'task_movies_and_cloud', label: '删除任务、关联影片和云存储' },
 ]
 
+function recomputeStats(runtimeByTaskId: Record<string, CrawlTaskRuntimeSnapshot>): CrawlTaskRuntimeStats {
+  const rows = Object.values(runtimeByTaskId)
+  return rows.reduce<CrawlTaskRuntimeStats>(
+    (acc, row) => {
+      acc.total += 1
+      acc[row.runtime_status] += 1
+      return acc
+    },
+    { total: 0, idle: 0, running: 0, queued: 0, stopped: 0 },
+  )
+}
+
 function TaskListPage() {
   const navigate = useNavigate()
   const [tasks, setTasks] = useState<CrawlTask[]>([])
-  const [stats, setStats] = useState<CrawlTaskStats>(initialStats)
+  const [stats, setStats] = useState<CrawlTaskRuntimeStats>(initialStats)
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
-  const [runtimeStatuses, setRuntimeStatuses] = useState<Map<string, TaskRuntimeStatus>>(new Map())
-  const runtimeStatusesRef = useRef(runtimeStatuses)
-  runtimeStatusesRef.current = runtimeStatuses
-
-  const fetchStats = useCallback(async () => {
-    const data = await getCrawlTaskStats()
-    setStats(data)
-  }, [])
-
-  const fetchRuntimeStatuses = useCallback(async () => {
-    const data = await getCrawlTaskRuntimeStatuses()
-    const statusMap = new Map<string, TaskRuntimeStatus>()
-    for (const status of data.tasks) {
-      statusMap.set(status.task_id, status)
-    }
-    setRuntimeStatuses(statusMap)
-  }, [])
+  const [runtimeByTaskId, setRuntimeByTaskId] = useState<Record<string, CrawlTaskRuntimeSnapshot>>({})
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
@@ -64,11 +66,16 @@ function TaskListPage() {
     }
   }, [])
 
+  const fetchRuntimeStatuses = useCallback(async () => {
+    const data = await getCrawlTaskRuntimeStatuses()
+    setRuntimeByTaskId(Object.fromEntries(data.tasks.map((item) => [item.task_id, item])))
+    setStats(data.stats)
+  }, [])
+
   const refreshList = useCallback(() => {
     void fetchTasks()
-    void fetchStats()
     void fetchRuntimeStatuses()
-  }, [fetchStats, fetchTasks, fetchRuntimeStatuses])
+  }, [fetchRuntimeStatuses, fetchTasks])
 
   useEffect(() => {
     refreshList()
@@ -76,30 +83,32 @@ function TaskListPage() {
 
   // Subscribe to realtime task status updates
   useEffect(() => {
-    const unsubscribe = subscribeRealtime<CrawlerTaskStatusUpdatedPayload>(
+    connectRealtime()
+
+    const unsubscribeTaskStatus = subscribeRealtime<CrawlerTaskStatusUpdatedPayload>(
       'crawler.task.status.updated',
       (event) => {
-        const { task_id, status } = event.payload
-        setRuntimeStatuses((prev) => {
-          const next = new Map(prev)
-          const existing = next.get(task_id)
-          if (existing) {
-            next.set(task_id, { ...existing, status })
-          }
+        const payload = event.payload
+        setRuntimeByTaskId((current) => {
+          const next = { ...current, [payload.task_id]: payload }
+          setStats(recomputeStats(next))
           return next
         })
       },
     )
-    return unsubscribe
-  }, [])
 
-  // Subscribe to system resync to refresh all statuses
-  useEffect(() => {
-    const unsubscribe = subscribeRealtime('system.resync_required', () => {
-      void fetchRuntimeStatuses()
-    })
-    return unsubscribe
-  }, [fetchRuntimeStatuses])
+    const unsubscribeResync = subscribeRealtime(
+      'system.resync_required',
+      () => {
+        refreshList()
+      },
+    )
+
+    return () => {
+      unsubscribeTaskStatus()
+      unsubscribeResync()
+    }
+  }, [refreshList])
 
   const handleDelete = useCallback(
     (task: CrawlTask) => {
@@ -168,17 +177,36 @@ function TaskListPage() {
 
   const handleStop = useCallback(
     async (task: CrawlTask) => {
-      const runtimeStatus = runtimeStatusesRef.current.get(task.id)
-      if (!runtimeStatus?.latest_run_id) return
+      const runtime = runtimeByTaskId[task.id]
+      if (!runtime?.latest_run_id) return
       try {
-        await stopCrawlerRun(runtimeStatus.latest_run_id)
-        message.success('已停止任务')
+        await stopCrawlerRun(runtime.latest_run_id)
+        message.success('已停止运行')
+        refreshList()
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : '停止失败'
+        message.error(msg)
         void fetchRuntimeStatuses()
-      } catch {
-        message.error('停止任务失败')
       }
     },
-    [fetchRuntimeStatuses],
+    [fetchRuntimeStatuses, refreshList, runtimeByTaskId],
+  )
+
+  const handleRestart = useCallback(
+    async (task: CrawlTask) => {
+      const runtime = runtimeByTaskId[task.id]
+      if (!runtime?.latest_run_id) return
+      try {
+        await restartCrawlerRun(runtime.latest_run_id)
+        message.success('已重启运行')
+        refreshList()
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : '重启失败'
+        message.error(msg)
+        void fetchRuntimeStatuses()
+      }
+    },
+    [fetchRuntimeStatuses, refreshList, runtimeByTaskId],
   )
 
   return (
@@ -203,12 +231,20 @@ function TaskListPage() {
           <span className={styles.statValue}>{stats.total}</span>
         </div>
         <div className={styles.statCard}>
-          <span className={styles.statLabel}>启用</span>
-          <span className={styles.statValue}>{stats.enabled}</span>
+          <span className={styles.statLabel}>空闲中</span>
+          <span className={styles.statValue}>{stats.idle}</span>
         </div>
         <div className={styles.statCard}>
-          <span className={styles.statLabel}>禁用</span>
-          <span className={styles.statValue}>{stats.disabled}</span>
+          <span className={styles.statLabel}>运行中</span>
+          <span className={styles.statValue}>{stats.running}</span>
+        </div>
+        <div className={styles.statCard}>
+          <span className={styles.statLabel}>排队中</span>
+          <span className={styles.statValue}>{stats.queued}</span>
+        </div>
+        <div className={styles.statCard}>
+          <span className={styles.statLabel}>停止中</span>
+          <span className={styles.statValue}>{stats.stopped}</span>
         </div>
       </section>
 
@@ -217,12 +253,13 @@ function TaskListPage() {
           tasks={tasks}
           loading={loading}
           total={total}
-          runtimeStatuses={runtimeStatuses}
+          runtimeByTaskId={runtimeByTaskId}
           onEdit={(task) => navigate({ to: '/crawler/tasks/$id/edit', params: { id: task.id } })}
           onDelete={handleDelete}
           onToggleSkip={handleToggleSkip}
           onRun={handleRun}
           onStop={handleStop}
+          onRestart={handleRestart}
         />
       </section>
     </div>

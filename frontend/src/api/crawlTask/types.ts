@@ -75,15 +75,25 @@ export interface TaskDictItem {
   name: string
 }
 
-export interface TaskRuntimeStatus {
+export type TaskRuntimeStatus = 'idle' | 'queued' | 'running' | 'stopped'
+
+export interface CrawlTaskRuntimeSnapshot {
   task_id: string
-  name: string
-  is_skip: boolean
-  status: 'pending' | 'running' | 'success' | 'failed'
+  runtime_status: TaskRuntimeStatus
   latest_run_id: string | null
   latest_run_status: string | null
+  last_run_at: string | null
 }
 
-export interface TaskRuntimeStatusResponse {
-  tasks: TaskRuntimeStatus[]
+export interface CrawlTaskRuntimeStats {
+  total: number
+  idle: number
+  running: number
+  queued: number
+  stopped: number
+}
+
+export interface CrawlTaskRuntimeStatusResponse {
+  tasks: CrawlTaskRuntimeSnapshot[]
+  stats: CrawlTaskRuntimeStats
 }

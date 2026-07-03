@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -138,18 +139,31 @@ class TaskStatsResponse(BaseModel):
     recent_runs: list[CrawlRunRead]
 
 
-class TaskRuntimeStatus(BaseModel):
-    """Derived runtime status for a single task."""
+TaskRuntimeStatus = Literal["idle", "queued", "running", "stopped"]
+
+
+class CrawlTaskRuntimeSnapshot(BaseModel):
+    """Runtime status snapshot for a single task."""
 
     task_id: uuid.UUID
-    name: str
-    is_skip: bool
-    status: str
+    runtime_status: TaskRuntimeStatus
     latest_run_id: uuid.UUID | None = None
     latest_run_status: str | None = None
+    last_run_at: datetime | None = None
 
 
-class TaskRuntimeStatusResponse(BaseModel):
-    """Response containing runtime statuses for all tasks."""
+class CrawlTaskRuntimeStats(BaseModel):
+    """Aggregate runtime status stats."""
 
-    tasks: list[TaskRuntimeStatus]
+    total: int
+    idle: int
+    running: int
+    queued: int
+    stopped: int
+
+
+class CrawlTaskRuntimeStatusResponse(BaseModel):
+    """Response containing runtime statuses and stats for all tasks."""
+
+    tasks: list[CrawlTaskRuntimeSnapshot]
+    stats: CrawlTaskRuntimeStats

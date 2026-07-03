@@ -1,3 +1,4 @@
+import type { CrawlTaskRuntimeSnapshot } from '@/api/crawlTask/types'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
 
 export type RealtimeEvent<TPayload = Record<string, unknown>> = {
@@ -22,10 +23,7 @@ export type CrawlerRunLogAppendedPayload = {
   log: RunLogEntry
 }
 
-export type CrawlerTaskStatusUpdatedPayload = {
-  task_id: string
-  status: 'pending' | 'running' | 'success' | 'failed'
-}
+export type CrawlerTaskStatusUpdatedPayload = CrawlTaskRuntimeSnapshot
 
 export type RealtimeEventName =
   | 'system.connected'

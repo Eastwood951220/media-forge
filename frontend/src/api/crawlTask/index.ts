@@ -2,13 +2,13 @@ import { request } from '@/request'
 import type {
   CrawlTask,
   CrawlTaskCreateParams,
+  CrawlTaskRuntimeStatusResponse,
   CrawlTaskStats,
   CrawlTaskUpdateParams,
   DeleteMode,
   DeleteTaskResult,
   PaginatedResponse,
   TaskDictItem,
-  TaskRuntimeStatusResponse,
 } from './types'
 
 const BASE_URL = '/api/crawler/tasks'
@@ -55,6 +55,6 @@ export function extractTaskName(url: string, urlType: string): Promise<{ name: s
   })
 }
 
-export function getCrawlTaskRuntimeStatuses(): Promise<TaskRuntimeStatusResponse> {
-  return request.get<TaskRuntimeStatusResponse>(`${BASE_URL}/statuses`)
+export function getCrawlTaskRuntimeStatuses(): Promise<CrawlTaskRuntimeStatusResponse> {
+  return request.get<CrawlTaskRuntimeStatusResponse>(`${BASE_URL}/statuses`)
 }
