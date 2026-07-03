@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -78,37 +77,6 @@ def _serialize_value(value: Any) -> str:
     return text
 
 
-def _update_env_file(updated: dict[str, Any]) -> None:
-    """Update the .env file with new config values so they persist across server restarts."""
-    env_file = cfg.BASE_DIR / ".env"
-    if not env_file.exists():
-        return
-
-    existing_lines = env_file.read_text(encoding="utf-8").splitlines()
-    remaining = dict(updated)
-    next_lines: list[str] = []
-
-    for line in existing_lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            next_lines.append(line)
-            continue
-
-        key, _value = line.split("=", 1)
-        normalized_key = key.strip()
-        if normalized_key in remaining:
-            next_lines.append(f"{normalized_key}={_serialize_value(remaining.pop(normalized_key))}")
-        else:
-            next_lines.append(line)
-
-    for key, value in remaining.items():
-        next_lines.append(f"{key}={_serialize_value(value)}")
-
-    tmp_path = env_file.with_name(f"{env_file.name}.tmp")
-    tmp_path.write_text("\n".join(next_lines) + "\n", encoding="utf-8")
-    tmp_path.replace(env_file)
-
-
 def _write_conf_file(updated: dict[str, Any]) -> None:
     filepath = _config_file_path()
     filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -142,10 +110,7 @@ def _read_config() -> dict[str, Any]:
     persisted = _read_conf_file()
     result: dict[str, Any] = {}
     for key in CONFIG_KEYS:
-        value = os.getenv(key)
-        if value is not None:
-            result[key] = _coerce_value(value)
-        elif key in persisted:
+        if key in persisted:
             result[key] = _coerce_value(persisted[key])
         elif key in defaults:
             result[key] = defaults[key]
@@ -164,10 +129,7 @@ def get_config(_current_user: CurrentUser) -> dict:
 @router.put("")
 def update_config(body: ConfigUpdate, _current_user: CurrentUser) -> dict:
     updated = body.model_dump(exclude_none=True)
-    for key, value in updated.items():
-        os.environ[key] = str(value)
     _write_conf_file(updated)
-    _update_env_file(updated)
     return success(data=_read_config())
 
 
