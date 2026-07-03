@@ -1,41 +1,52 @@
 import { useCallback, useEffect, useState } from 'react'
 import { PlusOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
-import { Button, Modal, Radio, message } from 'antd'
-import type { RadioChangeEvent } from 'antd'
+import { Button, Modal, Select, Typography, message } from 'antd'
 import {
   deleteCrawlTask,
+  getCrawlTaskStats,
   getCrawlTasks,
   updateCrawlTask,
 } from '@/api/crawlTask'
-import type { CrawlTask, DeleteMode } from '@/api/crawlTask/types'
+import type { CrawlTask, CrawlTaskStats, DeleteMode } from '@/api/crawlTask/types'
 import { runCrawlTask } from '@/api/crawlerRun'
 import type { CrawlMode } from '@/api/crawlerRun/types'
-import TaskListTable from '@/pages/crawler/tasks/components/TaskListTable.tsx'
+import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
 import { useTaskListQueryStore } from './useTaskListQueryStore'
 import styles from './TaskPages.module.less'
 
-const PAGE_SIZE = 20
+const initialStats: CrawlTaskStats = {
+  total: 0,
+  running: 0,
+  waiting: 0,
+}
+
+const deleteModeOptions: Array<{ value: DeleteMode; label: string }> = [
+  { value: 'task_only', label: '仅删除任务' },
+  { value: 'task_and_movies', label: '删除任务和关联影片' },
+  { value: 'task_movies_and_cloud', label: '删除任务、关联影片和云存储' },
+]
 
 function TaskListPage() {
   const navigate = useNavigate()
   const [tasks, setTasks] = useState<CrawlTask[]>([])
+  const [stats, setStats] = useState<CrawlTaskStats>(initialStats)
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
 
   const keyword = useTaskListQueryStore((state) => state.keyword)
-  const current = useTaskListQueryStore((state) => state.current)
   const setKeyword = useTaskListQueryStore((state) => state.setKeyword)
-  const setCurrent = useTaskListQueryStore((state) => state.setCurrent)
 
-  const fetchTasks = useCallback(async (page: number, nextKeyword: string) => {
+  const fetchStats = useCallback(async () => {
+    const data = await getCrawlTaskStats()
+    setStats(data)
+  }, [])
+
+  const fetchTasks = useCallback(async (nextKeyword: string) => {
     setLoading(true)
     try {
-      const skip = (page - 1) * PAGE_SIZE
       const normalizedKeyword = nextKeyword.trim()
       const data = await getCrawlTasks({
-        skip,
-        limit: PAGE_SIZE,
         keyword: normalizedKeyword || undefined,
       })
       setTasks(data.rows)
@@ -45,16 +56,14 @@ function TaskListPage() {
     }
   }, [])
 
-  useEffect(() => {
-    void fetchTasks(current, keyword)
-  }, [current, fetchTasks, keyword])
+  const refreshList = useCallback(() => {
+    void fetchTasks(keyword)
+    void fetchStats()
+  }, [fetchStats, fetchTasks, keyword])
 
-  const handlePageChange = useCallback(
-    (page: number) => {
-      setCurrent(page)
-    },
-    [setCurrent],
-  )
+  useEffect(() => {
+    refreshList()
+  }, [refreshList])
 
   const handleDelete = useCallback(
     (task: CrawlTask) => {
@@ -65,21 +74,21 @@ function TaskListPage() {
         content: (
           <div>
             <p>确定删除任务「{task.name}」？</p>
-            <div style={{margin: '12px 0'}}>
-              <p style={{marginBottom: 8}}>删除模式：</p>
-              <Radio.Group
+            <div className={styles.deleteModeRow}>
+              <Typography.Text className={styles.deleteModeLabel}>删除模式</Typography.Text>
+              <Select<DeleteMode>
+                aria-label="删除模式"
                 defaultValue="task_only"
-                onChange={(e: RadioChangeEvent) => {
-                  selectedMode = e.target.value as DeleteMode
+                options={deleteModeOptions}
+                onChange={(value) => {
+                  selectedMode = value
                 }}
-              >
-                <Radio value="task_only">仅删除任务</Radio>
-                <Radio value="task_and_movies">删除任务和关联影片</Radio>
-              </Radio.Group>
+                style={{ width: '100%' }}
+              />
             </div>
-            <p style={{color: '#ff4d4f', fontSize: 12}}>
-              ⚠️ 删除任务和关联影片将永久删除该任务独占的影片数据，且不可撤销！
-            </p>
+            <Typography.Text type="danger" className={styles.deleteWarning}>
+              删除任务和关联影片将永久删除该任务独占的影片数据，且不可撤销。
+            </Typography.Text>
           </div>
         ),
         okText: '删除',
@@ -92,11 +101,11 @@ function TaskListPage() {
             ? `，已删除 ${result?.deleted_movies ?? 0} 部关联影片`
             : ''
           message.success(`删除成功${msg}`)
-          void fetchTasks(current, keyword)
+          refreshList()
         },
       })
     },
-    [current, fetchTasks, keyword],
+    [refreshList],
   )
 
   const handleSearch = useCallback(
@@ -110,9 +119,9 @@ function TaskListPage() {
     async (task: CrawlTask) => {
       await updateCrawlTask(task.id, { is_skip: !task.is_skip })
       message.success(task.is_skip ? '任务已启用' : '任务已禁用')
-      void fetchTasks(current, keyword)
+      refreshList()
     },
-    [current, fetchTasks, keyword],
+    [refreshList],
   )
 
   const handleRun = useCallback(
@@ -120,8 +129,8 @@ function TaskListPage() {
       try {
         await runCrawlTask(task.id, mode)
         message.success(`已提交${mode === 'incremental' ? '增量' : '全量'}爬取任务`)
-        navigate({ to: '/crawler/runs' })
-      } catch (error) {
+        void navigate({ to: '/crawler/runs' })
+      } catch {
         message.error('启动爬取任务失败')
       }
     },
@@ -144,16 +153,28 @@ function TaskListPage() {
         </Button>
       </div>
 
+      <section className={styles.statsBar} aria-label="任务统计">
+        <div className={styles.statCard}>
+          <span className={styles.statLabel}>总数</span>
+          <span className={styles.statValue}>{stats.total}</span>
+        </div>
+        <div className={styles.statCard}>
+          <span className={styles.statLabel}>爬取中</span>
+          <span className={styles.statValue}>{stats.running}</span>
+        </div>
+        <div className={styles.statCard}>
+          <span className={styles.statLabel}>等待中</span>
+          <span className={styles.statValue}>{stats.waiting}</span>
+        </div>
+      </section>
+
       <section className={styles.panel}>
-        <TaskListTable
+        <TaskListCards
           tasks={tasks}
           loading={loading}
           total={total}
-          current={current}
-          pageSize={PAGE_SIZE}
           keyword={keyword}
           onKeywordChange={setKeyword}
-          onPageChange={handlePageChange}
           onEdit={(task) => navigate({ to: '/crawler/tasks/$id/edit', params: { id: task.id } })}
           onDelete={handleDelete}
           onToggleSkip={handleToggleSkip}
