@@ -5,8 +5,12 @@ import RunLogsTimeline from './components/RunLogsTimeline'
 import type { ColumnsType } from 'antd/es/table'
 import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks } from '@/api/crawlerRun'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
-import { useCrawlerSSE } from '@/hooks/useCrawlerSSE'
-import type { CrawlerEvent } from '@/api/crawler/sse'
+import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
+import type {
+  CrawlerRunDetailUpdatedPayload,
+  CrawlerRunLogAppendedPayload,
+  CrawlerRunUpdatedPayload,
+} from '@/realtime/types'
 
 const statusLabels: Record<string, { text: string; color: string }> = {
   queued: { text: '排队中', color: 'default' },
@@ -40,144 +44,119 @@ function RunDetailPage() {
     setKeyword('')
   }, [id])
 
-  // Initial fetch of run details
-  useEffect(() => {
+  // Fetch helpers
+  const fetchRun = useCallback(async () => {
     if (!id) return
-    let cancelled = false
-    const fetchRun = async () => {
-      const data = await getCrawlerRun(id)
-      if (!cancelled) {
-        setRun(data)
-      }
+    const data = await getCrawlerRun(id)
+    setRun(data)
+  }, [id])
+
+  const fetchLogs = useCallback(async () => {
+    if (!id) return
+    const data = await getCrawlerRunLogs(id)
+    setLogs(data)
+  }, [id])
+
+  const fetchTasks = useCallback(async () => {
+    if (!id) return
+    setLoading(true)
+    try {
+      const data = await getCrawlerRunTasks(id, {
+        limit: 200,
+        status: statusFilter,
+        keyword: keyword || undefined,
+      })
+      setTasks(data.rows)
+    } finally {
+      setLoading(false)
     }
+  }, [id, keyword, statusFilter])
+
+  const resyncSnapshot = useCallback(() => {
     void fetchRun()
-    return () => {
-      cancelled = true
-    }
-  }, [id])
-
-  // Initial fetch of logs
-  useEffect(() => {
-    if (!id) return
-    let cancelled = false
-    const fetchLogs = async () => {
-      const data = await getCrawlerRunLogs(id)
-      if (!cancelled) {
-        setLogs(data)
-      }
-    }
     void fetchLogs()
-    return () => {
-      cancelled = true
-    }
-  }, [id])
+    void fetchTasks()
+  }, [fetchLogs, fetchRun, fetchTasks])
 
-  // Initial fetch of task list
+  // Initial fetch effects
+  useEffect(() => {
+    void fetchRun()
+  }, [fetchRun])
+
+  useEffect(() => {
+    void fetchLogs()
+  }, [fetchLogs])
+
+  useEffect(() => {
+    void fetchTasks()
+  }, [fetchTasks])
+
+  // Realtime subscription effects
   useEffect(() => {
     if (!id) return
-    let cancelled = false
-    const fetchTasks = async () => {
-      setLoading(true)
-      try {
-        const data = await getCrawlerRunTasks(id, {
-          limit: 200,
-          status: statusFilter,
-          keyword: keyword || undefined,
+    connectRealtime()
+
+    const unsubscribeRun = subscribeRealtime<CrawlerRunUpdatedPayload>(
+      'crawler.run.updated',
+      (event) => {
+        if (event.resource_id !== id) return
+        setRun((currentRun) => ({
+          ...event.payload,
+          logs: currentRun?.logs ?? [],
+        }))
+        if (['completed', 'failed', 'stopped'].includes(event.payload.status)) {
+          void fetchLogs()
+        }
+      },
+    )
+
+    const unsubscribeDetails = subscribeRealtime<CrawlerRunDetailUpdatedPayload>(
+      'crawler.run.detail.updated',
+      (event) => {
+        if (event.resource_id !== id || event.payload.run_id !== id) return
+        setTasks((currentTasks) => {
+          const byId = new Map(currentTasks.map((task) => [task.id, task]))
+          for (const task of event.payload.tasks) {
+            const matchesStatus = !statusFilter || task.status === statusFilter
+            const normalizedKeyword = keyword.trim().toLowerCase()
+            const matchesKeyword = !normalizedKeyword
+              || (task.code ?? '').toLowerCase().includes(normalizedKeyword)
+              || task.source_name.toLowerCase().includes(normalizedKeyword)
+            if (matchesStatus && matchesKeyword) {
+              byId.set(task.id, task)
+            } else {
+              byId.delete(task.id)
+            }
+          }
+          return Array.from(byId.values()).sort((a, b) => (
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          ))
         })
-        if (!cancelled) {
-          setTasks(data.rows)
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-    void fetchTasks()
+      },
+    )
+
+    const unsubscribeLogs = subscribeRealtime<CrawlerRunLogAppendedPayload>(
+      'crawler.run.log.appended',
+      (event) => {
+        if (event.resource_id !== id || event.payload.run_id !== id) return
+        setLogs((currentLogs) => [...currentLogs, event.payload.log])
+      },
+    )
+
+    const unsubscribeResync = subscribeRealtime(
+      'system.resync_required',
+      () => {
+        resyncSnapshot()
+      },
+    )
+
     return () => {
-      cancelled = true
+      unsubscribeRun()
+      unsubscribeDetails()
+      unsubscribeLogs()
+      unsubscribeResync()
     }
-  }, [id, statusFilter, keyword])
-
-  // SSE event handlers for real-time updates
-  const handleRunStatus = useCallback((event: CrawlerEvent & { type: 'run:status' }) => {
-    if (event.run_id !== id) return
-
-    // Update run status from SSE event
-    setRun((prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        status: event.status as CrawlRun['status'],
-        error: event.error ?? prev.error,
-        finished_at: event.status === 'completed' || event.status === 'failed' || event.status === 'stopped'
-          ? event.timestamp
-          : prev.finished_at,
-      }
-    })
-
-    // Reload logs when run completes
-    if (event.status === 'completed' || event.status === 'failed' || event.status === 'stopped') {
-      void getCrawlerRunLogs(id!).then((data) => setLogs(data))
-    }
-  }, [id])
-
-  const handleTaskStatus = useCallback((event: CrawlerEvent & { type: 'task:status' }) => {
-    if (event.run_id !== id) return
-
-    // Update or add task in the list
-    setTasks((prev) => {
-      const existingIndex = prev.findIndex((t) => t.code === event.code)
-      if (existingIndex >= 0) {
-        // Update existing task
-        const updated = [...prev]
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          status: event.status as CrawlRunDetailTask['status'],
-          error: event.error ?? updated[existingIndex].error,
-        }
-        return updated
-      } else {
-        // Add new task if not exists
-        const newTask: CrawlRunDetailTask = {
-          id: `temp-${event.code}-${Date.now()}`,
-          run_id: event.run_id,
-          task_name: '',
-          code: event.code ?? null,
-          source_url: event.source_url,
-          source_name: '',
-          status: event.status as CrawlRunDetailTask['status'],
-          error: event.error ?? null,
-          item_data: null,
-          created_at: event.timestamp,
-          crawled_at: null,
-          saved_at: null,
-        }
-        return [...prev, newTask]
-      }
-    })
-  }, [id])
-
-  const handleEvent = useCallback((event: CrawlerEvent) => {
-    // Handle run:log events to append logs
-    if (event.type === 'run:log' && event.run_id === id) {
-      const logEntry: RunLogEntry = {
-        timestamp: event.timestamp,
-        level: event.level,
-        message: event.message,
-        context: event.context,
-      }
-      setLogs((prev) => [...prev, logEntry])
-    }
-  }, [id])
-
-  // Connect to SSE stream for real-time updates
-  useCrawlerSSE({
-    enabled: !!id,
-    onEvent: handleEvent,
-    onRunStatus: handleRunStatus,
-    onTaskStatus: handleTaskStatus,
-  })
+  }, [id, fetchLogs, keyword, resyncSnapshot, statusFilter])
 
   const columns: ColumnsType<CrawlRunDetailTask> = [
     {
