@@ -12,7 +12,6 @@ export interface MovieTableProps {
   selectedRowKeys: React.Key[]
   onSelectionChange: (keys: React.Key[]) => void
   onPageChange: (page: number, size: number) => void
-  onShowSizeChange: (current: number, size: number) => void
   onSortChange: (field: string, order: number) => void
   onViewDetail: (id: string) => void
 }
@@ -58,7 +57,6 @@ export default function MovieTable({
   selectedRowKeys,
   onSelectionChange,
   onPageChange,
-  onShowSizeChange,
   onSortChange,
   onViewDetail,
 }: MovieTableProps) {
@@ -151,10 +149,16 @@ export default function MovieTable({
         showSizeChanger: true,
         pageSizeOptions: ['20', '50', '100'],
         showTotal: (count) => `共 ${count} 条`,
-        onChange: onPageChange,
-        onShowSizeChange,
       }}
-      onChange={(_pagination, _filters, sorter) => {
+      onChange={(pagination, _filters, sorter) => {
+        // Handle pagination changes (page or pageSize)
+        const newPage = pagination.current ?? 1
+        const newPageSize = pagination.pageSize ?? 20
+        if (newPage !== page || newPageSize !== pageSize) {
+          onPageChange(newPage, newPageSize)
+        }
+
+        // Handle sort changes
         if (!Array.isArray(sorter) && sorter.column) {
           const field = sorter.field as string
           if (sorter.order === 'ascend') onSortChange(field, 1)

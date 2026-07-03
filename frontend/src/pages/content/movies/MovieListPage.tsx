@@ -109,7 +109,6 @@ function MovieListPage() {
           selectedRowKeys={list.selectedRowKeys}
           onSelectionChange={list.setSelectedRowKeys}
           onPageChange={list.handlePageChange}
-          onShowSizeChange={list.handleShowSizeChange}
           onSortChange={list.handleSortChange}
           onViewDetail={detail.showDetail}
         />
