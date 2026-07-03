@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.models.storage_task import StorageMainTask, StorageSubTask
+from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
 
 logger = logging.getLogger(__name__)
 _worker_lock = threading.Lock()
@@ -75,6 +76,7 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
         main_task.status = "running"
         main_task.started_at = main_task.started_at or datetime.now(timezone.utc)
         db.commit()
+        logger.info("Storage main task %s claimed by worker", task_id)
 
         # Load config from snapshot
         config = dict(main_task.config_snapshot or {})
@@ -89,6 +91,17 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
             if runtime.should_stop(task_id):
                 break
 
+            write_storage_subtask_log(
+                str(subtask.id),
+                "INFO",
+                "存储 worker 开始执行子任务",
+                {
+                    "main_task_id": str(main_task.id),
+                    "movie_id": str(subtask.movie_id),
+                    "step": subtask.step,
+                },
+            )
+
             # Create provider from config
             try:
                 client = provider_factory.create(config)
@@ -99,6 +112,12 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
                 subtask.error_message = f"创建 CloudDrive2 客户端失败: {exc}"
                 subtask.finished_at = datetime.now(timezone.utc)
                 has_failure = True
+                write_storage_subtask_log(
+                    str(subtask.id),
+                    "ERROR",
+                    f"创建 CloudDrive2 客户端失败: {exc}",
+                    {"main_task_id": str(main_task.id)},
+                )
                 db.commit()
                 continue
 
@@ -112,11 +131,30 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
 
             try:
                 execute_subtask_pipeline(context)
+                write_storage_subtask_log(
+                    str(subtask.id),
+                    "INFO",
+                    "存储子任务执行结束",
+                    {
+                        "main_task_id": str(main_task.id),
+                        "status": subtask.status,
+                        "step": subtask.step,
+                    },
+                )
             except Exception as exc:
                 subtask.status = "failed"
                 subtask.error_message = str(exc)
                 subtask.finished_at = datetime.now(timezone.utc)
                 has_failure = True
+                write_storage_subtask_log(
+                    str(subtask.id),
+                    "ERROR",
+                    f"存储子任务执行失败: {exc}",
+                    {
+                        "main_task_id": str(main_task.id),
+                        "step": subtask.step,
+                    },
+                )
                 logger.exception("Storage subtask %s failed", subtask.id)
 
             db.commit()

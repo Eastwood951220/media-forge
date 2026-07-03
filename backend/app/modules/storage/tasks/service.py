@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.storage_task import StorageMainTask, StorageSubTask
 from backend.app.modules.storage.config.service import StorageConfigService
+from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
 from backend.app.modules.storage.tasks.policies import generate_default_alias
 from backend.app.modules.storage.tasks.repository import StorageTaskRepository
 from backend.app.modules.storage.worker.runner import ensure_storage_worker_started
@@ -243,6 +244,16 @@ class StorageTaskService:
             )
             self.db.add(subtask)
             self.db.flush()
+            write_storage_subtask_log(
+                str(subtask.id),
+                "INFO",
+                "存储子任务已跳过",
+                {
+                    "main_task_id": str(main_task.id),
+                    "movie_id": str(movie_id),
+                    "skip_reason": skip_reason,
+                },
+            )
             return subtask
 
         # Resolve target locations from source tasks
@@ -262,6 +273,18 @@ class StorageTaskService:
         )
         self.db.add(subtask)
         self.db.flush()
+
+        write_storage_subtask_log(
+            str(subtask.id),
+            "INFO",
+            "存储子任务已创建并等待执行",
+            {
+                "main_task_id": str(main_task.id),
+                "movie_id": str(movie_id),
+                "storage_mode": storage_mode,
+                "target_locations": target_locations,
+            },
+        )
 
         # Update movie storage_summary
         self._update_movie_storage_summary(movie, main_task, subtask, storage_mode, user_id)
