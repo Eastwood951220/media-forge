@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
-import { Button, Modal, Space, Table, Tag, message } from 'antd'
+import { Button, Popconfirm, Space, Table, Tag, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { deleteCrawlerRun, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlRun } from '@/api/crawlerRun/types'
@@ -60,24 +60,21 @@ function RunListPage() {
     }
   }, [current, fetchRuns])
 
-  const handleDelete = useCallback((run: CrawlRun) => {
-    Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除运行记录"${run.task_name}"吗？此操作不可恢复。`,
-      okText: '删除',
-      okType: 'danger',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          await deleteCrawlerRun(run.id)
-          message.success('已删除运行记录')
-          void fetchRuns(current)
-        } catch {
-          message.error('删除失败')
-        }
-      },
-    })
-  }, [current, fetchRuns])
+  const handleDelete = useCallback(async (run: CrawlRun) => {
+    try {
+      await deleteCrawlerRun(run.id)
+      message.success('已删除运行记录')
+      const nextPage = runs.length === 1 && current > 1 ? current - 1 : current
+      if (nextPage !== current) {
+        setCurrent(nextPage)
+        return
+      }
+      void fetchRuns(current)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '删除失败'
+      message.error(msg)
+    }
+  }, [current, fetchRuns, runs.length])
 
   const columns: ColumnsType<CrawlRun> = [
     {
@@ -138,15 +135,22 @@ function RunListPage() {
               重启
             </Button>
           )}
-          {record.status !== 'running' && (
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDelete(record)}
+          {record.status !== 'queued' && record.status !== 'running' && (
+            <Popconfirm
+              title="删除运行记录"
+              description="仅删除运行记录和子任务记录，不会删除影片数据。"
+              okText="确定"
+              cancelText="取消"
+              onConfirm={() => handleDelete(record)}
             >
-              删除
-            </Button>
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+              >
+                删除
+              </Button>
+            </Popconfirm>
           )}
         </Space>
       ),

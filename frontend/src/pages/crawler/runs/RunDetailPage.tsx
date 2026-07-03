@@ -37,6 +37,7 @@ function RunDetailPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
   const [keyword, setKeyword] = useState('')
   const [pageSize, setPageSize] = useState(50)
+  const [actionLoading, setActionLoading] = useState<'stop' | 'restart' | null>(null)
 
   // Reset state when run ID changes
   useEffect(() => {
@@ -83,13 +84,19 @@ function RunDetailPage() {
 
   const handleStop = useCallback(async () => {
     if (!id) return
+    setActionLoading('stop')
     try {
-      await stopCrawlerRun(id)
+      const stoppedRun = await stopCrawlerRun(id)
+      setRun(stoppedRun)
       message.success('已停止运行')
-    } catch {
-      message.error('停止失败')
+      resyncSnapshot()
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '停止失败'
+      message.error(msg)
+    } finally {
+      setActionLoading(null)
     }
-  }, [id])
+  }, [id, resyncSnapshot])
 
   const handleDelete = useCallback(() => {
     if (!id || !run) return
@@ -113,14 +120,19 @@ function RunDetailPage() {
 
   const handleRestart = useCallback(async () => {
     if (!id) return
+    setActionLoading('restart')
     try {
-      await restartCrawlerRun(id)
+      const restartedRun = await restartCrawlerRun(id)
+      setRun(restartedRun)
       message.success('已重启运行')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '重启失败'
+      resyncSnapshot()
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '重启失败'
       message.error(msg)
+    } finally {
+      setActionLoading(null)
     }
-  }, [id])
+  }, [id, resyncSnapshot])
 
   // Initial fetch effects
   useEffect(() => {
@@ -237,14 +249,15 @@ function RunDetailPage() {
     <div style={{ padding: 24 }}>
       {run && (
         <Card
-          title={
+          title={`运行详情 - ${run.task_name}`}
+          extra={(
             <Space>
-              <span>运行详情 - {run.task_name}</span>
               {(run.status === 'queued' || run.status === 'running') && (
                 <Button
                   danger
                   icon={<StopOutlined />}
-                  onClick={handleStop}
+                  loading={actionLoading === 'stop'}
+                  onClick={() => void handleStop()}
                 >
                   停止
                 </Button>
@@ -253,7 +266,8 @@ function RunDetailPage() {
                 <Button
                   type="primary"
                   icon={<ReloadOutlined />}
-                  onClick={handleRestart}
+                  loading={actionLoading === 'restart'}
+                  onClick={() => void handleRestart()}
                 >
                   重启
                 </Button>
@@ -268,7 +282,7 @@ function RunDetailPage() {
                 </Button>
               )}
             </Space>
-          }
+          )}
           style={{ marginBottom: 16 }}
         >
           <Descriptions column={3}>
