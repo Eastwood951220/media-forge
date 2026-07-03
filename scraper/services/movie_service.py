@@ -77,6 +77,58 @@ class MovieService:
             stopped=stopped,
         )
 
+    def crawl_javdb_detail_tasks(self, task: CrawlTask, detail_tasks: list[dict], task_id: str = None, stop_check=None, log_callback=None, on_item_saved=None, on_detail_failed=None, on_detail_check_callback=None, on_item_already_exists=None) -> dict:
+        if task.is_skip:
+            if log_callback:
+                log_callback(f"跳过任务: {task.name}", "INFO")
+            return build_skipped_task_result(task)
+
+        spider = self._build_spider()
+        pipeline = MoviePipeline()
+        collected_items: list[dict] = []
+
+        def collect_completed_detail(detail_task: dict) -> None:
+            item = self._build_detail_item(task, detail_task)
+            if not item:
+                return
+
+            cleaned = pipeline.process_item(item, task_name=task.name, task_id=task_id)
+            if cleaned is not None:
+                collected_items.append(cleaned)
+                msg = (
+                    f"[{task.name}] 详情完成: code={cleaned.get('code')} "
+                    f"source_task_name={cleaned.get('source_task_name')}"
+                )
+                print(msg)
+                if log_callback:
+                    log_callback(msg, "INFO")
+                if on_item_saved:
+                    on_item_saved(detail_task, cleaned)
+            else:
+                msg = f"[{task.name}] 跳过无效数据: code={item.get('code')}"
+                print(msg)
+                if log_callback:
+                    log_callback(msg, "WARNING")
+
+        processed_tasks = spider.run_detail_tasks(
+            detail_tasks,
+            task_name=task.name,
+            on_detail_completed=collect_completed_detail,
+            on_detail_failed=on_detail_failed,
+            stop_check=stop_check,
+            log_callback=log_callback,
+            on_detail_check_callback=on_detail_check_callback,
+            on_item_already_exists=on_item_already_exists,
+        )
+
+        stopped = stop_check() if stop_check else False
+        return build_task_result(
+            task=task,
+            detail_tasks=processed_tasks,
+            saved_items=collected_items,
+            stopped=stopped,
+        )
+
     def _build_detail_item(self, task: CrawlTask, detail_task: dict) -> dict:
         detail = detail_task.get("detail") or {}
         if not detail:

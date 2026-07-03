@@ -94,11 +94,11 @@ def delete_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depe
     run = db.get(CrawlRun, run_id)
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
-    if run.status == "running":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete a running task")
+    if run.status in {"queued", "running"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="运行中任务不能删除，请先停止")
     db.delete(run)
     db.commit()
-    return success(message="Run deleted")
+    return success(data={"id": str(run_id), "deleted": True})
 
 
 @router.post("/{run_id}/stop")

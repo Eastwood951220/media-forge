@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from '@tanstack/react-router'
-import { DeleteOutlined, StopOutlined } from '@ant-design/icons'
+import { DeleteOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { Button, Card, Descriptions, Input, message, Modal, Select, Space, Table, Tag } from 'antd'
 import RunLogsTimeline from './components/RunLogsTimeline'
 import type { ColumnsType } from 'antd/es/table'
-import { deleteCrawlerRun, getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks, stopCrawlerRun } from '@/api/crawlerRun'
+import { deleteCrawlerRun, getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
 import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
 import type {
@@ -110,6 +110,17 @@ function RunDetailPage() {
       },
     })
   }, [id, run, navigate])
+
+  const handleRestart = useCallback(async () => {
+    if (!id) return
+    try {
+      await restartCrawlerRun(id)
+      message.success('已重启运行')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '重启失败'
+      message.error(msg)
+    }
+  }, [id])
 
   // Initial fetch effects
   useEffect(() => {
@@ -236,6 +247,15 @@ function RunDetailPage() {
                   onClick={handleStop}
                 >
                   停止
+                </Button>
+              )}
+              {(run.status === 'stopped' || run.status === 'failed') && (
+                <Button
+                  type="primary"
+                  icon={<ReloadOutlined />}
+                  onClick={handleRestart}
+                >
+                  重启
                 </Button>
               )}
               {run.status !== 'running' && (

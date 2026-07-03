@@ -21,6 +21,9 @@ from backend.app.modules.crawler.runtime.source_task_names import (
 logger = logging.getLogger(__name__)
 
 UNFINISHED_DETAIL_STATUSES = {"pending_crawl", "crawl_failed", "save_failed"}
+RESTARTABLE_DETAIL_STATUSES = UNFINISHED_DETAIL_STATUSES
+TERMINAL_DETAIL_STATUSES = {"saved", "skipped"}
+DETAIL_PHASE_STARTED_STATUSES = {"saved", "crawl_failed", "save_failed"}
 
 _worker_lock = threading.Lock()
 _worker_running = False
@@ -38,8 +41,46 @@ def cleanup_interrupted_runs(db: Session, runtime: CrawlerRuntimeState) -> int:
         run.status = "stopped"
         run.finished_at = run.finished_at or now
         run.error = "服务重启，任务已停止，需手动重启"
+        reset_unfinished_detail_tasks_to_pending(db, run)
     db.commit()
     return len(rows)
+
+
+def has_detail_phase_started(db: Session, run: CrawlRun) -> bool:
+    return db.query(CrawlRunDetailTask.id).filter(
+        CrawlRunDetailTask.run_id == run.id,
+        (
+            CrawlRunDetailTask.status.in_(DETAIL_PHASE_STARTED_STATUSES)
+            | CrawlRunDetailTask.crawled_at.isnot(None)
+            | CrawlRunDetailTask.saved_at.isnot(None)
+        ),
+    ).first() is not None
+
+
+def reset_unfinished_detail_tasks_to_pending(
+    db: Session,
+    run: CrawlRun,
+) -> list[CrawlRunDetailTask]:
+    details = (
+        db.query(CrawlRunDetailTask)
+        .filter(
+            CrawlRunDetailTask.run_id == run.id,
+            CrawlRunDetailTask.status.notin_(TERMINAL_DETAIL_STATUSES),
+        )
+        .order_by(CrawlRunDetailTask.created_at.asc())
+        .all()
+    )
+    for detail in details:
+        detail.status = "pending_crawl"
+        detail.error = None
+        detail.crawled_at = None
+        detail.saved_at = None
+    db.flush()
+    return details
+
+
+def clear_run_detail_tasks(db: Session, run: CrawlRun) -> None:
+    db.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).delete(synchronize_session=False)
 
 
 class CrawlerRunService:
@@ -73,62 +114,49 @@ class CrawlerRunService:
         self.runtime.request_stop(str(run.id))
         run.status = "stopped"
         run.finished_at = datetime.now()
-        # Reset unfinished detail tasks so they can be retried on restart
-        self.db.query(CrawlRunDetailTask).filter(
-            CrawlRunDetailTask.run_id == run.id,
-            CrawlRunDetailTask.status.in_(UNFINISHED_DETAIL_STATUSES),
-        ).update({"status": "pending_crawl", "error": None})
+        run.error = "用户停止任务"
+        reset_details = reset_unfinished_detail_tasks_to_pending(self.db, run)
         self.db.commit()
         self.db.refresh(run)
+        if reset_details:
+            publish_run_detail_updated(self.db, run, reset_details)
         publish_run_updated(self.db, run)
         return run
 
     def restart_run(self, run_id: uuid.UUID) -> CrawlRun:
-        old_run = self.db.get(CrawlRun, run_id)
-        if old_run is None:
+        run = self.db.get(CrawlRun, run_id)
+        if run is None:
             raise ValueError("运行记录不存在")
-        if old_run.status not in {"stopped", "failed"}:
+        if run.status not in {"stopped", "failed"}:
             raise ValueError("只能重启已停止或失败的运行")
-        details = (
-            self.db.query(CrawlRunDetailTask)
-            .filter(
-                CrawlRunDetailTask.run_id == old_run.id,
-                CrawlRunDetailTask.status.in_(UNFINISHED_DETAIL_STATUSES),
+        if run.task_id is None:
+            restartable_count = (
+                self.db.query(CrawlRunDetailTask)
+                .filter(
+                    CrawlRunDetailTask.run_id == run.id,
+                    CrawlRunDetailTask.status.in_(RESTARTABLE_DETAIL_STATUSES),
+                )
+                .count()
             )
-            .order_by(CrawlRunDetailTask.created_at.asc())
-            .all()
-        )
-        if not details:
-            raise ValueError("没有未完成的子任务，无法重启")
-        new_run = CrawlRun(
-            task_id=old_run.task_id,
-            task_name=old_run.task_name,
-            status="queued",
-            crawl_mode=old_run.crawl_mode,
-            queued_at=datetime.now(),
-            resumed_from=old_run.id,
-        )
-        self.db.add(new_run)
-        self.db.flush()
-        for detail in details:
-            self.db.add(CrawlRunDetailTask(
-                run_id=new_run.id,
-                task_name=detail.task_name,
-                code=detail.code,
-                source_url=detail.source_url,
-                source_name=detail.source_name,
-                status=detail.status,
-                error=None,
-                item_data=detail.item_data,
-                created_at=datetime.now(),
-                crawled_at=None,
-                saved_at=None,
-            ))
+            if restartable_count == 0:
+                raise ValueError("没有关联任务或未完成子任务，无法重启")
+
+        if has_detail_phase_started(self.db, run):
+            reset_unfinished_detail_tasks_to_pending(self.db, run)
+        else:
+            clear_run_detail_tasks(self.db, run)
+        run.status = "queued"
+        run.queued_at = datetime.now()
+        run.started_at = None
+        run.finished_at = None
+        run.result = None
+        run.error = None
         self.db.commit()
-        self.db.refresh(new_run)
-        self.runtime.enqueue_run(str(new_run.id))
+        self.db.refresh(run)
+        self.runtime.enqueue_run(str(run.id))
         self._ensure_worker_started()
-        return new_run
+        publish_run_updated(self.db, run)
+        return run
 
     def _ensure_worker_started(self) -> None:
         global _worker_running
@@ -385,18 +413,26 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
         for item in items:
             is_skipped = item.get("status") == "skipped"
             reason = item.get("reason") if is_skipped else None
-            detail = CrawlRunDetailTask(
-                run_id=run.id,
-                task_name=task.name,
-                code=item.get("code"),
-                source_url=item.get("url", ""),
-                source_name=item.get("name", ""),
-                status="skipped" if is_skipped else "pending_crawl",
-                error=reason,
-                created_at=datetime.now(),
-            )
-            db.add(detail)
-            db.flush()
+            detail = find_detail(item)
+            if detail is None:
+                detail = CrawlRunDetailTask(
+                    run_id=run.id,
+                    task_name=task.name,
+                    code=item.get("code"),
+                    source_url=item.get("url", ""),
+                    source_name=item.get("name", ""),
+                    status="skipped" if is_skipped else "pending_crawl",
+                    error=reason,
+                    created_at=datetime.now(),
+                )
+                db.add(detail)
+                db.flush()
+            elif detail.status not in {"saved", "skipped"}:
+                detail.status = "skipped" if is_skipped else "pending_crawl"
+                detail.error = reason
+                detail.item_data = None
+                detail.crawled_at = None
+                detail.saved_at = None
             remember_detail(detail)
             created_details.append(detail)
             if is_skipped:
@@ -486,22 +522,72 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             append_run_log_for_run(db, run, f"详情阶段跳过已存在影片: {code}", "INFO", code=code)
         return exists
 
+    def detail_row_to_task_info(detail: CrawlRunDetailTask) -> dict[str, Any]:
+        return {
+            "code": detail.code,
+            "url": detail.source_url,
+            "name": detail.source_name,
+        }
+
+    # Preload existing detail tasks for in-place restart
+    existing_details = (
+        db.query(CrawlRunDetailTask)
+        .filter(CrawlRunDetailTask.run_id == run.id)
+        .order_by(CrawlRunDetailTask.created_at.asc())
+        .all()
+    )
+    for detail in existing_details:
+        remember_detail(detail)
+
     # Execute crawl
     try:
         from scraper.services.movie_service import MovieService
         movie_service = MovieService()
-        result = movie_service.crawl_javdb_task(
-            task,
-            task_id=str(run.task_id) if run.task_id else None,
-            crawl_mode=run.crawl_mode,
-            on_tasks_batch_created=on_tasks_batch_created,
-            on_item_saved=on_item_saved,
-            on_detail_failed=on_detail_failed,
-            on_item_already_exists=on_item_already_exists,
-            log_callback=log_callback,
-            db_check_callback=db_check_callback,
-            on_detail_check_callback=on_detail_check_callback,
-        )
+
+        detail_phase_restart = has_detail_phase_started(db, run)
+        restartable_existing_details = [
+            detail for detail in existing_details
+            if detail.status in RESTARTABLE_DETAIL_STATUSES
+        ]
+        if detail_phase_restart and restartable_existing_details:
+            append_run_log_for_run(
+                db,
+                run,
+                f"检测到已有详情子任务 {len(restartable_existing_details)} 条，跳过列表收集直接重试详情",
+                "INFO",
+            )
+            result = movie_service.crawl_javdb_detail_tasks(
+                task,
+                detail_tasks=[detail_row_to_task_info(detail) for detail in restartable_existing_details],
+                task_id=str(run.task_id) if run.task_id else None,
+                on_item_saved=on_item_saved,
+                on_detail_failed=on_detail_failed,
+                on_item_already_exists=on_item_already_exists,
+                log_callback=log_callback,
+                on_detail_check_callback=on_detail_check_callback,
+                stop_check=lambda: runtime.is_stop_requested(str(run.id)),
+            )
+        else:
+            result = movie_service.crawl_javdb_task(
+                task,
+                task_id=str(run.task_id) if run.task_id else None,
+                crawl_mode=run.crawl_mode,
+                on_tasks_batch_created=on_tasks_batch_created,
+                on_item_saved=on_item_saved,
+                on_detail_failed=on_detail_failed,
+                on_item_already_exists=on_item_already_exists,
+                log_callback=log_callback,
+                db_check_callback=db_check_callback,
+                on_detail_check_callback=on_detail_check_callback,
+                stop_check=lambda: runtime.is_stop_requested(str(run.id)),
+            )
+
+        stopped = runtime.is_stop_requested(str(run.id)) or bool((result or {}).get("stopped"))
+        if stopped:
+            reset_details = reset_unfinished_detail_tasks_to_pending(db, run)
+            if reset_details:
+                publish_run_detail_updated(db, run, reset_details)
+
         total_count = _count_run_detail_tasks(db, run.id)
         saved_count = _count_run_detail_tasks(db, run.id, "saved")
         save_failed_count = _count_run_detail_tasks(db, run.id, "save_failed")
@@ -514,26 +600,37 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             "save_failed": save_failed_count,
             "crawl_failed": crawl_failed_count,
             "skipped_tasks": skipped_count,
+            "stopped": stopped,
         }
-        run.status = "completed"
-        append_run_log_for_run(
-            db, run,
-            f"任务完成: 总计={total_count}, 已保存={saved_count}, 入库失败={save_failed_count}, 爬取失败={crawl_failed_count}, 跳过={skipped_count}",
-            "INFO",
-        )
-        try:
-            from scraper.database.repositories.filter_repository import sync_movie_filters
-
-            sync_result = sync_movie_filters(db)
+        if stopped:
+            run.status = "stopped"
+            run.error = run.error or "用户停止任务"
+            append_run_log_for_run(
+                db,
+                run,
+                f"任务已停止: 总计={total_count}, 已保存={saved_count}, 入库失败={save_failed_count}, 爬取失败={crawl_failed_count}, 跳过={skipped_count}",
+                "WARNING",
+            )
+        else:
+            run.status = "completed"
             append_run_log_for_run(
                 db, run,
-                f"筛选列表已同步: 演员={sync_result['actors']}, 标签={sync_result['tags']}, "
-                f"导演={sync_result['directors']}, 片商={sync_result['makers']}, 系列={sync_result['series']}",
+                f"任务完成: 总计={total_count}, 已保存={saved_count}, 入库失败={save_failed_count}, 爬取失败={crawl_failed_count}, 跳过={skipped_count}",
                 "INFO",
             )
-        except Exception as sync_exc:
-            logger.warning("Failed to sync movie filters for run %s: %s", run.id, sync_exc)
-            append_run_log_for_run(db, run, f"筛选列表同步失败: {sync_exc}", "WARNING")
+            try:
+                from scraper.database.repositories.filter_repository import sync_movie_filters
+
+                sync_result = sync_movie_filters(db)
+                append_run_log_for_run(
+                    db, run,
+                    f"筛选列表已同步: 演员={sync_result['actors']}, 标签={sync_result['tags']}, "
+                    f"导演={sync_result['directors']}, 片商={sync_result['makers']}, 系列={sync_result['series']}",
+                    "INFO",
+                )
+            except Exception as sync_exc:
+                logger.warning("Failed to sync movie filters for run %s: %s", run.id, sync_exc)
+                append_run_log_for_run(db, run, f"筛选列表同步失败: {sync_exc}", "WARNING")
     except ImportError:
         logger.warning("MovieService not available, marking run as completed with stub")
         append_run_log_for_run(db, run, "MovieService 不可用，使用空结果完成运行", "WARNING")
