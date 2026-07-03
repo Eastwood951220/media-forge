@@ -48,8 +48,16 @@ def get_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
     payload = CrawlRunRead.model_validate(run).model_dump(mode="json")
-    payload["logs"] = load_run_logs(str(run_id))
+    payload["logs"] = []
     return success(data=payload)
+
+
+@router.get("/{run_id}/logs")
+def get_run_logs(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+    run = db.get(CrawlRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    return success(data=load_run_logs(str(run_id)))
 
 
 @router.get("/{run_id}/tasks")

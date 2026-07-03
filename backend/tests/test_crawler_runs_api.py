@@ -104,7 +104,7 @@ def test_run_list_and_detail_endpoints(client: TestClient, admin_user, monkeypat
     assert tasks_response.json()["rows"] == []
 
 
-def test_run_detail_includes_jsonl_logs(client: TestClient, admin_user, monkeypatch, tmp_path) -> None:
+def test_run_detail_excludes_jsonl_logs_and_logs_endpoint_returns_them(client: TestClient, admin_user, monkeypatch, tmp_path) -> None:
     from backend.app.modules.crawler.runs import logs as run_logs
 
     monkeypatch.setattr(run_logs, "RUN_LOG_DIR", str(tmp_path))
@@ -118,13 +118,26 @@ def test_run_detail_includes_jsonl_logs(client: TestClient, admin_user, monkeypa
     append_run_log(run_id, build_run_log("INFO", "任务开始执行"))
     append_run_log(run_id, build_run_log("ERROR", "入库失败", code="AAA-001"))
 
-    response = client.get(f"/api/crawler/runs/{run_id}", headers=headers)
+    detail_response = client.get(f"/api/crawler/runs/{run_id}", headers=headers)
+    logs_response = client.get(f"/api/crawler/runs/{run_id}/logs", headers=headers)
 
-    assert response.status_code == HTTPStatus.OK
-    body = response.json()["data"]
-    assert body["id"] == run_id
-    assert [entry["message"] for entry in body["logs"]] == ["任务开始执行", "入库失败"]
-    assert body["logs"][1]["context"] == {"code": "AAA-001"}
+    assert detail_response.status_code == HTTPStatus.OK
+    detail_body = detail_response.json()["data"]
+    assert detail_body["id"] == run_id
+    assert detail_body["logs"] == []
+
+    assert logs_response.status_code == HTTPStatus.OK
+    logs_body = logs_response.json()["data"]
+    assert [entry["message"] for entry in logs_body] == ["任务开始执行", "入库失败"]
+    assert logs_body[1]["context"] == {"code": "AAA-001"}
+
+
+def test_run_logs_endpoint_returns_404_for_missing_run(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+
+    response = client.get("/api/crawler/runs/00000000-0000-0000-0000-000000000001/logs", headers=headers)
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 def task_payload() -> dict:
