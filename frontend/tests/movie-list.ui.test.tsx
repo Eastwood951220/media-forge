@@ -84,6 +84,7 @@ function deferred<T>() {
 
 describe('MovieListPage', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     vi.mocked(fetchMovies).mockResolvedValue({
       items: [movie],
       total: 1,
@@ -189,8 +190,12 @@ describe('MovieListPage', () => {
     })
   })
 
-  it('sends original filter params when searching', async () => {
+  it('sends original filter params when searching after config and options are ready', async () => {
     renderPage()
+
+    await waitFor(() => {
+      expect(fetchMovies).toHaveBeenCalledTimes(1)
+    })
 
     await userEvent.type(await screen.findByPlaceholderText('搜索番号、标题...'), 'AAA')
     const searchButtons = screen.getAllByRole('button', { name: /搜\s*索/ })
@@ -205,5 +210,22 @@ describe('MovieListPage', () => {
         sort_order: -1,
       }))
     })
+  })
+
+  it('does not flash config-hidden filters after config loads', async () => {
+    vi.mocked(fetchMovieFilterConfig).mockResolvedValue({
+      _key: 'default',
+      filters: {
+        actors: { visible: true, order: 0 },
+        tags: { visible: false, order: 1 },
+        tagsNot: { visible: false, order: 2 },
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('筛选演员')).toBeInTheDocument()
+    expect(screen.queryByText('筛选标签')).not.toBeInTheDocument()
+    expect(screen.queryByText('排除标签')).not.toBeInTheDocument()
   })
 })
