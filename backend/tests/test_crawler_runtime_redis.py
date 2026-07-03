@@ -61,3 +61,16 @@ def test_stop_signal_and_cleanup() -> None:
         "current_run_id": None,
         "stop_requested": False,
     }
+
+
+def test_clear_stop_signal() -> None:
+    redis = FakeRedis()
+    runtime = CrawlerRuntimeState(redis)
+
+    runtime.request_stop("run-1")
+    assert runtime.is_stop_requested("run-1") is True
+
+    runtime.clear_stop("run-1")
+
+    assert runtime.is_stop_requested("run-1") is False
+    assert runtime.queue_status()["stop_requested"] is False

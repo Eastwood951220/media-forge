@@ -156,9 +156,13 @@ class RuntimeForStopRestart(FakeRuntime):
     def __init__(self) -> None:
         super().__init__()
         self.stopped = []
+        self.cleared = []
 
     def request_stop(self, run_id: str) -> None:
         self.stopped.append(run_id)
+
+    def clear_stop(self, run_id: str) -> None:
+        self.cleared.append(run_id)
 
 
 def test_stop_running_run_sets_stop_signal(client: TestClient, admin_user, monkeypatch) -> None:
@@ -298,6 +302,7 @@ def test_restart_after_detail_phase_requeues_same_run_and_keeps_terminal_details
     assert body["result"] is None
     assert body["error"] is None
     assert runtime.enqueued == [str(run.id)]
+    assert runtime.cleared == [str(run.id)]
 
     tasks_response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=headers)
     rows = tasks_response.json()["rows"]
@@ -332,6 +337,7 @@ def test_restart_after_list_phase_discards_partial_list_tasks_and_requeues_same_
     assert body["status"] == "queued"
     assert body["task_id"] == task_id
     assert runtime.enqueued == [str(run.id)]
+    assert runtime.cleared == [str(run.id)]
 
     tasks_response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=headers)
     assert tasks_response.json()["rows"] == []
@@ -356,6 +362,7 @@ def test_restart_stopped_run_without_subtasks_requeues_same_run(client: TestClie
     assert body["status"] == "queued"
     assert body["task_id"] == task_id
     assert runtime.enqueued == [str(run.id)]
+    assert runtime.cleared == [str(run.id)]
 
     tasks_response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=headers)
     assert tasks_response.json()["rows"] == []

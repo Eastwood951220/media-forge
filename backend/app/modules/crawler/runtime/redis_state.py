@@ -34,6 +34,9 @@ class CrawlerRuntimeState:
     def request_stop(self, run_id: str) -> None:
         self.redis.set(self._stop_key(run_id), "1")
 
+    def clear_stop(self, run_id: str) -> None:
+        self.redis.delete(self._stop_key(run_id))
+
     def is_stop_requested(self, run_id: str) -> bool:
         return self.redis.get(self._stop_key(run_id)) is not None
 

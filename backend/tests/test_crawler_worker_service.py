@@ -18,6 +18,7 @@ class Runtime:
         self._run_id = run_id
         self.current = None
         self.progress = {}
+        self.cleared = []
 
     def claim_next_run(self):
         run_id, self._run_id = self._run_id, None
@@ -31,6 +32,9 @@ class Runtime:
 
     def write_progress(self, run_id, progress):
         self.progress = progress
+
+    def clear_stop(self, run_id):
+        self.cleared.append(run_id)
 
 
 class MovieServiceStub:
@@ -219,6 +223,7 @@ def test_process_next_run_marks_saved(monkeypatch) -> None:
     assert refreshed.status == "completed"
     detail = session.query(CrawlRunDetailTask).one()
     assert detail.status == "saved"
+    assert runtime.cleared == [str(run.id)]
 
 
 def test_execute_run_persists_movie_before_marking_detail_saved(monkeypatch) -> None:

@@ -153,6 +153,7 @@ class CrawlerRunService:
         run.error = None
         self.db.commit()
         self.db.refresh(run)
+        self.runtime.clear_stop(str(run.id))
         self.runtime.enqueue_run(str(run.id))
         self._ensure_worker_started()
         publish_run_updated(self.db, run)
@@ -214,6 +215,7 @@ def process_run(db_factory: sessionmaker, runtime: CrawlerRuntimeState, run_id: 
         finally:
             runtime.set_current_run(None)
             runtime.write_progress(run_id, {})
+            runtime.clear_stop(run_id)
 
         return True
     finally:
