@@ -1,6 +1,6 @@
 import React from "react";
 import {Input, Select, InputNumber, DatePicker, Button, Space} from "antd";
-import {SearchOutlined, ReloadOutlined, SettingOutlined} from "@ant-design/icons";
+import {SearchOutlined, ReloadOutlined} from "@ant-design/icons";
 import type {MovieFilters} from "../hooks/useMovieFilters";
 import type {MovieFilterConfig, MovieFilterField} from "@/api/movie/types";
 
@@ -41,10 +41,9 @@ export interface MovieFilterBarProps {
     filterConfig: MovieFilterConfig;
     onSearch: () => void;
     onReset: () => void;
-    onConfigClick?: () => void;
 }
 
-export default function MovieFilterBar({filters, sort, filterConfig, onSearch, onReset, onConfigClick}: MovieFilterBarProps) {
+export default function MovieFilterBar({filters, sort, filterConfig, onSearch, onReset}: MovieFilterBarProps) {
     const {
         form, patchForm,
         taskOptions, actorOptions, tagOptions, directorOptions, makerOptions, seriesOptions,
@@ -143,7 +142,6 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
                 </Space>}
                 <Button type="primary" onClick={onSearch}>搜索</Button>
                 <Button icon={<ReloadOutlined/>} onClick={onReset}>刷新</Button>
-                {onConfigClick && <Button icon={<SettingOutlined/>} onClick={onConfigClick}>配置</Button>}
             </Space>
         </Space>
     );

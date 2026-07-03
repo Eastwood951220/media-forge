@@ -1,18 +1,8 @@
-import type React from 'react'
-import { Button, Space, Table, Tag, Typography } from 'antd'
+import { Button, Space, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { Movie } from '@/api/movie/types'
 
-export interface MovieTableProps {
-  data: Movie[]
-  total: number
-  page: number
-  pageSize: number
-  loading: boolean
-  selectedRowKeys: React.Key[]
-  onSelectionChange: (keys: React.Key[]) => void
-  onPageChange: (page: number, size: number) => void
-  onSortChange: (field: string, order: number) => void
+export interface MovieColumnsOptions {
   onViewDetail: (id: string) => void
 }
 
@@ -48,19 +38,8 @@ function unique(values: string[] | undefined) {
   return [...new Set(values || [])]
 }
 
-export default function MovieTable({
-  data,
-  total,
-  page,
-  pageSize,
-  loading,
-  selectedRowKeys,
-  onSelectionChange,
-  onPageChange,
-  onSortChange,
-  onViewDetail,
-}: MovieTableProps) {
-  const columns: ColumnsType<Movie> = [
+export function createMovieColumns({ onViewDetail }: MovieColumnsOptions): ColumnsType<Movie> {
+  return [
     { title: '番号', dataIndex: 'code', key: 'code', width: 120 },
     { title: '标题', dataIndex: 'source_name', key: 'source_name', ellipsis: true },
     {
@@ -124,7 +103,7 @@ export default function MovieTable({
     },
     {
       title: '操作',
-      key: 'actions',
+      key: 'action',
       fixed: 'right',
       width: 100,
       render: (_: unknown, record) => (
@@ -134,39 +113,4 @@ export default function MovieTable({
       ),
     },
   ]
-
-  return (
-    <Table
-      columns={columns}
-      dataSource={data}
-      rowKey="_id"
-      loading={loading}
-      rowSelection={{ selectedRowKeys, onChange: onSelectionChange }}
-      pagination={{
-        current: page,
-        total,
-        pageSize,
-        showSizeChanger: true,
-        pageSizeOptions: ['20', '50', '100'],
-        showTotal: (count) => `共 ${count} 条`,
-      }}
-      onChange={(pagination, _filters, sorter) => {
-        // Handle pagination changes (page or pageSize)
-        const newPage = pagination.current ?? 1
-        const newPageSize = pagination.pageSize ?? 20
-        if (newPage !== page || newPageSize !== pageSize) {
-          onPageChange(newPage, newPageSize)
-        }
-
-        // Handle sort changes
-        if (!Array.isArray(sorter) && sorter.column) {
-          const field = sorter.field as string
-          if (sorter.order === 'ascend') onSortChange(field, 1)
-          else if (sorter.order === 'descend') onSortChange(field, -1)
-          else onSortChange('created_at', -1)
-        }
-      }}
-      scroll={{ x: 1100 }}
-    />
-  )
 }

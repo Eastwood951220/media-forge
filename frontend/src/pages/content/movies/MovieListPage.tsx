@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Card } from 'antd'
 import { DEFAULT_MOVIE_PAGE } from './constants'
+import BaseListPage from '@/components/BaseListPage'
 import type { FilterItemConfig } from '@/api/movie'
-import type { MovieFilterConfig } from '@/api/movie/types'
+import type { Movie, MovieFilterConfig } from '@/api/movie/types'
 import MovieDetailDrawer from './components/MovieDetailDrawer'
-import FilterConfigDrawer from './components/FilterConfigDrawer'
 import MovieFilterBar from './components/MovieFilterBar'
-import MovieTable from './components/MovieTable'
+import { createMovieColumns } from './components/MovieTable'
 import { useMovieDetail } from './hooks/useMovieDetail'
 import { useMovieFilterConfig } from './hooks/useMovieFilterConfig'
 import { useMovieFilters } from './hooks/useMovieFilters'
 import { useMovieList } from './hooks/useMovieList'
 import type { MovieFilterState } from './utils/movieFilter'
+import styles from './MovieListPage.module.less'
 
 function parseSortDefault(config: MovieFilterConfig | undefined): { sortBy: string; sortOrder: number } | undefined {
   const raw = config?.sortBy?.defaultValue
@@ -82,50 +82,66 @@ function MovieListPage() {
       url.searchParams.delete('id')
       window.history.replaceState({}, '', url.toString())
     }
-  }, [])
+  }, [detail])
 
   const filterConfig = useMemo(() => configHook.config as Record<string, FilterItemConfig>, [configHook.config])
+  const columns = useMemo(
+    () => createMovieColumns({ onViewDetail: detail.showDetail }),
+    [detail.showDetail],
+  )
 
   return (
-    <div>
-      <Card size="small" style={{ marginBottom: 16 }}>
-        <MovieFilterBar
-          filters={filters}
-          sort={{ sortBy: list.sortBy, sortOrder: list.sortOrder, onChange: list.handleSortChange }}
-          filterConfig={filterConfig}
-          onSearch={list.search}
-          onReset={handleResetFilters}
-          onConfigClick={() => configHook.setDrawerOpen(true)}
-        />
-      </Card>
+    <div className={styles.page}>
+      <BaseListPage<Movie>
+        rowKey="_id"
+        columns={columns}
+        dataSource={list.data.items}
+        loading={list.loading}
+        rowSelection={{
+          selectedRowKeys: list.selectedRowKeys,
+          onChange: list.setSelectedRowKeys,
+        }}
+        pagination={{
+          current: list.data.page,
+          total: list.data.total,
+          pageSize: list.pageSize,
+          showSizeChanger: true,
+          pageSizeOptions: ['20', '50', '100'],
+          showTotal: (count) => `共 ${count} 条`,
+        }}
+        queryNode={(
+          <MovieFilterBar
+            filters={filters}
+            sort={{ sortBy: list.sortBy, sortOrder: list.sortOrder, onChange: list.handleSortChange }}
+            filterConfig={filterConfig}
+            onSearch={list.search}
+            onReset={handleResetFilters}
+          />
+        )}
+        onRefresh={list.reload}
+        tableProps={{
+          onChange: (pagination, _filters, sorter) => {
+            const newPage = pagination.current ?? 1
+            const newPageSize = pagination.pageSize ?? 20
+            if (newPage !== list.data.page || newPageSize !== list.pageSize) {
+              list.handlePageChange(newPage, newPageSize)
+            }
 
-      <Card size="medium">
-        <MovieTable
-          data={list.data.items}
-          total={list.data.total}
-          page={list.data.page}
-          pageSize={list.pageSize}
-          loading={list.loading}
-          selectedRowKeys={list.selectedRowKeys}
-          onSelectionChange={list.setSelectedRowKeys}
-          onPageChange={list.handlePageChange}
-          onSortChange={list.handleSortChange}
-          onViewDetail={detail.showDetail}
-        />
-      </Card>
+            if (!Array.isArray(sorter) && sorter.column) {
+              const field = sorter.field as string
+              if (sorter.order === 'ascend') list.handleSortChange(field, 1)
+              else if (sorter.order === 'descend') list.handleSortChange(field, -1)
+              else list.handleSortChange('created_at', -1)
+            }
+          },
+        }}
+      />
 
       <MovieDetailDrawer
         open={detail.open}
         detail={detail.detail}
         onClose={detail.closeDetail}
         onFilterClick={handleDetailFilterClick}
-      />
-
-      <FilterConfigDrawer
-        open={configHook.drawerOpen}
-        onClose={() => configHook.setDrawerOpen(false)}
-        config={filterConfig}
-        onSave={(cfg) => configHook.setConfig(cfg as typeof configHook.config)}
       />
     </div>
   )
