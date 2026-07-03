@@ -12,13 +12,12 @@ import type { CrawlTask, CrawlTaskStats, DeleteMode } from '@/api/crawlTask/type
 import { runCrawlTask } from '@/api/crawlerRun'
 import type { CrawlMode } from '@/api/crawlerRun/types'
 import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
-import { useTaskListQueryStore } from './useTaskListQueryStore'
 import styles from './TaskPages.module.less'
 
 const initialStats: CrawlTaskStats = {
   total: 0,
-  running: 0,
-  waiting: 0,
+  enabled: 0,
+  disabled: 0,
 }
 
 const deleteModeOptions: Array<{ value: DeleteMode; label: string }> = [
@@ -34,21 +33,15 @@ function TaskListPage() {
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
 
-  const keyword = useTaskListQueryStore((state) => state.keyword)
-  const setKeyword = useTaskListQueryStore((state) => state.setKeyword)
-
   const fetchStats = useCallback(async () => {
     const data = await getCrawlTaskStats()
     setStats(data)
   }, [])
 
-  const fetchTasks = useCallback(async (nextKeyword: string) => {
+  const fetchTasks = useCallback(async () => {
     setLoading(true)
     try {
-      const normalizedKeyword = nextKeyword.trim()
-      const data = await getCrawlTasks({
-        keyword: normalizedKeyword || undefined,
-      })
+      const data = await getCrawlTasks()
       setTasks(data.rows)
       setTotal(data.total)
     } finally {
@@ -57,9 +50,9 @@ function TaskListPage() {
   }, [])
 
   const refreshList = useCallback(() => {
-    void fetchTasks(keyword)
+    void fetchTasks()
     void fetchStats()
-  }, [fetchStats, fetchTasks, keyword])
+  }, [fetchStats, fetchTasks])
 
   useEffect(() => {
     refreshList()
@@ -108,13 +101,6 @@ function TaskListPage() {
     [refreshList],
   )
 
-  const handleSearch = useCallback(
-    (nextKeyword: string) => {
-      setKeyword(nextKeyword)
-    },
-    [setKeyword],
-  )
-
   const handleToggleSkip = useCallback(
     async (task: CrawlTask) => {
       await updateCrawlTask(task.id, { is_skip: !task.is_skip })
@@ -159,12 +145,12 @@ function TaskListPage() {
           <span className={styles.statValue}>{stats.total}</span>
         </div>
         <div className={styles.statCard}>
-          <span className={styles.statLabel}>爬取中</span>
-          <span className={styles.statValue}>{stats.running}</span>
+          <span className={styles.statLabel}>启用</span>
+          <span className={styles.statValue}>{stats.enabled}</span>
         </div>
         <div className={styles.statCard}>
-          <span className={styles.statLabel}>等待中</span>
-          <span className={styles.statValue}>{stats.waiting}</span>
+          <span className={styles.statLabel}>禁用</span>
+          <span className={styles.statValue}>{stats.disabled}</span>
         </div>
       </section>
 
@@ -173,12 +159,9 @@ function TaskListPage() {
           tasks={tasks}
           loading={loading}
           total={total}
-          keyword={keyword}
-          onKeywordChange={setKeyword}
           onEdit={(task) => navigate({ to: '/crawler/tasks/$id/edit', params: { id: task.id } })}
           onDelete={handleDelete}
           onToggleSkip={handleToggleSkip}
-          onSearch={handleSearch}
           onRun={handleRun}
         />
       </section>

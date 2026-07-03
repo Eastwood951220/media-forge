@@ -3,9 +3,8 @@ import {
   EditOutlined,
   MoreOutlined,
   PlayCircleOutlined,
-  SearchOutlined,
 } from '@ant-design/icons'
-import { Button, Dropdown, Empty, Input, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
+import { Button, Dropdown, Empty, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import type { CrawlTask } from '@/api/crawlTask/types'
 import type { CrawlMode } from '@/api/crawlerRun/types'
@@ -15,20 +14,10 @@ type TaskListCardsProps = {
   tasks: CrawlTask[]
   loading: boolean
   total: number
-  keyword: string
-  onKeywordChange: (keyword: string) => void
   onEdit: (task: CrawlTask) => void
   onDelete: (task: CrawlTask) => void
   onToggleSkip: (task: CrawlTask) => void
-  onSearch: (keyword: string) => void
   onRun: (task: CrawlTask, mode: CrawlMode) => void
-}
-
-const taskStatusLabels: Record<string, { text: string; color: string }> = {
-  pending: { text: '等待中', color: 'default' },
-  running: { text: '爬取中', color: 'processing' },
-  success: { text: '已完成', color: 'success' },
-  failed: { text: '失败', color: 'error' },
 }
 
 const runStatusLabels: Record<string, { text: string; color: string }> = {
@@ -48,11 +37,6 @@ function getUrlNames(task: CrawlTask) {
   return task.urls
     .map((url) => url.url_name?.trim())
     .filter((name): name is string => Boolean(name))
-}
-
-function statusTag(status: string) {
-  const statusConfig = taskStatusLabels[status] ?? { text: status, color: 'default' }
-  return <Tag color={statusConfig.color}>{statusConfig.text}</Tag>
 }
 
 function runStatusTag(status: string | null) {
@@ -88,7 +72,7 @@ function TaskCard({
             {task.name}
           </Typography.Text>
         </Tooltip>
-        {statusTag(task.status)}
+        <Tag color={task.is_skip ? 'default' : 'success'}>{task.is_skip ? '禁用' : '启用'}</Tag>
       </div>
 
       <div className={styles.taskCardBody}>
@@ -181,26 +165,14 @@ function TaskListCards({
   tasks,
   loading,
   total,
-  keyword,
-  onKeywordChange,
   onEdit,
   onDelete,
   onToggleSkip,
-  onSearch,
   onRun,
 }: TaskListCardsProps) {
   return (
     <div className={styles.taskListShell}>
       <div className={styles.taskListToolbar}>
-        <Input.Search
-          placeholder="搜索任务名称"
-          allowClear
-          enterButton={<SearchOutlined />}
-          value={keyword}
-          onChange={(event) => onKeywordChange(event.target.value)}
-          onSearch={onSearch}
-          className={styles.taskSearch}
-        />
         <Typography.Text type="secondary">共 {total} 条</Typography.Text>
       </div>
 

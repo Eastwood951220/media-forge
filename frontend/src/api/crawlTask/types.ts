@@ -54,8 +54,8 @@ export interface CrawlTaskUpdateParams {
 
 export interface CrawlTaskStats {
   total: number
-  running: number
-  waiting: number
+  enabled: number
+  disabled: number
 }
 
 export type DeleteMode = 'task_only' | 'task_and_movies' | 'task_movies_and_cloud'

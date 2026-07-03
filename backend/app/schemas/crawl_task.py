@@ -75,8 +75,8 @@ class ExtractNameResponse(BaseModel):
 
 class CrawlTaskStats(BaseModel):
     total: int
-    running: int
-    waiting: int
+    enabled: int
+    disabled: int
 
 
 # -- Movie list schemas --

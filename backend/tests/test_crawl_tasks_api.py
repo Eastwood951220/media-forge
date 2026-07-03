@@ -235,7 +235,7 @@ class TestCrawlTasksApi:
         assert body["total"] == 25
         assert len(body["rows"]) == 25
 
-    def test_stats_returns_total_running_and_waiting_counts(
+    def test_stats_returns_total_enabled_and_disabled_counts(
         self,
         client: TestClient,
         admin_user,
@@ -244,9 +244,9 @@ class TestCrawlTasksApi:
         session = TestingSessionLocal()
         session.add_all(
             [
-                CrawlTask(name="待处理任务", storage_location="PENDING", owner_id=admin_user.id, status="pending"),
-                CrawlTask(name="运行中任务", storage_location="RUNNING", owner_id=admin_user.id, status="running"),
-                CrawlTask(name="成功任务", storage_location="SUCCESS", owner_id=admin_user.id, status="success"),
+                CrawlTask(name="启用任务1", storage_location="ENABLED1", owner_id=admin_user.id, is_skip=False),
+                CrawlTask(name="启用任务2", storage_location="ENABLED2", owner_id=admin_user.id, is_skip=False),
+                CrawlTask(name="禁用任务", storage_location="DISABLED", owner_id=admin_user.id, is_skip=True),
             ]
         )
         session.commit()
@@ -257,8 +257,8 @@ class TestCrawlTasksApi:
         assert response.status_code == HTTPStatus.OK
         assert response.json()["data"] == {
             "total": 3,
-            "running": 1,
-            "waiting": 1,
+            "enabled": 2,
+            "disabled": 1,
         }
 
     def test_list_tasks_returns_latest_run_metadata(

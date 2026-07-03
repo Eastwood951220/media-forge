@@ -31,7 +31,7 @@ function renderPage() {
 describe('crawler task run controls', () => {
   beforeEach(() => {
     useTaskListQueryStore.getState().reset()
-    vi.mocked(getCrawlTaskStats).mockResolvedValue({ total: 1, running: 0, waiting: 1 })
+    vi.mocked(getCrawlTaskStats).mockResolvedValue({ total: 1, enabled: 1, disabled: 0 })
     vi.mocked(getCrawlTasks).mockResolvedValue({
       rows: [{
         id: 'task-1',

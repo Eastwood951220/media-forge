@@ -187,17 +187,13 @@ class CrawlTaskRepository(BaseRepository):
         return [{"id": str(row.id), "name": row.name} for row in rows]
 
     def get_summary_stats(self, owner_id: uuid.UUID) -> dict[str, int]:
-        rows = (
-            self.session.query(CrawlTask.status, func.count(CrawlTask.id))
-            .filter(CrawlTask.owner_id == owner_id)
-            .group_by(CrawlTask.status)
-            .all()
-        )
-        counts = {str(status): int(count) for status, count in rows}
+        total = self.session.query(func.count(CrawlTask.id)).filter(CrawlTask.owner_id == owner_id).scalar() or 0
+        enabled = self.session.query(func.count(CrawlTask.id)).filter(CrawlTask.owner_id == owner_id, CrawlTask.is_skip == False).scalar() or 0
+        disabled = total - enabled
         return {
-            "total": sum(counts.values()),
-            "running": counts.get(TaskStatus.RUNNING.value, 0),
-            "waiting": counts.get(TaskStatus.PENDING.value, 0),
+            "total": total,
+            "enabled": enabled,
+            "disabled": disabled,
         }
 
     def get_latest_runs_by_task_ids(self, task_ids: list[uuid.UUID]) -> dict[uuid.UUID, CrawlRun]:
