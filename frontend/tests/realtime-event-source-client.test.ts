@@ -97,4 +97,41 @@ describe('eventSourceClient', () => {
 
     expect(handler).not.toHaveBeenCalled()
   })
+
+  it('delivers crawler run log appended events to subscribers', () => {
+    const handler = vi.fn()
+    subscribeRealtime('crawler.run.log.appended', handler)
+    connectRealtime()
+
+    FakeEventSource.instances[0].emit('crawler.run.log.appended', {
+      id: 'event-log-1',
+      event: 'crawler.run.log.appended',
+      scope: 'crawler.run',
+      resource_id: 'run-1',
+      owner_id: 'user-1',
+      payload: {
+        run_id: 'run-1',
+        log: {
+          timestamp: '2026-07-03T04:06:58Z',
+          level: 'INFO',
+          component: 'crawler.run',
+          event: 'run_log',
+          message: '详情 1/53 跳过',
+          context: { reason: 'already_exists' },
+        },
+      },
+      created_at: '2026-07-03T04:06:58Z',
+    })
+
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'crawler.run.log.appended',
+      resource_id: 'run-1',
+      payload: expect.objectContaining({
+        run_id: 'run-1',
+        log: expect.objectContaining({
+          message: '详情 1/53 跳过',
+        }),
+      }),
+    }))
+  })
 })
