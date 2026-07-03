@@ -10,6 +10,7 @@ from backend.app.models.storage_task import StorageMainTask, StorageSubTask
 from backend.app.modules.storage.config.service import StorageConfigService
 from backend.app.modules.storage.tasks.policies import generate_default_alias
 from backend.app.modules.storage.tasks.repository import StorageTaskRepository
+from backend.app.modules.storage.worker.runner import ensure_storage_worker_started
 from backend.app.modules.storage.tasks.schemas import (
     StorageBatchPushRequest,
     StorageMainTaskResponse,
@@ -29,6 +30,11 @@ class StorageTaskService:
         self.config_service = config_service
         self.runtime = runtime
         self.repository = StorageTaskRepository(db)
+
+    def generate_next_alias(self) -> str:
+        now = datetime.now(timezone.utc)
+        sequence = self.repository.count_today_main_tasks() + 1
+        return generate_default_alias(now, sequence)
 
     def create_single_push(self, body: StorageSinglePushRequest, user_id: uuid.UUID) -> StorageMainTask:
         return self._create_main_task(
@@ -88,6 +94,11 @@ class StorageTaskService:
         if self.runtime is not None:
             self.runtime.clear_stop(str(task.id))
             self.runtime.enqueue_main_task(str(task.id))
+            ensure_storage_worker_started(
+                self.runtime,
+                self.config_service.provider_factory,
+                self.config_service,
+            )
         self.db.commit()
         self.db.refresh(task)
 
@@ -196,6 +207,11 @@ class StorageTaskService:
 
         if has_queued and self.runtime is not None:
             self.runtime.enqueue_main_task(str(main_task.id))
+            ensure_storage_worker_started(
+                self.runtime,
+                self.config_service.provider_factory,
+                self.config_service,
+            )
 
         return main_task
 

@@ -143,3 +143,50 @@ def test_subtask_not_found(client, auth_headers):
     fake_id = "00000000-0000-0000-0000-000000000000"
     resp = client.get(f"/api/storage/tasks/subtasks/{fake_id}", headers=auth_headers)
     assert resp.status_code == 404
+
+
+def test_single_push_enqueues_runtime_and_starts_worker(db_session, test_user, monkeypatch):
+    from backend.app.modules.storage.config.service import StorageConfigService
+    from backend.app.modules.storage.tasks.schemas import StorageSinglePushRequest
+    from backend.app.modules.storage.tasks.service import StorageTaskService
+
+    movie = _movie_with_source_and_magnet(db_session, test_user.id, code="abc-queued")
+
+    class FakeRuntime:
+        def __init__(self) -> None:
+            self.enqueued: list[str] = []
+
+        def enqueue_main_task(self, task_id: str) -> None:
+            self.enqueued.append(task_id)
+
+    fake_runtime = FakeRuntime()
+    started: list[str] = []
+
+    def fake_start_worker(runtime, provider_factory, config_service):
+        assert runtime is fake_runtime
+        assert provider_factory is config_service.provider_factory
+        started.append("started")
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.tasks.service.ensure_storage_worker_started",
+        fake_start_worker,
+        raising=False,
+    )
+
+    service = StorageTaskService(
+        db=db_session,
+        config_service=StorageConfigService(),
+        runtime=fake_runtime,
+    )
+
+    main_task = service.create_single_push(
+        StorageSinglePushRequest(
+            movie_id=movie.id,
+            storage_mode="single",
+            selected_storage_location="A",
+        ),
+        test_user.id,
+    )
+
+    assert fake_runtime.enqueued == [str(main_task.id)]
+    assert started == ["started"]

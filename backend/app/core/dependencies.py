@@ -57,9 +57,14 @@ def get_storage_config_service() -> StorageConfigService:
 
 
 def get_storage_task_service(db: DbSession):
+    from backend.app.modules.storage.runtime.redis_state import StorageRuntimeState
     from backend.app.modules.storage.tasks.service import StorageTaskService
 
-    return StorageTaskService(db=db, config_service=get_storage_config_service())
+    return StorageTaskService(
+        db=db,
+        config_service=get_storage_config_service(),
+        runtime=StorageRuntimeState(get_redis()),
+    )
 
 
 # -- Auth --
