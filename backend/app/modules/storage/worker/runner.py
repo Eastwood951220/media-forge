@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.models.storage_task import StorageMainTask, StorageSubTask
-from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
+from backend.app.modules.storage.tasks.logs import write_storage_subtask_log  # noqa: F401
 
 logger = logging.getLogger(__name__)
 _worker_lock = threading.Lock()
@@ -127,12 +127,12 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
                 subtask=subtask,
                 config=config,
                 provider=provider,
+                owner_id=str(main_task.created_by),
             )
 
             try:
                 execute_subtask_pipeline(context)
-                write_storage_subtask_log(
-                    str(subtask.id),
+                context.log(
                     "INFO",
                     "存储子任务执行结束",
                     {
@@ -140,21 +140,26 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
                         "status": subtask.status,
                         "step": subtask.step,
                     },
+                    step=subtask.step,
+                    event="subtask_finished",
                 )
+                context.publish_subtask()
             except Exception as exc:
                 subtask.status = "failed"
                 subtask.error_message = str(exc)
                 subtask.finished_at = datetime.now(timezone.utc)
                 has_failure = True
-                write_storage_subtask_log(
-                    str(subtask.id),
+                context.log(
                     "ERROR",
                     f"存储子任务执行失败: {exc}",
                     {
                         "main_task_id": str(main_task.id),
                         "step": subtask.step,
                     },
+                    step=subtask.step,
+                    event="subtask_failed",
                 )
+                context.publish_subtask()
                 logger.exception("Storage subtask %s failed", subtask.id)
 
             db.commit()
