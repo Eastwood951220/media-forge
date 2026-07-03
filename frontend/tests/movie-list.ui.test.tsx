@@ -212,6 +212,31 @@ describe('MovieListPage', () => {
     })
   })
 
+  it('keeps the requested page when table pagination changes', async () => {
+    vi.mocked(fetchMovies).mockResolvedValue({
+      items: [movie],
+      total: 45,
+      page: 1,
+      limit: 20,
+      total_pages: 3,
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(fetchMovies).toHaveBeenCalledTimes(1)
+    })
+
+    await userEvent.click(await screen.findByTitle('2'))
+
+    await waitFor(() => {
+      expect(fetchMovies).toHaveBeenLastCalledWith(expect.objectContaining({
+        page: 2,
+        limit: 20,
+      }))
+    })
+  })
+
   it('does not flash config-hidden filters after config loads', async () => {
     vi.mocked(fetchMovieFilterConfig).mockResolvedValue({
       _key: 'default',

@@ -53,7 +53,7 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
             title="影片详情"
             open={open}
             onClose={onClose}
-            size={600}
+            size={800}
         >
             {detail && (
                 <Descriptions column={1} bordered size="small">

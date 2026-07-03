@@ -47,7 +47,6 @@ export function createMovieColumns({ onViewDetail }: MovieColumnsOptions): Colum
       dataIndex: 'rating',
       key: 'rating',
       width: 80,
-      sorter: true,
       render: (value: number | null) => (value != null ? value.toFixed(2) : '-'),
     },
     {
@@ -55,8 +54,6 @@ export function createMovieColumns({ onViewDetail }: MovieColumnsOptions): Colum
       dataIndex: 'release_date',
       key: 'release_date',
       width: 160,
-      sorter: true,
-      defaultSortOrder: 'descend',
     },
     {
       title: '时长',

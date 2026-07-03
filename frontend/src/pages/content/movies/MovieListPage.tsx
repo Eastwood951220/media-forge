@@ -135,18 +135,11 @@ function MovieListPage() {
         queryNode={queryNode}
         onRefresh={listReady ? list.reload : undefined}
         tableProps={{
-          onChange: (pagination, _filters, sorter) => {
+          onChange: (pagination) => {
             const newPage = pagination.current ?? 1
             const newPageSize = pagination.pageSize ?? 20
             if (newPage !== list.page || newPageSize !== list.pageSize) {
               list.handlePageChange(newPage, newPageSize)
-            }
-
-            if (!Array.isArray(sorter) && sorter.column) {
-              const field = sorter.field as string
-              if (sorter.order === 'ascend') list.handleSortChange(field, 1)
-              else if (sorter.order === 'descend') list.handleSortChange(field, -1)
-              else list.handleSortChange('created_at', -1)
             }
           },
         }}
