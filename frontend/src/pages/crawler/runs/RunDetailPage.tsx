@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams } from '@tanstack/react-router'
 import { Card, Descriptions, Input, Select, Space, Table, Tag } from 'antd'
 import RunLogsTimeline from './components/RunLogsTimeline'
 import type { ColumnsType } from 'antd/es/table'
 import { getCrawlerRun, getCrawlerRunTasks } from '@/api/crawlerRun'
-import type { CrawlRun, CrawlRunDetailTask } from '@/api/crawlerRun/types'
+import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
+import { useCrawlerSSE } from '@/hooks/useCrawlerSSE'
+import type { CrawlerEvent } from '@/api/crawler/sse'
 
 const statusLabels: Record<string, { text: string; color: string }> = {
   queued: { text: '排队中', color: 'default' },
@@ -28,6 +30,7 @@ function RunDetailPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
   const [keyword, setKeyword] = useState('')
 
+  // Reset state when run ID changes
   useEffect(() => {
     setRun(null)
     setTasks([])
@@ -35,6 +38,7 @@ function RunDetailPage() {
     setKeyword('')
   }, [id])
 
+  // Initial fetch of run details
   useEffect(() => {
     if (!id) return
     let cancelled = false
@@ -50,16 +54,7 @@ function RunDetailPage() {
     }
   }, [id])
 
-  useEffect(() => {
-    if (!id || !run || (run.status !== 'queued' && run.status !== 'running')) return
-
-    const timer = window.setInterval(() => {
-      void getCrawlerRun(id).then(setRun)
-    }, 3000)
-
-    return () => window.clearInterval(timer)
-  }, [id, run])
-
+  // Initial fetch of task list
   useEffect(() => {
     if (!id) return
     let cancelled = false
@@ -86,19 +81,86 @@ function RunDetailPage() {
     }
   }, [id, statusFilter, keyword])
 
-  useEffect(() => {
-    if (!id || !run || (run.status !== 'queued' && run.status !== 'running')) return
+  // SSE event handlers for real-time updates
+  const handleRunStatus = useCallback((event: CrawlerEvent & { type: 'run:status' }) => {
+    if (event.run_id !== id) return
 
-    const timer = window.setInterval(() => {
-      void getCrawlerRunTasks(id, {
-        limit: 200,
-        status: statusFilter,
-        keyword: keyword || undefined,
-      }).then((data) => setTasks(data.rows))
-    }, 3000)
+    // Update run status from SSE event
+    setRun((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        status: event.status as CrawlRun['status'],
+        error: event.error ?? prev.error,
+        finished_at: event.status === 'completed' || event.status === 'failed' || event.status === 'stopped'
+          ? event.timestamp
+          : prev.finished_at,
+      }
+    })
+  }, [id])
 
-    return () => window.clearInterval(timer)
-  }, [id, run, statusFilter, keyword])
+  const handleTaskStatus = useCallback((event: CrawlerEvent & { type: 'task:status' }) => {
+    if (event.run_id !== id) return
+
+    // Update or add task in the list
+    setTasks((prev) => {
+      const existingIndex = prev.findIndex((t) => t.code === event.code)
+      if (existingIndex >= 0) {
+        // Update existing task
+        const updated = [...prev]
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          status: event.status as CrawlRunDetailTask['status'],
+          error: event.error ?? updated[existingIndex].error,
+        }
+        return updated
+      } else {
+        // Add new task if not exists
+        const newTask: CrawlRunDetailTask = {
+          id: `temp-${event.code}-${Date.now()}`,
+          run_id: event.run_id,
+          task_name: '',
+          code: event.code ?? null,
+          source_url: event.source_url,
+          source_name: '',
+          status: event.status as CrawlRunDetailTask['status'],
+          error: event.error ?? null,
+          item_data: null,
+          created_at: event.timestamp,
+          crawled_at: null,
+          saved_at: null,
+        }
+        return [...prev, newTask]
+      }
+    })
+  }, [id])
+
+  const handleEvent = useCallback((event: CrawlerEvent) => {
+    // Handle run:log events to append logs
+    if (event.type === 'run:log' && event.run_id === id) {
+      const logEntry: RunLogEntry = {
+        timestamp: event.timestamp,
+        level: event.level,
+        message: event.message,
+        context: event.context,
+      }
+      setRun((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          logs: [...(prev.logs ?? []), logEntry],
+        }
+      })
+    }
+  }, [id])
+
+  // Connect to SSE stream for real-time updates
+  useCrawlerSSE({
+    enabled: !!id,
+    onEvent: handleEvent,
+    onRunStatus: handleRunStatus,
+    onTaskStatus: handleTaskStatus,
+  })
 
   const columns: ColumnsType<CrawlRunDetailTask> = [
     {
