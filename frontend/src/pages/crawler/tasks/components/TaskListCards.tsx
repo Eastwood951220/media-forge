@@ -1,8 +1,7 @@
 import {
   DeleteOutlined,
   EditOutlined,
-  MoreOutlined,
-  PlayCircleOutlined,
+  PlayCircleOutlined, PlusOutlined,
   ReloadOutlined,
   StopOutlined,
 } from '@ant-design/icons'
@@ -11,6 +10,7 @@ import type { MenuProps } from 'antd'
 import type { CrawlTask, CrawlTaskRuntimeSnapshot, TaskRuntimeStatus } from '@/api/crawlTask/types'
 import type { CrawlMode } from '@/api/crawlerRun/types'
 import styles from '../TaskPages.module.less'
+import {useNavigate} from "@tanstack/react-router";
 
 type TaskListCardsProps = {
   tasks: CrawlTask[]
@@ -170,21 +170,6 @@ function TaskCard({
                 onClick={() => onDelete(task)}
               />
             </Tooltip>
-            <Dropdown
-              menu={{
-                items: [
-                  { key: 'edit', label: '编辑', icon: <EditOutlined /> },
-                  { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
-                ],
-                onClick: ({ key }) => {
-                  if (key === 'edit') onEdit(task)
-                  if (key === 'delete') onDelete(task)
-                },
-              }}
-              trigger={['click']}
-            >
-              <Button aria-label={`更多 ${task.name}`} type="text" size="small" icon={<MoreOutlined />} />
-            </Dropdown>
           </Space>
         )}
       </div>
@@ -204,10 +189,17 @@ function TaskListCards({
   onStop,
   onRestart,
 }: TaskListCardsProps) {
+  const navigate = useNavigate()
   return (
     <div className={styles.taskListShell}>
       <div className={styles.taskListToolbar}>
         <Typography.Text type="secondary">共 {total} 条</Typography.Text>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => navigate({ to: '/crawler/tasks/new' })}>
+          新建任务
+        </Button>
       </div>
 
       <Spin spinning={loading}>

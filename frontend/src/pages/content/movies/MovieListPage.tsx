@@ -25,7 +25,11 @@ function parseSortDefault(config: MovieFilterConfig | undefined): { sortBy: stri
 
 function MovieListPage() {
   const filters = useMovieFilters()
-  const list = useMovieList(filters.requestParams)
+  const effectiveParams = useMemo(
+    () => (filters.filtersLoading ? undefined : filters.requestParams),
+    [filters.filtersLoading, filters.requestParams],
+  )
+  const list = useMovieList(effectiveParams)
   const detail = useMovieDetail()
   const configHook = useMovieFilterConfig()
 
