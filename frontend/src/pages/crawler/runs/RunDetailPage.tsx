@@ -34,6 +34,7 @@ function RunDetailPage() {
   const [loading, setLoading] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
   const [keyword, setKeyword] = useState('')
+  const [pageSize, setPageSize] = useState(50)
 
   // Reset state when run ID changes
   useEffect(() => {
@@ -228,7 +229,12 @@ function RunDetailPage() {
           columns={columns}
           dataSource={tasks}
           loading={loading}
-          pagination={{ pageSize: 50 }}
+          pagination={{
+            pageSize,
+            showSizeChanger: true,
+            pageSizeOptions: ['20', '50', '100', '200'],
+            onChange: (_page, size) => setPageSize(size),
+          }}
         />
       </Card>
 

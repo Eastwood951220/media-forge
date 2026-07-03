@@ -160,7 +160,7 @@ describe('RunDetailPage realtime events', () => {
     renderPage()
     await screen.findByText('运行详情 - 任务A')
 
-    const initialCallCount = vi.mocked(getCrawlerRunLogs).mock.calls.length
+    const initialCallCount = vi.mocked(getCrawlerRunLogs).mock.calls.length as number
 
     emit('crawler.run.updated', {
       id: 'run-1',
@@ -180,7 +180,7 @@ describe('RunDetailPage realtime events', () => {
     })
 
     await waitFor(() => {
-      expect(getCrawlerRunLogs.mock.calls.length).toBeGreaterThan(initialCallCount)
+      expect(vi.mocked(getCrawlerRunLogs).mock.calls.length).toBeGreaterThan(initialCallCount)
     })
     expect(await screen.findByText('详情处理完成: 总计=54 已完成=0 失败=0 跳过=54')).toBeInTheDocument()
   })
@@ -197,9 +197,9 @@ describe('RunDetailPage realtime events', () => {
     emit('system.resync_required', { reason: 'connection_error' }, null)
 
     await waitFor(() => {
-      expect(getCrawlerRun.mock.calls.length).toBeGreaterThan(initialRunCalls)
-      expect(getCrawlerRunLogs.mock.calls.length).toBeGreaterThan(initialLogsCalls)
-      expect(getCrawlerRunTasks.mock.calls.length).toBeGreaterThan(initialTasksCalls)
+      expect(vi.mocked(getCrawlerRun).mock.calls.length).toBeGreaterThan(initialRunCalls)
+      expect(vi.mocked(getCrawlerRunLogs).mock.calls.length).toBeGreaterThan(initialLogsCalls)
+      expect(vi.mocked(getCrawlerRunTasks).mock.calls.length).toBeGreaterThan(initialTasksCalls)
     })
   })
 })
