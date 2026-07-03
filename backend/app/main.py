@@ -12,6 +12,7 @@ from backend.app.core.exception_handlers import register_exception_handlers
 from backend.app.modules.auth.router import router as auth_router
 from backend.app.modules.content.movies.router import router as content_movies_router
 from backend.app.modules.crawler.config.router import router as crawler_config_router
+from backend.app.modules.crawler.events.router import router as crawler_events_router
 from backend.app.modules.crawler.runs.router import router as crawler_runs_router
 from backend.app.modules.crawler.runtime.service import cleanup_interrupted_runs, get_runtime_state
 from backend.app.modules.crawler.tasks.router import router as crawler_tasks_router
@@ -107,6 +108,7 @@ app.include_router(health_router)
 app.include_router(crawler_tasks_router)
 app.include_router(crawler_config_router)
 app.include_router(crawler_runs_router)
+app.include_router(crawler_events_router)
 app.include_router(content_movies_router)
 app.include_router(movies_router)
 
