@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from '@tanstack/react-router'
-import { DeleteOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
-import { Button, Card, Descriptions, Input, message, Modal, Select, Space, Table, Tag } from 'antd'
+import { useParams } from '@tanstack/react-router'
+import { ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { Button, Card, Descriptions, Input, message, Select, Space, Table, Tag } from 'antd'
 import RunLogsTimeline from './components/RunLogsTimeline'
 import type { ColumnsType } from 'antd/es/table'
-import { deleteCrawlerRun, getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
+import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
 import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
 import type {
@@ -29,7 +29,6 @@ const statusLabels: Record<string, { text: string; color: string }> = {
 
 function RunDetailPage() {
   const { id } = useParams({ strict: false })
-  const navigate = useNavigate()
   const [run, setRun] = useState<CrawlRun | null>(null)
   const [logs, setLogs] = useState<RunLogEntry[]>([])
   const [tasks, setTasks] = useState<CrawlRunDetailTask[]>([])
@@ -97,26 +96,6 @@ function RunDetailPage() {
       setActionLoading(null)
     }
   }, [id, resyncSnapshot])
-
-  const handleDelete = useCallback(() => {
-    if (!id || !run) return
-    Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除运行记录"${run.task_name}"吗？此操作不可恢复。`,
-      okText: '删除',
-      okType: 'danger',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          await deleteCrawlerRun(id)
-          message.success('已删除运行记录')
-          void navigate({ to: '/crawler/runs' })
-        } catch {
-          message.error('删除失败')
-        }
-      },
-    })
-  }, [id, run, navigate])
 
   const handleRestart = useCallback(async () => {
     if (!id) return
@@ -270,15 +249,6 @@ function RunDetailPage() {
                   onClick={() => void handleRestart()}
                 >
                   重启
-                </Button>
-              )}
-              {run.status !== 'running' && (
-                <Button
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={handleDelete}
-                >
-                  删除
                 </Button>
               )}
             </Space>
