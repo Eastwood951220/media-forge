@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from queue import Empty
 
@@ -366,3 +367,118 @@ def test_execute_run_marks_detail_phase_existing_movies_skipped(monkeypatch) -> 
     assert str(run.task_id) in [str(tid) for tid in movie.source_task_ids]
     refreshed = session.get(CrawlRun, run.id)
     assert refreshed.result["skipped_tasks"] == 1
+
+
+class StopRequestedRuntime(Runtime):
+    def is_stop_requested(self, run_id):
+        return True
+
+
+class StopAwareMovieServiceStub:
+    def crawl_javdb_task(self, task, **kwargs):
+        assert kwargs["stop_check"]() is True
+        kwargs["on_tasks_batch_created"]([
+            {"code": "STOP-001", "url": "https://javdb.com/v/stop001", "name": "STOP 001"}
+        ])
+        return {
+            "total_tasks": 1,
+            "completed_tasks": 0,
+            "failed_tasks": 0,
+            "stopped": True,
+        }
+
+
+class ExistingDetailReuseMovieServiceStub:
+    def crawl_javdb_task(self, task, **kwargs):
+        raise AssertionError("detail-stage restart must not run list collection")
+
+    def crawl_javdb_detail_tasks(self, task, detail_tasks, **kwargs):
+        assert [item["code"] for item in detail_tasks] == ["REUSE-001"]
+        kwargs["on_item_saved"](
+            {"code": "REUSE-001", "url": "https://javdb.com/v/reuse001", "name": "REUSE 001"},
+            {"code": "REUSE-001", "source_url": "https://javdb.com/v/reuse001", "source_name": "REUSE 001"},
+        )
+        return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
+
+
+class ListPhaseRestartMovieServiceStub:
+    def crawl_javdb_task(self, task, **kwargs):
+        kwargs["on_tasks_batch_created"]([
+            {"code": "LIST-001", "url": "https://javdb.com/v/list001", "name": "LIST 001"}
+        ])
+        return {"total_tasks": 1, "completed_tasks": 0, "failed_tasks": 0}
+
+    def crawl_javdb_detail_tasks(self, task, detail_tasks, **kwargs):
+        raise AssertionError("list-stage restart must rerun list collection")
+
+
+def test_execute_run_stops_when_runtime_stop_requested(monkeypatch) -> None:
+    from backend.app.modules.crawler.runtime.service import _execute_run
+
+    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: StopAwareMovieServiceStub())
+    session = TestingSessionLocal()
+    run, _runtime = create_run_with_task("stop-requested")
+    runtime = StopRequestedRuntime(str(run.id))
+
+    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+
+    session.expire_all()
+    refreshed = session.get(CrawlRun, run.id)
+    detail = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "STOP-001").one()
+    assert refreshed.status == "stopped"
+    assert refreshed.finished_at is not None
+    assert refreshed.result["stopped"] is True
+    assert detail.status == "pending_crawl"
+    assert detail.error is None
+
+
+def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch) -> None:
+    from backend.app.modules.crawler.runtime.service import _execute_run
+
+    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: ExistingDetailReuseMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service._persist_crawled_item", lambda db, item_data: uuid.uuid4())
+    session = TestingSessionLocal()
+    run, runtime = create_run_with_task("reuse-existing")
+    existing = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name="任务",
+        code="REUSE-001",
+        source_url="https://javdb.com/v/reuse001",
+        source_name="REUSE 001",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    )
+    session.add(existing)
+    session.commit()
+
+    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+
+    session.expire_all()
+    details = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "REUSE-001").all()
+    assert len(details) == 1
+    assert details[0].status == "saved"
+    assert details[0].error is None
+
+
+def test_execute_run_does_not_treat_list_stage_pending_details_as_detail_restart(monkeypatch) -> None:
+    from backend.app.modules.crawler.runtime.service import _execute_run
+
+    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: ListPhaseRestartMovieServiceStub())
+    session = TestingSessionLocal()
+    run, runtime = create_run_with_task("list-stage")
+    session.add(CrawlRunDetailTask(
+        run_id=run.id,
+        task_name="任务",
+        code="LIST-OLD",
+        source_url="https://javdb.com/v/list-old",
+        source_name="LIST OLD",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    ))
+    session.commit()
+
+    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+
+    session.expire_all()
+    codes = [row.code for row in session.query(CrawlRunDetailTask).order_by(CrawlRunDetailTask.created_at.asc()).all()]
+    assert "LIST-001" in codes

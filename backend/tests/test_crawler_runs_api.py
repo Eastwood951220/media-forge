@@ -201,3 +201,161 @@ def test_restart_copies_unfinished_subtasks(client: TestClient, admin_user, monk
 
     tasks_response = client.get(f"/api/crawler/runs/{new_run['id']}/tasks", headers=headers)
     assert [row["code"] for row in tasks_response.json()["rows"]] == ["B"]
+
+
+def test_stop_running_run_resets_unfinished_detail_tasks_to_pending(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="running", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    session.add_all([
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="P", source_url="https://p", source_name="P", status="pending_crawl", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="C", source_url="https://c", source_name="C", status="crawl_failed", error="timeout", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="F", source_url="https://f", source_name="F", status="save_failed", error="db", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="S", source_url="https://s", source_name="S", status="saved", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="K", source_url="https://k", source_name="K", status="skipped", created_at=datetime.now()),
+    ])
+    session.commit()
+    runtime = RuntimeForStopRestart()
+    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: runtime)
+
+    response = client.post(f"/api/crawler/runs/{run.id}/stop", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["data"]["status"] == "stopped"
+    assert runtime.stopped == [str(run.id)]
+
+    session.expire_all()
+    statuses = {
+        row.code: (row.status, row.error)
+        for row in session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
+    }
+    assert statuses["P"] == ("pending_crawl", None)
+    assert statuses["C"] == ("pending_crawl", None)
+    assert statuses["F"] == ("pending_crawl", None)
+    assert statuses["S"] == ("saved", None)
+    assert statuses["K"] == ("skipped", None)
+
+
+def test_delete_run_removes_only_run_and_detail_tasks(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="completed", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    session.add_all([
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="A", source_url="https://a", source_name="A", status="saved", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="B", source_url="https://b", source_name="B", status="pending_crawl", created_at=datetime.now()),
+    ])
+    session.commit()
+
+    response = client.delete(f"/api/crawler/runs/{run.id}", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["data"] == {"id": str(run.id), "deleted": True}
+    session.expire_all()
+    assert session.get(CrawlRun, run.id) is None
+    assert session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).count() == 0
+
+
+def test_restart_after_detail_phase_requeues_same_run_and_keeps_terminal_details(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
+    task_id = task_response.json()["data"]["id"]
+    session = TestingSessionLocal()
+    run = CrawlRun(
+        task_id=task_id,
+        task_name="任务",
+        status="stopped",
+        crawl_mode="incremental",
+        queued_at=datetime.now(),
+        started_at=datetime.now(),
+        finished_at=datetime.now(),
+        result={"stopped": True},
+        error="用户停止任务",
+    )
+    session.add(run)
+    session.flush()
+    session.add_all([
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="A", source_url="https://a", source_name="A", status="saved", created_at=datetime.now(), crawled_at=datetime.now(), saved_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="B", source_url="https://b", source_name="B", status="crawl_failed", error="timeout", created_at=datetime.now(), crawled_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="C", source_url="https://c", source_name="C", status="skipped", error="already_exists", created_at=datetime.now(), crawled_at=datetime.now()),
+    ])
+    session.commit()
+    runtime = RuntimeForStopRestart()
+    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: runtime)
+
+    response = client.post(f"/api/crawler/runs/{run.id}/restart", headers=headers)
+
+    assert response.status_code == HTTPStatus.CREATED
+    body = response.json()["data"]
+    assert body["id"] == str(run.id)
+    assert body["status"] == "queued"
+    assert body["task_id"] == task_id
+    assert body["started_at"] is None
+    assert body["finished_at"] is None
+    assert body["result"] is None
+    assert body["error"] is None
+    assert runtime.enqueued == [str(run.id)]
+
+    tasks_response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=headers)
+    rows = tasks_response.json()["rows"]
+    assert [(row["code"], row["status"], row["error"]) for row in rows] == [
+        ("A", "saved", None),
+        ("B", "pending_crawl", None),
+        ("C", "skipped", "already_exists"),
+    ]
+
+
+def test_restart_after_list_phase_discards_partial_list_tasks_and_requeues_same_run(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
+    task_id = task_response.json()["data"]["id"]
+    session = TestingSessionLocal()
+    run = CrawlRun(task_id=task_id, task_name="任务", status="stopped", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    session.add_all([
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="P", source_url="https://p", source_name="P", status="pending_crawl", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="K", source_url="https://k", source_name="K", status="skipped", error="already_exists", created_at=datetime.now()),
+    ])
+    session.commit()
+    runtime = RuntimeForStopRestart()
+    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: runtime)
+
+    response = client.post(f"/api/crawler/runs/{run.id}/restart", headers=headers)
+
+    assert response.status_code == HTTPStatus.CREATED
+    body = response.json()["data"]
+    assert body["id"] == str(run.id)
+    assert body["status"] == "queued"
+    assert body["task_id"] == task_id
+    assert runtime.enqueued == [str(run.id)]
+
+    tasks_response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=headers)
+    assert tasks_response.json()["rows"] == []
+
+
+def test_restart_stopped_run_without_subtasks_requeues_same_run(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
+    task_id = task_response.json()["data"]["id"]
+    session = TestingSessionLocal()
+    run = CrawlRun(task_id=task_id, task_name="任务", status="stopped", crawl_mode="incremental")
+    session.add(run)
+    session.commit()
+    runtime = RuntimeForStopRestart()
+    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: runtime)
+
+    response = client.post(f"/api/crawler/runs/{run.id}/restart", headers=headers)
+
+    assert response.status_code == HTTPStatus.CREATED
+    body = response.json()["data"]
+    assert body["id"] == str(run.id)
+    assert body["status"] == "queued"
+    assert body["task_id"] == task_id
+    assert runtime.enqueued == [str(run.id)]
+
+    tasks_response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=headers)
+    assert tasks_response.json()["rows"] == []
