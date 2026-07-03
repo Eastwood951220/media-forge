@@ -26,6 +26,8 @@ export interface CrawlTask {
   owner_id: string
   created_at: string
   updated_at: string | null
+  last_run_at: string | null
+  last_run_status: string | null
 }
 
 export interface PaginatedResponse<T> {
@@ -52,6 +54,8 @@ export interface CrawlTaskUpdateParams {
 
 export interface CrawlTaskStats {
   total: number
+  running: number
+  waiting: number
 }
 
 export type DeleteMode = 'task_only' | 'task_and_movies' | 'task_movies_and_cloud'
