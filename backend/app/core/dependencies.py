@@ -56,6 +56,12 @@ def get_storage_config_service() -> StorageConfigService:
     return StorageConfigService(provider_factory=get_clouddrive_client_factory())
 
 
+def get_storage_task_service(db: DbSession):
+    from backend.app.modules.storage.tasks.service import StorageTaskService
+
+    return StorageTaskService(db=db, config_service=get_storage_config_service())
+
+
 # -- Auth --
 
 
