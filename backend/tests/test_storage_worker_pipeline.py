@@ -95,3 +95,157 @@ def test_execute_current_magnet_attempt_logs_submit_failure(tmp_path, monkeypatc
     assert success is False
     logs = read_storage_subtask_logs(str(subtask.id))
     assert any("提交磁力失败" in entry["message"] for entry in logs)
+
+
+def test_execute_current_magnet_attempt_polls_until_file_appears(monkeypatch, tmp_path):
+    import uuid
+    from dataclasses import dataclass
+    from pathlib import PurePosixPath
+    from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
+
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+
+    class Result:
+        success = True
+        error_message = None
+        result_paths = []
+
+    class File:
+        name = "ABC-123.mp4"
+        full_path = "/Downloads/storage_sub/ABC-123.mp4"
+        size = 500 * 1024 * 1024
+        is_directory = False
+        is_search_result = False
+
+    class PollingProvider:
+        def __init__(self) -> None:
+            self.list_calls = 0
+            self.moved: list[tuple[list[str], str]] = []
+
+        def ensure_directory(self, path):
+            return None
+
+        def submit_offline_download(self, magnet_url, target_folder):
+            return Result()
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            return []
+
+        def list_files(self, path, force_refresh=False):
+            if path.startswith("/Downloads/storage_"):
+                self.list_calls += 1
+                return [] if self.list_calls < 3 else [File()]
+            return []
+
+        def move_files(self, source_paths, target_folder):
+            self.moved.append((source_paths, target_folder))
+            return None
+
+    @dataclass
+    class FakeSubtask:
+        id: uuid.UUID
+        movie_code: str = "ABC-123"
+        renamed_files: list | None = None
+        moved_files: list | None = None
+        result: dict | None = None
+
+    @dataclass
+    class FakeContext:
+        subtask: FakeSubtask
+        config: dict
+        provider: object
+
+    provider = PollingProvider()
+    subtask = FakeSubtask(id=uuid.uuid4())
+    context = FakeContext(
+        subtask=subtask,
+        config={
+            "download_root_folder": "/Downloads",
+            "target_folder": "/Movies",
+            "download_max_poll_count": 5,
+            "download_poll_interval_min": 0,
+            "download_poll_interval_max": 0,
+            "video_extensions": [".mp4"],
+            "minimum_video_size_mb": 100,
+        },
+        provider=provider,
+    )
+
+    success = execute_current_magnet_attempt(
+        context,
+        {"id": "m1", "magnet_url": "magnet:?xt=urn:btih:abc", "tags": [], "weight": 10},
+    )
+
+    assert success is True
+    assert provider.list_calls == 3
+    assert provider.moved == [(["/Downloads/storage_sub/ABC-123.mp4"], "/Movies/ABC-123")]
+
+
+def test_execute_current_magnet_attempt_fails_after_download_poll_limit(monkeypatch, tmp_path):
+    import uuid
+    from dataclasses import dataclass
+    from backend.app.modules.storage.tasks.logs import read_storage_subtask_logs
+    from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
+
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+
+    class Result:
+        success = True
+        error_message = None
+        result_paths = []
+
+    class EmptyProvider:
+        def __init__(self) -> None:
+            self.list_calls = 0
+
+        def ensure_directory(self, path):
+            return None
+
+        def submit_offline_download(self, magnet_url, target_folder):
+            return Result()
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            return []
+
+        def list_files(self, path, force_refresh=False):
+            if path.startswith("/Downloads/storage_"):
+                self.list_calls += 1
+            return []
+
+    @dataclass
+    class FakeSubtask:
+        id: uuid.UUID
+        movie_code: str = "ABC-404"
+
+    @dataclass
+    class FakeContext:
+        subtask: FakeSubtask
+        config: dict
+        provider: object
+
+    provider = EmptyProvider()
+    subtask = FakeSubtask(id=uuid.uuid4())
+    context = FakeContext(
+        subtask=subtask,
+        config={
+            "download_root_folder": "/Downloads",
+            "download_max_poll_count": 3,
+            "download_poll_interval_min": 0,
+            "download_poll_interval_max": 0,
+            "video_extensions": [".mp4"],
+            "minimum_video_size_mb": 100,
+        },
+        provider=provider,
+    )
+
+    success = execute_current_magnet_attempt(
+        context,
+        {"id": "m1", "magnet_url": "magnet:?xt=urn:btih:abc", "tags": [], "weight": 10},
+    )
+
+    assert success is False
+    assert provider.list_calls == 3
+    logs = read_storage_subtask_logs(str(subtask.id))
+    assert any("下载轮询达到最大次数" in entry["message"] for entry in logs)

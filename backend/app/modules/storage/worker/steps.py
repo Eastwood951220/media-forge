@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import random
+import time
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
@@ -41,6 +43,57 @@ def target_files_exist(provider, target_folder: str, filenames: list[str]) -> bo
         return all(name in existing_names for name in filenames)
     except Exception:
         return False
+
+
+def poll_downloaded_video_files(context, search_terms: list[str], search_paths: list[str]) -> list[dict]:
+    from backend.app.modules.storage.worker.file_finder import find_existing_video_files
+
+    config = context.config
+    max_poll_count = int(config.get("download_max_poll_count", 10) or 10)
+    poll_min = float(config.get("download_poll_interval_min", 5.0) or 0)
+    poll_max = float(config.get("download_poll_interval_max", poll_min) or poll_min)
+    if poll_max < poll_min:
+        poll_max = poll_min
+
+    for poll_index in range(1, max_poll_count + 1):
+        found_files = find_existing_video_files(context.provider, search_terms, search_paths, config)
+        if found_files:
+            _subtask_log(
+                context,
+                "INFO",
+                "下载轮询发现可用视频文件",
+                {
+                    "poll_index": poll_index,
+                    "max_poll_count": max_poll_count,
+                    "file_count": len(found_files),
+                    "search_paths": search_paths,
+                },
+            )
+            return found_files
+
+        _subtask_log(
+            context,
+            "INFO",
+            "下载轮询未发现可用视频文件",
+            {
+                "poll_index": poll_index,
+                "max_poll_count": max_poll_count,
+                "search_paths": search_paths,
+            },
+        )
+        if poll_index < max_poll_count:
+            time.sleep(random.uniform(poll_min, poll_max))
+
+    _subtask_log(
+        context,
+        "WARNING",
+        "下载轮询达到最大次数，当前磁力失败",
+        {
+            "max_poll_count": max_poll_count,
+            "search_paths": search_paths,
+        },
+    )
+    return []
 
 
 def execute_current_magnet_attempt(context, magnet: dict) -> bool:
@@ -97,6 +150,12 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
 
     if not result.success:
         logger.warning("Magnet download not successful: %s", result.error_message)
+        _subtask_log(
+            context,
+            "WARNING",
+            f"CloudDrive2 未接受磁力任务: {result.error_message}",
+            {"magnet_id": magnet.get("id")},
+        )
         return False
 
     # Wait for download and find files
@@ -105,7 +164,7 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
     search_terms = [subtask.movie_code]
     search_paths = [download_folder]
 
-    found_files = find_existing_video_files(provider, search_terms, search_paths, config)
+    found_files = poll_downloaded_video_files(context, search_terms, search_paths)
     if not found_files:
         _subtask_log(
             context,
