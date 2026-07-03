@@ -27,6 +27,7 @@ class StorageConfig(BaseModel):
     video_extensions: list[str] = Field(
         default_factory=lambda: [".mp4", ".mkv", ".avi", ".wmv", ".flv", ".mov"]
     )
+    magnet_max_attempts_per_subtask: int = Field(default=3, ge=1)
 
 
 class StorageConfigUpdate(BaseModel):
@@ -50,6 +51,7 @@ class StorageConfigUpdate(BaseModel):
     download_max_poll_count: int | None = Field(default=None, ge=1)
     minimum_video_size_mb: int | None = Field(default=None, ge=0)
     video_extensions: list[str] | None = None
+    magnet_max_attempts_per_subtask: int | None = Field(default=None, ge=1)
 
 
 class StorageConfigResponse(StorageConfig):

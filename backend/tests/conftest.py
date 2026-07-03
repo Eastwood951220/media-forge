@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 import backend.app.models  # noqa: F401
 import shared.database.models.content  # noqa: F401
 from backend.app.core.dependencies import get_db
-from backend.app.core.security import get_password_hash
+from backend.app.core.security import create_access_token, get_password_hash
 from backend.app.main import app
 from backend.app.models.user import User
 from shared.database.models.base import Base
@@ -41,6 +41,37 @@ def setup_db() -> None:
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture
+def db_session():
+    """Provide a transactional database session for test data setup."""
+    session = TestingSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def test_user(db_session) -> User:
+    """Seed a test user in the database."""
+    user = User(
+        username="testuser",
+        hashed_password=get_password_hash("test123"),
+        role="admin",
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def auth_headers(test_user) -> dict[str, str]:
+    """Return authorization headers with a valid JWT token."""
+    token = create_access_token(data={"sub": test_user.username})
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
