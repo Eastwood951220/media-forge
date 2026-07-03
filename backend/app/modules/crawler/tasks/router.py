@@ -19,6 +19,7 @@ from backend.app.repositories.crawl_task import CrawlTaskRepository
 from backend.app.schemas.crawl_task import (
     CrawlTaskCreate,
     CrawlTaskRead,
+    CrawlTaskStats,
     CrawlTaskUpdate,
     ExtractNameRequest,
 )
@@ -72,9 +73,12 @@ def _raise_task_integrity_error(exc: IntegrityError, *, name: str | None = None)
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="创建任务失败，请检查数据库表结构") from exc
 
 
-def _serialize(task) -> CrawlTaskRead:
+def _serialize(task, latest_run=None) -> CrawlTaskRead:
     data = CrawlTaskRead.model_validate(task)
     data._id = data.id
+    if latest_run is not None:
+        data.last_run_at = latest_run.created_at
+        data.last_run_status = latest_run.status
     return data
 
 
@@ -82,20 +86,27 @@ def _serialize(task) -> CrawlTaskRead:
 def list_tasks(
     current_user: CurrentUser,
     db: Session = Depends(get_db),
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=20, ge=1, le=100),
+    skip: int | None = Query(default=None, ge=0),
+    limit: int | None = Query(default=None, ge=1, le=1000),
     keyword: str | None = Query(default=None, max_length=200),
 ) -> dict:
     repo = CrawlTaskRepository(db)
     rows = repo.get_by_owner(current_user.id, skip=skip, limit=limit, keyword=keyword)
     total = repo.count_by_owner(current_user.id, keyword=keyword)
-    return paginated(rows=[_serialize(row).model_dump(mode="json") for row in rows], total=total)
+    latest_runs = repo.get_latest_runs_by_task_ids([row.id for row in rows])
+    return paginated(
+        rows=[
+            _serialize(row, latest_runs.get(row.id)).model_dump(mode="json")
+            for row in rows
+        ],
+        total=total,
+    )
 
 
 @router.get("/stats")
 def get_stats(current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
     repo = CrawlTaskRepository(db)
-    return success(data={"total": repo.count_by_owner(current_user.id)})
+    return success(data=CrawlTaskStats(**repo.get_summary_stats(current_user.id)).model_dump())
 
 
 @router.get("/dict")

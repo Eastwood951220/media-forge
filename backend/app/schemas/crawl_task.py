@@ -58,6 +58,8 @@ class CrawlTaskRead(BaseModel):
     owner_id: uuid.UUID
     created_at: datetime
     updated_at: datetime | None = None
+    last_run_at: datetime | None = None
+    last_run_status: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -69,6 +71,12 @@ class ExtractNameRequest(BaseModel):
 
 class ExtractNameResponse(BaseModel):
     name: str
+
+
+class CrawlTaskStats(BaseModel):
+    total: int
+    running: int
+    waiting: int
 
 
 # -- Movie list schemas --

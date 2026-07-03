@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
+from backend.app.models.crawl_run import CrawlRun
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.models.enums import TaskStatus
 from backend.app.repositories.base import BaseRepository
@@ -31,17 +32,16 @@ class CrawlTaskRepository(BaseRepository):
         self,
         owner_id: uuid.UUID,
         *,
-        skip: int = 0,
-        limit: int = 20,
+        skip: int | None = None,
+        limit: int | None = None,
         keyword: str | None = None,
     ) -> list[CrawlTask]:
-        return (
-            self._owner_query(owner_id, keyword)
-            .order_by(CrawlTask.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        query = self._owner_query(owner_id, keyword).order_by(CrawlTask.created_at.desc())
+        if skip is not None:
+            query = query.offset(skip)
+        if limit is not None:
+            query = query.limit(limit)
+        return query.all()
 
     def count_by_owner(self, owner_id: uuid.UUID, keyword: str | None = None) -> int:
         query = self.session.query(CrawlTask).filter(CrawlTask.owner_id == owner_id)
@@ -185,3 +185,33 @@ class CrawlTaskRepository(BaseRepository):
             .all()
         )
         return [{"id": str(row.id), "name": row.name} for row in rows]
+
+    def get_summary_stats(self, owner_id: uuid.UUID) -> dict[str, int]:
+        rows = (
+            self.session.query(CrawlTask.status, func.count(CrawlTask.id))
+            .filter(CrawlTask.owner_id == owner_id)
+            .group_by(CrawlTask.status)
+            .all()
+        )
+        counts = {str(status): int(count) for status, count in rows}
+        return {
+            "total": sum(counts.values()),
+            "running": counts.get(TaskStatus.RUNNING.value, 0),
+            "waiting": counts.get(TaskStatus.PENDING.value, 0),
+        }
+
+    def get_latest_runs_by_task_ids(self, task_ids: list[uuid.UUID]) -> dict[uuid.UUID, CrawlRun]:
+        if not task_ids:
+            return {}
+
+        rows = (
+            self.session.query(CrawlRun)
+            .filter(CrawlRun.task_id.in_(task_ids))
+            .order_by(CrawlRun.task_id.asc(), CrawlRun.created_at.desc())
+            .all()
+        )
+        latest: dict[uuid.UUID, CrawlRun] = {}
+        for row in rows:
+            if row.task_id is not None and row.task_id not in latest:
+                latest[row.task_id] = row
+        return latest

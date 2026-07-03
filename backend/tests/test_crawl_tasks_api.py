@@ -1,6 +1,11 @@
+from datetime import datetime
 from http import HTTPStatus
 
 from fastapi.testclient import TestClient
+
+from backend.app.models.crawl_run import CrawlRun
+from backend.app.models.crawl_task import CrawlTask
+from backend.tests.conftest import TestingSessionLocal
 
 
 def auth_headers(client: TestClient, admin_user) -> dict[str, str]:
@@ -206,3 +211,91 @@ class TestCrawlTasksApi:
         detail_response = client.get(f"/api/crawler/tasks/{task_id}", headers=headers)
         assert detail_response.status_code == HTTPStatus.OK
         assert detail_response.json()["data"]["urls"][0]["url_name"] == "演员 QV49G"
+
+    def test_list_tasks_without_pagination_returns_all_matching_rows(
+        self,
+        client: TestClient,
+        admin_user,
+    ) -> None:
+        headers = auth_headers(client, admin_user)
+        session = TestingSessionLocal()
+        session.add_all(
+            [
+                CrawlTask(name=f"任务{i:02d}", storage_location=f"P{i:02d}"[:10], owner_id=admin_user.id)
+                for i in range(25)
+            ]
+        )
+        session.commit()
+        session.close()
+
+        response = client.get("/api/crawler/tasks", headers=headers)
+
+        assert response.status_code == HTTPStatus.OK
+        body = response.json()
+        assert body["total"] == 25
+        assert len(body["rows"]) == 25
+
+    def test_stats_returns_total_running_and_waiting_counts(
+        self,
+        client: TestClient,
+        admin_user,
+    ) -> None:
+        headers = auth_headers(client, admin_user)
+        session = TestingSessionLocal()
+        session.add_all(
+            [
+                CrawlTask(name="待处理任务", storage_location="PENDING", owner_id=admin_user.id, status="pending"),
+                CrawlTask(name="运行中任务", storage_location="RUNNING", owner_id=admin_user.id, status="running"),
+                CrawlTask(name="成功任务", storage_location="SUCCESS", owner_id=admin_user.id, status="success"),
+            ]
+        )
+        session.commit()
+        session.close()
+
+        response = client.get("/api/crawler/tasks/stats", headers=headers)
+
+        assert response.status_code == HTTPStatus.OK
+        assert response.json()["data"] == {
+            "total": 3,
+            "running": 1,
+            "waiting": 1,
+        }
+
+    def test_list_tasks_returns_latest_run_metadata(
+        self,
+        client: TestClient,
+        admin_user,
+    ) -> None:
+        headers = auth_headers(client, admin_user)
+        session = TestingSessionLocal()
+        task = CrawlTask(name="有码任务", storage_location="AV", owner_id=admin_user.id, status="success")
+        session.add(task)
+        session.flush()
+        session.add_all(
+            [
+                CrawlRun(
+                    task_id=task.id,
+                    task_name=task.name,
+                    status="failed",
+                    crawl_mode="incremental",
+                    created_at=datetime(2026, 7, 2, 8, 0, 0),
+                ),
+                CrawlRun(
+                    task_id=task.id,
+                    task_name=task.name,
+                    status="completed",
+                    crawl_mode="full",
+                    created_at=datetime(2026, 7, 3, 8, 0, 0),
+                ),
+            ]
+        )
+        session.commit()
+        session.close()
+
+        response = client.get("/api/crawler/tasks", headers=headers)
+
+        assert response.status_code == HTTPStatus.OK
+        row = response.json()["rows"][0]
+        assert row["name"] == "有码任务"
+        assert row["last_run_status"] == "completed"
+        assert row["last_run_at"].startswith("2026-07-03T08:00:00")
