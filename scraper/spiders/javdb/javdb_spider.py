@@ -143,9 +143,19 @@ class JavdbSpider(BaseSpider):
                                 f"(>= 阈值 {incremental_threshold}), 跳过后续页面"
                             )
                             self._emit(msg, log_callback, "INFO")
-                            detail_tasks.extend(fresh_tasks)
-                            if on_tasks_batch_created and fresh_tasks:
-                                on_tasks_batch_created(fresh_tasks)
+                            non_skipped_tasks = [
+                                item for item in fresh_tasks
+                                if item.get("status") != TASK_STATUS_SKIPPED
+                            ]
+                            if non_skipped_tasks:
+                                detail_tasks.extend(non_skipped_tasks)
+                                if on_tasks_batch_created:
+                                    on_tasks_batch_created(non_skipped_tasks)
+                            msg = (
+                                f"[{task_name}] 当前 URL 达到增量阈值，"
+                                "停止该 URL 后续列表页，继续下一个 URL"
+                            )
+                            self._emit(msg, log_callback, "INFO")
                             break
 
             detail_tasks.extend(fresh_tasks)
