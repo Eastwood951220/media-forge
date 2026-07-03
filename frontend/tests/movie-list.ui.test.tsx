@@ -11,6 +11,7 @@ import {
   fetchTaskNames,
   updateMovieFilterConfig,
 } from '../src/api/movie'
+import { getTaskDict } from '../src/api/crawlTask'
 
 vi.mock('../src/api/movie', () => ({
   fetchMovies: vi.fn(),
@@ -19,6 +20,10 @@ vi.mock('../src/api/movie', () => ({
   fetchFilters: vi.fn(),
   fetchMovieFilterConfig: vi.fn(),
   updateMovieFilterConfig: vi.fn(),
+}))
+
+vi.mock('../src/api/crawlTask', () => ({
+  getTaskDict: vi.fn(),
 }))
 
 function renderPage() {
@@ -67,6 +72,16 @@ const movie = {
   selected_magnet_dedupe_key: 'abc',
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
+}
+
 describe('MovieListPage', () => {
   beforeEach(() => {
     vi.mocked(fetchMovies).mockResolvedValue({
@@ -78,6 +93,7 @@ describe('MovieListPage', () => {
     })
     vi.mocked(fetchMovie).mockResolvedValue(movie)
     vi.mocked(fetchTaskNames).mockResolvedValue([{ name: '任务A' }])
+    vi.mocked(getTaskDict).mockResolvedValue([{ id: 'task-1', name: '任务A' }])
     vi.mocked(fetchFilters).mockImplementation(async (type) => {
       if (type === 'actor') return ['演员A']
       if (type === 'tag') return ['标签A']
@@ -88,6 +104,58 @@ describe('MovieListPage', () => {
     })
     vi.mocked(fetchMovieFilterConfig).mockResolvedValue({ _key: 'default', filters: {} })
     vi.mocked(updateMovieFilterConfig).mockResolvedValue({ success: true })
+  })
+
+  it('hides configured filters and does not call option or list APIs before filter config completes', () => {
+    const configRequest = deferred<Awaited<ReturnType<typeof fetchMovieFilterConfig>>>()
+    vi.mocked(fetchMovieFilterConfig).mockReturnValue(configRequest.promise)
+
+    renderPage()
+
+    expect(screen.queryByText('筛选演员')).not.toBeInTheDocument()
+    expect(screen.queryByText('筛选标签')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /配置/ })).not.toBeInTheDocument()
+    expect(getTaskDict).not.toHaveBeenCalled()
+    expect(fetchFilters).not.toHaveBeenCalled()
+    expect(fetchMovies).not.toHaveBeenCalled()
+  })
+
+  it('loads configured filters and movie list after filter config completes', async () => {
+    const configRequest = deferred<Awaited<ReturnType<typeof fetchMovieFilterConfig>>>()
+    vi.mocked(fetchMovieFilterConfig).mockReturnValue(configRequest.promise)
+
+    renderPage()
+
+    expect(fetchMovies).not.toHaveBeenCalled()
+    expect(fetchFilters).not.toHaveBeenCalled()
+
+    configRequest.resolve({
+      _key: 'default',
+      filters: {
+        actors: { visible: true, order: 0 },
+        tags: { visible: false, order: 1 },
+        sortBy: { visible: true, order: 2, defaultValue: 'rating:-1' },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByText('筛选演员')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByText('筛选标签')).not.toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(getTaskDict).toHaveBeenCalledTimes(1)
+      expect(fetchFilters).toHaveBeenCalled()
+      expect(fetchMovies).toHaveBeenCalledTimes(1)
+    })
+
+    expect(fetchMovies).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 1,
+      limit: 20,
+      sort_by: 'rating',
+      sort_order: -1,
+    }))
   })
 
   it('renders filters with settings button and opens read-only detail', async () => {

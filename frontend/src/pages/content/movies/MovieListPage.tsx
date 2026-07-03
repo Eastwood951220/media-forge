@@ -24,24 +24,32 @@ function parseSortDefault(config: MovieFilterConfig | undefined): { sortBy: stri
 }
 
 function MovieListPage() {
-  const filters = useMovieFilters()
+  const configHook = useMovieFilterConfig()
+  const filterConfig = useMemo(
+    () => configHook.config as Record<string, FilterItemConfig>,
+    [configHook.config],
+  )
+  const filters = useMovieFilters({
+    enabled: configHook.loaded,
+    filterConfig: configHook.config,
+  })
+  const listReady = configHook.loaded && filters.optionsLoaded
   const effectiveParams = useMemo(
-    () => (filters.filtersLoading ? undefined : filters.requestParams),
-    [filters.filtersLoading, filters.requestParams],
+    () => (listReady ? filters.requestParams : undefined),
+    [listReady, filters.requestParams],
   )
   const list = useMovieList(effectiveParams)
   const detail = useMovieDetail()
-  const configHook = useMovieFilterConfig()
 
   const configSortParsed = useRef(false)
   useEffect(() => {
-    if (configSortParsed.current) return
+    if (!configHook.loaded || configSortParsed.current) return
     const sortDefault = parseSortDefault(configHook.config)
     if (sortDefault) {
       list.resetSort(sortDefault)
       configSortParsed.current = true
     }
-  }, [configHook.config, list.resetSort])
+  }, [configHook.loaded, configHook.config, list.resetSort])
 
   const handleDetailFilterClick = useCallback((field: string, value: string) => {
     detail.closeDetail()
@@ -89,11 +97,21 @@ function MovieListPage() {
     }
   }, [detail])
 
-  const filterConfig = useMemo(() => configHook.config as Record<string, FilterItemConfig>, [configHook.config])
   const columns = useMemo(
     () => createMovieColumns({ onViewDetail: detail.showDetail }),
     [detail.showDetail],
   )
+
+  const queryNode = configHook.loaded ? (
+    <MovieFilterBar
+      filters={filters}
+      sort={{ sortBy: list.sortBy, sortOrder: list.sortOrder, onChange: list.handleSortChange }}
+      filterConfig={filterConfig}
+      onSearch={list.search}
+      onReset={handleResetFilters}
+      onConfigClick={() => configHook.setDrawerOpen(true)}
+    />
+  ) : undefined
 
   return (
     <div className={styles.page}>
@@ -101,7 +119,7 @@ function MovieListPage() {
         rowKey="_id"
         columns={columns}
         dataSource={list.data.items}
-        loading={list.loading}
+        loading={configHook.loading || filters.filtersLoading || list.loading}
         rowSelection={{
           selectedRowKeys: list.selectedRowKeys,
           onChange: list.setSelectedRowKeys,
@@ -114,17 +132,8 @@ function MovieListPage() {
           pageSizeOptions: ['20', '50', '100'],
           showTotal: (count) => `共 ${count} 条`,
         }}
-        queryNode={(
-          <MovieFilterBar
-            filters={filters}
-            sort={{ sortBy: list.sortBy, sortOrder: list.sortOrder, onChange: list.handleSortChange }}
-            filterConfig={filterConfig}
-            onSearch={list.search}
-            onReset={handleResetFilters}
-            onConfigClick={() => configHook.setDrawerOpen(true)}
-          />
-        )}
-        onRefresh={list.reload}
+        queryNode={queryNode}
+        onRefresh={listReady ? list.reload : undefined}
         tableProps={{
           onChange: (pagination, _filters, sorter) => {
             const newPage = pagination.current ?? 1
