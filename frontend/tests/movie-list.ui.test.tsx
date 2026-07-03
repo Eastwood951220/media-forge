@@ -90,12 +90,14 @@ describe('MovieListPage', () => {
     vi.mocked(updateMovieFilterConfig).mockResolvedValue({ success: true })
   })
 
-  it('renders restored filters and opens read-only detail', async () => {
+  it('renders filters without settings and opens read-only detail', async () => {
     renderPage()
 
     expect(await screen.findByText('AAA-001')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('搜索番号、标题...')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /配置/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /配置/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '隐藏搜索' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '刷新列表' })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /详情/ }))
 
@@ -107,23 +109,20 @@ describe('MovieListPage', () => {
     expect(screen.queryByText('标记')).not.toBeInTheDocument()
   })
 
-  it('persists filter drawer settings', async () => {
+  it('does not persist filter drawer settings because the settings entry is removed', async () => {
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: /配置/ }))
-    expect(await screen.findByText('筛选条件配置')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: '保存配置' }))
-
-    await waitFor(() => {
-      expect(updateMovieFilterConfig).toHaveBeenCalled()
-    })
+    expect(await screen.findByText('AAA-001')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /配置/ })).not.toBeInTheDocument()
+    expect(updateMovieFilterConfig).not.toHaveBeenCalled()
   })
 
   it('sends original filter params when searching', async () => {
     renderPage()
 
     await userEvent.type(await screen.findByPlaceholderText('搜索番号、标题...'), 'AAA')
-    await userEvent.click(screen.getByRole('button', { name: /搜\s*索/ }))
+    const searchButtons = screen.getAllByRole('button', { name: /搜\s*索/ })
+    await userEvent.click(searchButtons[0])
 
     await waitFor(() => {
       expect(fetchMovies).toHaveBeenLastCalledWith(expect.objectContaining({
