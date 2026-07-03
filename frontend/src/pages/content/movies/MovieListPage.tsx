@@ -3,6 +3,7 @@ import { DEFAULT_MOVIE_PAGE } from './constants'
 import BaseListPage from '@/components/BaseListPage'
 import type { FilterItemConfig } from '@/api/movie'
 import type { Movie, MovieFilterConfig } from '@/api/movie/types'
+import FilterConfigDrawer from './components/FilterConfigDrawer'
 import MovieDetailDrawer from './components/MovieDetailDrawer'
 import MovieFilterBar from './components/MovieFilterBar'
 import { createMovieColumns } from './components/MovieTable'
@@ -102,7 +103,7 @@ function MovieListPage() {
           onChange: list.setSelectedRowKeys,
         }}
         pagination={{
-          current: list.data.page,
+          current: list.page,
           total: list.data.total,
           pageSize: list.pageSize,
           showSizeChanger: true,
@@ -116,6 +117,7 @@ function MovieListPage() {
             filterConfig={filterConfig}
             onSearch={list.search}
             onReset={handleResetFilters}
+            onConfigClick={() => configHook.setDrawerOpen(true)}
           />
         )}
         onRefresh={list.reload}
@@ -123,7 +125,7 @@ function MovieListPage() {
           onChange: (pagination, _filters, sorter) => {
             const newPage = pagination.current ?? 1
             const newPageSize = pagination.pageSize ?? 20
-            if (newPage !== list.data.page || newPageSize !== list.pageSize) {
+            if (newPage !== list.page || newPageSize !== list.pageSize) {
               list.handlePageChange(newPage, newPageSize)
             }
 
@@ -142,6 +144,13 @@ function MovieListPage() {
         detail={detail.detail}
         onClose={detail.closeDetail}
         onFilterClick={handleDetailFilterClick}
+      />
+
+      <FilterConfigDrawer
+        open={configHook.drawerOpen}
+        onClose={() => configHook.setDrawerOpen(false)}
+        config={filterConfig}
+        onSave={(cfg) => configHook.setConfig(cfg as typeof configHook.config)}
       />
     </div>
   )
