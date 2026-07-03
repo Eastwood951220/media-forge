@@ -22,6 +22,41 @@ const levelColors: Record<string, string> = {
   ERROR: 'error',
 }
 
+const stepOrder = [
+  'prepare',
+  'submit_magnet',
+  'waiting_download',
+  'scan_files',
+  'select_videos',
+  'rename_files',
+  'move_files',
+  'verify_result',
+  'cleanup_files',
+]
+
+const stepLabels: Record<string, string> = {
+  prepare: '准备任务',
+  submit_magnet: '提交磁力',
+  waiting_download: '云端下载',
+  scan_files: '扫描文件',
+  select_videos: '识别主视频',
+  rename_files: '重命名',
+  move_files: '移动文件',
+  verify_result: '校验结果',
+  cleanup_files: '清理临时文件',
+}
+
+function logsForStep(logs: StorageTaskLog[], step: string) {
+  return logs.filter((log) => log.step === step || log.context?.step === step)
+}
+
+function stepColor(subtask: StorageSubTask, logs: StorageTaskLog[], step: string) {
+  if (logs.some((log) => log.level === 'ERROR')) return 'red'
+  if (logs.length > 0) return 'green'
+  if (subtask.step === step) return 'blue'
+  return 'gray'
+}
+
 function formatTime(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -83,7 +118,8 @@ function StorageSubTaskDetailPage() {
     const unsubscribeLog = subscribeRealtime<StorageTaskLog>(
       'storage.sub.log.appended',
       (event: RealtimeEvent<StorageTaskLog>) => {
-        setLogs((current) => [...current, event.payload])
+        if (event.resource_id !== id) return
+        setLogs((current) => current.concat(event.payload))
       },
     )
 
@@ -173,6 +209,38 @@ function StorageSubTaskDetailPage() {
             ) : (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无跳过文件" />
             )}
+          </Card>
+
+          <Card title="步骤时间线" style={{ marginBottom: 16 }}>
+            <Timeline
+              items={stepOrder.map((step) => {
+                const stepLogs = logsForStep(logs, step)
+                const lastLog = stepLogs.at(-1)
+                return {
+                  color: stepColor(subtask, stepLogs, step),
+                  children: (
+                    <div className={styles.stepTimelineItem}>
+                      <div className={styles.stepTimelineHeader}>
+                        <Typography.Text strong>{stepLabels[step]}</Typography.Text>
+                        <Typography.Text type="secondary">{step}</Typography.Text>
+                      </div>
+                      {lastLog ? (
+                        <Typography.Text
+                          type={lastLog.level === 'ERROR' ? 'danger' : 'secondary'}
+                          className={styles.stepTimelineMessage}
+                        >
+                          {formatTime(lastLog.timestamp)} {lastLog.message}
+                        </Typography.Text>
+                      ) : (
+                        <Typography.Text type="secondary" className={styles.stepTimelineMessage}>
+                          等待执行
+                        </Typography.Text>
+                      )}
+                    </div>
+                  ),
+                }
+              })}
+            />
           </Card>
 
           <Card title="任务日志">

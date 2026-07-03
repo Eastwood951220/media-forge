@@ -1,6 +1,6 @@
 import type { CrawlTaskRuntimeSnapshot } from '@/api/crawlTask/types'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
-import type { StorageMainTask } from '@/api/storage/storageTasks/types'
+import type { StorageMainTask, StorageTaskLog } from '@/api/storage/storageTasks/types'
 
 export type RealtimeEvent<TPayload = Record<string, unknown>> = {
   id: string
@@ -36,6 +36,8 @@ export type StorageSubUpdatedPayload = {
   step: string
   error_message?: string | null
 }
+
+export type StorageSubLogAppendedPayload = StorageTaskLog
 
 export type MovieStorageUpdatedPayload = {
   movie_id: string

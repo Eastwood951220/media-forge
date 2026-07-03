@@ -50,6 +50,9 @@ export interface StorageTaskLog {
   level: string
   message: string
   context: Record<string, unknown>
+  step?: string
+  step_label?: string
+  event?: string
 }
 
 export interface StorageSinglePushPayload {
