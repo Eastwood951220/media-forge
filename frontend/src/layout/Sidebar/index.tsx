@@ -51,6 +51,11 @@ const menuItems: MenuProps['items'] = [
     label: '存储',
     children: [
       {
+        key: '/storage/tasks',
+        icon: <HistoryOutlined />,
+        label: '存储任务',
+      },
+      {
         key: '/storage/config',
         icon: <SettingOutlined />,
         label: '存储配置',
@@ -85,11 +90,13 @@ export function SideMenu({ collapsed }: SideMenuProps) {
       ? '/crawler/runs'
       : pathname.startsWith('/crawler/config')
         ? '/crawler/config'
-        : pathname.startsWith('/storage/config')
-          ? '/storage/config'
-          : pathname.startsWith('/content/movies')
-            ? '/content/movies'
-            : pathname
+        : pathname.startsWith('/storage/tasks')
+          ? '/storage/tasks'
+          : pathname.startsWith('/storage/config')
+            ? '/storage/config'
+            : pathname.startsWith('/content/movies')
+              ? '/content/movies'
+              : pathname
   const selectedKeys = useMemo(() => [selectedKey === '/' ? '/' : selectedKey], [selectedKey])
   const openKeys = useMemo(() => {
     const keys: string[] = []

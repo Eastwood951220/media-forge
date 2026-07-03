@@ -12,6 +12,9 @@ import RunListPage from '@/pages/crawler/runs/RunListPage'
 import RunDetailPage from '@/pages/crawler/runs/RunDetailPage'
 import MovieListPage from '@/pages/content/movies/MovieListPage'
 import StorageConfigPage from '@/pages/storage/config/StorageConfigPage'
+import StorageTaskListPage from '@/pages/storage/tasks/StorageTaskListPage'
+import StorageTaskDetailPage from '@/pages/storage/tasks/StorageTaskDetailPage'
+import StorageSubTaskDetailPage from '@/pages/storage/tasks/StorageSubTaskDetailPage'
 import AppLayout from '@/layout'
 
 const rootRoute = createRootRoute({
@@ -119,6 +122,24 @@ const storageConfigRoute = createRoute({
   component: StorageConfigPage,
 })
 
+const storageTasksRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/storage/tasks',
+  component: StorageTaskListPage,
+})
+
+const storageTaskDetailRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/storage/tasks/$id',
+  component: StorageTaskDetailPage,
+})
+
+const storageSubTaskDetailRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/storage/tasks/subtasks/$id',
+  component: StorageSubTaskDetailPage,
+})
+
 const contentMoviesRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/content/movies',
@@ -146,6 +167,9 @@ const routeTree = rootRoute.addChildren([
     crawlerRunsRoute,
     crawlerRunDetailRoute,
     storageConfigRoute,
+    storageTasksRoute,
+    storageTaskDetailRoute,
+    storageSubTaskDetailRoute,
     contentMoviesRoute,
     legacyCrawlTasksRoute,
   ]),
