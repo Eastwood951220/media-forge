@@ -89,6 +89,18 @@ def list_run_tasks(
     )
 
 
+@router.delete("/{run_id}")
+def delete_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+    run = db.get(CrawlRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    if run.status == "running":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete a running task")
+    db.delete(run)
+    db.commit()
+    return success(message="Run deleted")
+
+
 @router.post("/{run_id}/stop")
 def stop_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
     try:

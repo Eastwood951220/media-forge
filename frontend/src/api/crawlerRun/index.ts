@@ -43,6 +43,10 @@ export function stopCrawlerRun(runId: string): Promise<CrawlRun> {
   return request.post<CrawlRun>(`${BASE_URL}/${runId}/stop`)
 }
 
+export function deleteCrawlerRun(runId: string): Promise<void> {
+  return request.delete<void>(`${BASE_URL}/${runId}`)
+}
+
 export function restartCrawlerRun(runId: string): Promise<CrawlRun> {
   return request.post<CrawlRun>(`${BASE_URL}/${runId}/restart`)
 }

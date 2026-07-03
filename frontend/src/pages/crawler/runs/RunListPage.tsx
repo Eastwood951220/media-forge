@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
-import { Button, Space, Table, Tag, message } from 'antd'
+import { Button, Modal, Space, Table, Tag, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
+import { deleteCrawlerRun, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlRun } from '@/api/crawlerRun/types'
 
 const statusLabels: Record<string, { text: string; color: string }> = {
@@ -58,6 +58,25 @@ function RunListPage() {
       const msg = err instanceof Error ? err.message : '重启失败'
       message.error(msg)
     }
+  }, [current, fetchRuns])
+
+  const handleDelete = useCallback((run: CrawlRun) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除运行记录"${run.task_name}"吗？此操作不可恢复。`,
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await deleteCrawlerRun(run.id)
+          message.success('已删除运行记录')
+          void fetchRuns(current)
+        } catch {
+          message.error('删除失败')
+        }
+      },
+    })
   }, [current, fetchRuns])
 
   const columns: ColumnsType<CrawlRun> = [
@@ -117,6 +136,16 @@ function RunListPage() {
               onClick={() => handleRestart(record)}
             >
               重启
+            </Button>
+          )}
+          {record.status !== 'running' && (
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDelete(record)}
+            >
+              删除
             </Button>
           )}
         </Space>
