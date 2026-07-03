@@ -22,6 +22,13 @@ from backend.app.schemas.crawl_task import (
     CrawlTaskStats,
     CrawlTaskUpdate,
     ExtractNameRequest,
+    TaskRuntimeStatus,
+    TaskRuntimeStatusResponse,
+)
+from backend.app.modules.crawler.tasks.runtime_status import (
+    can_delete_task,
+    get_all_task_runtime_statuses,
+    get_latest_runs_by_task_ids,
 )
 from scraper.config.settings import REQUEST_TIMEOUT
 from scraper.config.sites import JAVDB_SITE
@@ -113,6 +120,20 @@ def get_stats(current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
 def task_dict(current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
     """Return task ID-to-name mapping for frontend use."""
     return success(data=CrawlTaskRepository(db).get_dict_by_owner(current_user.id))
+
+
+@router.get("/statuses")
+def get_task_statuses(current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+    """Return derived runtime status for all tasks.
+
+    Status is derived from each task's latest crawl run, not persisted.
+    """
+    statuses = get_all_task_runtime_statuses(db, current_user.id)
+    return success(
+        data=TaskRuntimeStatusResponse(
+            tasks=[TaskRuntimeStatus(**s) for s in statuses]
+        ).model_dump(mode="json")
+    )
 
 
 @router.post("/extract-name")
@@ -235,6 +256,14 @@ def delete_task_endpoint(
     task = repo.get_owned(task_id, current_user.id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    # Check runtime status before allowing delete
+    latest_runs = get_latest_runs_by_task_ids(db, [task_id])
+    if not can_delete_task(latest_runs.get(task_id)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="任务正在运行中，无法删除",
+        )
 
     if mode not in VALID_DELETE_MODES:
         raise HTTPException(

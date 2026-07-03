@@ -74,3 +74,16 @@ export interface TaskDictItem {
   id: string
   name: string
 }
+
+export interface TaskRuntimeStatus {
+  task_id: string
+  name: string
+  is_skip: boolean
+  status: 'pending' | 'running' | 'success' | 'failed'
+  latest_run_id: string | null
+  latest_run_status: string | null
+}
+
+export interface TaskRuntimeStatusResponse {
+  tasks: TaskRuntimeStatus[]
+}

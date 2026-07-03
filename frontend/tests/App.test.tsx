@@ -18,8 +18,16 @@ vi.mock('@/api/init', () => ({
 
 vi.mock('@/api/crawlTask', () => ({
   getCrawlTasks: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+  getCrawlTaskRuntimeStatuses: vi.fn().mockResolvedValue({ tasks: [] }),
+  getCrawlTaskStats: vi.fn().mockResolvedValue({ total: 0, enabled: 0, disabled: 0 }),
   deleteCrawlTask: vi.fn().mockResolvedValue(undefined),
   updateCrawlTask: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/realtime/eventSourceClient', () => ({
+  subscribeRealtime: vi.fn(() => vi.fn()),
+  connectRealtime: vi.fn(),
+  disconnectRealtime: vi.fn(),
 }))
 
 vi.mock('@/api/crawlerConfig', () => ({

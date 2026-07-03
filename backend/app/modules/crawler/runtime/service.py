@@ -17,6 +17,10 @@ from backend.app.modules.crawler.runtime.source_task_names import (
     find_existing_movie_codes,
     movie_code_exists,
 )
+from backend.app.modules.crawler.tasks.runtime_status import (
+    derive_runtime_status,
+    publish_task_status_updated,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +46,10 @@ def cleanup_interrupted_runs(db: Session, runtime: CrawlerRuntimeState) -> int:
         run.finished_at = run.finished_at or now
         run.error = "服务重启，任务已停止，需手动重启"
         reset_unfinished_detail_tasks_to_pending(db, run)
+        if run.task_id is not None:
+            owner_id = _run_owner_id(db, run)
+            if owner_id:
+                publish_task_status_updated(owner_id, run.task_id, "pending")
     db.commit()
     return len(rows)
 
@@ -121,6 +129,10 @@ class CrawlerRunService:
         if reset_details:
             publish_run_detail_updated(self.db, run, reset_details)
         publish_run_updated(self.db, run)
+        if run.task_id is not None:
+            owner_id = _run_owner_id(self.db, run)
+            if owner_id:
+                publish_task_status_updated(owner_id, run.task_id, "pending")
         return run
 
     def restart_run(self, run_id: uuid.UUID) -> CrawlRun:
@@ -200,6 +212,10 @@ def process_run(db_factory: sessionmaker, runtime: CrawlerRuntimeState, run_id: 
         run.started_at = datetime.now()
         db.commit()
         publish_run_updated(db, run)
+        if run.task_id is not None:
+            owner_id = _run_owner_id(db, run)
+            if owner_id:
+                publish_task_status_updated(owner_id, run.task_id, "running")
 
         runtime.set_current_run(run_id)
 
@@ -212,6 +228,10 @@ def process_run(db_factory: sessionmaker, runtime: CrawlerRuntimeState, run_id: 
             run.finished_at = datetime.now()
             db.commit()
             publish_run_updated(db, run)
+            if run.task_id is not None:
+                owner_id = _run_owner_id(db, run)
+                if owner_id:
+                    publish_task_status_updated(owner_id, run.task_id, "failed")
         finally:
             runtime.set_current_run(None)
             runtime.write_progress(run_id, {})
@@ -613,6 +633,10 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
                 f"任务已停止: 总计={total_count}, 已保存={saved_count}, 入库失败={save_failed_count}, 爬取失败={crawl_failed_count}, 跳过={skipped_count}",
                 "WARNING",
             )
+            if run.task_id is not None:
+                owner_id = _run_owner_id(db, run)
+                if owner_id:
+                    publish_task_status_updated(owner_id, run.task_id, "pending")
         else:
             run.status = "completed"
             append_run_log_for_run(
@@ -620,6 +644,10 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
                 f"任务完成: 总计={total_count}, 已保存={saved_count}, 入库失败={save_failed_count}, 爬取失败={crawl_failed_count}, 跳过={skipped_count}",
                 "INFO",
             )
+            if run.task_id is not None:
+                owner_id = _run_owner_id(db, run)
+                if owner_id:
+                    publish_task_status_updated(owner_id, run.task_id, "success")
             try:
                 from scraper.database.repositories.filter_repository import sync_movie_filters
 
@@ -638,6 +666,10 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
         append_run_log_for_run(db, run, "MovieService 不可用，使用空结果完成运行", "WARNING")
         run.result = {"total_tasks": 0, "completed_tasks": 0, "failed_tasks": 0}
         run.status = "completed"
+        if run.task_id is not None:
+            owner_id = _run_owner_id(db, run)
+            if owner_id:
+                publish_task_status_updated(owner_id, run.task_id, "success")
     except Exception as exc:
         raise
 

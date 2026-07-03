@@ -8,6 +8,7 @@ import type {
   DeleteTaskResult,
   PaginatedResponse,
   TaskDictItem,
+  TaskRuntimeStatusResponse,
 } from './types'
 
 const BASE_URL = '/api/crawler/tasks'
@@ -52,4 +53,8 @@ export function extractTaskName(url: string, urlType: string): Promise<{ name: s
     url,
     url_type: urlType,
   })
+}
+
+export function getCrawlTaskRuntimeStatuses(): Promise<TaskRuntimeStatusResponse> {
+  return request.get<TaskRuntimeStatusResponse>(`${BASE_URL}/statuses`)
 }

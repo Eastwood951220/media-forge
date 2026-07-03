@@ -22,6 +22,11 @@ export type CrawlerRunLogAppendedPayload = {
   log: RunLogEntry
 }
 
+export type CrawlerTaskStatusUpdatedPayload = {
+  task_id: string
+  status: 'pending' | 'running' | 'success' | 'failed'
+}
+
 export type RealtimeEventName =
   | 'system.connected'
   | 'system.resync_required'
@@ -29,6 +34,7 @@ export type RealtimeEventName =
   | 'crawler.run.detail.updated'
   | 'crawler.run.log.appended'
   | 'crawler.queue.updated'
+  | 'crawler.task.status.updated'
 
 export type RealtimeHandler<TPayload = Record<string, unknown>> = (
   event: RealtimeEvent<TPayload>,

@@ -10,12 +10,20 @@ import { useTaskListQueryStore } from '../src/pages/crawler/tasks/useTaskListQue
 vi.mock('../src/api/crawlTask', () => ({
   getCrawlTasks: vi.fn(),
   getCrawlTaskStats: vi.fn(),
+  getCrawlTaskRuntimeStatuses: vi.fn().mockResolvedValue({ tasks: [] }),
   deleteCrawlTask: vi.fn(),
   updateCrawlTask: vi.fn(),
 }))
 
 vi.mock('../src/api/crawlerRun', () => ({
   runCrawlTask: vi.fn(),
+  stopCrawlerRun: vi.fn(),
+}))
+
+vi.mock('../src/realtime/eventSourceClient', () => ({
+  subscribeRealtime: vi.fn(() => vi.fn()),
+  connectRealtime: vi.fn(),
+  disconnectRealtime: vi.fn(),
 }))
 
 function renderPage() {

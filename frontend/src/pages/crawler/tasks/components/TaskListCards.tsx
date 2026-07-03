@@ -3,10 +3,11 @@ import {
   EditOutlined,
   MoreOutlined,
   PlayCircleOutlined,
+  StopOutlined,
 } from '@ant-design/icons'
 import { Button, Dropdown, Empty, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import type { CrawlTask } from '@/api/crawlTask/types'
+import type { CrawlTask, TaskRuntimeStatus } from '@/api/crawlTask/types'
 import type { CrawlMode } from '@/api/crawlerRun/types'
 import styles from '../TaskPages.module.less'
 
@@ -14,31 +15,22 @@ type TaskListCardsProps = {
   tasks: CrawlTask[]
   loading: boolean
   total: number
+  runtimeStatuses: Map<string, TaskRuntimeStatus>
   onEdit: (task: CrawlTask) => void
   onDelete: (task: CrawlTask) => void
   onToggleSkip: (task: CrawlTask) => void
   onRun: (task: CrawlTask, mode: CrawlMode) => void
+  onStop: (task: CrawlTask) => void
 }
 
-const taskStatusLabels: Record<string, { text: string; color: string }> = {
-  pending: { text: '等待中', color: 'default' },
-  running: { text: '爬取中', color: 'processing' },
+
+const runtimeStatusLabels: Record<string, { text: string; color: string }> = {
+  pending: { text: '待执行', color: 'default' },
+  running: { text: '运行中', color: 'processing' },
   success: { text: '已完成', color: 'success' },
   failed: { text: '失败', color: 'error' },
 }
 
-const runStatusLabels: Record<string, { text: string; color: string }> = {
-  queued: { text: '排队中', color: 'default' },
-  running: { text: '运行中', color: 'processing' },
-  completed: { text: '已完成', color: 'success' },
-  failed: { text: '失败', color: 'error' },
-  stopped: { text: '已停止', color: 'warning' },
-}
-
-function taskStatusTag(status: string) {
-  const statusConfig = taskStatusLabels[status] ?? { text: status, color: 'default' }
-  return <Tag color={statusConfig.color}>{statusConfig.text}</Tag>
-}
 
 function formatDateTime(value: string | null) {
   if (!value) return '-'
@@ -51,29 +43,34 @@ function getUrlNames(task: CrawlTask) {
     .filter((name): name is string => Boolean(name))
 }
 
-function runStatusTag(status: string | null) {
+function runtimeStatusTag(status: string | null) {
   if (!status) return <Typography.Text type="secondary">-</Typography.Text>
-  const statusConfig = runStatusLabels[status] ?? { text: status, color: 'default' }
+  const statusConfig = runtimeStatusLabels[status] ?? { text: status, color: 'default' }
   return <Tag color={statusConfig.color}>{statusConfig.text}</Tag>
 }
 
 function TaskCard({
   task,
+  runtimeStatus,
   onEdit,
   onDelete,
   onToggleSkip,
   onRun,
+  onStop,
 }: {
   task: CrawlTask
+  runtimeStatus: TaskRuntimeStatus | undefined
   onEdit: (task: CrawlTask) => void
   onDelete: (task: CrawlTask) => void
   onToggleSkip: (task: CrawlTask) => void
   onRun: (task: CrawlTask, mode: CrawlMode) => void
+  onStop: (task: CrawlTask) => void
 }) {
   const urlNames = getUrlNames(task)
+  const isRunning = runtimeStatus?.status === 'running'
   const runItems: MenuProps['items'] = [
-    { key: 'incremental', label: '增量爬取', icon: <PlayCircleOutlined /> },
-    { key: 'full', label: '全量爬取', icon: <PlayCircleOutlined /> },
+    { key: 'incremental', label: '增量爬取', icon: <PlayCircleOutlined />, disabled: isRunning },
+    { key: 'full', label: '全量爬取', icon: <PlayCircleOutlined />, disabled: isRunning },
   ]
 
   return (
@@ -84,7 +81,7 @@ function TaskCard({
             {task.name}
           </Typography.Text>
         </Tooltip>
-        {taskStatusTag(task.status)}
+          {runtimeStatusTag(runtimeStatus?.status ?? null)}
       </div>
 
       <div className={styles.taskCardBody}>
@@ -114,24 +111,36 @@ function TaskCard({
               unCheckedChildren="禁用"
               size="small"
             />
-            {runStatusTag(task.last_run_status)}
+
           </Space>
         </div>
       </div>
 
       <div className={styles.taskCardFooter}>
-        <Dropdown
-          menu={{
-            items: runItems,
-            onClick: ({ key }) => onRun(task, key as CrawlMode),
-          }}
-          trigger={['click']}
-          disabled={task.is_skip}
-        >
-          <Button type="primary" size="small" icon={<PlayCircleOutlined />} disabled={task.is_skip}>
-            爬取
+        {isRunning ? (
+          <Button
+            type="primary"
+            danger
+            size="small"
+            icon={<StopOutlined />}
+            onClick={() => onStop(task)}
+          >
+            停止
           </Button>
-        </Dropdown>
+        ) : (
+          <Dropdown
+            menu={{
+              items: runItems,
+              onClick: ({ key }) => onRun(task, key as CrawlMode),
+            }}
+            trigger={['click']}
+            disabled={task.is_skip}
+          >
+            <Button type="primary" size="small" icon={<PlayCircleOutlined />} disabled={task.is_skip}>
+              爬取
+            </Button>
+          </Dropdown>
+        )}
         <Space size={4}>
           <Tooltip title="编辑">
             <Button
@@ -140,9 +149,10 @@ function TaskCard({
               size="small"
               icon={<EditOutlined />}
               onClick={() => onEdit(task)}
+              disabled={isRunning}
             />
           </Tooltip>
-          <Tooltip title="删除">
+          <Tooltip title={isRunning ? '任务运行中，无法删除' : '删除'}>
             <Button
               aria-label={`删除 ${task.name}`}
               type="text"
@@ -150,13 +160,14 @@ function TaskCard({
               danger
               icon={<DeleteOutlined />}
               onClick={() => onDelete(task)}
+              disabled={isRunning}
             />
           </Tooltip>
           <Dropdown
             menu={{
               items: [
-                { key: 'edit', label: '编辑', icon: <EditOutlined /> },
-                { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+                { key: 'edit', label: '编辑', icon: <EditOutlined />, disabled: isRunning },
+                { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true, disabled: isRunning },
               ],
               onClick: ({ key }) => {
                 if (key === 'edit') onEdit(task)
@@ -177,10 +188,12 @@ function TaskListCards({
   tasks,
   loading,
   total,
+  runtimeStatuses,
   onEdit,
   onDelete,
   onToggleSkip,
   onRun,
+  onStop,
 }: TaskListCardsProps) {
   return (
     <div className={styles.taskListShell}>
@@ -195,10 +208,12 @@ function TaskListCards({
               <TaskCard
                 key={task.id}
                 task={task}
+                runtimeStatus={runtimeStatuses.get(task.id)}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onToggleSkip={onToggleSkip}
                 onRun={onRun}
+                onStop={onStop}
               />
             ))}
           </div>

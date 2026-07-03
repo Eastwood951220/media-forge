@@ -136,3 +136,20 @@ class TaskStatsResponse(BaseModel):
     total_found_all_time: int
     total_qualified_all_time: int
     recent_runs: list[CrawlRunRead]
+
+
+class TaskRuntimeStatus(BaseModel):
+    """Derived runtime status for a single task."""
+
+    task_id: uuid.UUID
+    name: str
+    is_skip: bool
+    status: str
+    latest_run_id: uuid.UUID | None = None
+    latest_run_status: str | None = None
+
+
+class TaskRuntimeStatusResponse(BaseModel):
+    """Response containing runtime statuses for all tasks."""
+
+    tasks: list[TaskRuntimeStatus]

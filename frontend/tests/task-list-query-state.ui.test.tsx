@@ -8,7 +8,16 @@ import { getCrawlTasks } from '../src/api/crawlTask'
 
 vi.mock('../src/api/crawlTask', () => ({
   getCrawlTasks: vi.fn(),
+  getCrawlTaskRuntimeStatuses: vi.fn().mockResolvedValue({ tasks: [] }),
+  getCrawlTaskStats: vi.fn().mockResolvedValue({ total: 0, enabled: 0, disabled: 0 }),
   deleteCrawlTask: vi.fn(),
+  updateCrawlTask: vi.fn(),
+}))
+
+vi.mock('../src/realtime/eventSourceClient', () => ({
+  subscribeRealtime: vi.fn(() => vi.fn()),
+  connectRealtime: vi.fn(),
+  disconnectRealtime: vi.fn(),
 }))
 
 vi.mock('keepalive-for-react', () => ({
