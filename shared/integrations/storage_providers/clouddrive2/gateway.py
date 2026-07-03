@@ -45,6 +45,18 @@ class StorageProvider(Protocol):
     def delete_file(self, path: str) -> RemoteOperationResult:
         raise NotImplementedError
 
+    def search_files(
+        self,
+        search_term: str,
+        path: str = "/",
+        force_refresh: bool = False,
+        fuzzy_match: bool = False,
+    ) -> list[RemoteFile]:
+        raise NotImplementedError
+
+    def get_original_path(self, path: str) -> str:
+        raise NotImplementedError
+
 
 class CloudDrive2Gateway:
     def __init__(self, client) -> None:
@@ -99,3 +111,19 @@ class CloudDrive2Gateway:
 
     def delete_file(self, path: str) -> RemoteOperationResult:
         return map_operation_result(self.client.delete_file(path))
+
+    def search_files(
+        self,
+        search_term: str,
+        path: str = "/",
+        force_refresh: bool = False,
+        fuzzy_match: bool = False,
+    ) -> list[RemoteFile]:
+        return [
+            map_remote_file(file_obj)
+            for file_obj in self.client.search_files(search_term, path, force_refresh, fuzzy_match)
+        ]
+
+    def get_original_path(self, path: str) -> str:
+        result = self.client.get_original_path(path)
+        return str(getattr(result, "result", "") or "")

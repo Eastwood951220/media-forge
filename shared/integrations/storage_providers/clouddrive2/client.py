@@ -157,6 +157,34 @@ class CloudDriveGrpcClient:
         request = clouddrive_pb2.AddOfflineFileRequest(urls=urls, toFolder=to_folder)
         return stub.AddOfflineFiles(request, metadata=self._auth_metadata(), timeout=self.timeout)
 
+    def search_files(self, search_term: str, path: str = "/", force_refresh: bool = False, fuzzy_match: bool = False):
+        """Search for files. Returns list of CloudDriveFile objects."""
+        stub = self._get_stub()
+        request = clouddrive_pb2.SearchRequest(
+            searchFor=search_term,
+            path=path,
+            forceRefresh=force_refresh,
+            fuzzyMatch=fuzzy_match,
+        )
+        files = []
+        for response in stub.GetSearchResults(
+            request,
+            metadata=self._auth_metadata(),
+            timeout=self.timeout,
+        ):
+            files.extend(response.subFiles)
+        return files
+
+    def get_original_path(self, path: str):
+        """Get original path for a search result. Returns StringResult."""
+        stub = self._get_stub()
+        request = clouddrive_pb2.FileRequest(path=path)
+        return stub.GetOriginalPath(
+            request,
+            metadata=self._auth_metadata(),
+            timeout=self.timeout,
+        )
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
