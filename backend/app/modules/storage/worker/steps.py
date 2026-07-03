@@ -191,7 +191,11 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
     code_folder = build_video_filename(subtask.movie_code, main_videos[0]["name"], tags, 0, 1)
     from backend.app.modules.storage.tasks.policies import code_folder_from_filename
     code_dir = code_folder_from_filename(code_folder)
-    final_folder = f"{target_folder}/{code_dir}"
+    selected_location = getattr(subtask, "selected_storage_location", None) or ""
+    if selected_location:
+        final_folder = f"{target_folder}/{selected_location}/{code_dir}"
+    else:
+        final_folder = f"{target_folder}/{code_dir}"
 
     try:
         ensure_directory_chain(provider, final_folder)
