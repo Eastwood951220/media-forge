@@ -177,6 +177,7 @@ class MoveRenamedVideosResult:
     moved_files: list[dict]
     skipped_files: list[dict]
     all_targets_exist: bool = False
+    all_rename_name_exists: bool = False
 
 
 def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[str]) -> MoveRenamedVideosResult:
@@ -192,6 +193,15 @@ def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[s
 
     for file_info in renamed_files:
         if file_info.get("rename_error"):
+            if file_info.get("rename_name_exists"):
+                skipped.append({**file_info, "skip_reason": "rename_name_exists"})
+                context.log(
+                    "WARNING",
+                    f"跳过重命名目标已存在的文件: {file_info['name']}",
+                    {"rename_error": file_info.get("rename_error"), "renamed_name": file_info.get("renamed_name")},
+                    step="move_files",
+                )
+                continue
             skipped.append({**file_info, "skip_reason": "rename_failed"})
             context.log("WARNING", f"跳过重命名失败的文件: {file_info['name']}", step="move_files")
             continue
@@ -228,10 +238,15 @@ def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[s
         item.get("skip_reason") == "target_exists"
         for item in skipped
     )
+    all_rename_name_exists = bool(renamed_files) and len(skipped) == len(renamed_files) and all(
+        item.get("skip_reason") == "rename_name_exists"
+        for item in skipped
+    )
     return MoveRenamedVideosResult(
         moved_files=moved,
         skipped_files=skipped,
         all_targets_exist=all_targets_exist,
+        all_rename_name_exists=all_rename_name_exists,
     )
 
 
