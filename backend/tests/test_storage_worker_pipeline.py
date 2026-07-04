@@ -401,20 +401,17 @@ def test_execute_current_magnet_attempt_marks_subtask_skipped_when_all_targets_e
             return Result()
 
         def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            return []
+
+        def list_files(self, path, force_refresh=False):
             if path.startswith("/Downloads/storage_"):
-                return [type("SearchFile", (), {
+                return [type("ListFile", (), {
                     "name": "MIDA-628.mp4",
                     "full_path": f"{path}/MIDA-628.mp4",
                     "size": file_size,
                     "is_directory": False,
                     "is_search_result": False,
                 })()]
-            return []
-
-        def get_original_path(self, path):
-            return target_file
-
-        def list_files(self, path, force_refresh=False):
             return []
 
         def find_file(self, path):
