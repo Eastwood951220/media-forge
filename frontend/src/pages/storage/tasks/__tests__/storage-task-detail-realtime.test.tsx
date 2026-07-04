@@ -102,13 +102,13 @@ function emit(eventName: RealtimeEventName, payload: Record<string, unknown>, re
   }
 }
 
-function descriptionValue(label: string) {
+function descriptionValue(label: string): HTMLElement {
   const labelNodes = screen.getAllByText(label)
-  const labelNode = labelNodes.find((node) => node.closest('.ant-descriptions-item'))
+  const labelNode = labelNodes.find((node) => (node as HTMLElement).closest('.ant-descriptions-item'))
   if (!labelNode) throw new Error(`Missing description item for ${label}`)
-  const item = labelNode.closest('.ant-descriptions-item')
+  const item = (labelNode as HTMLElement).closest('.ant-descriptions-item')
   if (!item) throw new Error(`Missing description item for ${label}`)
-  return item
+  return item as HTMLElement
 }
 
 describe('StorageTaskDetailPage realtime updates', () => {
