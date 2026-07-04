@@ -1438,3 +1438,26 @@ def test_subtask_pipeline_does_not_start_later_magnet_after_success(monkeypatch)
     assert attempt_order == ["m1"]
     assert context.subtask.status == "completed"
     assert [attempt["magnet_id"] for attempt in context.subtask.magnet_attempts] == ["m1"]
+
+
+def test_deduped_single_real_file_renames_without_cd_suffix() -> None:
+    from backend.app.modules.storage.tasks.policies import build_video_filename
+
+    accepted_files = [
+        {
+            "name": "hhd800.com@ACZD-165.mp4",
+            "path": "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+            "size": 4770615244,
+            "is_dir": False,
+        }
+    ]
+
+    new_name = build_video_filename(
+        movie_code="ACZD-165",
+        original_name=accepted_files[0]["name"],
+        tags=[],
+        index=0,
+        total=len(accepted_files),
+    )
+
+    assert new_name == "ACZD-165.mp4"
