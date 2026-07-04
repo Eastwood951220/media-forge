@@ -2352,3 +2352,72 @@ def test_find_existing_target_files_reports_source_and_missing_targets() -> None
             "size": 500 * 1024 * 1024,
         }
     ]
+
+
+def test_copy_existing_target_to_missing_targets_copies_from_first_found_target() -> None:
+    from backend.app.modules.storage.worker.steps import (
+        ExistingTargetFilesResult,
+        copy_existing_target_to_missing_targets,
+    )
+
+    class Provider:
+        def __init__(self) -> None:
+            self.ensure_calls: list[str] = []
+            self.copy_calls: list[tuple[str, str]] = []
+
+        def ensure_directory(self, path):
+            self.ensure_calls.append(path)
+
+        def copy_file(self, source_path, dest_folder):
+            self.copy_calls.append((source_path, dest_folder))
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.logs: list[dict] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+    context = Context()
+    result = ExistingTargetFilesResult(
+        all_targets_exist=False,
+        any_target_exists=True,
+        checked_targets=["/Movies/A/ACZD-165", "/Movies/B/ACZD-165", "/Movies/C/ACZD-165"],
+        existing_targets=["/Movies/A/ACZD-165"],
+        missing_targets=["/Movies/B/ACZD-165", "/Movies/C/ACZD-165"],
+        expected_names=["ACZD-165.mp4"],
+        existing_files=[
+            {
+                "target_folder": "/Movies/A/ACZD-165",
+                "path": "/Movies/A/ACZD-165/ACZD-165.mp4",
+                "name": "ACZD-165.mp4",
+                "size": 500 * 1024 * 1024,
+            }
+        ],
+        source_path="/Movies/A/ACZD-165/ACZD-165.mp4",
+        source_name="ACZD-165.mp4",
+        source_size=500 * 1024 * 1024,
+    )
+
+    copied = copy_existing_target_to_missing_targets(context, result)
+
+    assert context.provider.ensure_calls == ["/Movies/B/ACZD-165", "/Movies/C/ACZD-165"]
+    assert context.provider.copy_calls == [
+        ("/Movies/A/ACZD-165/ACZD-165.mp4", "/Movies/B/ACZD-165"),
+        ("/Movies/A/ACZD-165/ACZD-165.mp4", "/Movies/C/ACZD-165"),
+    ]
+    assert copied == [
+        {
+            "name": "ACZD-165.mp4",
+            "path": "/Movies/A/ACZD-165/ACZD-165.mp4",
+            "size": 500 * 1024 * 1024,
+            "renamed_name": "ACZD-165.mp4",
+            "moved_path": "/Movies/A/ACZD-165/ACZD-165.mp4",
+            "copied_paths": ["/Movies/B/ACZD-165/ACZD-165.mp4", "/Movies/C/ACZD-165/ACZD-165.mp4"],
+            "copy_source": "/Movies/A/ACZD-165/ACZD-165.mp4",
+            "copy_source_target": "/Movies/A/ACZD-165",
+        }
+    ]
+    assert any("已从命中的目标文件复制到缺失目标" in log["message"] for log in context.logs)

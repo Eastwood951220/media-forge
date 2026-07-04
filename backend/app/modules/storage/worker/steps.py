@@ -313,6 +313,42 @@ def find_existing_target_files(provider, target_paths: list[str], expected_names
     )
 
 
+def copy_existing_target_to_missing_targets(context, result: ExistingTargetFilesResult) -> list[dict]:
+    if not result.source_path or not result.source_name:
+        return []
+    if not result.missing_targets:
+        return []
+
+    copied_paths: list[str] = []
+    for target_folder in result.missing_targets:
+        ensure_directory_chain(context.provider, target_folder)
+        context.provider.copy_file(result.source_path, target_folder)
+        copied_paths.append(_target_file_path(target_folder, result.source_name))
+
+    moved_file = {
+        "name": result.source_name,
+        "path": result.source_path,
+        "size": result.source_size,
+        "renamed_name": result.source_name,
+        "moved_path": result.source_path,
+        "copied_paths": copied_paths,
+        "copy_source": result.source_path,
+        "copy_source_target": result.existing_targets[0] if result.existing_targets else "",
+    }
+    context.log(
+        "INFO",
+        "已从命中的目标文件复制到缺失目标",
+        {
+            "source": result.source_path,
+            "source_target": moved_file["copy_source_target"],
+            "missing_targets": result.missing_targets,
+            "copied_paths": copied_paths,
+        },
+        step="move_files",
+    )
+    return [moved_file]
+
+
 def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[str]) -> MoveRenamedVideosResult:
     moved: list[dict] = []
     skipped: list[dict] = []
