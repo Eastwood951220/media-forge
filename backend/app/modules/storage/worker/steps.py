@@ -172,6 +172,18 @@ def _target_file_exists(provider, target_path: str) -> bool:
         return False
 
 
+def _move_source_path(file_info: dict) -> str:
+    return str(file_info.get("existing_path") or file_info.get("renamed_path") or file_info["path"])
+
+
+def _move_file_name(file_info: dict) -> str:
+    return str(file_info.get("renamed_name") or PurePosixPath(_move_source_path(file_info)).name)
+
+
+def _target_file_path(target_folder: str, file_name: str) -> str:
+    return str(PurePosixPath(target_folder) / file_name)
+
+
 @dataclass
 class MoveRenamedVideosResult:
     moved_files: list[dict]
@@ -206,9 +218,20 @@ def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[s
             context.log("WARNING", f"跳过重命名失败的文件: {file_info['name']}", step="move_files")
             continue
 
-        src = file_info.get("renamed_path") or file_info["path"]
-        file_name = PurePosixPath(src).name
-        existing_targets = [str(PurePosixPath(target) / file_name) for target in target_paths if _target_file_exists(context.provider, str(PurePosixPath(target) / file_name))]
+        src = _move_source_path(file_info)
+        file_name = _move_file_name(file_info)
+        if file_info.get("rename_name_exists"):
+            context.log(
+                "INFO",
+                f"使用已存在的规范命名文件执行移动或复制: {file_name}",
+                {"source": src, "targets": target_paths},
+                step="move_files",
+            )
+        existing_targets = [
+            _target_file_path(target, file_name)
+            for target in target_paths
+            if _target_file_exists(context.provider, _target_file_path(target, file_name))
+        ]
         if len(existing_targets) == len(target_paths):
             skipped.append({**file_info, "skip_reason": "target_exists", "existing_targets": existing_targets})
             context.log("INFO", f"跳过已存在: {file_name}", {"existing_targets": existing_targets}, step="move_files")
@@ -216,7 +239,7 @@ def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[s
 
         copied_paths = []
         for copy_target in copy_targets:
-            copy_dst = str(PurePosixPath(copy_target) / file_name)
+            copy_dst = _target_file_path(copy_target, file_name)
             if _target_file_exists(context.provider, copy_dst):
                 copied_paths.append(copy_dst)
                 context.log("INFO", f"跳过已存在: {file_name}", {"target": copy_dst}, step="move_files")
@@ -225,7 +248,7 @@ def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[s
             copied_paths.append(copy_dst)
             context.log("INFO", f"已复制: {file_name} → {copy_target}", step="move_files")
 
-        move_dst = str(PurePosixPath(move_target) / file_name)
+        move_dst = _target_file_path(move_target, file_name)
         if _target_file_exists(context.provider, move_dst):
             moved.append({**file_info, "moved_path": move_dst, "copied_paths": copied_paths})
             context.log("INFO", f"跳过已存在: {file_name}", {"target": move_dst}, step="move_files")
