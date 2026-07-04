@@ -26,7 +26,10 @@ export type CrawlerRunLogAppendedPayload = {
 
 export type CrawlerTaskStatusUpdatedPayload = CrawlTaskRuntimeSnapshot
 
-export type StorageMainUpdatedPayload = StorageMainTask
+export type StorageMainUpdatedPayload = Pick<
+  StorageMainTask,
+  'id' | 'status' | 'total_count' | 'success_count' | 'failed_count' | 'skipped_count'
+> & Partial<StorageMainTask>
 
 export type StorageSubUpdatedPayload = {
   id: string

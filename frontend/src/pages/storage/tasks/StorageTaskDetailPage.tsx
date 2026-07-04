@@ -11,7 +11,7 @@ import {
 } from '@/api/storage/storageTasks'
 import type { StorageMainTask, StorageMode, StorageSubTask } from '@/api/storage/storageTasks/types'
 import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
-import type { RealtimeEvent } from '@/realtime/types'
+import type { RealtimeEvent, StorageMainUpdatedPayload, StorageSubUpdatedPayload } from '@/realtime/types'
 import { useNavigate } from '@tanstack/react-router'
 import styles from './StorageTasks.module.less'
 
@@ -35,6 +35,16 @@ const subTaskStatusLabels: Record<string, { text: string; color: string }> = {
 const modeLabels: Record<StorageMode, string> = {
   single: '单盘',
   multiple: '多盘',
+}
+
+function mergeSubtaskUpdate(current: StorageSubTask[], update: StorageSubUpdatedPayload): StorageSubTask[] {
+  let matched = false
+  const next = current.map((subtask) => {
+    if (subtask.id !== update.id) return subtask
+    matched = true
+    return { ...subtask, ...update }
+  })
+  return matched ? next : current
 }
 
 function StorageTaskDetailPage() {
@@ -85,27 +95,19 @@ function StorageTaskDetailPage() {
     if (!id) return
     connectRealtime()
 
-    const unsubscribeTask = subscribeRealtime<StorageMainTask>(
+    const unsubscribeTask = subscribeRealtime<StorageMainUpdatedPayload>(
       'storage.main.updated',
-      (event: RealtimeEvent<StorageMainTask>) => {
+      (event: RealtimeEvent<StorageMainUpdatedPayload>) => {
         if (event.payload.id !== id) return
-        setTask((current) => (current ? { ...current, ...event.payload } : event.payload))
+        setTask((current) => (current ? { ...current, ...event.payload } : current))
       },
     )
 
-    const unsubscribeSubtask = subscribeRealtime<StorageSubTask[]>(
+    const unsubscribeSubtask = subscribeRealtime<StorageSubUpdatedPayload>(
       'storage.sub.updated',
-      (event: RealtimeEvent<StorageSubTask[]>) => {
-        if (!Array.isArray(event.payload)) return
-        setSubtasks((current) => {
-          const byId = new Map(current.map((st) => [st.id, st]))
-          for (const subtask of event.payload) {
-            if (subtask.main_task_id === id) {
-              byId.set(subtask.id, subtask)
-            }
-          }
-          return Array.from(byId.values())
-        })
+      (event: RealtimeEvent<StorageSubUpdatedPayload>) => {
+        if (event.payload.main_task_id !== id) return
+        setSubtasks((current) => mergeSubtaskUpdate(current, event.payload))
       },
     )
 
