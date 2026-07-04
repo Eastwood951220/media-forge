@@ -20,25 +20,50 @@ def _raw_file_to_dict(file_obj) -> dict:
     }
 
 
+def _is_virtual_search_path(path: str) -> bool:
+    return "/[Search]" in str(PurePosixPath(path))
+
+
+def _is_search_result(file_obj, raw_item: dict) -> bool:
+    return bool(
+        getattr(file_obj, "is_search_result", False)
+        or getattr(file_obj, "isSearchResult", False)
+        or _is_virtual_search_path(raw_item["path"])
+    )
+
+
+def _resolve_file_candidate(provider, file_obj) -> tuple[dict, dict, str | None]:
+    raw_item = _raw_file_to_dict(file_obj)
+    resolved_item = dict(raw_item)
+    if not _is_search_result(file_obj, raw_item):
+        if _is_virtual_search_path(raw_item["path"]):
+            return raw_item, resolved_item, "virtual_search_path"
+        return raw_item, resolved_item, None
+
+    try:
+        original = provider.get_original_path(raw_item["path"])
+    except Exception:
+        original = ""
+    if not original:
+        resolved_item["path"] = ""
+        return raw_item, resolved_item, "missing_original_path"
+    resolved_item["path"] = original
+    resolved_item["name"] = PurePosixPath(original).name
+    if _is_virtual_search_path(original):
+        return raw_item, resolved_item, "virtual_search_path"
+    return raw_item, resolved_item, None
+
+
 def _file_to_dict(provider, file_obj) -> dict:
-    item = _raw_file_to_dict(file_obj)
-    if getattr(file_obj, "is_search_result", False) or getattr(file_obj, "isSearchResult", False):
-        original = provider.get_original_path(item["path"])
-        if original:
-            item["path"] = original
-            item["name"] = PurePosixPath(original).name
-    return item
-    path = getattr(file_obj, "full_path", "") or getattr(file_obj, "fullPathName", "")
-    if getattr(file_obj, "is_search_result", False) or getattr(file_obj, "isSearchResult", False):
-        original = provider.get_original_path(path)
-        if original:
-            path = original
-    return {
-        "name": getattr(file_obj, "name", "") or PurePosixPath(path).name,
-        "path": path,
-        "size": int(getattr(file_obj, "size", 0) or 0),
-        "is_dir": bool(getattr(file_obj, "is_directory", False) or getattr(file_obj, "isDirectory", False)),
-    }
+    raw_item, resolved_item, reason = _resolve_file_candidate(provider, file_obj)
+    if reason is not None:
+        return {
+            **resolved_item,
+            "resolution_error": reason,
+            "raw_path": raw_item["path"],
+            "resolved_path": resolved_item["path"],
+        }
+    return resolved_item
 
 
 def _is_usable_video(file_dict: dict, config: dict) -> bool:
@@ -73,6 +98,19 @@ def _rejection_reason(file_dict: dict, *, config: dict, movie_code: str, search_
     return None
 
 
+def _rejected_file(raw_item: dict, resolved_item: dict, reason: str, error: str | None = None) -> dict:
+    entry = {
+        "name": raw_item["name"],
+        "raw_path": raw_item["path"],
+        "resolved_path": resolved_item.get("path", ""),
+        "size": int(raw_item.get("size") or 0),
+        "reason": reason,
+    }
+    if error:
+        entry["error"] = error
+    return entry
+
+
 def _recursive_list(provider, path: str, config: dict) -> list[dict]:
     found = []
     for entry in provider.list_files(path):
@@ -86,6 +124,7 @@ def _recursive_list(provider, path: str, config: dict) -> list[dict]:
 
 def _append_candidate(
     *,
+    raw_candidate: dict,
     candidate: dict,
     accepted: list[dict],
     rejected: list[dict],
@@ -94,8 +133,12 @@ def _append_candidate(
     movie_code: str,
     search_scope: str,
     task_download_folder: str,
+    resolution_error: str | None = None,
 ) -> None:
     if candidate.get("is_dir"):
+        return
+    if resolution_error is not None:
+        rejected.append(_rejected_file(raw_candidate, candidate, resolution_error))
         return
     reason = _rejection_reason(
         candidate,
@@ -105,14 +148,13 @@ def _append_candidate(
         task_download_folder=task_download_folder,
     )
     if reason:
-        rejected.append({
-            "name": candidate["name"],
-            "path": candidate["path"],
-            "size": int(candidate.get("size") or 0),
-            "reason": reason,
-        })
+        rejected.append(_rejected_file(raw_candidate, candidate, reason))
+        return
+    if _is_virtual_search_path(candidate["path"]):
+        rejected.append(_rejected_file(raw_candidate, candidate, "virtual_search_path"))
         return
     if candidate["path"] in seen:
+        rejected.append(_rejected_file(raw_candidate, candidate, "duplicate_resolved_path"))
         return
     seen.add(candidate["path"])
     accepted.append({
@@ -158,11 +200,11 @@ def find_scoped_video_files(
         )
 
     for file_obj in search_results:
-        raw_item = _raw_file_to_dict(file_obj)
+        raw_item, resolved, resolution_error = _resolve_file_candidate(provider, file_obj)
         raw_results.append({key: raw_item[key] for key in ("name", "path", "size")})
-        resolved = _file_to_dict(provider, file_obj)
         resolved_results.append({key: resolved[key] for key in ("name", "path", "size")})
         _append_candidate(
+            raw_candidate=raw_item,
             candidate=resolved,
             accepted=accepted,
             rejected=rejected,
@@ -171,6 +213,7 @@ def find_scoped_video_files(
             movie_code=movie_code,
             search_scope=search_scope,
             task_download_folder=task_download_folder,
+            resolution_error=resolution_error,
         )
 
     try:
@@ -183,6 +226,7 @@ def find_scoped_video_files(
         raw_results.append({key: listed[key] for key in ("name", "path", "size")})
         resolved_results.append({key: listed[key] for key in ("name", "path", "size")})
         _append_candidate(
+            raw_candidate=listed,
             candidate=listed,
             accepted=accepted,
             rejected=rejected,
