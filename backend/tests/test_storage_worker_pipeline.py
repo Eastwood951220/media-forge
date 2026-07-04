@@ -617,3 +617,219 @@ def test_execute_subtask_pipeline_stops_after_target_exists_skip(monkeypatch):
             "timestamp": context.subtask.magnet_attempts[0]["timestamp"],
         }
     ]
+
+
+def test_is_rename_name_exists_error_detects_clouddrive_20004() -> None:
+    from backend.app.modules.storage.worker.steps import is_rename_name_exists_error
+
+    error = RuntimeError(
+        'api error Cloud 115open(342367138) api error: code: 20004, '
+        'message: 很抱歉，该目录名称已存在。'
+    )
+
+    assert is_rename_name_exists_error(error) is True
+    assert is_rename_name_exists_error(RuntimeError("permission denied")) is False
+
+
+def test_rename_name_exists_reuses_existing_canonical_source_file() -> None:
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.steps import rename_selected_videos
+
+    class RenameNameExistsProvider:
+        def __init__(self) -> None:
+            self.find_calls: list[str] = []
+
+        def rename_file(self, source_path, new_name):
+            raise RuntimeError("api error: code: 20004, message: 很抱歉，该目录名称已存在。")
+
+        def find_file(self, path):
+            self.find_calls.append(path)
+            if path == "/Downloads/MIDA-628.mp4":
+                return SimpleNamespace(size=6910439461)
+            return None
+
+    class FakeSubtask:
+        movie_code = "MIDA-628"
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.subtask = FakeSubtask()
+            self.provider = RenameNameExistsProvider()
+            self.messages: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.messages.append(message)
+            return {}
+
+    context = FakeContext()
+
+    renamed = rename_selected_videos(
+        context,
+        [
+            {
+                "name": "hhd800.com@MIDA-628.mp4",
+                "path": "/Downloads/hhd800.com@MIDA-628.mp4",
+                "size": 6910439461,
+            }
+        ],
+        tags=[],
+    )
+
+    assert renamed == [
+        {
+            "name": "hhd800.com@MIDA-628.mp4",
+            "path": "/Downloads/hhd800.com@MIDA-628.mp4",
+            "size": 6910439461,
+            "renamed_path": "/Downloads/MIDA-628.mp4",
+            "renamed_name": "MIDA-628.mp4",
+            "rename_name_exists": True,
+            "existing_path": "/Downloads/MIDA-628.mp4",
+        }
+    ]
+    assert context.provider.find_calls == ["/Downloads/MIDA-628.mp4"]
+    assert any("重命名目标已存在，复用已有文件" in message for message in context.messages)
+
+
+def test_rename_name_exists_without_resolved_file_becomes_terminal_skip() -> None:
+    from backend.app.modules.storage.worker.steps import move_renamed_videos
+
+    class Provider:
+        def ensure_directory(self, path):
+            return None
+
+        def find_file(self, path):
+            return None
+
+    class Subtask:
+        pass
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.config = {"auto_create_target_folder": True}
+            self.subtask = Subtask()
+            self.messages: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.messages.append(message)
+            return {}
+
+    context = FakeContext()
+
+    result = move_renamed_videos(
+        context,
+        [
+            {
+                "name": "hhd800.com@MIDA-628.mp4",
+                "path": "/Downloads/hhd800.com@MIDA-628.mp4",
+                "size": 6910439461,
+                "rename_error": "api error: code: 20004, message: 很抱歉，该目录名称已存在。",
+                "rename_name_exists": True,
+                "renamed_name": "MIDA-628.mp4",
+            }
+        ],
+        ["/Movies/巨乳/MIDA-628"],
+    )
+
+    assert result.moved_files == []
+    assert result.skipped_files == [
+        {
+            "name": "hhd800.com@MIDA-628.mp4",
+            "path": "/Downloads/hhd800.com@MIDA-628.mp4",
+            "size": 6910439461,
+            "rename_error": "api error: code: 20004, message: 很抱歉，该目录名称已存在。",
+            "rename_name_exists": True,
+            "renamed_name": "MIDA-628.mp4",
+            "skip_reason": "rename_name_exists",
+        }
+    ]
+    assert result.all_rename_name_exists is True
+    assert any("跳过重命名目标已存在的文件" in message for message in context.messages)
+
+
+def test_execute_subtask_pipeline_stops_after_rename_name_exists_skip(monkeypatch):
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import execute_subtask_pipeline
+
+    attempt_ids: list[str] = []
+
+    def fake_execute_current_magnet_attempt(context, magnet):
+        attempt_ids.append(magnet["id"])
+        context.subtask.status = "skipped"
+        context.subtask.skip_reason = "rename_name_exists"
+        context.subtask.result = {"status": "skipped", "reason": "rename_name_exists"}
+        return True
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.steps.execute_current_magnet_attempt",
+        fake_execute_current_magnet_attempt,
+    )
+
+    @dataclass
+    class FakeMagnet:
+        id: str
+        magnet_url: str
+        tags: list[str]
+        weight: int
+        selected: bool
+
+    class FakeMovie:
+        magnets = [
+            FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
+            FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
+        ]
+
+    class FakeDb:
+        def get(self, model, movie_id):
+            return FakeMovie()
+
+    @dataclass
+    class FakeSubtask:
+        id: uuid.UUID
+        movie_id: uuid.UUID
+        movie_code: str = "MIDA-628"
+        status: str = "queued"
+        step: str = "prepare"
+        skip_reason: str | None = None
+        started_at: object | None = None
+        finished_at: object | None = None
+        error_message: str | None = None
+        current_magnet_id: str | None = None
+        current_magnet_url: str = ""
+        magnet_attempts: list | None = None
+        result: dict | None = None
+
+        def __post_init__(self):
+            if self.magnet_attempts is None:
+                self.magnet_attempts = []
+            if self.result is None:
+                self.result = {}
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.db = FakeDb()
+            self.subtask = FakeSubtask(id=uuid.uuid4(), movie_id=uuid.uuid4())
+            self.config = {"magnet_max_attempts_per_subtask": 2}
+            self.logs: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append(message)
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    context = FakeContext()
+
+    execute_subtask_pipeline(context)
+
+    assert attempt_ids == ["m1"]
+    assert context.subtask.status == "skipped"
+    assert context.subtask.skip_reason == "rename_name_exists"
+    assert context.subtask.step == "done"
+    assert context.subtask.magnet_attempts[0]["magnet_id"] == "m1"
+    assert context.subtask.magnet_attempts[0]["success"] is True
+    assert context.subtask.magnet_attempts[0]["status"] == "skipped"
