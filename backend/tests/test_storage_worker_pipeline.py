@@ -1286,3 +1286,154 @@ def test_poll_downloaded_video_files_does_not_search_root_when_task_folder_has_f
 
     assert [file["path"] for file in files] == ["/Downloads/storage_sub/ACZD-165.mp4"]
     assert context.provider.search_calls == [("ACZD-165", "/Downloads/storage_sub")]
+
+
+def test_subtask_pipeline_starts_next_magnet_only_after_current_failure(monkeypatch):
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import execute_subtask_pipeline
+
+    attempt_order: list[str] = []
+
+    def fake_execute_current_magnet_attempt(context, magnet):
+        attempt_order.append(magnet["id"])
+        return magnet["id"] == "m2"
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.steps.execute_current_magnet_attempt",
+        fake_execute_current_magnet_attempt,
+    )
+
+    @dataclass
+    class FakeMagnet:
+        id: str
+        magnet_url: str
+        tags: list[str]
+        weight: int
+        selected: bool
+
+    class FakeMovie:
+        magnets = [
+            FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
+            FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
+        ]
+
+    class FakeDb:
+        def get(self, model, movie_id):
+            return FakeMovie()
+
+    @dataclass
+    class FakeSubtask:
+        id: uuid.UUID
+        movie_id: uuid.UUID
+        movie_code: str = "ACZD-165"
+        status: str = "queued"
+        step: str = "prepare"
+        started_at: object | None = None
+        finished_at: object | None = None
+        error_message: str | None = None
+        current_magnet_id: str | None = None
+        current_magnet_url: str = ""
+        magnet_attempts: list | None = None
+
+        def __post_init__(self):
+            if self.magnet_attempts is None:
+                self.magnet_attempts = []
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.db = FakeDb()
+            self.subtask = FakeSubtask(id=uuid.uuid4(), movie_id=uuid.uuid4())
+            self.config = {"magnet_max_attempts_per_subtask": 2}
+            self.logs: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append(message)
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    context = FakeContext()
+
+    execute_subtask_pipeline(context)
+
+    assert attempt_order == ["m1", "m2"]
+    assert context.subtask.status == "completed"
+    assert [attempt["magnet_id"] for attempt in context.subtask.magnet_attempts] == ["m1", "m2"]
+    assert [attempt["success"] for attempt in context.subtask.magnet_attempts] == [False, True]
+
+
+def test_subtask_pipeline_does_not_start_later_magnet_after_success(monkeypatch):
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import execute_subtask_pipeline
+
+    attempt_order: list[str] = []
+
+    def fake_execute_current_magnet_attempt(context, magnet):
+        attempt_order.append(magnet["id"])
+        return True
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.steps.execute_current_magnet_attempt",
+        fake_execute_current_magnet_attempt,
+    )
+
+    @dataclass
+    class FakeMagnet:
+        id: str
+        magnet_url: str
+        tags: list[str]
+        weight: int
+        selected: bool
+
+    class FakeMovie:
+        magnets = [
+            FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
+            FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
+        ]
+
+    class FakeDb:
+        def get(self, model, movie_id):
+            return FakeMovie()
+
+    @dataclass
+    class FakeSubtask:
+        id: uuid.UUID
+        movie_id: uuid.UUID
+        movie_code: str = "ACZD-165"
+        status: str = "queued"
+        step: str = "prepare"
+        started_at: object | None = None
+        finished_at: object | None = None
+        error_message: str | None = None
+        current_magnet_id: str | None = None
+        current_magnet_url: str = ""
+        magnet_attempts: list | None = None
+
+        def __post_init__(self):
+            if self.magnet_attempts is None:
+                self.magnet_attempts = []
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.db = FakeDb()
+            self.subtask = FakeSubtask(id=uuid.uuid4(), movie_id=uuid.uuid4())
+            self.config = {"magnet_max_attempts_per_subtask": 2}
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    context = FakeContext()
+
+    execute_subtask_pipeline(context)
+
+    assert attempt_order == ["m1"]
+    assert context.subtask.status == "completed"
+    assert [attempt["magnet_id"] for attempt in context.subtask.magnet_attempts] == ["m1"]
