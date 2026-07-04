@@ -416,6 +416,26 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
         cleanup_download_folder(context, download_folder, config)
         return True
 
+    if move_result.all_rename_name_exists:
+        subtask.status = "skipped"
+        subtask.skip_reason = "rename_name_exists"
+        subtask.result = {
+            "status": "skipped",
+            "reason": "rename_name_exists",
+            "files": skipped_files,
+        }
+        context.log(
+            "INFO",
+            "重命名目标已存在，子任务标记为跳过",
+            {"skipped_files": skipped_files, "target_paths": target_paths},
+            step="move_files",
+            event="subtask_skipped",
+        )
+        context.publish_subtask()
+        context.set_step("cleanup_files")
+        cleanup_download_folder(context, download_folder, config)
+        return True
+
     if not moved_files:
         context.log("WARNING", "没有文件完成移动或复制", {"skipped_files": skipped_files}, step="move_files")
         return False
