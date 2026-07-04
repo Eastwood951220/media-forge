@@ -232,58 +232,84 @@ class MoveRenamedVideosResult:
 @dataclass
 class ExistingTargetFilesResult:
     all_targets_exist: bool
+    any_target_exists: bool
     checked_targets: list[str]
     existing_targets: list[str]
     missing_targets: list[str]
     expected_names: list[str]
+    existing_files: list[dict]
+    source_path: str | None = None
+    source_name: str | None = None
+    source_size: int = 0
 
 
-def _remote_file_name(file_obj) -> str:
-    path = getattr(file_obj, "full_path", "") or getattr(file_obj, "fullPathName", "")
-    return str(getattr(file_obj, "name", "") or PurePosixPath(path).name)
-
-
-def _remote_file_size(file_obj) -> int:
-    return int(getattr(file_obj, "size", 0) or 0)
+def _listed_entry_to_target_file(entry) -> dict:
+    path = getattr(entry, "full_path", "") or getattr(entry, "fullPathName", "")
+    name = getattr(entry, "name", "") or PurePosixPath(path).name
+    return {
+        "name": name,
+        "path": path,
+        "size": int(getattr(entry, "size", 0) or 0),
+        "is_dir": bool(getattr(entry, "is_directory", False) or getattr(entry, "isDirectory", False)),
+    }
 
 
 def find_existing_target_files(provider, target_paths: list[str], expected_names: list[str]) -> ExistingTargetFilesResult:
+    normalized_expected = {str(name).lower() for name in expected_names if name}
     checked_targets: list[str] = []
     existing_targets: list[str] = []
     missing_targets: list[str] = []
-    expected_name_set = {name for name in expected_names if name}
+    existing_files: list[dict] = []
+    source_path: str | None = None
+    source_name: str | None = None
+    source_size = 0
 
-    for target_path in target_paths:
-        checked_targets.append(target_path)
+    for target_folder in target_paths:
+        checked_targets.append(target_folder)
+        matched_file: dict | None = None
         try:
-            files = provider.list_files(target_path)
+            entries = provider.list_files(target_folder)
         except Exception:
-            files = []
+            entries = []
 
-        names_to_paths: dict[str, str] = {}
-        for file_obj in files:
-            name = _remote_file_name(file_obj)
-            size = _remote_file_size(file_obj)
-            is_dir = bool(getattr(file_obj, "is_directory", False) or getattr(file_obj, "isDirectory", False))
-            if is_dir or size <= 0:
+        for entry in entries:
+            item = _listed_entry_to_target_file(entry)
+            if item["is_dir"]:
                 continue
-            names_to_paths[name] = str(PurePosixPath(target_path) / name)
+            if item["size"] <= 0:
+                continue
+            if item["name"].lower() not in normalized_expected:
+                continue
+            matched_file = {
+                "target_folder": target_folder,
+                "path": item["path"] or _target_file_path(target_folder, item["name"]),
+                "name": item["name"],
+                "size": item["size"],
+            }
+            break
 
-        matched_path = next(
-            (names_to_paths[name] for name in expected_name_set if name in names_to_paths),
-            None,
-        )
-        if matched_path:
-            existing_targets.append(matched_path)
-        else:
-            missing_targets.append(target_path)
+        if matched_file:
+            existing_targets.append(target_folder)
+            existing_files.append(matched_file)
+            if source_path is None:
+                source_path = matched_file["path"]
+                source_name = matched_file["name"]
+                source_size = int(matched_file["size"] or 0)
+            continue
+
+        missing_targets.append(target_folder)
 
     return ExistingTargetFilesResult(
         all_targets_exist=bool(target_paths) and len(existing_targets) == len(target_paths),
+        any_target_exists=bool(existing_targets),
         checked_targets=checked_targets,
         existing_targets=existing_targets,
         missing_targets=missing_targets,
-        expected_names=sorted(expected_name_set),
+        expected_names=list(expected_names),
+        existing_files=existing_files,
+        source_path=source_path,
+        source_name=source_name,
+        source_size=source_size,
     )
 
 

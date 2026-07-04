@@ -1805,7 +1805,7 @@ def test_find_existing_target_files_uses_list_files_for_single_target() -> None:
     )
 
     assert result.all_targets_exist is True
-    assert result.existing_targets == ["/Movies/人妖/ACZD-165/ACZD-165.mp4"]
+    assert result.existing_targets == ["/Movies/人妖/ACZD-165"]
     assert result.missing_targets == []
     assert result.checked_targets == ["/Movies/人妖/ACZD-165"]
 
@@ -1841,7 +1841,7 @@ def test_find_existing_target_files_requires_all_targets_to_exist() -> None:
     )
 
     assert result.all_targets_exist is False
-    assert result.existing_targets == ["/Movies/A/ACZD-165/ACZD-165.mp4"]
+    assert result.existing_targets == ["/Movies/A/ACZD-165"]
     assert result.missing_targets == ["/Movies/B/ACZD-165"]
     assert provider.list_calls == ["/Movies/A/ACZD-165", "/Movies/B/ACZD-165"]
 
@@ -1871,7 +1871,7 @@ def test_find_existing_target_files_accepts_suffix_filename() -> None:
     )
 
     assert result.all_targets_exist is True
-    assert result.existing_targets == ["/Movies/A/ACZD-165-C/ACZD-165-C.mp4"]
+    assert result.existing_targets == ["/Movies/A/ACZD-165-C"]
 
 
 def test_execute_current_magnet_attempt_skips_after_task_exists_when_target_file_exists(monkeypatch) -> None:
@@ -2299,3 +2299,56 @@ def test_subtask_pipeline_stops_after_existing_target_skip_from_task_exists(monk
     assert context.subtask.magnet_attempts[0]["magnet_id"] == "m1"
     assert context.subtask.magnet_attempts[0]["success"] is True
     assert context.subtask.magnet_attempts[0]["status"] == "skipped"
+
+
+def test_find_existing_target_files_reports_source_and_missing_targets() -> None:
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import find_existing_target_files
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path == "/Movies/A/ACZD-165":
+                return [
+                    RemoteFile(
+                        name="ACZD-165.mp4",
+                        full_path="/Movies/A/ACZD-165/ACZD-165.mp4",
+                        size=500 * 1024 * 1024,
+                    )
+                ]
+            if path == "/Movies/B/ACZD-165":
+                return []
+            return []
+
+    result = find_existing_target_files(
+        provider=Provider(),
+        target_paths=["/Movies/A/ACZD-165", "/Movies/B/ACZD-165"],
+        expected_names=["ACZD-165.mp4"],
+    )
+
+    assert result.any_target_exists is True
+    assert result.all_targets_exist is False
+    assert result.checked_targets == ["/Movies/A/ACZD-165", "/Movies/B/ACZD-165"]
+    assert result.existing_targets == ["/Movies/A/ACZD-165"]
+    assert result.missing_targets == ["/Movies/B/ACZD-165"]
+    assert result.source_path == "/Movies/A/ACZD-165/ACZD-165.mp4"
+    assert result.source_name == "ACZD-165.mp4"
+    assert result.existing_files == [
+        {
+            "target_folder": "/Movies/A/ACZD-165",
+            "path": "/Movies/A/ACZD-165/ACZD-165.mp4",
+            "name": "ACZD-165.mp4",
+            "size": 500 * 1024 * 1024,
+        }
+    ]
