@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import random
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
@@ -123,7 +124,14 @@ def _target_file_exists(provider, target_path: str) -> bool:
         return False
 
 
-def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[str]) -> tuple[list[dict], list[dict]]:
+@dataclass
+class MoveRenamedVideosResult:
+    moved_files: list[dict]
+    skipped_files: list[dict]
+    all_targets_exist: bool = False
+
+
+def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[str]) -> MoveRenamedVideosResult:
     moved: list[dict] = []
     skipped: list[dict] = []
     copy_targets = target_paths[:-1] if len(target_paths) > 1 else []
@@ -168,7 +176,15 @@ def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[s
         moved.append({**file_info, "moved_path": move_dst, "copied_paths": copied_paths})
         context.log("INFO", f"已移动: {file_name} → {move_target}", step="move_files")
 
-    return moved, skipped
+    all_targets_exist = bool(renamed_files) and len(skipped) == len(renamed_files) and all(
+        item.get("skip_reason") == "target_exists"
+        for item in skipped
+    )
+    return MoveRenamedVideosResult(
+        moved_files=moved,
+        skipped_files=skipped,
+        all_targets_exist=all_targets_exist,
+    )
 
 
 def verify_moved_files(context, moved_files: list[dict]) -> bool:
@@ -310,7 +326,9 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
     renamed_files = rename_selected_videos(context, classified.selected_videos, tags)
 
     context.set_step("move_files")
-    moved_files, skipped_files = move_renamed_videos(context, renamed_files, target_paths)
+    move_result = move_renamed_videos(context, renamed_files, target_paths)
+    moved_files = move_result.moved_files
+    skipped_files = move_result.skipped_files
     subtask.renamed_files = renamed_files
     subtask.moved_files = moved_files
     subtask.skipped_files = skipped_files
