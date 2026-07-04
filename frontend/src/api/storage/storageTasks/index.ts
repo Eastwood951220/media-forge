@@ -10,6 +10,10 @@ import type { PaginatedResponse } from '@/api/crawlTask/types'
 
 const BASE_URL = '/api/storage/tasks'
 
+export function getNextAlias(): Promise<{ alias: string }> {
+  return request.get<{ alias: string }>(`${BASE_URL}/next-alias`)
+}
+
 export function createStoragePush(payload: StorageSinglePushPayload): Promise<StorageMainTask> {
   return request.post<StorageMainTask>(`${BASE_URL}/push`, payload)
 }
@@ -19,9 +23,10 @@ export function createBatchStoragePush(payload: StorageBatchPushPayload): Promis
 }
 
 export function listStorageMainTasks(params?: {
-  skip?: number
+  page?: number
   limit?: number
   status?: string
+  keyword?: string
 }): Promise<PaginatedResponse<StorageMainTask>> {
   return request.get<PaginatedResponse<StorageMainTask>>(BASE_URL, params)
 }
@@ -41,9 +46,8 @@ export function restartStorageMainTask(id: string): Promise<StorageMainTask> {
 export function listStorageSubTasks(
   mainTaskId: string,
   params?: {
-    skip?: number
+    page?: number
     limit?: number
-    status?: string
   },
 ): Promise<PaginatedResponse<StorageSubTask>> {
   return request.get<PaginatedResponse<StorageSubTask>>(`${BASE_URL}/${mainTaskId}/subtasks`, params)

@@ -36,8 +36,7 @@ function StorageTaskListPage() {
   const fetchTasks = useCallback(async (page: number, size: number) => {
     setLoading(true)
     try {
-      const skip = (page - 1) * size
-      const data = await listStorageMainTasks({ skip, limit: size })
+      const data = await listStorageMainTasks({ page, limit: size })
       setTasks(data.rows)
       setTotal(data.total)
     } finally {
