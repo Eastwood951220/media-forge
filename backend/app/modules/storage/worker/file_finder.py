@@ -427,3 +427,35 @@ def find_existing_video_files(provider, search_terms: list[str], search_paths: l
         if results:
             return results
     return results
+
+
+def find_recovery_video_files(
+    *,
+    provider,
+    search_terms: list[str],
+    task_download_folder: str,
+    download_root: str,
+    movie_code: str,
+    config: dict,
+) -> ScopedSearchResult:
+    task_result = find_listed_video_files(
+        provider=provider,
+        search_path=task_download_folder,
+        search_scope="recovery_task_download_folder",
+        movie_code=movie_code,
+        task_download_folder=task_download_folder,
+        config=config,
+    )
+    if task_result.accepted_files:
+        return task_result
+
+    root_result = find_scoped_video_files(
+        provider=provider,
+        search_terms=search_terms,
+        search_path=download_root,
+        search_scope="recovery_download_root",
+        movie_code=movie_code,
+        task_download_folder=download_root,
+        config=config,
+    )
+    return root_result

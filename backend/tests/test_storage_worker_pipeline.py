@@ -1547,3 +1547,226 @@ def test_scan_found_files_rejects_virtual_search_paths() -> None:
             "is_dir": False,
         }
     ]
+
+
+def test_execute_current_magnet_attempt_uses_recovery_only_when_submit_task_exists(monkeypatch):
+    import uuid
+    from dataclasses import dataclass
+    from pathlib import PurePosixPath
+
+    from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+            self.search_calls: list[tuple[str, str]] = []
+            self.renamed: list[tuple[str, str]] = []
+            self.moved: list[tuple[list[str], str]] = []
+            self.deleted: list[str] = []
+            self.files: dict[str, RemoteFile] = {}
+
+        def ensure_directory(self, path):
+            return None
+
+        def submit_offline_download(self, magnet_url, target_folder):
+            raise RuntimeError("任务已存在")
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path == "/Downloads/storage_sub":
+                return [
+                    RemoteFile("ACZD-165", "/Downloads/storage_sub/ACZD-165", 0, True),
+                ]
+            if path == "/Downloads/storage_sub/ACZD-165":
+                return [
+                    RemoteFile(
+                        "hhd800.com@ACZD-165.mp4",
+                        "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+                        500 * 1024 * 1024,
+                    )
+                ]
+            if path == "/Movies/A/ACZD-165":
+                return []
+            return []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            self.search_calls.append((term, path))
+            return []
+
+        def find_file(self, path):
+            if path in self.files:
+                return self.files[path]
+            return None
+
+        def rename_file(self, old_path, new_name):
+            self.renamed.append((old_path, new_name))
+
+        def move_files(self, source_paths, target_folder):
+            self.moved.append((source_paths, target_folder))
+            for src in source_paths:
+                dst = str(PurePosixPath(target_folder) / PurePosixPath(src).name)
+                self.files[dst] = RemoteFile(PurePosixPath(dst).name, dst, 500 * 1024 * 1024)
+
+        def delete_file(self, path):
+            self.deleted.append(path)
+
+    class Subtask:
+        id = "sub"
+        movie_id = uuid.uuid4()
+        movie_code = "ACZD-165"
+        target_locations = ["A"]
+        selected_storage_location = None
+        download_path = ""
+        target_paths = []
+        renamed_files = []
+        moved_files = []
+        skipped_files = []
+        status = "queued"
+        step = "prepare"
+        result = {}
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = Subtask()
+            self.config = {
+                "download_root_folder": "/Downloads",
+                "target_folder": "/Movies",
+                "download_max_poll_count": 1,
+                "download_poll_interval_min": 0,
+                "download_poll_interval_max": 0,
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+                "use_task_subfolder": True,
+                "auto_create_target_folder": True,
+            }
+            self.logs: list[dict] = []
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    context = Context()
+
+    success = execute_current_magnet_attempt(
+        context,
+        {
+            "id": "m1",
+            "magnet_url": "magnet:?xt=urn:btih:first",
+            "tags": [],
+            "weight": 100,
+            "selected": True,
+        },
+    )
+
+    assert success is True
+    assert context.provider.search_calls == []
+    assert "/Downloads/storage_sub" in context.provider.list_calls
+    assert context.provider.renamed == [
+        ("/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4", "ACZD-165.mp4")
+    ]
+    assert context.provider.moved == [
+        (["/Downloads/storage_sub/ACZD-165/ACZD-165.mp4"], "/Movies/A/ACZD-165")
+    ]
+    assert any(log["context"].get("search_scope") == "recovery_task_download_folder" for log in context.logs)
+
+
+def test_recover_existing_downloaded_video_files_searches_root_after_task_folder_empty() -> None:
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import recover_existing_downloaded_video_files
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+        is_search_result: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+            self.search_calls: list[tuple[str, str]] = []
+            self.original_path_calls: list[str] = []
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            return []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            self.search_calls.append((term, path))
+            return [
+                RemoteFile(
+                    "hhd800.com@ACZD-165.mp4",
+                    "/Downloads/[Search]ACZD-165/hhd800.com@ACZD-165.mp4",
+                    500 * 1024 * 1024,
+                    False,
+                    True,
+                )
+            ]
+
+        def get_original_path(self, path):
+            self.original_path_calls.append(path)
+            return "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4"
+
+    class Subtask:
+        movie_code = "ACZD-165"
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = Subtask()
+            self.config = {
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+            }
+            self.logs: list[dict] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+    context = Context()
+
+    files = recover_existing_downloaded_video_files(
+        context,
+        search_terms=["ACZD-165"],
+        task_download_folder="/Downloads/storage_sub",
+        download_root="/Downloads",
+    )
+
+    assert files == [
+        {
+            "name": "hhd800.com@ACZD-165.mp4",
+            "path": "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+            "size": 500 * 1024 * 1024,
+            "is_dir": False,
+        }
+    ]
+    assert "/Downloads/storage_sub" in context.provider.list_calls
+    assert context.provider.search_calls == [("ACZD-165", "/Downloads")]
+    assert context.provider.original_path_calls == ["/Downloads/[Search]ACZD-165/hhd800.com@ACZD-165.mp4"]
+    assert context.logs[0]["context"]["search_scope"] == "recovery_download_root"
+    assert context.logs[0]["context"]["original_path_results"] == [
+        {
+            "name": "hhd800.com@ACZD-165.mp4",
+            "raw_path": "/Downloads/[Search]ACZD-165/hhd800.com@ACZD-165.mp4",
+            "original_path": "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+        }
+    ]

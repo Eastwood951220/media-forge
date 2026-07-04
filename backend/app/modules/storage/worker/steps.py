@@ -56,6 +56,23 @@ def _log_search_result(context, result) -> None:
     )
 
 
+def recover_existing_downloaded_video_files(context, search_terms: list[str], task_download_folder: str, download_root: str) -> list[dict]:
+    from backend.app.modules.storage.worker.file_finder import find_recovery_video_files
+
+    movie_code = getattr(context.subtask, "movie_code", search_terms[0] if search_terms else "")
+    result = find_recovery_video_files(
+        provider=context.provider,
+        search_terms=search_terms,
+        task_download_folder=task_download_folder,
+        download_root=download_root,
+        movie_code=movie_code,
+        config=context.config,
+    )
+    result.log_context["recovery_reason"] = "submit_task_exists"
+    _log_search_result(context, result)
+    return result.accepted_files
+
+
 def poll_downloaded_video_files(context, search_terms: list[str], task_download_folder: str, download_root: str) -> list[dict]:
     from backend.app.modules.storage.worker.file_finder import find_listed_video_files
 
@@ -375,6 +392,7 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
     )
 
     context.set_step("submit_magnet")
+    submit_task_exists = False
     try:
         context.log(
             "INFO",
@@ -395,16 +413,25 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
         if "10008" not in message and "任务已存在" not in message:
             context.log("ERROR", f"提交磁力失败: {exc}", {"magnet_id": magnet.get("id")}, step="submit_magnet")
             return False
+        submit_task_exists = True
         context.log("WARNING", "磁力链接已存在 (code 10008)，搜索现有下载中", {"magnet_id": magnet.get("id")}, step="submit_magnet")
 
     context.set_step("waiting_download")
     search_terms = [subtask.movie_code]
-    found_files = poll_downloaded_video_files(
-        context,
-        search_terms=search_terms,
-        task_download_folder=download_folder,
-        download_root=download_root,
-    )
+    if submit_task_exists:
+        found_files = recover_existing_downloaded_video_files(
+            context,
+            search_terms=search_terms,
+            task_download_folder=download_folder,
+            download_root=download_root,
+        )
+    else:
+        found_files = poll_downloaded_video_files(
+            context,
+            search_terms=search_terms,
+            task_download_folder=download_folder,
+            download_root=download_root,
+        )
     if not found_files:
         context.log("WARNING", "未在下载目录找到可用视频文件", {"magnet_id": magnet.get("id"), "task_download_folder": download_folder, "download_root": download_root}, step="waiting_download")
         return False
