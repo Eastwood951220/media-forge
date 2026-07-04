@@ -229,6 +229,64 @@ class MoveRenamedVideosResult:
     all_rename_name_exists: bool = False
 
 
+@dataclass
+class ExistingTargetFilesResult:
+    all_targets_exist: bool
+    checked_targets: list[str]
+    existing_targets: list[str]
+    missing_targets: list[str]
+    expected_names: list[str]
+
+
+def _remote_file_name(file_obj) -> str:
+    path = getattr(file_obj, "full_path", "") or getattr(file_obj, "fullPathName", "")
+    return str(getattr(file_obj, "name", "") or PurePosixPath(path).name)
+
+
+def _remote_file_size(file_obj) -> int:
+    return int(getattr(file_obj, "size", 0) or 0)
+
+
+def find_existing_target_files(provider, target_paths: list[str], expected_names: list[str]) -> ExistingTargetFilesResult:
+    checked_targets: list[str] = []
+    existing_targets: list[str] = []
+    missing_targets: list[str] = []
+    expected_name_set = {name for name in expected_names if name}
+
+    for target_path in target_paths:
+        checked_targets.append(target_path)
+        try:
+            files = provider.list_files(target_path)
+        except Exception:
+            files = []
+
+        names_to_paths: dict[str, str] = {}
+        for file_obj in files:
+            name = _remote_file_name(file_obj)
+            size = _remote_file_size(file_obj)
+            is_dir = bool(getattr(file_obj, "is_directory", False) or getattr(file_obj, "isDirectory", False))
+            if is_dir or size <= 0:
+                continue
+            names_to_paths[name] = str(PurePosixPath(target_path) / name)
+
+        matched_path = next(
+            (names_to_paths[name] for name in expected_name_set if name in names_to_paths),
+            None,
+        )
+        if matched_path:
+            existing_targets.append(matched_path)
+        else:
+            missing_targets.append(target_path)
+
+    return ExistingTargetFilesResult(
+        all_targets_exist=bool(target_paths) and len(existing_targets) == len(target_paths),
+        checked_targets=checked_targets,
+        existing_targets=existing_targets,
+        missing_targets=missing_targets,
+        expected_names=sorted(expected_name_set),
+    )
+
+
 def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[str]) -> MoveRenamedVideosResult:
     moved: list[dict] = []
     skipped: list[dict] = []

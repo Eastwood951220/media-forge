@@ -1767,3 +1767,108 @@ def test_recover_existing_downloaded_video_files_searches_root_after_task_folder
             "original_path": "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
         }
     ]
+
+
+def test_find_existing_target_files_uses_list_files_for_single_target() -> None:
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import find_existing_target_files
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+            self.find_calls: list[str] = []
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path == "/Movies/人妖/ACZD-165":
+                return [
+                    RemoteFile("ACZD-165.mp4", "/Movies/人妖/ACZD-165/ACZD-165.mp4", 4770615244),
+                ]
+            return []
+
+        def find_file(self, path):
+            self.find_calls.append(path)
+            return None
+
+    result = find_existing_target_files(
+        provider=Provider(),
+        target_paths=["/Movies/人妖/ACZD-165"],
+        expected_names=["ACZD-165.mp4"],
+    )
+
+    assert result.all_targets_exist is True
+    assert result.existing_targets == ["/Movies/人妖/ACZD-165/ACZD-165.mp4"]
+    assert result.missing_targets == []
+    assert result.checked_targets == ["/Movies/人妖/ACZD-165"]
+
+
+def test_find_existing_target_files_requires_all_targets_to_exist() -> None:
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import find_existing_target_files
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path == "/Movies/A/ACZD-165":
+                return [RemoteFile("ACZD-165.mp4", "/Movies/A/ACZD-165/ACZD-165.mp4", 4770615244)]
+            return []
+
+    provider = Provider()
+
+    result = find_existing_target_files(
+        provider=provider,
+        target_paths=["/Movies/A/ACZD-165", "/Movies/B/ACZD-165"],
+        expected_names=["ACZD-165.mp4"],
+    )
+
+    assert result.all_targets_exist is False
+    assert result.existing_targets == ["/Movies/A/ACZD-165/ACZD-165.mp4"]
+    assert result.missing_targets == ["/Movies/B/ACZD-165"]
+    assert provider.list_calls == ["/Movies/A/ACZD-165", "/Movies/B/ACZD-165"]
+
+
+def test_find_existing_target_files_accepts_suffix_filename() -> None:
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import find_existing_target_files
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def list_files(self, path, force_refresh=False):
+            return [
+                RemoteFile("ACZD-165-C.mp4", f"{path}/ACZD-165-C.mp4", 4770615244),
+            ]
+
+    result = find_existing_target_files(
+        provider=Provider(),
+        target_paths=["/Movies/A/ACZD-165-C"],
+        expected_names=["ACZD-165-C.mp4", "ACZD-165.mp4"],
+    )
+
+    assert result.all_targets_exist is True
+    assert result.existing_targets == ["/Movies/A/ACZD-165-C/ACZD-165-C.mp4"]
