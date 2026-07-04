@@ -57,7 +57,7 @@ def _log_search_result(context, result) -> None:
 
 
 def poll_downloaded_video_files(context, search_terms: list[str], task_download_folder: str, download_root: str) -> list[dict]:
-    from backend.app.modules.storage.worker.file_finder import find_scoped_video_files
+    from backend.app.modules.storage.worker.file_finder import find_listed_video_files
 
     config = context.config
     movie_code = getattr(context.subtask, "movie_code", search_terms[0] if search_terms else "")
@@ -68,9 +68,8 @@ def poll_downloaded_video_files(context, search_terms: list[str], task_download_
         poll_max = poll_min
 
     for poll_index in range(1, max_poll_count + 1):
-        result = find_scoped_video_files(
+        result = find_listed_video_files(
             provider=context.provider,
-            search_terms=search_terms,
             search_path=task_download_folder,
             search_scope="task_download_folder",
             movie_code=movie_code,
@@ -92,25 +91,10 @@ def poll_downloaded_video_files(context, search_terms: list[str], task_download_
         if poll_index < max_poll_count:
             time.sleep(random.uniform(poll_min, poll_max))
 
-    root_result = find_scoped_video_files(
-        provider=context.provider,
-        search_terms=search_terms,
-        search_path=download_root,
-        search_scope="download_root",
-        movie_code=movie_code,
-        task_download_folder=task_download_folder,
-        config=config,
-    )
-    root_result.log_context["poll_index"] = max_poll_count
-    root_result.log_context["max_poll_count"] = max_poll_count
-    _log_search_result(context, root_result)
-    if root_result.accepted_files:
-        return root_result.accepted_files
-
     context.log(
         "WARNING",
-        f"轮询次数超过上限: {max_poll_count}/{max_poll_count}，任务目录与下载根目录均未发现可用视频文件，跳过当前磁力",
-        {"max_poll_count": max_poll_count, "task_download_folder": task_download_folder, "download_root": download_root},
+        f"轮询次数超过上限: {max_poll_count}/{max_poll_count}，任务目录未发现可用视频文件，跳过当前磁力",
+        {"max_poll_count": max_poll_count, "task_download_folder": task_download_folder},
         step="waiting_download",
     )
     return []

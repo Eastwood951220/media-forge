@@ -1156,7 +1156,7 @@ def test_execute_subtask_pipeline_stops_after_rename_existing_source_target_skip
     assert context.subtask.magnet_attempts[0]["status"] == "skipped"
 
 
-def test_poll_downloaded_video_files_searches_task_folder_before_download_root(monkeypatch):
+def test_poll_downloaded_video_files_uses_list_subfiles_and_does_not_search_root(monkeypatch):
     from dataclasses import dataclass
 
     from backend.app.modules.storage.worker.steps import poll_downloaded_video_files
@@ -1169,22 +1169,28 @@ def test_poll_downloaded_video_files_searches_task_folder_before_download_root(m
         full_path: str
         size: int
         is_directory: bool = False
-        is_search_result: bool = False
 
     class Provider:
         def __init__(self) -> None:
+            self.list_calls: list[str] = []
             self.search_calls: list[tuple[str, str]] = []
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path == "/Downloads/storage_sub":
+                return [RemoteFile("ACZD-165", "/Downloads/storage_sub/ACZD-165", 0, True)]
+            if path == "/Downloads/storage_sub/ACZD-165":
+                return [
+                    RemoteFile(
+                        "hhd800.com@ACZD-165.mp4",
+                        "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+                        500 * 1024 * 1024,
+                    )
+                ]
+            return []
 
         def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
             self.search_calls.append((term, path))
-            if path == "/Downloads":
-                return [RemoteFile("ACZD-165.mp4", "/Downloads/ACZD-165.mp4", 500 * 1024 * 1024)]
-            return []
-
-        def get_original_path(self, path):
-            return ""
-
-        def list_files(self, path, force_refresh=False):
             return []
 
     class Subtask:
@@ -1216,16 +1222,16 @@ def test_poll_downloaded_video_files_searches_task_folder_before_download_root(m
         download_root="/Downloads",
     )
 
-    assert [file["path"] for file in files] == ["/Downloads/ACZD-165.mp4"]
-    assert context.provider.search_calls == [
-        ("ACZD-165", "/Downloads/storage_sub"),
-        ("ACZD-165", "/Downloads/storage_sub"),
-        ("ACZD-165", "/Downloads"),
+    assert [file["path"] for file in files] == [
+        "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4"
     ]
-    assert [log["context"]["search_scope"] for log in context.logs if log["message"] == "查找下载文件"] == [
-        "task_download_folder",
-        "task_download_folder",
-        "download_root",
+    assert context.provider.search_calls == []
+    assert context.provider.list_calls == [
+        "/Downloads/storage_sub",
+        "/Downloads/storage_sub/ACZD-165",
+    ]
+    assert [log["context"]["search_method"] for log in context.logs if log["message"] == "查找下载文件"] == [
+        "list_sub_files",
     ]
 
 
@@ -1242,20 +1248,18 @@ def test_poll_downloaded_video_files_does_not_search_root_when_task_folder_has_f
         full_path: str
         size: int
         is_directory: bool = False
-        is_search_result: bool = False
 
     class Provider:
         def __init__(self) -> None:
+            self.list_calls: list[str] = []
             self.search_calls: list[tuple[str, str]] = []
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            return [RemoteFile("ACZD-165.mp4", f"{path}/ACZD-165.mp4", 500 * 1024 * 1024)]
 
         def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
             self.search_calls.append((term, path))
-            return [RemoteFile("ACZD-165.mp4", f"{path}/ACZD-165.mp4", 500 * 1024 * 1024)]
-
-        def get_original_path(self, path):
-            return ""
-
-        def list_files(self, path, force_refresh=False):
             return []
 
     class Subtask:
@@ -1286,7 +1290,61 @@ def test_poll_downloaded_video_files_does_not_search_root_when_task_folder_has_f
     )
 
     assert [file["path"] for file in files] == ["/Downloads/storage_sub/ACZD-165.mp4"]
-    assert context.provider.search_calls == [("ACZD-165", "/Downloads/storage_sub")]
+    assert context.provider.search_calls == []
+    assert context.provider.list_calls == ["/Downloads/storage_sub"]
+
+
+def test_poll_downloaded_video_files_does_not_search_download_root_after_poll_exhaustion(monkeypatch):
+    from backend.app.modules.storage.worker.steps import poll_downloaded_video_files
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+            self.search_calls: list[tuple[str, str]] = []
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            return []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            self.search_calls.append((term, path))
+            return []
+
+    class Subtask:
+        movie_code = "ACZD-165"
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = Subtask()
+            self.config = {
+                "download_max_poll_count": 2,
+                "download_poll_interval_min": 0,
+                "download_poll_interval_max": 0,
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+            }
+            self.logs: list[dict] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+    context = Context()
+
+    files = poll_downloaded_video_files(
+        context,
+        search_terms=["ACZD-165"],
+        task_download_folder="/Downloads/storage_sub",
+        download_root="/Downloads",
+    )
+
+    assert files == []
+    assert context.provider.search_calls == []
+    assert context.provider.list_calls == ["/Downloads/storage_sub", "/Downloads/storage_sub"]
+    assert context.logs[-1]["message"] == "轮询次数超过上限: 2/2，任务目录未发现可用视频文件，跳过当前磁力"
 
 
 def test_subtask_pipeline_starts_next_magnet_only_after_current_failure(monkeypatch):
