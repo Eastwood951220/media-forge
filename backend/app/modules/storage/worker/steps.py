@@ -125,7 +125,7 @@ def scan_found_files(found_files: list[dict]) -> list[dict]:
             "is_dir": bool(file.get("is_dir", False)),
         }
         for file in found_files
-        if not file.get("is_dir", False)
+        if not file.get("is_dir", False) and "/[Search]" not in str(file.get("path", ""))
     ]
 
 

@@ -1461,3 +1461,31 @@ def test_deduped_single_real_file_renames_without_cd_suffix() -> None:
     )
 
     assert new_name == "ACZD-165.mp4"
+
+
+def test_scan_found_files_rejects_virtual_search_paths() -> None:
+    from backend.app.modules.storage.worker.steps import scan_found_files
+
+    scanned = scan_found_files([
+        {
+            "name": "hhd800.com@ACZD-165.mp4",
+            "path": "/Downloads/storage_sub/[Search]ACZD-165/hhd800.com@ACZD-165.mp4",
+            "size": 4770615244,
+            "is_dir": False,
+        },
+        {
+            "name": "hhd800.com@ACZD-165.mp4",
+            "path": "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+            "size": 4770615244,
+            "is_dir": False,
+        },
+    ])
+
+    assert scanned == [
+        {
+            "name": "hhd800.com@ACZD-165.mp4",
+            "path": "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+            "size": 4770615244,
+            "is_dir": False,
+        }
+    ]
