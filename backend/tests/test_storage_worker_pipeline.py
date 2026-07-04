@@ -2202,3 +2202,100 @@ def test_execute_current_magnet_attempt_does_not_skip_after_task_exists_when_any
         and log["context"]["missing_targets"] == ["/Movies/B/ACZD-165"]
         for log in context.logs
     )
+
+
+def test_subtask_pipeline_stops_after_existing_target_skip_from_task_exists(monkeypatch):
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import execute_subtask_pipeline
+
+    attempt_ids: list[str] = []
+
+    def fake_execute_current_magnet_attempt(context, magnet):
+        attempt_ids.append(magnet["id"])
+        context.subtask.status = "skipped"
+        context.subtask.skip_reason = "target_exists"
+        context.subtask.result = {
+            "status": "skipped",
+            "reason": "target_exists",
+            "files": [
+                {
+                    "renamed_name": "ACZD-165.mp4",
+                    "existing_targets": ["/Movies/A/ACZD-165/ACZD-165.mp4"],
+                    "skip_reason": "target_exists",
+                }
+            ],
+        }
+        return True
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.steps.execute_current_magnet_attempt",
+        fake_execute_current_magnet_attempt,
+    )
+
+    @dataclass
+    class FakeMagnet:
+        id: str
+        magnet_url: str
+        tags: list[str]
+        weight: int
+        selected: bool
+
+    class FakeMovie:
+        magnets = [
+            FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
+            FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
+        ]
+
+    class FakeDb:
+        def get(self, model, movie_id):
+            return FakeMovie()
+
+    @dataclass
+    class FakeSubtask:
+        id: uuid.UUID
+        movie_id: uuid.UUID
+        movie_code: str = "ACZD-165"
+        status: str = "queued"
+        step: str = "prepare"
+        skip_reason: str | None = None
+        started_at: object | None = None
+        finished_at: object | None = None
+        error_message: str | None = None
+        current_magnet_id: str | None = None
+        current_magnet_url: str = ""
+        magnet_attempts: list | None = None
+        result: dict | None = None
+
+        def __post_init__(self):
+            if self.magnet_attempts is None:
+                self.magnet_attempts = []
+            if self.result is None:
+                self.result = {}
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.db = FakeDb()
+            self.subtask = FakeSubtask(id=uuid.uuid4(), movie_id=uuid.uuid4())
+            self.config = {"magnet_max_attempts_per_subtask": 2}
+            self.logs: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append(message)
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    context = FakeContext()
+
+    execute_subtask_pipeline(context)
+
+    assert attempt_ids == ["m1"]
+    assert context.subtask.status == "skipped"
+    assert context.subtask.skip_reason == "target_exists"
+    assert context.subtask.step == "done"
+    assert context.subtask.magnet_attempts[0]["magnet_id"] == "m1"
+    assert context.subtask.magnet_attempts[0]["success"] is True
+    assert context.subtask.magnet_attempts[0]["status"] == "skipped"
