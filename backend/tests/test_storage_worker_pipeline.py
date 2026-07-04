@@ -2421,3 +2421,135 @@ def test_copy_existing_target_to_missing_targets_copies_from_first_found_target(
         }
     ]
     assert any("已从命中的目标文件复制到缺失目标" in log["message"] for log in context.logs)
+
+
+def test_execute_current_magnet_attempt_copies_from_existing_target_when_multiple_mode_partial_targets(monkeypatch):
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+            self.copy_calls: list[tuple[str, str]] = []
+            self.ensure_calls: list[str] = []
+            self.deleted: list[str] = []
+            self.files = {
+                "/Movies/A/ACZD-165/ACZD-165.mp4": RemoteFile(
+                    "ACZD-165.mp4",
+                    "/Movies/A/ACZD-165/ACZD-165.mp4",
+                    500 * 1024 * 1024,
+                )
+            }
+
+        def ensure_directory(self, path):
+            self.ensure_calls.append(path)
+
+        def submit_offline_download(self, magnet_url, target_folder):
+            raise RuntimeError("磁力链接已存在 (code 10008)")
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path == "/Downloads/storage_sub":
+                return []
+            if path == "/Downloads":
+                return []
+            if path == "/Movies/A/ACZD-165":
+                return [self.files["/Movies/A/ACZD-165/ACZD-165.mp4"]]
+            if path == "/Movies/B/ACZD-165":
+                return []
+            return []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            return []
+
+        def copy_file(self, source_path, dest_folder):
+            self.copy_calls.append((source_path, dest_folder))
+            dest_path = f"{dest_folder}/ACZD-165.mp4"
+            self.files[dest_path] = RemoteFile("ACZD-165.mp4", dest_path, 500 * 1024 * 1024)
+
+        def find_file(self, path):
+            return self.files.get(path)
+
+        def delete_file(self, path):
+            self.deleted.append(path)
+
+    class Subtask:
+        id = "sub"
+        movie_id = uuid.uuid4()
+        movie_code = "ACZD-165"
+        storage_mode = "multiple"
+        target_locations = ["A", "B"]
+        selected_storage_location = ""
+        download_path = ""
+        target_paths = []
+        renamed_files = []
+        moved_files = []
+        skipped_files = []
+        status = "running"
+        step = "prepare"
+        result = {}
+        skip_reason = None
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = Subtask()
+            self.config = {
+                "download_root_folder": "/Downloads",
+                "target_folder": "/Movies",
+                "download_max_poll_count": 1,
+                "download_poll_interval_min": 0,
+                "download_poll_interval_max": 0,
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+                "use_task_subfolder": True,
+                "auto_create_target_folder": True,
+            }
+            self.logs: list[dict] = []
+            self.publish_count = 0
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+        def publish_subtask(self):
+            self.publish_count += 1
+
+    context = Context()
+
+    success = execute_current_magnet_attempt(
+        context,
+        {
+            "id": "m1",
+            "magnet_url": "magnet:?xt=urn:btih:first",
+            "tags": [],
+            "weight": 100,
+            "selected": True,
+        },
+    )
+
+    assert success is True
+    assert context.subtask.result["status"] == "success"
+    assert context.subtask.result["reason"] == "copied_from_existing_target"
+    assert context.subtask.moved_files[0]["copy_source"] == "/Movies/A/ACZD-165/ACZD-165.mp4"
+    assert context.provider.copy_calls == [
+        ("/Movies/A/ACZD-165/ACZD-165.mp4", "/Movies/B/ACZD-165")
+    ]
+    assert context.provider.find_file("/Movies/B/ACZD-165/ACZD-165.mp4") is not None
+    assert context.provider.deleted == ["/Downloads/storage_sub"]
+    assert any(log["message"] == "检查目标目录是否已存在视频文件" for log in context.logs)
+    assert any(log["message"] == "磁力任务处理成功" for log in context.logs)

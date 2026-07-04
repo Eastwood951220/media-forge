@@ -592,22 +592,79 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
         )
         if submit_task_exists:
             expected_names = [preview_name]
-            existing_targets = find_existing_target_files(provider, target_paths, expected_names)
+            existing_result = find_existing_target_files(provider, target_paths, expected_names)
             context.log(
                 "INFO",
                 "检查目标目录是否已存在视频文件",
                 {
-                    "target_paths": target_paths,
-                    "expected_names": expected_names,
-                    "existing_targets": existing_targets.existing_targets,
-                    "missing_targets": existing_targets.missing_targets,
                     "search_method": "list_sub_files",
-                    "recovery_reason": "submit_task_exists_download_missing",
+                    "storage_mode": getattr(subtask, "storage_mode", ""),
+                    "expected_names": expected_names,
+                    "checked_targets": existing_result.checked_targets,
+                    "existing_targets": existing_result.existing_targets,
+                    "missing_targets": existing_result.missing_targets,
+                    "source_path": existing_result.source_path,
+                    "existing_files": existing_result.existing_files,
                 },
                 step="waiting_download",
             )
-            if existing_targets.all_targets_exist:
-                mark_subtask_skipped_for_existing_targets(context, existing_targets, preview_name)
+            if existing_result.all_targets_exist:
+                subtask.status = "skipped"
+                subtask.skip_reason = "target_exists"
+                subtask.moved_files = []
+                subtask.skipped_files = [
+                    {
+                        "name": existing_result.source_name or preview_name,
+                        "skip_reason": "target_exists",
+                        "existing_targets": [
+                            item["path"]
+                            for item in existing_result.existing_files
+                        ],
+                    }
+                ]
+                subtask.result = {
+                    "status": "skipped",
+                    "reason": "target_exists",
+                    "files": subtask.skipped_files,
+                }
+                context.log(
+                    "INFO",
+                    "目标文件已全部存在，子任务标记为跳过",
+                    {"skipped_files": subtask.skipped_files, "target_paths": target_paths},
+                    step="move_files",
+                    event="subtask_skipped",
+                )
+                context.publish_subtask()
+                context.set_step("cleanup_files")
+                cleanup_download_folder(context, download_folder, config)
+                return True
+
+            if getattr(subtask, "storage_mode", "") == "multiple" and existing_result.any_target_exists:
+                copied_files = copy_existing_target_to_missing_targets(context, existing_result)
+                subtask.renamed_files = []
+                subtask.moved_files = copied_files
+                subtask.skipped_files = []
+                context.publish_subtask()
+                context.set_step("verify_result")
+                if not verify_moved_files(context, copied_files):
+                    return False
+                context.set_step("cleanup_files")
+                cleanup_download_folder(context, download_folder, config)
+                subtask.result = {
+                    "status": "success",
+                    "reason": "copied_from_existing_target",
+                    "files": copied_files,
+                    "existing_targets": existing_result.existing_targets,
+                    "missing_targets": existing_result.missing_targets,
+                }
+                context.log(
+                    "INFO",
+                    "磁力任务处理成功",
+                    {"magnet_id": magnet.get("id"), "files": copied_files, "reason": "copied_from_existing_target"},
+                    step="cleanup_files",
+                    event="magnet_success",
+                )
+                context.publish_subtask()
                 return True
         return False
 
