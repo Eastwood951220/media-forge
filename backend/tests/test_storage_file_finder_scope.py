@@ -67,7 +67,7 @@ def test_scoped_search_logs_raw_resolved_accepted_and_rejected_files() -> None:
         {"name": "ACZD-165.txt", "path": "/Downloads/storage_sub/ACZD-165.txt", "size": 1024},
     ]
     assert result.log_context["accepted_files"] == [
-        {"name": "ACZD-165.mp4", "path": "/Downloads/storage_sub/ACZD-165.mp4", "size": 524288000}
+        {"name": "ACZD-165.mp4", "path": "/Downloads/storage_sub/ACZD-165.mp4", "size": 524288000, "is_dir": False}
     ]
     assert result.log_context["rejected_files"] == [
         {
