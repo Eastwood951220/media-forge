@@ -50,11 +50,29 @@ def _worker_loop(runtime, provider_factory, config_service) -> None:
         while True:
             task_id = runtime.claim_next_main_task()
             if task_id is None:
-                break
-            process_main_task(runtime, provider_factory, config_service, task_id)
-    finally:
+                with _worker_lock:
+                    task_id = runtime.claim_next_main_task()
+                    if task_id is None:
+                        _worker_running = False
+                        return
+            try:
+                process_main_task(runtime, provider_factory, config_service, task_id)
+            except Exception:
+                logger.exception("Storage worker failed while processing main task %s", task_id)
+    except Exception:
+        logger.exception("Storage worker loop crashed")
         with _worker_lock:
             _worker_running = False
+        raise
+
+
+def _publish_main_with_recomputed_counts(db: Session, repository, main_task: StorageMainTask) -> None:
+    from backend.app.modules.storage.tasks.events import publish_storage_main_updated
+
+    repository.recompute_counts(main_task)
+    db.flush()
+    db.commit()
+    publish_storage_main_updated(main_task)
 
 
 def process_main_task(runtime, provider_factory, config_service, task_id: str) -> bool:
@@ -118,7 +136,7 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
                     f"创建 CloudDrive2 客户端失败: {exc}",
                     {"main_task_id": str(main_task.id)},
                 )
-                db.commit()
+                _publish_main_with_recomputed_counts(db, repository, main_task)
                 continue
 
             context = StorageWorkerContext(
@@ -162,8 +180,7 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
                 context.publish_subtask()
                 logger.exception("Storage subtask %s failed", subtask.id)
 
-            db.commit()
-            publish_storage_main_updated(main_task)
+            _publish_main_with_recomputed_counts(db, repository, main_task)
 
             # Close client
             close = getattr(client, "close", None)
@@ -180,7 +197,6 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
             main_task.status = "completed"
 
         main_task.finished_at = datetime.now(timezone.utc)
-        db.commit()
-        publish_storage_main_updated(main_task)
+        _publish_main_with_recomputed_counts(db, repository, main_task)
 
     return True
