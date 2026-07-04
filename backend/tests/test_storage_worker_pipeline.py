@@ -833,3 +833,323 @@ def test_execute_subtask_pipeline_stops_after_rename_name_exists_skip(monkeypatc
     assert context.subtask.magnet_attempts[0]["magnet_id"] == "m1"
     assert context.subtask.magnet_attempts[0]["success"] is True
     assert context.subtask.magnet_attempts[0]["status"] == "skipped"
+
+
+def test_rename_existing_source_skips_when_single_target_already_has_file() -> None:
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.steps import move_renamed_videos
+
+    target_file = "/Movies/巨乳/MIDA-628/MIDA-628.mp4"
+
+    class Provider:
+        def __init__(self) -> None:
+            self.move_calls: list[tuple[list[str], str]] = []
+            self.copy_calls: list[tuple[str, str]] = []
+
+        def ensure_directory(self, path):
+            return None
+
+        def find_file(self, path):
+            if path == target_file:
+                return SimpleNamespace(size=6910439461)
+            return None
+
+        def move_files(self, source_paths, target_folder):
+            self.move_calls.append((source_paths, target_folder))
+            return None
+
+        def copy_file(self, source_path, dest_folder):
+            self.copy_calls.append((source_path, dest_folder))
+            return None
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.config = {"auto_create_target_folder": True}
+            self.messages: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.messages.append(message)
+            return {}
+
+    context = FakeContext()
+
+    result = move_renamed_videos(
+        context,
+        [
+            {
+                "name": "hhd800.com@MIDA-628.mp4",
+                "path": "/Downloads/hhd800.com@MIDA-628.mp4",
+                "size": 6910439461,
+                "renamed_path": "/Downloads/MIDA-628.mp4",
+                "renamed_name": "MIDA-628.mp4",
+                "rename_name_exists": True,
+                "existing_path": "/Downloads/MIDA-628.mp4",
+            }
+        ],
+        ["/Movies/巨乳/MIDA-628"],
+    )
+
+    assert result.moved_files == []
+    assert result.skipped_files == [
+        {
+            "name": "hhd800.com@MIDA-628.mp4",
+            "path": "/Downloads/hhd800.com@MIDA-628.mp4",
+            "size": 6910439461,
+            "renamed_path": "/Downloads/MIDA-628.mp4",
+            "renamed_name": "MIDA-628.mp4",
+            "rename_name_exists": True,
+            "existing_path": "/Downloads/MIDA-628.mp4",
+            "skip_reason": "target_exists",
+            "existing_targets": [target_file],
+        }
+    ]
+    assert result.all_targets_exist is True
+    assert context.provider.move_calls == []
+    assert context.provider.copy_calls == []
+    assert any("跳过已存在: MIDA-628.mp4" in message for message in context.messages)
+
+
+def test_rename_existing_source_skips_when_all_multi_targets_already_have_file() -> None:
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.steps import move_renamed_videos
+
+    target_files = {
+        "/Movies/巨乳/MIDA-628/MIDA-628.mp4",
+        "/Movies/中字/MIDA-628/MIDA-628.mp4",
+    }
+
+    class Provider:
+        def __init__(self) -> None:
+            self.move_calls: list[tuple[list[str], str]] = []
+            self.copy_calls: list[tuple[str, str]] = []
+
+        def ensure_directory(self, path):
+            return None
+
+        def find_file(self, path):
+            if path in target_files:
+                return SimpleNamespace(size=6910439461)
+            return None
+
+        def move_files(self, source_paths, target_folder):
+            self.move_calls.append((source_paths, target_folder))
+            return None
+
+        def copy_file(self, source_path, dest_folder):
+            self.copy_calls.append((source_path, dest_folder))
+            return None
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.config = {"auto_create_target_folder": True}
+            self.messages: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.messages.append(message)
+            return {}
+
+    context = FakeContext()
+
+    result = move_renamed_videos(
+        context,
+        [
+            {
+                "name": "hhd800.com@MIDA-628.mp4",
+                "path": "/Downloads/hhd800.com@MIDA-628.mp4",
+                "size": 6910439461,
+                "renamed_path": "/Downloads/MIDA-628.mp4",
+                "renamed_name": "MIDA-628.mp4",
+                "rename_name_exists": True,
+                "existing_path": "/Downloads/MIDA-628.mp4",
+            }
+        ],
+        ["/Movies/巨乳/MIDA-628", "/Movies/中字/MIDA-628"],
+    )
+
+    assert result.moved_files == []
+    assert result.skipped_files[0]["skip_reason"] == "target_exists"
+    assert result.skipped_files[0]["existing_targets"] == [
+        "/Movies/巨乳/MIDA-628/MIDA-628.mp4",
+        "/Movies/中字/MIDA-628/MIDA-628.mp4",
+    ]
+    assert result.all_targets_exist is True
+    assert context.provider.move_calls == []
+    assert context.provider.copy_calls == []
+
+
+def test_rename_existing_source_copies_missing_multi_target_and_keeps_existing_move_target() -> None:
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.steps import move_renamed_videos
+
+    existing_move_target = "/Movies/中字/MIDA-628/MIDA-628.mp4"
+
+    class Provider:
+        def __init__(self) -> None:
+            self.move_calls: list[tuple[list[str], str]] = []
+            self.copy_calls: list[tuple[str, str]] = []
+
+        def ensure_directory(self, path):
+            return None
+
+        def find_file(self, path):
+            if path == existing_move_target:
+                return SimpleNamespace(size=6910439461)
+            return None
+
+        def move_files(self, source_paths, target_folder):
+            self.move_calls.append((source_paths, target_folder))
+            return None
+
+        def copy_file(self, source_path, dest_folder):
+            self.copy_calls.append((source_path, dest_folder))
+            return None
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.config = {"auto_create_target_folder": True}
+            self.messages: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.messages.append(message)
+            return {}
+
+    context = FakeContext()
+
+    result = move_renamed_videos(
+        context,
+        [
+            {
+                "name": "hhd800.com@MIDA-628.mp4",
+                "path": "/Downloads/hhd800.com@MIDA-628.mp4",
+                "size": 6910439461,
+                "renamed_path": "/Downloads/MIDA-628.mp4",
+                "renamed_name": "MIDA-628.mp4",
+                "rename_name_exists": True,
+                "existing_path": "/Downloads/MIDA-628.mp4",
+            }
+        ],
+        ["/Movies/巨乳/MIDA-628", "/Movies/中字/MIDA-628"],
+    )
+
+    assert result.all_targets_exist is False
+    assert result.moved_files == [
+        {
+            "name": "hhd800.com@MIDA-628.mp4",
+            "path": "/Downloads/hhd800.com@MIDA-628.mp4",
+            "size": 6910439461,
+            "renamed_path": "/Downloads/MIDA-628.mp4",
+            "renamed_name": "MIDA-628.mp4",
+            "rename_name_exists": True,
+            "existing_path": "/Downloads/MIDA-628.mp4",
+            "moved_path": "/Movies/中字/MIDA-628/MIDA-628.mp4",
+            "copied_paths": ["/Movies/巨乳/MIDA-628/MIDA-628.mp4"],
+        }
+    ]
+    assert result.skipped_files == []
+    assert context.provider.copy_calls == [
+        ("/Downloads/MIDA-628.mp4", "/Movies/巨乳/MIDA-628")
+    ]
+    assert context.provider.move_calls == []
+
+
+def test_execute_subtask_pipeline_stops_after_rename_existing_source_target_skip(monkeypatch):
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import execute_subtask_pipeline
+
+    attempt_ids: list[str] = []
+
+    def fake_execute_current_magnet_attempt(context, magnet):
+        attempt_ids.append(magnet["id"])
+        context.subtask.status = "skipped"
+        context.subtask.skip_reason = "target_exists"
+        context.subtask.result = {
+            "status": "skipped",
+            "reason": "target_exists",
+            "files": [
+                {
+                    "renamed_path": "/Downloads/MIDA-628.mp4",
+                    "existing_targets": ["/Movies/巨乳/MIDA-628/MIDA-628.mp4"],
+                    "skip_reason": "target_exists",
+                }
+            ],
+        }
+        return True
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.steps.execute_current_magnet_attempt",
+        fake_execute_current_magnet_attempt,
+    )
+
+    @dataclass
+    class FakeMagnet:
+        id: str
+        magnet_url: str
+        tags: list[str]
+        weight: int
+        selected: bool
+
+    class FakeMovie:
+        magnets = [
+            FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
+            FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
+        ]
+
+    class FakeDb:
+        def get(self, model, movie_id):
+            return FakeMovie()
+
+    @dataclass
+    class FakeSubtask:
+        id: uuid.UUID
+        movie_id: uuid.UUID
+        movie_code: str = "MIDA-628"
+        status: str = "queued"
+        step: str = "prepare"
+        skip_reason: str | None = None
+        started_at: object | None = None
+        finished_at: object | None = None
+        error_message: str | None = None
+        current_magnet_id: str | None = None
+        current_magnet_url: str = ""
+        magnet_attempts: list | None = None
+        result: dict | None = None
+
+        def __post_init__(self):
+            if self.magnet_attempts is None:
+                self.magnet_attempts = []
+            if self.result is None:
+                self.result = {}
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.db = FakeDb()
+            self.subtask = FakeSubtask(id=uuid.uuid4(), movie_id=uuid.uuid4())
+            self.config = {"magnet_max_attempts_per_subtask": 2}
+            self.logs: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append(message)
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    context = FakeContext()
+
+    execute_subtask_pipeline(context)
+
+    assert attempt_ids == ["m1"]
+    assert context.subtask.status == "skipped"
+    assert context.subtask.skip_reason == "target_exists"
+    assert context.subtask.step == "done"
+    assert context.subtask.magnet_attempts[0]["magnet_id"] == "m1"
+    assert context.subtask.magnet_attempts[0]["success"] is True
+    assert context.subtask.magnet_attempts[0]["status"] == "skipped"
