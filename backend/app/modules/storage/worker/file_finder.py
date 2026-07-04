@@ -32,30 +32,41 @@ def _is_search_result(file_obj, raw_item: dict) -> bool:
     )
 
 
-def _resolve_file_candidate(provider, file_obj) -> tuple[dict, dict, str | None]:
+def _resolve_file_candidate(provider, file_obj) -> tuple[dict, dict, str | None, dict | None]:
     raw_item = _raw_file_to_dict(file_obj)
     resolved_item = dict(raw_item)
     if not _is_search_result(file_obj, raw_item):
         if _is_virtual_search_path(raw_item["path"]):
-            return raw_item, resolved_item, "virtual_search_path"
-        return raw_item, resolved_item, None
+            return raw_item, resolved_item, "virtual_search_path", None
+        return raw_item, resolved_item, None, None
 
     try:
         original = provider.get_original_path(raw_item["path"])
-    except Exception:
+        original_log = {
+            "name": raw_item["name"],
+            "raw_path": raw_item["path"],
+            "original_path": original,
+        }
+    except Exception as exc:
         original = ""
+        original_log = {
+            "name": raw_item["name"],
+            "raw_path": raw_item["path"],
+            "original_path": "",
+            "error": str(exc),
+        }
     if not original:
         resolved_item["path"] = ""
-        return raw_item, resolved_item, "missing_original_path"
+        return raw_item, resolved_item, "missing_original_path", original_log
     resolved_item["path"] = original
     resolved_item["name"] = PurePosixPath(original).name
     if _is_virtual_search_path(original):
-        return raw_item, resolved_item, "virtual_search_path"
-    return raw_item, resolved_item, None
+        return raw_item, resolved_item, "virtual_search_path", original_log
+    return raw_item, resolved_item, None, original_log
 
 
 def _file_to_dict(provider, file_obj) -> dict:
-    raw_item, resolved_item, reason = _resolve_file_candidate(provider, file_obj)
+    raw_item, resolved_item, reason, _original_log = _resolve_file_candidate(provider, file_obj)
     if reason is not None:
         return {
             **resolved_item,
@@ -122,6 +133,143 @@ def _recursive_list(provider, path: str, config: dict) -> list[dict]:
     return found
 
 
+def _raw_entry_log(current_path: str, item: dict) -> dict:
+    return {
+        "current_path": current_path,
+        "name": item["name"],
+        "path": item["path"],
+        "size": int(item.get("size") or 0),
+        "is_dir": bool(item.get("is_dir", False)),
+    }
+
+
+def _list_real_files_recursive(
+    *,
+    provider,
+    current_path: str,
+    search_root: str,
+    config: dict,
+    raw_entries: list[dict],
+    rejected: list[dict],
+    visited: set[str],
+    depth: int,
+    max_depth: int,
+) -> list[dict]:
+    normalized_current = str(PurePosixPath(current_path))
+    if normalized_current in visited:
+        rejected.append({
+            "name": PurePosixPath(normalized_current).name,
+            "raw_path": normalized_current,
+            "resolved_path": normalized_current,
+            "size": 0,
+            "reason": "recursive_loop",
+        })
+        return []
+    if depth > max_depth:
+        rejected.append({
+            "name": PurePosixPath(normalized_current).name,
+            "raw_path": normalized_current,
+            "resolved_path": normalized_current,
+            "size": 0,
+            "reason": "max_depth_exceeded",
+        })
+        return []
+
+    visited.add(normalized_current)
+    found: list[dict] = []
+    try:
+        entries = provider.list_files(normalized_current)
+    except Exception as exc:
+        rejected.append({
+            "name": PurePosixPath(normalized_current).name,
+            "raw_path": normalized_current,
+            "resolved_path": normalized_current,
+            "size": 0,
+            "reason": "list_error",
+            "error": str(exc),
+        })
+        return found
+
+    for entry in entries:
+        item = _raw_file_to_dict(entry)
+        raw_entries.append(_raw_entry_log(normalized_current, item))
+        if _is_virtual_search_path(item["path"]):
+            rejected.append(_rejected_file(item, item, "virtual_search_path"))
+            continue
+        if not _path_is_under(item["path"], search_root):
+            rejected.append(_rejected_file(item, item, "outside_task_download_folder"))
+            continue
+        if item["is_dir"]:
+            found.extend(_list_real_files_recursive(
+                provider=provider,
+                current_path=item["path"],
+                search_root=search_root,
+                config=config,
+                raw_entries=raw_entries,
+                rejected=rejected,
+                visited=visited,
+                depth=depth + 1,
+                max_depth=max_depth,
+            ))
+            continue
+        found.append(item)
+    return found
+
+
+def find_listed_video_files(
+    *,
+    provider,
+    search_path: str,
+    search_scope: str,
+    movie_code: str,
+    task_download_folder: str,
+    config: dict,
+) -> ScopedSearchResult:
+    accepted: list[dict] = []
+    rejected: list[dict] = []
+    raw_entries: list[dict] = []
+    seen: set[str] = set()
+    max_depth = int(config.get("download_scan_max_depth", 10) or 10)
+
+    listed_files = _list_real_files_recursive(
+        provider=provider,
+        current_path=search_path,
+        search_root=task_download_folder,
+        config=config,
+        raw_entries=raw_entries,
+        rejected=rejected,
+        visited=set(),
+        depth=0,
+        max_depth=max_depth,
+    )
+
+    for listed in listed_files:
+        _append_candidate(
+            raw_candidate=listed,
+            candidate=listed,
+            accepted=accepted,
+            rejected=rejected,
+            seen=seen,
+            config=config,
+            movie_code=movie_code,
+            search_scope=search_scope,
+            task_download_folder=task_download_folder,
+        )
+
+    return ScopedSearchResult(
+        accepted_files=accepted,
+        log_context={
+            "search_path": search_path,
+            "current_path": search_path,
+            "search_scope": search_scope,
+            "search_method": "list_sub_files",
+            "raw_entries": raw_entries,
+            "accepted_files": accepted,
+            "rejected_files": rejected,
+        },
+    )
+
+
 def _append_candidate(
     *,
     raw_candidate: dict,
@@ -179,6 +327,7 @@ def find_scoped_video_files(
     rejected: list[dict] = []
     raw_results: list[dict] = []
     resolved_results: list[dict] = []
+    original_path_results: list[dict] = []
     seen: set[str] = set()
     search_term = search_terms[0] if search_terms else movie_code
 
@@ -194,15 +343,18 @@ def find_scoped_video_files(
                 "search_method": "search_files",
                 "raw_results": [],
                 "resolved_results": [],
+                "original_path_results": [],
                 "accepted_files": [],
                 "rejected_files": [{"name": "", "path": search_path, "size": 0, "reason": "search_error", "error": str(exc)}],
             },
         )
 
     for file_obj in search_results:
-        raw_item, resolved, resolution_error = _resolve_file_candidate(provider, file_obj)
+        raw_item, resolved, resolution_error, original_log = _resolve_file_candidate(provider, file_obj)
         raw_results.append({key: raw_item[key] for key in ("name", "path", "size")})
         resolved_results.append({key: resolved[key] for key in ("name", "path", "size")})
+        if original_log is not None:
+            original_path_results.append(original_log)
         _append_candidate(
             raw_candidate=raw_item,
             candidate=resolved,
@@ -246,6 +398,7 @@ def find_scoped_video_files(
             "search_method": "search_files",
             "raw_results": raw_results,
             "resolved_results": resolved_results,
+            "original_path_results": original_path_results,
             "accepted_files": accepted,
             "rejected_files": rejected,
         },

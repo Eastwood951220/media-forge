@@ -66,6 +66,18 @@ def test_scoped_search_logs_raw_resolved_accepted_and_rejected_files() -> None:
         {"name": "MIDA-628.mp4", "path": "/Downloads/storage_old/MIDA-628.mp4", "size": 524288000},
         {"name": "ACZD-165.txt", "path": "/Downloads/storage_sub/ACZD-165.txt", "size": 1024},
     ]
+    assert result.log_context["original_path_results"] == [
+        {
+            "name": "ACZD-165.mp4",
+            "raw_path": "/Search/ACZD-165.mp4",
+            "original_path": "/Downloads/storage_sub/ACZD-165.mp4",
+        },
+        {
+            "name": "MIDA-628.mp4",
+            "raw_path": "/Search/MIDA-628.mp4",
+            "original_path": "/Downloads/storage_old/MIDA-628.mp4",
+        },
+    ]
     assert result.log_context["accepted_files"] == [
         {"name": "ACZD-165.mp4", "path": "/Downloads/storage_sub/ACZD-165.mp4", "size": 524288000, "is_dir": False}
     ]
@@ -271,4 +283,207 @@ def test_scoped_search_rejects_missing_and_virtual_original_paths() -> None:
             "size": 524288000,
             "reason": "virtual_search_path",
         },
+    ]
+
+
+def test_list_subfiles_discovery_accepts_nested_real_video_without_search() -> None:
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.file_finder import find_listed_video_files
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+        is_search_result: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+            self.search_calls: list[tuple[str, str]] = []
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path == "/Downloads/storage_sub":
+                return [
+                    RemoteFile("ACZD-165", "/Downloads/storage_sub/ACZD-165", 0, True),
+                    RemoteFile("cover.jpg", "/Downloads/storage_sub/cover.jpg", 1024, False),
+                ]
+            if path == "/Downloads/storage_sub/ACZD-165":
+                return [
+                    RemoteFile(
+                        "hhd800.com@ACZD-165.mp4",
+                        "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+                        4770615244,
+                        False,
+                    )
+                ]
+            return []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            self.search_calls.append((term, path))
+            return []
+
+    provider = Provider()
+
+    result = find_listed_video_files(
+        provider=provider,
+        search_path="/Downloads/storage_sub",
+        search_scope="task_download_folder",
+        movie_code="ACZD-165",
+        task_download_folder="/Downloads/storage_sub",
+        config={"video_extensions": [".mp4"], "minimum_video_size_mb": 100},
+    )
+
+    assert provider.search_calls == []
+    assert provider.list_calls == [
+        "/Downloads/storage_sub",
+        "/Downloads/storage_sub/ACZD-165",
+    ]
+    assert result.accepted_files == [
+        {
+            "name": "hhd800.com@ACZD-165.mp4",
+            "path": "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+            "size": 4770615244,
+            "is_dir": False,
+        }
+    ]
+    assert result.log_context["search_method"] == "list_sub_files"
+    assert result.log_context["search_path"] == "/Downloads/storage_sub"
+    assert result.log_context["search_scope"] == "task_download_folder"
+    assert result.log_context["raw_entries"] == [
+        {
+            "current_path": "/Downloads/storage_sub",
+            "name": "ACZD-165",
+            "path": "/Downloads/storage_sub/ACZD-165",
+            "size": 0,
+            "is_dir": True,
+        },
+        {
+            "current_path": "/Downloads/storage_sub/ACZD-165",
+            "name": "hhd800.com@ACZD-165.mp4",
+            "path": "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+            "size": 4770615244,
+            "is_dir": False,
+        },
+        {
+            "current_path": "/Downloads/storage_sub",
+            "name": "cover.jpg",
+            "path": "/Downloads/storage_sub/cover.jpg",
+            "size": 1024,
+            "is_dir": False,
+        },
+    ]
+    assert result.log_context["rejected_files"] == [
+        {
+            "name": "cover.jpg",
+            "raw_path": "/Downloads/storage_sub/cover.jpg",
+            "resolved_path": "/Downloads/storage_sub/cover.jpg",
+            "size": 1024,
+            "reason": "extension_not_allowed",
+        }
+    ]
+
+
+def test_list_subfiles_discovery_rejects_virtual_and_duplicate_paths() -> None:
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.file_finder import find_listed_video_files
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def list_files(self, path, force_refresh=False):
+            return [
+                RemoteFile(
+                    "hhd800.com@ACZD-165.mp4",
+                    "/Downloads/storage_sub/[Search]ACZD-165/hhd800.com@ACZD-165.mp4",
+                    4770615244,
+                    False,
+                ),
+                RemoteFile(
+                    "hhd800.com@ACZD-165.mp4",
+                    "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+                    4770615244,
+                    False,
+                ),
+                RemoteFile(
+                    "hhd800.com@ACZD-165.mp4",
+                    "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+                    4770615244,
+                    False,
+                ),
+            ]
+
+    result = find_listed_video_files(
+        provider=Provider(),
+        search_path="/Downloads/storage_sub",
+        search_scope="task_download_folder",
+        movie_code="ACZD-165",
+        task_download_folder="/Downloads/storage_sub",
+        config={"video_extensions": [".mp4"], "minimum_video_size_mb": 100},
+    )
+
+    assert result.accepted_files == [
+        {
+            "name": "hhd800.com@ACZD-165.mp4",
+            "path": "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+            "size": 4770615244,
+            "is_dir": False,
+        }
+    ]
+    assert [item["reason"] for item in result.log_context["rejected_files"]] == [
+        "virtual_search_path",
+        "duplicate_resolved_path",
+    ]
+
+
+def test_list_subfiles_discovery_stops_recursive_directory_loops() -> None:
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.file_finder import find_listed_video_files
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            return [RemoteFile("loop", "/Downloads/storage_sub", 0, True)]
+
+    provider = Provider()
+
+    result = find_listed_video_files(
+        provider=provider,
+        search_path="/Downloads/storage_sub",
+        search_scope="task_download_folder",
+        movie_code="ACZD-165",
+        task_download_folder="/Downloads/storage_sub",
+        config={"video_extensions": [".mp4"], "minimum_video_size_mb": 100},
+    )
+
+    assert result.accepted_files == []
+    assert provider.list_calls == ["/Downloads/storage_sub"]
+    assert result.log_context["rejected_files"] == [
+        {
+            "name": "storage_sub",
+            "raw_path": "/Downloads/storage_sub",
+            "resolved_path": "/Downloads/storage_sub",
+            "size": 0,
+            "reason": "recursive_loop",
+        }
     ]
