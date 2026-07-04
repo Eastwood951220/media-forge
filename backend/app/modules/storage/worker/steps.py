@@ -404,6 +404,37 @@ def verify_moved_files(context, moved_files: list[dict]) -> bool:
     return all_ok
 
 
+def mark_subtask_skipped_for_existing_targets(context, existing_result: ExistingTargetFilesResult, expected_name: str) -> None:
+    skipped_files = [
+        {
+            "renamed_name": expected_name,
+            "existing_targets": existing_result.existing_targets,
+            "skip_reason": "target_exists",
+        }
+    ]
+    context.subtask.status = "skipped"
+    context.subtask.skip_reason = "target_exists"
+    context.subtask.skipped_files = skipped_files
+    context.subtask.result = {
+        "status": "skipped",
+        "reason": "target_exists",
+        "files": skipped_files,
+    }
+    context.log(
+        "INFO",
+        "目标文件已全部存在，子任务标记为跳过",
+        {
+            "skipped_files": skipped_files,
+            "target_paths": existing_result.checked_targets,
+            "existing_targets": existing_result.existing_targets,
+            "expected_names": existing_result.expected_names,
+        },
+        step="waiting_download",
+        event="subtask_skipped",
+    )
+    context.publish_subtask()
+
+
 def cleanup_download_folder(context, download_folder: str, config: dict) -> None:
     if download_folder and config.get("use_task_subfolder", True):
         try:
@@ -491,7 +522,31 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
             download_root=download_root,
         )
     if not found_files:
-        context.log("WARNING", "未在下载目录找到可用视频文件", {"magnet_id": magnet.get("id"), "task_download_folder": download_folder, "download_root": download_root}, step="waiting_download")
+        context.log(
+            "WARNING",
+            "未在下载目录找到可用视频文件",
+            {"magnet_id": magnet.get("id"), "task_download_folder": download_folder, "download_root": download_root},
+            step="waiting_download",
+        )
+        if submit_task_exists:
+            expected_names = [preview_name]
+            existing_targets = find_existing_target_files(provider, target_paths, expected_names)
+            context.log(
+                "INFO",
+                "检查目标目录是否已存在视频文件",
+                {
+                    "target_paths": target_paths,
+                    "expected_names": expected_names,
+                    "existing_targets": existing_targets.existing_targets,
+                    "missing_targets": existing_targets.missing_targets,
+                    "search_method": "list_sub_files",
+                    "recovery_reason": "submit_task_exists_download_missing",
+                },
+                step="waiting_download",
+            )
+            if existing_targets.all_targets_exist:
+                mark_subtask_skipped_for_existing_targets(context, existing_targets, preview_name)
+                return True
         return False
 
     total_size = sum(int(file.get("size") or 0) for file in found_files)

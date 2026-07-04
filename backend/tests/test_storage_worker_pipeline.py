@@ -1872,3 +1872,333 @@ def test_find_existing_target_files_accepts_suffix_filename() -> None:
 
     assert result.all_targets_exist is True
     assert result.existing_targets == ["/Movies/A/ACZD-165-C/ACZD-165-C.mp4"]
+
+
+def test_execute_current_magnet_attempt_skips_after_task_exists_when_target_file_exists(monkeypatch) -> None:
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+            self.search_calls: list[tuple[str, str]] = []
+            self.submit_calls = 0
+
+        def ensure_directory(self, path):
+            return None
+
+        def submit_offline_download(self, magnet_url, target_folder):
+            self.submit_calls += 1
+            raise RuntimeError("api error: code: 10008, message: 任务已存在")
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path == "/Movies/A/ACZD-165":
+                return [
+                    RemoteFile("ACZD-165.mp4", "/Movies/A/ACZD-165/ACZD-165.mp4", 4770615244),
+                ]
+            return []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            self.search_calls.append((term, path))
+            return []
+
+        def delete_file(self, path):
+            return None
+
+    class Subtask:
+        id = "sub"
+        movie_id = uuid.uuid4()
+        movie_code = "ACZD-165"
+        target_locations = ["A"]
+        selected_storage_location = None
+        download_path = ""
+        target_paths = []
+        renamed_files = []
+        moved_files = []
+        skipped_files = []
+        status = "queued"
+        step = "prepare"
+        result = {}
+        skip_reason = None
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = Subtask()
+            self.config = {
+                "download_root_folder": "/Downloads",
+                "target_folder": "/Movies",
+                "download_max_poll_count": 1,
+                "download_poll_interval_min": 0,
+                "download_poll_interval_max": 0,
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+                "use_task_subfolder": True,
+                "auto_create_target_folder": True,
+            }
+            self.logs: list[dict] = []
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    context = Context()
+
+    success = execute_current_magnet_attempt(
+        context,
+        {
+            "id": "m1",
+            "magnet_url": "magnet:?xt=urn:btih:first",
+            "tags": [],
+            "weight": 100,
+            "selected": True,
+        },
+    )
+
+    assert success is True
+    assert context.subtask.status == "skipped"
+    assert context.subtask.skip_reason == "target_exists"
+    assert context.subtask.result == {
+        "status": "skipped",
+        "reason": "target_exists",
+        "files": [
+            {
+                "renamed_name": "ACZD-165.mp4",
+                "existing_targets": ["/Movies/A/ACZD-165/ACZD-165.mp4"],
+                "skip_reason": "target_exists",
+            }
+        ],
+    }
+    assert context.subtask.skipped_files == [
+        {
+            "renamed_name": "ACZD-165.mp4",
+            "existing_targets": ["/Movies/A/ACZD-165/ACZD-165.mp4"],
+            "skip_reason": "target_exists",
+        }
+    ]
+    assert "/Movies/A/ACZD-165" in context.provider.list_calls
+    assert any(log["event"] == "subtask_skipped" for log in context.logs)
+
+
+def test_execute_current_magnet_attempt_skips_after_task_exists_only_when_all_targets_exist(monkeypatch) -> None:
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+
+        def ensure_directory(self, path):
+            return None
+
+        def submit_offline_download(self, magnet_url, target_folder):
+            raise RuntimeError("任务已存在")
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path in {"/Movies/A/ACZD-165", "/Movies/B/ACZD-165"}:
+                return [RemoteFile("ACZD-165.mp4", f"{path}/ACZD-165.mp4", 4770615244)]
+            return []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            return []
+
+        def delete_file(self, path):
+            return None
+
+    class Subtask:
+        id = "sub"
+        movie_id = uuid.uuid4()
+        movie_code = "ACZD-165"
+        target_locations = ["A", "B"]
+        selected_storage_location = None
+        download_path = ""
+        target_paths = []
+        renamed_files = []
+        moved_files = []
+        skipped_files = []
+        status = "queued"
+        step = "prepare"
+        result = {}
+        skip_reason = None
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = Subtask()
+            self.config = {
+                "download_root_folder": "/Downloads",
+                "target_folder": "/Movies",
+                "download_max_poll_count": 1,
+                "download_poll_interval_min": 0,
+                "download_poll_interval_max": 0,
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+                "use_task_subfolder": True,
+                "auto_create_target_folder": True,
+            }
+            self.logs: list[dict] = []
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    context = Context()
+
+    success = execute_current_magnet_attempt(
+        context,
+        {
+            "id": "m1",
+            "magnet_url": "magnet:?xt=urn:btih:first",
+            "tags": [],
+            "weight": 100,
+            "selected": True,
+        },
+    )
+
+    assert success is True
+    assert context.subtask.status == "skipped"
+    assert context.subtask.skip_reason == "target_exists"
+    assert sorted(context.subtask.skipped_files[0]["existing_targets"]) == [
+        "/Movies/A/ACZD-165/ACZD-165.mp4",
+        "/Movies/B/ACZD-165/ACZD-165.mp4",
+    ]
+    assert "/Movies/A/ACZD-165" in context.provider.list_calls
+    assert "/Movies/B/ACZD-165" in context.provider.list_calls
+
+
+def test_execute_current_magnet_attempt_does_not_skip_after_task_exists_when_any_target_missing(monkeypatch) -> None:
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+
+        def ensure_directory(self, path):
+            return None
+
+        def submit_offline_download(self, magnet_url, target_folder):
+            raise RuntimeError("任务已存在")
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path == "/Movies/A/ACZD-165":
+                return [RemoteFile("ACZD-165.mp4", f"{path}/ACZD-165.mp4", 4770615244)]
+            return []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            return []
+
+    class Subtask:
+        id = "sub"
+        movie_id = uuid.uuid4()
+        movie_code = "ACZD-165"
+        target_locations = ["A", "B"]
+        selected_storage_location = None
+        download_path = ""
+        target_paths = []
+        renamed_files = []
+        moved_files = []
+        skipped_files = []
+        status = "queued"
+        step = "prepare"
+        result = {}
+        skip_reason = None
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = Subtask()
+            self.config = {
+                "download_root_folder": "/Downloads",
+                "target_folder": "/Movies",
+                "download_max_poll_count": 1,
+                "download_poll_interval_min": 0,
+                "download_poll_interval_max": 0,
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+                "use_task_subfolder": True,
+                "auto_create_target_folder": True,
+            }
+            self.logs: list[dict] = []
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    context = Context()
+
+    success = execute_current_magnet_attempt(
+        context,
+        {
+            "id": "m1",
+            "magnet_url": "magnet:?xt=urn:btih:first",
+            "tags": [],
+            "weight": 100,
+            "selected": True,
+        },
+    )
+
+    assert success is False
+    assert context.subtask.status == "queued"
+    assert context.subtask.skip_reason is None
+    assert "/Movies/A/ACZD-165" in context.provider.list_calls
+    assert "/Movies/B/ACZD-165" in context.provider.list_calls
+    assert any(
+        log["message"] == "检查目标目录是否已存在视频文件"
+        and log["context"]["missing_targets"] == ["/Movies/B/ACZD-165"]
+        for log in context.logs
+    )
