@@ -1153,3 +1153,136 @@ def test_execute_subtask_pipeline_stops_after_rename_existing_source_target_skip
     assert context.subtask.magnet_attempts[0]["magnet_id"] == "m1"
     assert context.subtask.magnet_attempts[0]["success"] is True
     assert context.subtask.magnet_attempts[0]["status"] == "skipped"
+
+
+def test_poll_downloaded_video_files_searches_task_folder_before_download_root(monkeypatch):
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import poll_downloaded_video_files
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+        is_search_result: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.search_calls: list[tuple[str, str]] = []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            self.search_calls.append((term, path))
+            if path == "/Downloads":
+                return [RemoteFile("ACZD-165.mp4", "/Downloads/ACZD-165.mp4", 500 * 1024 * 1024)]
+            return []
+
+        def get_original_path(self, path):
+            return ""
+
+        def list_files(self, path, force_refresh=False):
+            return []
+
+    class Subtask:
+        movie_code = "ACZD-165"
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = Subtask()
+            self.config = {
+                "download_max_poll_count": 2,
+                "download_poll_interval_min": 0,
+                "download_poll_interval_max": 0,
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+            }
+            self.logs: list[dict] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+    context = Context()
+
+    files = poll_downloaded_video_files(
+        context,
+        search_terms=["ACZD-165"],
+        task_download_folder="/Downloads/storage_sub",
+        download_root="/Downloads",
+    )
+
+    assert [file["path"] for file in files] == ["/Downloads/ACZD-165.mp4"]
+    assert context.provider.search_calls == [
+        ("ACZD-165", "/Downloads/storage_sub"),
+        ("ACZD-165", "/Downloads/storage_sub"),
+        ("ACZD-165", "/Downloads"),
+    ]
+    assert [log["context"]["search_scope"] for log in context.logs if log["message"] == "查找下载文件"] == [
+        "task_download_folder",
+        "task_download_folder",
+        "download_root",
+    ]
+
+
+def test_poll_downloaded_video_files_does_not_search_root_when_task_folder_has_file(monkeypatch):
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import poll_downloaded_video_files
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+        is_search_result: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.search_calls: list[tuple[str, str]] = []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            self.search_calls.append((term, path))
+            return [RemoteFile("ACZD-165.mp4", f"{path}/ACZD-165.mp4", 500 * 1024 * 1024)]
+
+        def get_original_path(self, path):
+            return ""
+
+        def list_files(self, path, force_refresh=False):
+            return []
+
+    class Subtask:
+        movie_code = "ACZD-165"
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = Subtask()
+            self.config = {
+                "download_max_poll_count": 3,
+                "download_poll_interval_min": 0,
+                "download_poll_interval_max": 0,
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+            }
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            return {}
+
+    context = Context()
+
+    files = poll_downloaded_video_files(
+        context,
+        search_terms=["ACZD-165"],
+        task_download_folder="/Downloads/storage_sub",
+        download_root="/Downloads",
+    )
+
+    assert [file["path"] for file in files] == ["/Downloads/storage_sub/ACZD-165.mp4"]
+    assert context.provider.search_calls == [("ACZD-165", "/Downloads/storage_sub")]

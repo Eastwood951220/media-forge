@@ -47,10 +47,20 @@ def target_files_exist(provider, target_folder: str, filenames: list[str]) -> bo
         return False
 
 
-def poll_downloaded_video_files(context, search_terms: list[str], search_paths: list[str]) -> list[dict]:
-    from backend.app.modules.storage.worker.file_finder import find_existing_video_files
+def _log_search_result(context, result) -> None:
+    context.log(
+        "INFO",
+        "查找下载文件",
+        result.log_context,
+        step="waiting_download",
+    )
+
+
+def poll_downloaded_video_files(context, search_terms: list[str], task_download_folder: str, download_root: str) -> list[dict]:
+    from backend.app.modules.storage.worker.file_finder import find_scoped_video_files
 
     config = context.config
+    movie_code = getattr(context.subtask, "movie_code", search_terms[0] if search_terms else "")
     max_poll_count = int(config.get("download_max_poll_count", 10) or 10)
     poll_min = float(config.get("download_poll_interval_min", 5.0) or 0)
     poll_max = float(config.get("download_poll_interval_max", poll_min) or poll_min)
@@ -58,23 +68,49 @@ def poll_downloaded_video_files(context, search_terms: list[str], search_paths: 
         poll_max = poll_min
 
     for poll_index in range(1, max_poll_count + 1):
-        found_files = find_existing_video_files(context.provider, search_terms, search_paths, config)
-        if found_files:
-            return found_files
+        result = find_scoped_video_files(
+            provider=context.provider,
+            search_terms=search_terms,
+            search_path=task_download_folder,
+            search_scope="task_download_folder",
+            movie_code=movie_code,
+            task_download_folder=task_download_folder,
+            config=config,
+        )
+        result.log_context["poll_index"] = poll_index
+        result.log_context["max_poll_count"] = max_poll_count
+        _log_search_result(context, result)
+        if result.accepted_files:
+            return result.accepted_files
 
         context.log(
             "INFO",
-            f"轮询 #{poll_index}: 目录为空，等待中",
-            {"poll_index": poll_index, "max_poll_count": max_poll_count, "search_paths": search_paths},
+            f"轮询 #{poll_index}: 任务下载目录未发现可用视频文件，等待中",
+            {"poll_index": poll_index, "max_poll_count": max_poll_count, "search_path": task_download_folder},
             step="waiting_download",
         )
         if poll_index < max_poll_count:
             time.sleep(random.uniform(poll_min, poll_max))
 
+    root_result = find_scoped_video_files(
+        provider=context.provider,
+        search_terms=search_terms,
+        search_path=download_root,
+        search_scope="download_root",
+        movie_code=movie_code,
+        task_download_folder=task_download_folder,
+        config=config,
+    )
+    root_result.log_context["poll_index"] = max_poll_count
+    root_result.log_context["max_poll_count"] = max_poll_count
+    _log_search_result(context, root_result)
+    if root_result.accepted_files:
+        return root_result.accepted_files
+
     context.log(
         "WARNING",
-        f"轮询次数超过上限: {max_poll_count}/{max_poll_count}，跳过当前磁力",
-        {"max_poll_count": max_poll_count, "search_paths": search_paths},
+        f"轮询次数超过上限: {max_poll_count}/{max_poll_count}，任务目录与下载根目录均未发现可用视频文件，跳过当前磁力",
+        {"max_poll_count": max_poll_count, "task_download_folder": task_download_folder, "download_root": download_root},
         step="waiting_download",
     )
     return []
@@ -379,10 +415,14 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
 
     context.set_step("waiting_download")
     search_terms = [subtask.movie_code]
-    search_paths = [download_folder, download_root, *target_paths]
-    found_files = poll_downloaded_video_files(context, search_terms, search_paths)
+    found_files = poll_downloaded_video_files(
+        context,
+        search_terms=search_terms,
+        task_download_folder=download_folder,
+        download_root=download_root,
+    )
     if not found_files:
-        context.log("WARNING", "未在下载目录找到可用视频文件", {"magnet_id": magnet.get("id"), "search_paths": search_paths}, step="waiting_download")
+        context.log("WARNING", "未在下载目录找到可用视频文件", {"magnet_id": magnet.get("id"), "task_download_folder": download_folder, "download_root": download_root}, step="waiting_download")
         return False
 
     total_size = sum(int(file.get("size") or 0) for file in found_files)
