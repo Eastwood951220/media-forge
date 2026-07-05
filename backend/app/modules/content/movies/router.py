@@ -6,7 +6,12 @@ from sqlalchemy import func, not_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.dependencies import CurrentUser, get_db
-from backend.app.modules.content.movies.schemas import MovieStorageSyncRequest
+from backend.app.modules.content.movies.delete_service import (
+    CloudMovieDeleteError,
+    UnsupportedMovieDeleteMode,
+    delete_movies,
+)
+from backend.app.modules.content.movies.schemas import MovieDeleteRequest, MovieStorageSyncRequest
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
 from shared.database.models.content import Movie, MovieFilter
 from backend.app.modules.content.movies.filter_config import (
@@ -405,6 +410,54 @@ def sync_movie_storage_statuses(
             for result in results
         ],
     })
+
+
+@router.post("/delete")
+def delete_content_movies(
+    body: MovieDeleteRequest,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    if not body.movie_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请选择要删除的影片")
+
+    movies = db.query(Movie).options(selectinload(Movie.magnets)).filter(Movie.id.in_(body.movie_ids)).all()
+    if not movies:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="影片不存在")
+
+    from backend.app.modules.storage.config.service import StorageConfigService
+
+    provider = None
+    client = None
+    if body.mode in {"cloud_only", "database_and_cloud"}:
+        config_service = StorageConfigService()
+        config = config_service.get_raw_config()
+        client = config_service.provider_factory.create(config)
+        provider = config_service.gateway_class(client)
+
+    try:
+        result = delete_movies(db=db, movies=movies, mode=body.mode, provider=provider)
+        db.commit()
+    except UnsupportedMovieDeleteMode as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except CloudMovieDeleteError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"message": "删除云存储文件夹失败", "failed_folders": exc.failed_folders},
+        ) from exc
+    finally:
+        close = getattr(client, "close", None)
+        if callable(close):
+            close()
+
+    if body.mode == "cloud_only":
+        from backend.app.modules.storage.tasks.events import publish_movie_storage_updated
+        for movie in movies:
+            publish_movie_storage_updated(db, str(current_user.id), movie.id)
+
+    return success(msg="删除成功", data=result.to_dict())
 
 
 @router.get("/{movie_id}")

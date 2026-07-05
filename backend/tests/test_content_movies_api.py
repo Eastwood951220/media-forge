@@ -483,3 +483,82 @@ def test_sync_movie_storage_status_api_uses_filters_when_no_selection(client: Te
     assert payload["results"][0]["movie_id"] == matched_id
     assert client.get(f"/api/content/movies/{matched_id}", headers=headers).json()["data"]["storage_status"] == "stored"
     assert client.get(f"/api/content/movies/{ignored_id}", headers=headers).json()["data"]["storage_status"] == "not_stored"
+
+
+def test_delete_movies_database_only_api_deletes_selected_movies(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    movie = Movie(code="DEL-DB-001", source_url="https://example.test/delete-db", source_name="delete db")
+    session.add(movie)
+    session.commit()
+    movie_id = str(movie.id)
+    session.close()
+
+    response = client.post(
+        "/api/content/movies/delete",
+        json={"movie_ids": [movie_id], "mode": "database_only"},
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["data"]["deleted_movies"] == 1
+    assert client.get(f"/api/content/movies/{movie_id}", headers=headers).status_code == HTTPStatus.NOT_FOUND
+
+
+def test_delete_movies_cloud_only_api_deletes_cloud_folders_and_keeps_movie(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    movie = Movie(
+        code="DEL-CLOUD-001",
+        source_url="https://example.test/delete-cloud",
+        source_name="delete cloud",
+        storage_summary={
+            "storage_status": "stored",
+            "last_status": "stored",
+            "locations": [
+                {
+                    "path": "/Movies/A/DEL-CLOUD-001/DEL-CLOUD-001.mp4",
+                    "target_folder": "/Movies/A/DEL-CLOUD-001",
+                    "storage_location": "A",
+                }
+            ],
+        },
+    )
+    session.add(movie)
+    session.commit()
+    movie_id = str(movie.id)
+    session.close()
+
+    deleted: list[str] = []
+
+    class Factory:
+        def create(self, config):
+            return object()
+
+    class Gateway:
+        def __init__(self, client):
+            return None
+
+        def delete_file(self, path):
+            deleted.append(path)
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.config.service.StorageConfigService",
+        lambda: type("ConfigService", (), {
+            "get_raw_config": lambda self: {"target_folder": "/Movies"},
+            "provider_factory": Factory(),
+            "gateway_class": Gateway,
+        })(),
+    )
+
+    response = client.post(
+        "/api/content/movies/delete",
+        json={"movie_ids": [movie_id], "mode": "cloud_only"},
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert deleted == ["/Movies/A/DEL-CLOUD-001"]
+    detail = client.get(f"/api/content/movies/{movie_id}", headers=headers).json()["data"]
+    assert detail["storage_status"] == "not_stored"
+    assert detail["storage_summary"]["locations"] == []

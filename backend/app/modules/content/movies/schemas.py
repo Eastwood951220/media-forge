@@ -88,3 +88,17 @@ class MovieStorageSyncResponse(BaseModel):
     stored_count: int
     not_stored_count: int
     results: list[dict[str, Any]]
+
+
+class MovieDeleteRequest(BaseModel):
+    movie_ids: list[uuid.UUID]
+    mode: str = "database_only"
+
+
+class MovieDeleteResponse(BaseModel):
+    deleted_movies: int
+    deleted_magnets: int
+    updated_movies: int
+    cloud_deleted_folders: list[str]
+    cloud_missing_folders: list[str]
+    cloud_failed_folders: list[dict[str, Any]]
