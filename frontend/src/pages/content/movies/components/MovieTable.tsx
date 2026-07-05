@@ -5,6 +5,7 @@ import type { Movie } from '@/api/movie/types'
 export interface MovieColumnsOptions {
   onViewDetail: (id: string) => void
   onPush?: (movie: Movie) => void
+  onDelete?: (movie: Movie) => void
 }
 
 const storageStatusColor: Record<string, string> = {
@@ -23,7 +24,7 @@ function unique(values: string[] | undefined) {
   return [...new Set(values || [])]
 }
 
-export function createMovieColumns({ onViewDetail, onPush }: MovieColumnsOptions): ColumnsType<Movie> {
+export function createMovieColumns({ onViewDetail, onPush, onDelete }: MovieColumnsOptions): ColumnsType<Movie> {
   return [
     { title: '番号', dataIndex: 'code', key: 'code', width: 120 },
     { title: '标题', dataIndex: 'source_name', key: 'source_name', ellipsis: true },
@@ -95,6 +96,11 @@ export function createMovieColumns({ onViewDetail, onPush }: MovieColumnsOptions
           {onPush && (
             <Button type="link" size="small" onClick={() => onPush(record)}>
               推送
+            </Button>
+          )}
+          {onDelete && (
+            <Button type="link" danger size="small" onClick={() => onDelete(record)}>
+              删除
             </Button>
           )}
         </Space>
