@@ -49,3 +49,20 @@ def test_publish_storage_sub_log_appended_sends_entry_to_owner() -> None:
         assert event.payload == entry
     finally:
         event_bus.unsubscribe(owner_id, queue)
+
+
+def test_delete_storage_subtask_log_removes_jsonl_file(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
+
+    from backend.app.modules.storage.tasks.logs import (
+        delete_storage_subtask_log,
+        read_storage_subtask_logs,
+        write_storage_subtask_log,
+    )
+
+    write_storage_subtask_log("sub-delete-1", "INFO", "存储子任务日志", {"value": 1})
+
+    assert read_storage_subtask_logs("sub-delete-1")[0]["message"] == "存储子任务日志"
+    assert delete_storage_subtask_log("sub-delete-1") is True
+    assert read_storage_subtask_logs("sub-delete-1") == []
+    assert delete_storage_subtask_log("sub-delete-1") is False

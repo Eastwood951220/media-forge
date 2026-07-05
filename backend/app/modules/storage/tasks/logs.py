@@ -44,3 +44,11 @@ def read_storage_subtask_logs(subtask_id: str) -> list[dict]:
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def delete_storage_subtask_log(subtask_id: str) -> bool:
+    path = _log_path(subtask_id)
+    if not path.exists():
+        return False
+    path.unlink()
+    return True
