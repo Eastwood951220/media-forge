@@ -339,3 +339,147 @@ def test_movie_payload_and_filter_use_three_storage_statuses(client: TestClient,
     assert storing.json()["rows"][0]["storage_status"] == "storing"
     assert [row["code"] for row in stored.json()["rows"]] == ["SYNC-300"]
     assert stored.json()["rows"][0]["storage_status"] == "stored"
+
+
+def test_sync_movie_storage_status_api_syncs_selected_movies(client: TestClient, admin_user, monkeypatch):
+    from dataclasses import dataclass
+
+    from backend.app.models.crawl_task import CrawlTask
+    from shared.database.models.content import Movie
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def list_files(self, path, force_refresh=False):
+            if path == "/Movies/A/SYNC-API-001":
+                return [RemoteFile("SYNC-API-001.mp4", "/Movies/A/SYNC-API-001/SYNC-API-001.mp4", 500 * 1024 * 1024)]
+            return []
+
+    class Factory:
+        def create(self, config):
+            return object()
+
+    class Gateway:
+        def __init__(self, client):
+            self.provider = Provider()
+
+        def list_files(self, path, force_refresh=False):
+            return self.provider.list_files(path, force_refresh)
+
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    crawl_task = CrawlTask(name="source-A", storage_location="A", owner_id=admin_user.id)
+    movie = Movie(code="SYNC-API-001", source_name="selected sync", source_task_ids=[], storage_summary={})
+    session.add_all([crawl_task, movie])
+    session.flush()
+    movie.source_task_ids = [crawl_task.id]
+    movie_id = str(movie.id)
+    session.commit()
+    session.close()
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.config.service.StorageConfigService",
+        lambda: type("ConfigService", (), {
+            "get_raw_config": lambda self: {
+                "target_folder": "/Movies",
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+            },
+            "provider_factory": Factory(),
+            "gateway_class": Gateway,
+        })(),
+    )
+
+    response = client.post(
+        "/api/content/movies/storage-sync",
+        json={"movie_ids": [movie_id]},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["total"] == 1
+    assert payload["stored_count"] == 1
+    assert payload["not_stored_count"] == 0
+    assert payload["results"][0]["movie_id"] == movie_id
+    assert payload["results"][0]["status"] == "stored"
+
+    detail = client.get(f"/api/content/movies/{movie_id}", headers=headers).json()["data"]
+    assert detail["storage_status"] == "stored"
+    assert detail["storage_summary"]["locations"][0]["path"] == "/Movies/A/SYNC-API-001/SYNC-API-001.mp4"
+
+
+def test_sync_movie_storage_status_api_uses_filters_when_no_selection(client: TestClient, admin_user, monkeypatch):
+    from dataclasses import dataclass
+
+    from backend.app.models.crawl_task import CrawlTask
+    from shared.database.models.content import Movie
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def list_files(self, path, force_refresh=False):
+            if path == "/Movies/A/SYNC-FILTER-001":
+                return [RemoteFile("SYNC-FILTER-001.mp4", "/Movies/A/SYNC-FILTER-001/SYNC-FILTER-001.mp4", 500 * 1024 * 1024)]
+            return []
+
+    class Factory:
+        def create(self, config):
+            return object()
+
+    class Gateway:
+        def __init__(self, client):
+            self.provider = Provider()
+
+        def list_files(self, path, force_refresh=False):
+            return self.provider.list_files(path, force_refresh)
+
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    crawl_task = CrawlTask(name="source-A", storage_location="A", owner_id=admin_user.id)
+    matched = Movie(code="SYNC-FILTER-001", source_name="matched selected name", source_task_ids=[], storage_summary={})
+    ignored = Movie(code="SYNC-FILTER-002", source_name="ignored name", source_task_ids=[], storage_summary={})
+    session.add_all([crawl_task, matched, ignored])
+    session.flush()
+    matched.source_task_ids = [crawl_task.id]
+    ignored.source_task_ids = [crawl_task.id]
+    matched_id = str(matched.id)
+    ignored_id = str(ignored.id)
+    session.commit()
+    session.close()
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.config.service.StorageConfigService",
+        lambda: type("ConfigService", (), {
+            "get_raw_config": lambda self: {
+                "target_folder": "/Movies",
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+            },
+            "provider_factory": Factory(),
+            "gateway_class": Gateway,
+        })(),
+    )
+
+    response = client.post(
+        "/api/content/movies/storage-sync",
+        json={"filters": {"search": "matched"}},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["total"] == 1
+    assert payload["results"][0]["movie_id"] == matched_id
+    assert client.get(f"/api/content/movies/{matched_id}", headers=headers).json()["data"]["storage_status"] == "stored"
+    assert client.get(f"/api/content/movies/{ignored_id}", headers=headers).json()["data"]["storage_status"] == "not_stored"
