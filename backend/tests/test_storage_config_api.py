@@ -225,3 +225,81 @@ def test_storage_config_api_test_endpoint(
         "target_folder_accessible": True,
         "target_folder_error": None,
     }
+
+
+def test_storage_config_service_open_provider_closes_client(monkeypatch, tmp_path) -> None:
+    from backend.app.modules.storage.config.service import StorageConfigService
+    from shared.runtime_config import RuntimeConfigPaths
+
+    class FakeClient:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    class FakeFactory:
+        client = FakeClient()
+
+        def normalize_host(self, value: str) -> str:
+            return value
+
+        def create(self, config):
+            return self.client
+
+    class FakeGateway:
+        def __init__(self, client):
+            self.client = client
+
+    paths = RuntimeConfigPaths(
+        config_dir=tmp_path,
+        database_file=tmp_path / "database.conf",
+        redis_file=tmp_path / "redis.conf",
+        storage_file=tmp_path / "storage.conf",
+    )
+    service = StorageConfigService(paths=paths, provider_factory=FakeFactory(), gateway_class=FakeGateway)
+
+    with service.open_provider() as (config, provider):
+        assert config["grpc_host"]
+        assert provider.client is service.provider_factory.client
+
+    assert service.provider_factory.client.closed is True
+
+
+def test_storage_config_service_open_provider_closes_client_on_error(monkeypatch, tmp_path) -> None:
+    from backend.app.modules.storage.config.service import StorageConfigService
+    from shared.runtime_config import RuntimeConfigPaths
+
+    class FakeClient:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    class FakeFactory:
+        client = FakeClient()
+
+        def normalize_host(self, value: str) -> str:
+            return value
+
+        def create(self, config):
+            return self.client
+
+    class FakeGateway:
+        def __init__(self, client):
+            self.client = client
+
+    paths = RuntimeConfigPaths(
+        config_dir=tmp_path,
+        database_file=tmp_path / "database.conf",
+        redis_file=tmp_path / "redis.conf",
+        storage_file=tmp_path / "storage.conf",
+    )
+    service = StorageConfigService(paths=paths, provider_factory=FakeFactory(), gateway_class=FakeGateway)
+
+    try:
+        with service.open_provider():
+            raise RuntimeError("boom")
+    except RuntimeError:
+        pass
+
+    assert service.provider_factory.client.closed is True

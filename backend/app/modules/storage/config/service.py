@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -130,6 +132,17 @@ class StorageConfigService:
                 except Exception as exc:
                     result.target_folder_error = str(exc)
             return result
+        finally:
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
+
+    @contextmanager
+    def open_provider(self) -> Iterator[tuple[dict[str, Any], CloudDrive2Gateway]]:
+        config = self.get_raw_config()
+        client = self.provider_factory.create(config)
+        try:
+            yield config, self.gateway_class(client)
         finally:
             close = getattr(client, "close", None)
             if callable(close):
