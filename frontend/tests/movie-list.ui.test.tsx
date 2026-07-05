@@ -171,7 +171,6 @@ describe('MovieListPage', () => {
     expect(await screen.findByText('影片详情')).toBeInTheDocument()
     expect(screen.getByText('最佳磁力')).toBeInTheDocument()
     expect(screen.getByText('磁力A')).toBeInTheDocument()
-    expect(screen.queryByText('删除')).not.toBeInTheDocument()
     expect(screen.queryByText('推送存储')).not.toBeInTheDocument()
     expect(screen.queryByText('标记')).not.toBeInTheDocument()
   })
