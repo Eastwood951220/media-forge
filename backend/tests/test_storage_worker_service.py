@@ -278,3 +278,94 @@ def test_process_main_task_publishes_recomputed_counts_after_provider_creation_f
     assert running_events[-1]["success_count"] == 0
     assert running_events[-1]["failed_count"] == 1
     assert running_events[-1]["skipped_count"] == 0
+
+
+def test_storage_worker_syncs_movie_to_stored_after_successful_subtask(db_session, test_user, monkeypatch):
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.models.storage_task import StorageMainTask, StorageSubTask
+    from backend.app.modules.storage.worker.runner import process_main_task
+    from backend.tests.conftest import TestingSessionLocal
+    from shared.database.models.content import Movie
+
+    monkeypatch.setattr(
+        "shared.database.session.get_session_factory",
+        lambda: TestingSessionLocal,
+    )
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    movie = Movie(code="WORK-001", source_name="worker movie", storage_summary={"storage_status": "storing", "last_status": "storing"})
+    db_session.add(movie)
+    db_session.flush()
+    main = StorageMainTask(
+        alias="worker-sync",
+        display_name="worker-sync",
+        source="single",
+        storage_mode="single",
+        status="queued",
+        total_count=1,
+        created_by=test_user.id,
+        config_snapshot={
+            "target_folder": "/Movies",
+            "video_extensions": [".mp4"],
+            "minimum_video_size_mb": 100,
+        },
+    )
+    db_session.add(main)
+    db_session.flush()
+    sub = StorageSubTask(
+        main_task_id=main.id,
+        movie_id=movie.id,
+        movie_code="WORK-001",
+        movie_title="worker movie",
+        status="queued",
+        step="prepare",
+        storage_mode="single",
+        target_locations=["A"],
+        target_paths=["/Movies/A/WORK-001"],
+    )
+    db_session.add(sub)
+    db_session.commit()
+
+    class Runtime:
+        def should_stop(self, task_id):
+            return False
+
+    class Provider:
+        def list_files(self, path, force_refresh=False):
+            if path == "/Movies/A/WORK-001":
+                return [RemoteFile("WORK-001.mp4", "/Movies/A/WORK-001/WORK-001.mp4", 500 * 1024 * 1024)]
+            return []
+
+    class Factory:
+        def create(self, config):
+            return object()
+
+    class ConfigService:
+        provider_factory = Factory()
+
+    def fake_gateway(client):
+        return Provider()
+
+    def fake_execute(context):
+        context.subtask.status = "completed"
+        context.subtask.step = "done"
+        context.subtask.target_paths = ["/Movies/A/WORK-001"]
+        context.subtask.target_locations = ["A"]
+
+    monkeypatch.setattr("shared.integrations.storage_providers.clouddrive2.gateway.CloudDrive2Gateway", fake_gateway, raising=False)
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.execute_subtask_pipeline", fake_execute, raising=False)
+
+    assert process_main_task(Runtime(), Factory(), ConfigService(), str(main.id)) is True
+
+    db_session.expire_all()
+    refreshed = db_session.get(Movie, movie.id)
+    assert refreshed.storage_summary["storage_status"] == "stored"
+    assert refreshed.storage_summary["locations"][0]["path"] == "/Movies/A/WORK-001/WORK-001.mp4"
