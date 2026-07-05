@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from shared.runtime_config import PROJECT_ROOT
+
 
 def read_incremental_threshold_from_conf(base_dir: Path | None = None) -> int:
-    root = base_dir or Path.cwd().parent
+    root = base_dir or PROJECT_ROOT
     conf_path = root / "data" / "configs" / "crawler.conf"
     if not conf_path.exists():
         return 0
