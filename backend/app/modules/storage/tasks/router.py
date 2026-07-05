@@ -80,11 +80,11 @@ def get_storage_main_task(main_task_id: UUID, current_user: CurrentUser, service
     return success(data=service.to_main_response(task))
 
 
-@router.delete("/{main_task_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{main_task_id}")
 def delete_storage_main_task(main_task_id: UUID, current_user: CurrentUser, service=Depends(get_storage_task_service)):
     try:
-        service.delete_main_task(main_task_id, current_user.id)
-        return None
+        result = service.delete_main_task(main_task_id, current_user.id)
+        return success(data=result)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:

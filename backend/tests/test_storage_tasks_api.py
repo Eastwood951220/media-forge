@@ -294,7 +294,13 @@ def test_delete_storage_main_task_api_removes_task_and_logs(client, db_session, 
 
     response = client.delete(f"/api/storage/tasks/{created['id']}", headers=auth_headers)
 
-    assert response.status_code == 204
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["code"] == 200
+    assert payload["msg"] == "success"
+    assert payload["data"]["id"] == created["id"]
+    assert payload["data"]["deleted_subtask_count"] == 1
+    assert payload["data"]["deleted_log_count"] == 1
     assert client.get(f"/api/storage/tasks/{created['id']}", headers=auth_headers).status_code == 404
     assert client.get(f"/api/storage/tasks/subtasks/{subtask_id}", headers=auth_headers).status_code == 404
     assert read_storage_subtask_logs(subtask_id) == []

@@ -126,11 +126,6 @@ export const transformResponse = (response: AxiosResponse<ApiResponse | Paginate
     return response.data
   }
 
-  // 204 No Content 响应没有响应体
-  if (response.status === 204 || !response.data) {
-    return undefined
-  }
-
   const code = response.data.code ?? HttpStatus.SUCCESS
   const msg = getBusinessMessage(response.data)
 
