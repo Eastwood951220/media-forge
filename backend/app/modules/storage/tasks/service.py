@@ -7,6 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.storage_task import StorageMainTask, StorageSubTask
+from backend.app.modules.content.movies.storage_status import (
+    STORAGE_STATUS_NOT_STORED,
+    STORAGE_STATUS_STORING,
+    set_movie_storage_status,
+)
 from backend.app.modules.storage.config.service import StorageConfigService
 from backend.app.modules.storage.tasks.logs import delete_storage_subtask_log, write_storage_subtask_log
 from backend.app.modules.storage.tasks.policies import generate_default_alias
@@ -372,12 +377,12 @@ class StorageTaskService:
         storage_mode: str,
         user_id: uuid.UUID,
     ) -> None:
-        summary = dict(movie.storage_summary or {})
-        summary.update({
-            "last_main_task_id": str(main_task.id),
-            "last_sub_task_id": str(subtask.id),
-            "last_status": subtask.status,
-            "storage_mode": storage_mode,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        })
-        movie.storage_summary = summary
+        status = STORAGE_STATUS_STORING if subtask.status == "queued" else STORAGE_STATUS_NOT_STORED
+        set_movie_storage_status(
+            movie,
+            status,
+            source="storage_push",
+            main_task_id=str(main_task.id),
+            sub_task_id=str(subtask.id),
+            storage_mode=storage_mode,
+        )

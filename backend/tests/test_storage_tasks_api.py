@@ -319,3 +319,22 @@ def test_delete_storage_main_task_api_rejects_running_task(client, db_session, a
     assert response.status_code == 400
     assert "运行中的存储任务不能删除" in response.text
     assert client.get(f"/api/storage/tasks/{created['id']}", headers=auth_headers).status_code == 200
+
+
+def test_storage_push_marks_movie_as_storing(client, db_session, auth_headers, test_user):
+    movie = _movie_with_source_and_magnet(db_session, test_user.id, code="store-queue-001")
+
+    response = client.post(
+        "/api/storage/tasks/push",
+        json={
+            "movie_id": str(movie.id),
+            "storage_mode": "single",
+            "selected_storage_location": "A",
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(movie)
+    assert movie.storage_summary["storage_status"] == "storing"
+    assert movie.storage_summary["last_status"] == "storing"
