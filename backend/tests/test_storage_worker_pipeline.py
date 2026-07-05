@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 from backend.app.modules.storage.worker.file_finder import find_existing_video_files
-from backend.app.modules.storage.worker.steps import select_main_videos
+from backend.app.modules.storage.worker.file_ops import select_main_videos
 
 
 @dataclass
@@ -618,7 +618,7 @@ def test_execute_subtask_pipeline_stops_after_target_exists_skip(monkeypatch):
 
 
 def test_is_rename_name_exists_error_detects_clouddrive_20004() -> None:
-    from backend.app.modules.storage.worker.steps import is_rename_name_exists_error
+    from backend.app.modules.storage.worker.file_ops import is_rename_name_exists_error
 
     error = RuntimeError(
         'api error Cloud 115open(342367138) api error: code: 20004, '
@@ -2355,7 +2355,7 @@ def test_find_existing_target_files_reports_source_and_missing_targets() -> None
 
 
 def test_copy_existing_target_to_missing_targets_copies_from_first_found_target() -> None:
-    from backend.app.modules.storage.worker.steps import (
+    from backend.app.modules.storage.worker.target_files import (
         ExistingTargetFilesResult,
         copy_existing_target_to_missing_targets,
     )

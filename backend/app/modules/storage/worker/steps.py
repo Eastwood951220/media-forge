@@ -3,11 +3,22 @@ from __future__ import annotations
 import logging
 import random
 import time
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
+from backend.app.modules.storage.worker.file_ops import (
+    cleanup_download_folder,
+    move_renamed_videos,
+    rename_selected_videos,
+    scan_found_files,
+    verify_moved_files,
+)
+from backend.app.modules.storage.worker.target_files import (
+    copy_existing_target_to_missing_targets,
+    ensure_directory_chain,
+    find_existing_target_files,
+)
 from backend.app.modules.storage.worker.timeline import classify_scanned_files
 
 logger = logging.getLogger(__name__)
@@ -18,33 +29,6 @@ def _subtask_log(context, level: str, message: str, extra: dict | None = None) -
     if subtask_id is None:
         return
     write_storage_subtask_log(str(subtask_id), level, message, extra or {})
-
-
-def select_main_videos(files: list[dict], config: dict) -> list[dict]:
-    extensions = {ext.lower() for ext in config.get("video_extensions", [])}
-    minimum_size = int(config.get("minimum_video_size_mb", 100)) * 1024 * 1024
-    videos = [
-        file
-        for file in files
-        if PurePosixPath(file["name"]).suffix.lower() in extensions
-        and int(file.get("size") or 0) >= minimum_size
-    ]
-    return sorted(videos, key=lambda file: (str(file["name"]).lower(), str(file["path"]).lower()))
-
-
-def ensure_directory_chain(provider, folder_path: str) -> None:
-    """Ensure all directories in the path exist."""
-    provider.ensure_directory(folder_path)
-
-
-def target_files_exist(provider, target_folder: str, filenames: list[str]) -> bool:
-    """Check if all target files exist in the folder."""
-    try:
-        existing = provider.list_files(target_folder)
-        existing_names = {getattr(f, "name", "") for f in existing}
-        return all(name in existing_names for name in filenames)
-    except Exception:
-        return False
 
 
 def _log_search_result(context, result) -> None:
@@ -117,356 +101,7 @@ def poll_downloaded_video_files(context, search_terms: list[str], task_download_
     return []
 
 
-def scan_found_files(found_files: list[dict]) -> list[dict]:
-    return [
-        {
-            "name": file["name"],
-            "path": file["path"],
-            "size": int(file.get("size") or 0),
-            "is_dir": bool(file.get("is_dir", False)),
-        }
-        for file in found_files
-        if not file.get("is_dir", False) and "/[Search]" not in str(file.get("path", ""))
-    ]
-
-
-def is_rename_name_exists_error(error: Exception | str) -> bool:
-    message = str(error)
-    return (
-        "20004" in message
-        or "目录名称已存在" in message
-        or "名称已存在" in message
-        or "already exists" in message.lower()
-    )
-
-
-def _find_existing_rename_target(provider, path: str):
-    try:
-        return provider.find_file(path)
-    except Exception:
-        return None
-
-
-def rename_selected_videos(context, selected_videos: list[dict], tags: list[str]) -> list[dict]:
-    from backend.app.modules.storage.tasks.policies import build_video_filename
-
-    renamed = []
-    total = len(selected_videos)
-    for index, video in enumerate(selected_videos):
-        old_path = video["path"]
-        new_name = build_video_filename(context.subtask.movie_code, video["name"], tags, index, total)
-        new_path = str(PurePosixPath(old_path).parent / new_name)
-        if PurePosixPath(old_path).name == new_name:
-            renamed.append({**video, "renamed_path": old_path, "renamed_name": new_name})
-            context.log("INFO", f"重命名: {video['name']} → {new_name}", step="rename_files")
-            continue
-        try:
-            context.provider.rename_file(old_path, new_name)
-            renamed.append({**video, "renamed_path": new_path, "renamed_name": new_name})
-            context.log("INFO", f"重命名: {video['name']} → {new_name}", step="rename_files")
-        except Exception as exc:
-            if is_rename_name_exists_error(exc):
-                existing = _find_existing_rename_target(context.provider, new_path)
-                if existing is not None:
-                    renamed.append({
-                        **video,
-                        "renamed_path": new_path,
-                        "renamed_name": new_name,
-                        "rename_name_exists": True,
-                        "existing_path": new_path,
-                    })
-                    context.log(
-                        "WARNING",
-                        f"重命名目标已存在，复用已有文件: {video['name']} → {new_name}",
-                        {"source": old_path, "existing_path": new_path},
-                        step="rename_files",
-                    )
-                    continue
-                context.log(
-                    "WARNING",
-                    f"重命名目标已存在但未能定位已有文件: {video['name']} → {new_name}",
-                    {"source": old_path, "expected_path": new_path, "error": str(exc)},
-                    step="rename_files",
-                )
-                renamed.append({
-                    **video,
-                    "rename_error": str(exc),
-                    "rename_name_exists": True,
-                    "renamed_name": new_name,
-                })
-                continue
-
-            context.log("ERROR", f"重命名失败: {video['name']}: {exc}", step="rename_files")
-            renamed.append({**video, "rename_error": str(exc)})
-    return renamed
-
-
-def _target_file_exists(provider, target_path: str) -> bool:
-    try:
-        found = provider.find_file(target_path)
-        return bool(found and int(getattr(found, "size", 0) or 0) > 0)
-    except Exception:
-        return False
-
-
-def _move_source_path(file_info: dict) -> str:
-    return str(file_info.get("existing_path") or file_info.get("renamed_path") or file_info["path"])
-
-
-def _move_file_name(file_info: dict) -> str:
-    return str(file_info.get("renamed_name") or PurePosixPath(_move_source_path(file_info)).name)
-
-
-def _target_file_path(target_folder: str, file_name: str) -> str:
-    return str(PurePosixPath(target_folder) / file_name)
-
-
-@dataclass
-class MoveRenamedVideosResult:
-    moved_files: list[dict]
-    skipped_files: list[dict]
-    all_targets_exist: bool = False
-    all_rename_name_exists: bool = False
-
-
-@dataclass
-class ExistingTargetFilesResult:
-    all_targets_exist: bool
-    any_target_exists: bool
-    checked_targets: list[str]
-    existing_targets: list[str]
-    missing_targets: list[str]
-    expected_names: list[str]
-    existing_files: list[dict]
-    source_path: str | None = None
-    source_name: str | None = None
-    source_size: int = 0
-
-
-def _listed_entry_to_target_file(entry) -> dict:
-    path = getattr(entry, "full_path", "") or getattr(entry, "fullPathName", "")
-    name = getattr(entry, "name", "") or PurePosixPath(path).name
-    return {
-        "name": name,
-        "path": path,
-        "size": int(getattr(entry, "size", 0) or 0),
-        "is_dir": bool(getattr(entry, "is_directory", False) or getattr(entry, "isDirectory", False)),
-    }
-
-
-def find_existing_target_files(provider, target_paths: list[str], expected_names: list[str]) -> ExistingTargetFilesResult:
-    normalized_expected = {str(name).lower() for name in expected_names if name}
-    checked_targets: list[str] = []
-    existing_targets: list[str] = []
-    missing_targets: list[str] = []
-    existing_files: list[dict] = []
-    source_path: str | None = None
-    source_name: str | None = None
-    source_size = 0
-
-    for target_folder in target_paths:
-        checked_targets.append(target_folder)
-        matched_file: dict | None = None
-        try:
-            entries = provider.list_files(target_folder)
-        except Exception:
-            entries = []
-
-        for entry in entries:
-            item = _listed_entry_to_target_file(entry)
-            if item["is_dir"]:
-                continue
-            if item["size"] <= 0:
-                continue
-            if item["name"].lower() not in normalized_expected:
-                continue
-            matched_file = {
-                "target_folder": target_folder,
-                "path": item["path"] or _target_file_path(target_folder, item["name"]),
-                "name": item["name"],
-                "size": item["size"],
-            }
-            break
-
-        if matched_file:
-            existing_targets.append(target_folder)
-            existing_files.append(matched_file)
-            if source_path is None:
-                source_path = matched_file["path"]
-                source_name = matched_file["name"]
-                source_size = int(matched_file["size"] or 0)
-            continue
-
-        missing_targets.append(target_folder)
-
-    return ExistingTargetFilesResult(
-        all_targets_exist=bool(target_paths) and len(existing_targets) == len(target_paths),
-        any_target_exists=bool(existing_targets),
-        checked_targets=checked_targets,
-        existing_targets=existing_targets,
-        missing_targets=missing_targets,
-        expected_names=list(expected_names),
-        existing_files=existing_files,
-        source_path=source_path,
-        source_name=source_name,
-        source_size=source_size,
-    )
-
-
-def copy_existing_target_to_missing_targets(context, result: ExistingTargetFilesResult) -> list[dict]:
-    if not result.source_path or not result.source_name:
-        return []
-    if not result.missing_targets:
-        return []
-
-    copied_paths: list[str] = []
-    for target_folder in result.missing_targets:
-        ensure_directory_chain(context.provider, target_folder)
-        context.provider.copy_file(result.source_path, target_folder)
-        copied_paths.append(_target_file_path(target_folder, result.source_name))
-
-    moved_file = {
-        "name": result.source_name,
-        "path": result.source_path,
-        "size": result.source_size,
-        "renamed_name": result.source_name,
-        "moved_path": result.source_path,
-        "copied_paths": copied_paths,
-        "copy_source": result.source_path,
-        "copy_source_target": result.existing_targets[0] if result.existing_targets else "",
-    }
-    context.log(
-        "INFO",
-        "已从命中的目标文件复制到缺失目标",
-        {
-            "source": result.source_path,
-            "source_target": moved_file["copy_source_target"],
-            "missing_targets": result.missing_targets,
-            "copied_paths": copied_paths,
-        },
-        step="move_files",
-    )
-    return [moved_file]
-
-
-def move_renamed_videos(context, renamed_files: list[dict], target_paths: list[str]) -> MoveRenamedVideosResult:
-    moved: list[dict] = []
-    skipped: list[dict] = []
-    copy_targets = target_paths[:-1] if len(target_paths) > 1 else []
-    move_target = target_paths[-1]
-
-    if context.config.get("auto_create_target_folder", True):
-        for target_path in target_paths:
-            ensure_directory_chain(context.provider, target_path)
-            context.log("INFO", f"已创建文件夹: {target_path}", step="move_files")
-
-    for file_info in renamed_files:
-        if file_info.get("rename_error"):
-            if file_info.get("rename_name_exists"):
-                skipped.append({**file_info, "skip_reason": "rename_name_exists"})
-                context.log(
-                    "WARNING",
-                    f"跳过重命名目标已存在的文件: {file_info['name']}",
-                    {"rename_error": file_info.get("rename_error"), "renamed_name": file_info.get("renamed_name")},
-                    step="move_files",
-                )
-                continue
-            skipped.append({**file_info, "skip_reason": "rename_failed"})
-            context.log("WARNING", f"跳过重命名失败的文件: {file_info['name']}", step="move_files")
-            continue
-
-        src = _move_source_path(file_info)
-        file_name = _move_file_name(file_info)
-        if file_info.get("rename_name_exists"):
-            context.log(
-                "INFO",
-                f"使用已存在的规范命名文件执行移动或复制: {file_name}",
-                {"source": src, "targets": target_paths},
-                step="move_files",
-            )
-        existing_targets = [
-            _target_file_path(target, file_name)
-            for target in target_paths
-            if _target_file_exists(context.provider, _target_file_path(target, file_name))
-        ]
-        if len(existing_targets) == len(target_paths):
-            skipped.append({**file_info, "skip_reason": "target_exists", "existing_targets": existing_targets})
-            context.log("INFO", f"跳过已存在: {file_name}", {"existing_targets": existing_targets}, step="move_files")
-            continue
-
-        copied_paths = []
-        for copy_target in copy_targets:
-            copy_dst = _target_file_path(copy_target, file_name)
-            if _target_file_exists(context.provider, copy_dst):
-                copied_paths.append(copy_dst)
-                context.log("INFO", f"跳过已存在: {file_name}", {"target": copy_dst}, step="move_files")
-                continue
-            context.provider.copy_file(src, copy_target)
-            copied_paths.append(copy_dst)
-            context.log("INFO", f"已复制: {file_name} → {copy_target}", step="move_files")
-
-        move_dst = _target_file_path(move_target, file_name)
-        if _target_file_exists(context.provider, move_dst):
-            moved.append({**file_info, "moved_path": move_dst, "copied_paths": copied_paths})
-            context.log("INFO", f"跳过已存在: {file_name}", {"target": move_dst}, step="move_files")
-            continue
-        context.provider.move_files([src], move_target)
-        moved.append({**file_info, "moved_path": move_dst, "copied_paths": copied_paths})
-        context.log("INFO", f"已移动: {file_name} → {move_target}", step="move_files")
-
-    all_targets_exist = bool(renamed_files) and len(skipped) == len(renamed_files) and all(
-        item.get("skip_reason") == "target_exists"
-        for item in skipped
-    )
-    all_rename_name_exists = bool(renamed_files) and len(skipped) == len(renamed_files) and all(
-        item.get("skip_reason") == "rename_name_exists"
-        for item in skipped
-    )
-    return MoveRenamedVideosResult(
-        moved_files=moved,
-        skipped_files=skipped,
-        all_targets_exist=all_targets_exist,
-        all_rename_name_exists=all_rename_name_exists,
-    )
-
-
-def verify_moved_files(context, moved_files: list[dict]) -> bool:
-    all_ok = True
-    for video in moved_files:
-        paths_to_verify = []
-        moved_path = video.get("moved_path") or video.get("target")
-        if moved_path:
-            paths_to_verify.append(("moved", moved_path))
-        for copied_path in video.get("copied_paths", []):
-            paths_to_verify.append(("copied", copied_path))
-
-        if not paths_to_verify:
-            all_ok = False
-            context.log("ERROR", f"验证失败: {video.get('name')} 无任何目标路径", step="verify_result")
-            continue
-
-        expected_size = int(video.get("size") or 0)
-        for label, path in paths_to_verify:
-            info = context.provider.find_file(path)
-            if not info:
-                all_ok = False
-                context.log("ERROR", f"验证失败: {label} 文件不存在 {path}", step="verify_result")
-                continue
-            actual_size = int(getattr(info, "size", 0) or 0)
-            if expected_size > 0 and abs(actual_size - expected_size) > 1024:
-                all_ok = False
-                context.log(
-                    "ERROR",
-                    f"验证失败: {label} 大小不匹配 {PurePosixPath(path).name} (expected={expected_size}, actual={actual_size})",
-                    step="verify_result",
-                )
-
-    if all_ok:
-        context.log("INFO", "验证通过: 所有文件完整 (含复制目标)", step="verify_result")
-    return all_ok
-
-
-def mark_subtask_skipped_for_existing_targets(context, existing_result: ExistingTargetFilesResult, expected_name: str) -> None:
+def mark_subtask_skipped_for_existing_targets(context, existing_result, expected_name: str) -> None:
     skipped_files = [
         {
             "renamed_name": expected_name,
@@ -495,16 +130,6 @@ def mark_subtask_skipped_for_existing_targets(context, existing_result: Existing
         event="subtask_skipped",
     )
     context.publish_subtask()
-
-
-def cleanup_download_folder(context, download_folder: str, config: dict) -> None:
-    if download_folder and config.get("use_task_subfolder", True):
-        try:
-            context.provider.delete_file(download_folder)
-            context.log("INFO", f"已清理下载目录: {download_folder}", step="cleanup_files")
-        except Exception as exc:
-            context.log("WARNING", f"清理下载目录失败 (非致命): {exc}", step="cleanup_files")
-    context.log("INFO", "清理完成", step="cleanup_files")
 
 
 def execute_current_magnet_attempt(context, magnet: dict) -> bool:
