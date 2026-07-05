@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from "react";
 import type React from "react";
 import {App} from "antd";
-import {fetchMovies} from "@/api/movie";
+import {fetchMovies, syncMovieStorageStatus} from "@/api/movie";
 import {DEFAULT_MOVIE_PAGE, DEFAULT_MOVIE_PAGE_SIZE, INITIAL_MOVIE_LIST_RESPONSE, DEFAULT_MOVIE_SORT_FIELD, DEFAULT_MOVIE_SORT_ORDER} from "../constants";
 import type {Movie, MovieListResponse} from "@/api/movie/types";
 import type {MovieFilterParams} from "../utils/movieFilter";
@@ -23,6 +23,7 @@ export function useMovieList(
     const [sortBy, setSortBy] = useState(initialSort?.sortBy ?? DEFAULT_MOVIE_SORT_FIELD);
     const [sortOrder, setSortOrder] = useState<number>(initialSort?.sortOrder ?? DEFAULT_MOVIE_SORT_ORDER);
     const [loading, setLoading] = useState(false);
+    const [syncingStorage, setSyncingStorage] = useState(false);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
     const loadMovies = useCallback(async () => {
@@ -102,10 +103,29 @@ export function useMovieList(
         }));
     }, []);
 
+    const syncStorageStatus = useCallback(async () => {
+        if (!filterParams) return;
+        setSyncingStorage(true);
+        try {
+            const selectedIds = selectedRowKeys.map((key) => String(key));
+            const payload = selectedIds.length > 0
+                ? {movie_ids: selectedIds}
+                : {filters: filterParams};
+            const result = await syncMovieStorageStatus(payload);
+            message.success(`同步完成：已存储 ${result.stored_count} 条，未存储 ${result.not_stored_count} 条`);
+            setSelectedRowKeys([]);
+            await loadMovies();
+        } catch (e: unknown) {
+            message.error(getErrorMessage(e));
+        } finally {
+            setSyncingStorage(false);
+        }
+    }, [filterParams, loadMovies, message, selectedRowKeys]);
+
     return {
-        data, page, pageSize, sortBy, sortOrder, loading, selectedRowKeys,
+        data, page, pageSize, sortBy, sortOrder, loading, syncingStorage, selectedRowKeys,
         setPage, setPageSize, setSelectedRowKeys,
-        search, reload, handlePageChange, handleShowSizeChange, handleSortChange, resetSort, updateMovie,
+        search, reload, syncStorageStatus, handlePageChange, handleShowSizeChange, handleSortChange, resetSort, updateMovie,
     };
 }
 

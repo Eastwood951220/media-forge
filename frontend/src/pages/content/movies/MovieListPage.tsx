@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Button } from 'antd'
+import { Button, Space } from 'antd'
+import { SyncOutlined } from '@ant-design/icons'
 import { DEFAULT_MOVIE_PAGE } from './constants'
 import BaseListPage from '@/components/BaseListPage'
 import type { FilterItemConfig } from '@/api/movie'
 import type { Movie, MovieFilterConfig } from '@/api/movie/types'
+import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
+import type { MovieStorageUpdatedPayload, RealtimeEvent } from '@/realtime/types'
 import FilterConfigDrawer from './components/FilterConfigDrawer'
 import MovieDetailDrawer from './components/MovieDetailDrawer'
 import MovieFilterBar from './components/MovieFilterBar'
@@ -105,6 +108,24 @@ function MovieListPage() {
     }
   }, [detail])
 
+  useEffect(() => {
+    connectRealtime()
+    const unsubscribe = subscribeRealtime<MovieStorageUpdatedPayload>(
+      'movie.storage.updated',
+      (event: RealtimeEvent<MovieStorageUpdatedPayload>) => {
+        list.updateMovie(event.payload.movie_id, (movie) => ({
+          ...movie,
+          storage_status: String(event.payload.storage_summary.storage_status || 'not_stored') as Movie['storage_status'],
+          storage_summary: {
+            ...movie.storage_summary,
+            ...event.payload.storage_summary,
+          },
+        }))
+      },
+    )
+    return unsubscribe
+  }, [list.updateMovie])
+
   const columns = useMemo(
     () => createMovieColumns({ onViewDetail: detail.showDetail, onPush: push.openSinglePush }),
     [detail.showDetail, push.openSinglePush],
@@ -141,13 +162,23 @@ function MovieListPage() {
           showTotal: (count) => `共 ${count} 条`,
         }}
         queryNode={queryNode}
-        toolbarLeft={
-          list.selectedRowKeys.length > 0 ? (
-            <Button type="primary" size="small" onClick={handleBulkPush}>
-              批量推送
+        toolbarLeft={(
+          <Space>
+            {list.selectedRowKeys.length > 0 && (
+              <Button type="primary" size="small" onClick={handleBulkPush}>
+                批量推送
+              </Button>
+            )}
+            <Button
+              size="small"
+              icon={<SyncOutlined />}
+              loading={list.syncingStorage}
+              onClick={() => void list.syncStorageStatus()}
+            >
+              同步存储状态
             </Button>
-          ) : undefined
-        }
+          </Space>
+        )}
         onRefresh={listReady ? list.reload : undefined}
         tableProps={{
           onChange: (pagination) => {
