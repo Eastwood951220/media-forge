@@ -101,3 +101,9 @@ def test_event_stream_endpoint_exists_and_requires_auth(client: TestClient) -> N
     """Verify the SSE endpoint exists and rejects bad tokens."""
     response = client.get("/api/events/stream?token=bad")
     assert response.status_code == 401
+
+
+def test_deprecated_crawler_stream_route_is_removed(client: TestClient) -> None:
+    response = client.get("/api/crawler/stream?token=bad")
+
+    assert response.status_code == 404
