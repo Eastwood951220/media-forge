@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import sqlalchemy as sa
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Select, and_, false, func, not_, or_, select
-from sqlalchemy.dialects.postgresql import ARRAY as CompatibleARRAY
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
@@ -173,6 +172,10 @@ def _parse_uuid(value: str | None) -> UUID | None:
         return None
 
 
+def _postgres_array_contains(column: Any, value: Any, item_type: Any):
+    return column.op("@>")(postgresql.array([value], type_=item_type))
+
+
 def requires_python_fallback(db: Session, filters: MovieListFilters) -> bool:
     if filters.storage_status:
         return True
@@ -244,18 +247,17 @@ def build_movie_list_statement(
         if filters.source_task_id:
             source_task_id = _parse_uuid(filters.source_task_id)
             if source_task_id is not None:
-                # Use @> operator for array containment
-                conditions.append(Movie.source_task_ids.op("@>")(func.cast(func.array(source_task_id), CompatibleARRAY(sa.dialects.postgresql.UUID))))
+                conditions.append(_postgres_array_contains(Movie.source_task_ids, source_task_id, postgresql.UUID(as_uuid=True)))
             else:
                 conditions.append(false())
         for actor in split_csv(filters.actors):
-            conditions.append(Movie.actors.op("@>")(func.cast(func.array(actor), CompatibleARRAY(sa.String))))
+            conditions.append(_postgres_array_contains(Movie.actors, actor, postgresql.TEXT()))
         for actor in split_csv(filters.actors_not):
-            conditions.append(not_(Movie.actors.op("@>")(func.cast(func.array(actor), CompatibleARRAY(sa.String)))))
+            conditions.append(not_(_postgres_array_contains(Movie.actors, actor, postgresql.TEXT())))
         for tag in split_csv(filters.tags):
-            conditions.append(Movie.tags.op("@>")(func.cast(func.array(tag), CompatibleARRAY(sa.String))))
+            conditions.append(_postgres_array_contains(Movie.tags, tag, postgresql.TEXT()))
         for tag in split_csv(filters.tags_not):
-            conditions.append(not_(Movie.tags.op("@>")(func.cast(func.array(tag), CompatibleARRAY(sa.String)))))
+            conditions.append(not_(_postgres_array_contains(Movie.tags, tag, postgresql.TEXT())))
         if filters.actors_count_min is not None:
             conditions.append(func.array_length(Movie.actors, 1) >= filters.actors_count_min)
         if filters.actors_count_max is not None:
