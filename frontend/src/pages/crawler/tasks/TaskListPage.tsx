@@ -141,10 +141,13 @@ function TaskListPage() {
                 width: 500,
                 onOk: async () => {
                     const result = await deleteCrawlTask(task.id, selectedMode)
-                    const msg = selectedMode === 'task_and_movies'
+                    const movieMsg = selectedMode !== 'task_only'
                         ? `，已删除 ${result?.deleted_movies ?? 0} 部关联影片`
                         : ''
-                    message.success(`删除成功${msg}`)
+                    const cloudMsg = selectedMode === 'task_movies_and_cloud'
+                        ? `，已删除 ${result?.cloud_deleted_folders?.length ?? 0} 个云存储文件夹`
+                        : ''
+                    message.success(`删除成功${movieMsg}${cloudMsg}`)
                     refreshList()
                 },
             })

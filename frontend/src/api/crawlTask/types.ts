@@ -68,6 +68,9 @@ export interface DeleteTaskResult {
   deleted_movies: number
   deleted_magnets: number
   cloud_delete: string
+  cloud_deleted_folders: string[]
+  cloud_missing_folders: string[]
+  cloud_failed_folders: Array<Record<string, unknown>>
 }
 
 export interface TaskDictItem {
