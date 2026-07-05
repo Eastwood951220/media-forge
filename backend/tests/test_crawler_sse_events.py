@@ -223,3 +223,10 @@ class TestSSERouter:
         """Verify the SSE endpoint exists and rejects bad tokens."""
         response = client.get("/api/crawler/stream?token=bad")
         assert response.status_code == 401
+
+    def test_stream_endpoint_is_marked_deprecated(self, client: TestClient):
+        schema = client.get("/openapi.json").json()
+
+        operation = schema["paths"]["/api/crawler/stream"]["get"]
+
+        assert operation["deprecated"] is True

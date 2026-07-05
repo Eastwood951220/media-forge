@@ -1,11 +1,8 @@
-"""SSE streaming endpoint for crawler real-time events.
+"""Deprecated SSE streaming endpoint for crawler real-time events.
 
-Clients connect to ``GET /api/crawler/stream?token=<jwt>`` and receive
-a continuous stream of ``CrawlerEvent`` objects encoded as SSE ``data:``
-frames.
-
-Authentication uses a query-parameter token because the browser
-``EventSource`` API does not support custom headers.
+This endpoint is retained for backward compatibility because backend tests still
+cover it. Current frontend pages use the unified ``/api/events/stream`` realtime
+channel instead.
 """
 
 from __future__ import annotations
@@ -33,7 +30,7 @@ _event_adapter = TypeAdapter(CrawlerEvent)
 RECONNECT_MS = 3_000
 
 
-@router.get("/api/crawler/stream")
+@router.get("/api/crawler/stream", deprecated=True)
 async def stream_crawler_events(
     token: str = Query(..., description="JWT access token"),
 ) -> StreamingResponse:
