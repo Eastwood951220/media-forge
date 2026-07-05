@@ -177,7 +177,7 @@ def seed_filter_movies() -> None:
             maker="片商A",
             series="系列A",
             source_task_ids=[TASK_ID_A],
-            storage_summary={"last_status": "completed"},
+            storage_summary={"storage_status": "stored", "last_status": "stored"},
         ),
         Movie(
             code="BBB-200",
@@ -220,7 +220,7 @@ def test_list_movies_supports_original_filter_contract(client: TestClient, admin
             "actors_count_max": 2,
             "release_date_from": "2026-01-01",
             "release_date_to": "2026-01-31",
-            "storage_status": "completed",
+            "storage_status": "stored",
             "page": 1,
             "limit": 20,
             "sort_by": "rating",
@@ -241,7 +241,7 @@ def test_list_movies_not_stored_filter(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
     session = TestingSessionLocal()
     session.add(Movie(code="CCC-300", source_url="https://javdb.com/v/ccc300", source_name="无存储", source_task_ids=[TASK_ID_C], storage_summary={}))
-    session.add(Movie(code="DDD-400", source_url="https://javdb.com/v/ddd400", source_name="已存储", source_task_ids=[TASK_ID_C], storage_summary={"last_status": "completed"}))
+    session.add(Movie(code="DDD-400", source_url="https://javdb.com/v/ddd400", source_name="已存储", source_task_ids=[TASK_ID_C], storage_summary={"storage_status": "stored", "last_status": "stored"}))
     session.commit()
     session.close()
 
@@ -316,3 +316,26 @@ def test_sync_movie_storage_status_scans_target_folders_and_records_locations(db
             "source": "manual_sync",
         }
     ]
+
+
+def test_movie_payload_and_filter_use_three_storage_statuses(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    session.add_all([
+        Movie(code="SYNC-100", source_url="https://example.test/1", source_name="默认未存储", storage_summary={}),
+        Movie(code="SYNC-200", source_url="https://example.test/2", source_name="入库中", storage_summary={"storage_status": "storing"}),
+        Movie(code="SYNC-300", source_url="https://example.test/3", source_name="已存储", storage_summary={"storage_status": "stored"}),
+    ])
+    session.commit()
+    session.close()
+
+    not_stored = client.get("/api/content/movies?storage_status=not_stored", headers=headers)
+    storing = client.get("/api/content/movies?storage_status=storing", headers=headers)
+    stored = client.get("/api/content/movies?storage_status=stored", headers=headers)
+
+    assert [row["code"] for row in not_stored.json()["rows"]] == ["SYNC-100"]
+    assert not_stored.json()["rows"][0]["storage_status"] == "not_stored"
+    assert [row["code"] for row in storing.json()["rows"]] == ["SYNC-200"]
+    assert storing.json()["rows"][0]["storage_status"] == "storing"
+    assert [row["code"] for row in stored.json()["rows"]] == ["SYNC-300"]
+    assert stored.json()["rows"][0]["storage_status"] == "stored"

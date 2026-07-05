@@ -6,6 +6,7 @@ from sqlalchemy import func, not_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.dependencies import CurrentUser, get_db
+from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
 from shared.database.models.content import Movie, MovieFilter
 from backend.app.modules.content.movies.filter_config import (
     MovieFilterConfigPayload,
@@ -65,6 +66,7 @@ def _movie_payload(movie: Movie, *, include_magnets: bool = False, db: Session |
                 loc = crawl_task.storage_location
                 if loc not in storage_locations:
                     storage_locations.append(loc)
+    storage_status = normalized_movie_storage_status(movie)
     payload = {
         "_id": str(movie.id),
         "id": str(movie.id),
@@ -83,6 +85,7 @@ def _movie_payload(movie: Movie, *, include_magnets: bool = False, db: Session |
         "source_task_ids": source_task_ids,
         "storage_locations": storage_locations,
         "marked": bool(movie.marked),
+        "storage_status": storage_status,
         "storage_summary": movie.storage_summary or {},
         "raw_detail": movie.raw_detail or {},
         "created_at": movie.created_at.isoformat() if movie.created_at else None,
@@ -193,10 +196,8 @@ def _movie_matches_python(
         return False
     if created_at_to and (movie.created_at is None or movie.created_at.date().isoformat() > created_at_to):
         return False
-    last_status = (movie.storage_summary or {}).get("last_status")
-    if storage_status == "not_stored":
-        return not last_status
-    if storage_status and last_status != storage_status:
+    normalized_storage_status = normalized_movie_storage_status(movie)
+    if storage_status and normalized_storage_status != storage_status:
         return False
     return True
 
