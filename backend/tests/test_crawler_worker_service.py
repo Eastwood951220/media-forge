@@ -38,82 +38,90 @@ class Runtime:
 
 
 class MovieServiceStub:
-    def crawl_javdb_task(self, task, **kwargs):
-        kwargs["on_tasks_batch_created"]([
-            {"code": "AAA-001", "url": "https://javdb.com/v/aaa", "name": "AAA"}
-        ])
-        kwargs["on_item_saved"](
-            {"code": "AAA-001", "url": "https://javdb.com/v/aaa", "name": "AAA"},
-            {"code": "AAA-001", "source_url": "https://javdb.com/v/aaa", "source_name": "AAA"},
-        )
+    def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
+        if callbacks.on_tasks_batch_created:
+            callbacks.on_tasks_batch_created([
+                {"code": "AAA-001", "url": "https://javdb.com/v/aaa", "name": "AAA"}
+            ])
+        if callbacks.on_item_saved:
+            callbacks.on_item_saved(
+                {"code": "AAA-001", "url": "https://javdb.com/v/aaa", "name": "AAA"},
+                {"code": "AAA-001", "source_url": "https://javdb.com/v/aaa", "source_name": "AAA"},
+            )
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
 
 class PersistingMovieServiceStub:
-    def crawl_javdb_task(self, task, **kwargs):
-        kwargs["on_tasks_batch_created"]([
-            {"code": "AAA-002", "url": "https://javdb.com/v/aaa002", "name": "AAA 002"}
-        ])
-        kwargs["on_item_saved"](
-            {"code": "AAA-002", "url": "https://javdb.com/v/aaa002", "name": "AAA 002"},
-            {
-                "code": "AAA-002",
-                "source_url": "https://javdb.com/v/aaa002",
-                "source_name": "AAA 002",
-                "title": "AAA 002",
-                "magnets": [
-                    {
-                        "magnet": "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                        "name": "AAA 002",
-                        "size_text": "1.2GB",
-                    }
-                ],
-            },
-        )
+    def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
+        if callbacks.on_tasks_batch_created:
+            callbacks.on_tasks_batch_created([
+                {"code": "AAA-002", "url": "https://javdb.com/v/aaa002", "name": "AAA 002"}
+            ])
+        if callbacks.on_item_saved:
+            callbacks.on_item_saved(
+                {"code": "AAA-002", "url": "https://javdb.com/v/aaa002", "name": "AAA 002"},
+                {
+                    "code": "AAA-002",
+                    "source_url": "https://javdb.com/v/aaa002",
+                    "source_name": "AAA 002",
+                    "title": "AAA 002",
+                    "magnets": [
+                        {
+                            "magnet": "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                            "name": "AAA 002",
+                            "size_text": "1.2GB",
+                        }
+                    ],
+                },
+            )
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
 
 class FilterSyncMovieServiceStub:
-    def crawl_javdb_task(self, task, **kwargs):
-        kwargs["on_tasks_batch_created"]([
-            {"code": "FILTER-001", "url": "https://javdb.com/v/filter001", "name": "FILTER 001"}
-        ])
-        kwargs["on_item_saved"](
-            {"code": "FILTER-001", "url": "https://javdb.com/v/filter001", "name": "FILTER 001"},
-            {
-                "code": "FILTER-001",
-                "source_url": "https://javdb.com/v/filter001",
-                "source_name": "FILTER 001",
-                "title": "FILTER 001",
-                "actors": ["演员缓存A", "演员缓存B"],
-                "tags": ["标签缓存A"],
-                "director": "导演缓存A",
-                "maker": "片商缓存A",
-                "series": "系列缓存A",
-            },
-        )
+    def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
+        if callbacks.on_tasks_batch_created:
+            callbacks.on_tasks_batch_created([
+                {"code": "FILTER-001", "url": "https://javdb.com/v/filter001", "name": "FILTER 001"}
+            ])
+        if callbacks.on_item_saved:
+            callbacks.on_item_saved(
+                {"code": "FILTER-001", "url": "https://javdb.com/v/filter001", "name": "FILTER 001"},
+                {
+                    "code": "FILTER-001",
+                    "source_url": "https://javdb.com/v/filter001",
+                    "source_name": "FILTER 001",
+                    "title": "FILTER 001",
+                    "actors": ["演员缓存A", "演员缓存B"],
+                    "tags": ["标签缓存A"],
+                    "director": "导演缓存A",
+                    "maker": "片商缓存A",
+                    "series": "系列缓存A",
+                },
+            )
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
 
 class FailingPersistenceMovieServiceStub:
-    def crawl_javdb_task(self, task, **kwargs):
-        kwargs["on_tasks_batch_created"]([
-            {"code": "AAA-003", "url": "https://javdb.com/v/aaa003", "name": "AAA 003"}
-        ])
-        kwargs["on_item_saved"](
-            {"code": "AAA-003", "url": "https://javdb.com/v/aaa003", "name": "AAA 003"},
-            {
-                "code": "AAA-003",
-                "source_url": "https://javdb.com/v/aaa003",
-                "source_name": "AAA 003",
-            },
-        )
+    def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
+        if callbacks.on_tasks_batch_created:
+            callbacks.on_tasks_batch_created([
+                {"code": "AAA-003", "url": "https://javdb.com/v/aaa003", "name": "AAA 003"}
+            ])
+        if callbacks.on_item_saved:
+            callbacks.on_item_saved(
+                {"code": "AAA-003", "url": "https://javdb.com/v/aaa003", "name": "AAA 003"},
+                {
+                    "code": "AAA-003",
+                    "source_url": "https://javdb.com/v/aaa003",
+                    "source_name": "AAA 003",
+                },
+            )
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
 
 class ListPhaseDedupeMovieServiceStub:
-    def crawl_javdb_task(self, task, **kwargs):
-        existing_codes = kwargs["db_check_callback"](["AAA-010", "AAA-011"])
+    def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
+        existing_codes = callbacks.db_check_callback(["AAA-010", "AAA-011"])
         batch = [
             {"code": "AAA-010", "url": "https://javdb.com/v/aaa010", "name": "AAA 010"},
             {"code": "AAA-011", "url": "https://javdb.com/v/aaa011", "name": "AAA 011"},
@@ -122,7 +130,8 @@ class ListPhaseDedupeMovieServiceStub:
             if item["code"] in existing_codes:
                 item["status"] = "skipped"
                 item["reason"] = "already_exists"
-        kwargs["on_tasks_batch_created"](batch)
+        if callbacks.on_tasks_batch_created:
+            callbacks.on_tasks_batch_created(batch)
         return {
             "total_tasks": 2,
             "completed_tasks": 0,
@@ -132,13 +141,15 @@ class ListPhaseDedupeMovieServiceStub:
 
 
 class DetailPhaseDedupeMovieServiceStub:
-    def crawl_javdb_task(self, task, **kwargs):
+    def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
         detail_task = {"code": "AAA-020", "url": "https://javdb.com/v/aaa020", "name": "AAA 020"}
-        kwargs["on_tasks_batch_created"]([detail_task])
-        if kwargs["on_detail_check_callback"]("AAA-020"):
+        if callbacks.on_tasks_batch_created:
+            callbacks.on_tasks_batch_created([detail_task])
+        if callbacks.on_detail_check_callback and callbacks.on_detail_check_callback("AAA-020"):
             detail_task["status"] = "skipped"
             detail_task["reason"] = "already_exists"
-            kwargs["on_item_already_exists"](detail_task)
+            if callbacks.on_item_already_exists:
+                callbacks.on_item_already_exists(detail_task)
         return {
             "total_tasks": 1,
             "completed_tasks": 0,
@@ -229,7 +240,7 @@ def test_process_next_run_marks_saved(monkeypatch) -> None:
 def test_execute_run_persists_movie_before_marking_detail_saved(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: PersistingMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: PersistingMovieServiceStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("persist")
 
@@ -255,7 +266,7 @@ def test_execute_run_publishes_run_detail_events_to_realtime_bus(monkeypatch) ->
     from backend.app.modules.crawler.runtime.service import _execute_run
     from backend.app.modules.realtime.bus import event_bus as realtime_bus
 
-    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: PersistingMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: PersistingMovieServiceStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("realtime")
     task = session.get(CrawlTask, run.task_id)
@@ -288,7 +299,7 @@ def test_execute_run_publishes_run_detail_events_to_realtime_bus(monkeypatch) ->
 def test_execute_run_syncs_movie_filters_after_movie_persistence(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: FilterSyncMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: FilterSyncMovieServiceStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("filter-sync")
 
@@ -307,10 +318,12 @@ def test_execute_run_syncs_movie_filters_after_movie_persistence(monkeypatch) ->
 
 def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
-    from scraper.database.repositories.movie_repository import MovieRepository
 
-    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: FailingPersistenceMovieServiceStub())
-    monkeypatch.setattr(MovieRepository, "upsert_movie", lambda self, item: None)
+    def fail_persistence(db, item_data):
+        raise RuntimeError("movie repository returned no id")
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: FailingPersistenceMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.upsert_movie_with_magnets", fail_persistence)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("save-failed")
 
@@ -328,7 +341,7 @@ def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monke
 def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: ListPhaseDedupeMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ListPhaseDedupeMovieServiceStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("list-dedupe")
     session.add(Movie(code="AAA-010", source_url="https://javdb.com/v/aaa010", source_task_ids=[]))
@@ -353,7 +366,7 @@ def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> No
 def test_execute_run_marks_detail_phase_existing_movies_skipped(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: DetailPhaseDedupeMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: DetailPhaseDedupeMovieServiceStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("detail-dedupe")
     session.add(Movie(code="AAA-020", source_url="https://javdb.com/v/aaa020", source_task_ids=[]))
@@ -380,11 +393,12 @@ class StopRequestedRuntime(Runtime):
 
 
 class StopAwareMovieServiceStub:
-    def crawl_javdb_task(self, task, **kwargs):
-        assert kwargs["stop_check"]() is True
-        kwargs["on_tasks_batch_created"]([
-            {"code": "STOP-001", "url": "https://javdb.com/v/stop001", "name": "STOP 001"}
-        ])
+    def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
+        assert callbacks.stop_check() is True
+        if callbacks.on_tasks_batch_created:
+            callbacks.on_tasks_batch_created([
+                {"code": "STOP-001", "url": "https://javdb.com/v/stop001", "name": "STOP 001"}
+            ])
         return {
             "total_tasks": 1,
             "completed_tasks": 0,
@@ -394,33 +408,35 @@ class StopAwareMovieServiceStub:
 
 
 class ExistingDetailReuseMovieServiceStub:
-    def crawl_javdb_task(self, task, **kwargs):
+    def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
         raise AssertionError("detail-stage restart must not run list collection")
 
-    def crawl_javdb_detail_tasks(self, task, detail_tasks, **kwargs):
+    def crawl_detail_tasks(self, task, *, detail_tasks, task_id=None, callbacks):
         assert [item["code"] for item in detail_tasks] == ["REUSE-001"]
-        kwargs["on_item_saved"](
-            {"code": "REUSE-001", "url": "https://javdb.com/v/reuse001", "name": "REUSE 001"},
-            {"code": "REUSE-001", "source_url": "https://javdb.com/v/reuse001", "source_name": "REUSE 001"},
-        )
+        if callbacks.on_item_saved:
+            callbacks.on_item_saved(
+                {"code": "REUSE-001", "url": "https://javdb.com/v/reuse001", "name": "REUSE 001"},
+                {"code": "REUSE-001", "source_url": "https://javdb.com/v/reuse001", "source_name": "REUSE 001"},
+            )
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
 
 class ListPhaseRestartMovieServiceStub:
-    def crawl_javdb_task(self, task, **kwargs):
-        kwargs["on_tasks_batch_created"]([
-            {"code": "LIST-001", "url": "https://javdb.com/v/list001", "name": "LIST 001"}
-        ])
+    def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
+        if callbacks.on_tasks_batch_created:
+            callbacks.on_tasks_batch_created([
+                {"code": "LIST-001", "url": "https://javdb.com/v/list001", "name": "LIST 001"}
+            ])
         return {"total_tasks": 1, "completed_tasks": 0, "failed_tasks": 0}
 
-    def crawl_javdb_detail_tasks(self, task, detail_tasks, **kwargs):
+    def crawl_detail_tasks(self, task, *, detail_tasks, task_id=None, callbacks):
         raise AssertionError("list-stage restart must rerun list collection")
 
 
 def test_execute_run_stops_when_runtime_stop_requested(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: StopAwareMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: StopAwareMovieServiceStub())
     session = TestingSessionLocal()
     run, _runtime = create_run_with_task("stop-requested")
     runtime = StopRequestedRuntime(str(run.id))
@@ -440,8 +456,8 @@ def test_execute_run_stops_when_runtime_stop_requested(monkeypatch) -> None:
 def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: ExistingDetailReuseMovieServiceStub())
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service._persist_crawled_item", lambda db, item_data: uuid.uuid4())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ExistingDetailReuseMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.upsert_movie_with_magnets", lambda db, item_data: uuid.uuid4())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("reuse-existing")
     existing = CrawlRunDetailTask(
@@ -450,7 +466,7 @@ def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch
         code="REUSE-001",
         source_url="https://javdb.com/v/reuse001",
         source_name="REUSE 001",
-        status="pending_crawl",
+        status="save_failed",
         created_at=datetime.now(),
     )
     session.add(existing)
@@ -468,7 +484,7 @@ def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch
 def test_execute_run_does_not_treat_list_stage_pending_details_as_detail_restart(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("scraper.services.movie_service.MovieService", lambda: ListPhaseRestartMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ListPhaseRestartMovieServiceStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("list-stage")
     session.add(CrawlRunDetailTask(

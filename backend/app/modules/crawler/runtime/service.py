@@ -13,10 +13,17 @@ from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
 from backend.app.modules.crawler.runtime.source_task_names import (
-    add_source_task_id_for_code,
     find_existing_movie_codes,
     movie_code_exists,
 )
+from backend.app.modules.content.movies.persistence import (
+    append_source_task_id,
+    sync_movie_filters,
+    upsert_movie_with_magnets,
+)
+from backend.app.modules.crawler.runtime.config import read_incremental_threshold_from_conf
+from backend.app.modules.crawler.runtime.engine import CrawlCallbacks, get_crawler_engine
+from backend.app.modules.crawler.runtime.task_adapter import to_scraper_task
 from backend.app.modules.crawler.tasks.runtime_status import (
     derive_runtime_status,
     publish_task_status_updated,
@@ -29,22 +36,7 @@ UNFINISHED_DETAIL_STATUSES = {"pending_crawl", "crawl_failed", "save_failed"}
 
 def _read_incremental_threshold_from_conf() -> int:
     """Read INCREMENTAL_EXIST_THRESHOLD from crawler.conf."""
-    from scraper.config import settings as cfg
-
-    conf_path = cfg.BASE_DIR / "data" / "configs" / "crawler.conf"
-    if not conf_path.exists():
-        return 0
-    for line in conf_path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            continue
-        key, value = stripped.split("=", 1)
-        if key.strip() == "INCREMENTAL_EXIST_THRESHOLD":
-            try:
-                return int(value.strip())
-            except (ValueError, TypeError):
-                return 0
-    return 0
+    return read_incremental_threshold_from_conf()
 RESTARTABLE_DETAIL_STATUSES = UNFINISHED_DETAIL_STATUSES
 TERMINAL_DETAIL_STATUSES = {"saved", "skipped"}
 DETAIL_PHASE_STARTED_STATUSES = {"saved", "crawl_failed", "save_failed"}
@@ -376,22 +368,7 @@ def append_run_log_for_run(
 
 
 def _persist_crawled_item(db: Session, item_data: dict[str, Any]) -> uuid.UUID:
-    from scraper.database.repositories.movie_magnet_repository import MovieMagnetRepository
-    from scraper.database.repositories.movie_repository import MovieRepository
-
-    movie_doc = dict(item_data)
-    magnets = movie_doc.pop("magnets", []) or []
-    repository = MovieRepository(session=db)
-    magnet_repository = MovieMagnetRepository(session=db)
-    movie_id = repository.upsert_movie(movie_doc)
-    if movie_id is None:
-        raise RuntimeError("movie repository returned no id")
-
-    if magnets:
-        magnet_repository.upsert_many(movie_id, movie_doc, magnets)
-        magnet_repository.auto_select_best_magnet(str(movie_id))
-
-    return movie_id
+    return upsert_movie_with_magnets(db, item_data)
 
 
 def _count_run_detail_tasks(db: Session, run_id: uuid.UUID, status: str | None = None) -> int:
@@ -465,7 +442,7 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             created_details.append(detail)
             if is_skipped:
                 skipped_count += 1
-                if add_source_task_id_for_code(db, item.get("code"), task.id):
+                if append_source_task_id(db, item.get("code"), task.id):
                     append_run_log_for_run(db, run, f"已存在影片追加任务ID: {item.get('code')} -> {task.id}", "INFO", code=item.get("code"))
         progress["total"] += len(items)
         progress["skipped"] += skipped_count
@@ -526,7 +503,7 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             detail.error = "already_exists"
             detail.crawled_at = detail.crawled_at or datetime.now()
             detail.saved_at = None
-        add_source_task_id_for_code(db, code, task.id)
+        append_source_task_id(db, code, task.id)
         if not was_skipped:
             progress["skipped"] += 1
         runtime.write_progress(str(run.id), progress)
@@ -569,8 +546,8 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
 
     # Execute crawl
     try:
-        from scraper.services.movie_service import MovieService
-        movie_service = MovieService()
+        engine_task = to_scraper_task(task)
+        engine = get_crawler_engine()
 
         detail_phase_restart = has_detail_phase_started(db, run)
         restartable_existing_details = [
@@ -584,32 +561,36 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
                 f"检测到已有详情子任务 {len(restartable_existing_details)} 条，跳过列表收集直接重试详情",
                 "INFO",
             )
-            result = movie_service.crawl_javdb_detail_tasks(
-                task,
+            result = engine.crawl_detail_tasks(
+                engine_task,
                 detail_tasks=[detail_row_to_task_info(detail) for detail in restartable_existing_details],
                 task_id=str(run.task_id) if run.task_id else None,
-                on_item_saved=on_item_saved,
-                on_detail_failed=on_detail_failed,
-                on_item_already_exists=on_item_already_exists,
-                log_callback=log_callback,
-                on_detail_check_callback=on_detail_check_callback,
-                stop_check=lambda: runtime.is_stop_requested(str(run.id)),
+                callbacks=CrawlCallbacks(
+                    on_item_saved=on_item_saved,
+                    on_detail_failed=on_detail_failed,
+                    on_item_already_exists=on_item_already_exists,
+                    log_callback=log_callback,
+                    on_detail_check_callback=on_detail_check_callback,
+                    stop_check=lambda: runtime.is_stop_requested(str(run.id)),
+                ),
             )
         else:
             incremental_threshold = _read_incremental_threshold_from_conf()
-            result = movie_service.crawl_javdb_task(
-                task,
+            result = engine.crawl_task(
+                engine_task,
                 task_id=str(run.task_id) if run.task_id else None,
                 crawl_mode=run.crawl_mode,
                 incremental_threshold=incremental_threshold,
-                on_tasks_batch_created=on_tasks_batch_created,
-                on_item_saved=on_item_saved,
-                on_detail_failed=on_detail_failed,
-                on_item_already_exists=on_item_already_exists,
-                log_callback=log_callback,
-                db_check_callback=db_check_callback,
-                on_detail_check_callback=on_detail_check_callback,
-                stop_check=lambda: runtime.is_stop_requested(str(run.id)),
+                callbacks=CrawlCallbacks(
+                    on_tasks_batch_created=on_tasks_batch_created,
+                    on_item_saved=on_item_saved,
+                    on_detail_failed=on_detail_failed,
+                    on_item_already_exists=on_item_already_exists,
+                    log_callback=log_callback,
+                    db_check_callback=db_check_callback,
+                    on_detail_check_callback=on_detail_check_callback,
+                    stop_check=lambda: runtime.is_stop_requested(str(run.id)),
+                ),
             )
 
         stopped = runtime.is_stop_requested(str(run.id)) or bool((result or {}).get("stopped"))
@@ -649,8 +630,6 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
                 "INFO",
             )
             try:
-                from scraper.database.repositories.filter_repository import sync_movie_filters
-
                 sync_result = sync_movie_filters(db)
                 append_run_log_for_run(
                     db, run,
@@ -661,12 +640,7 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             except Exception as sync_exc:
                 logger.warning("Failed to sync movie filters for run %s: %s", run.id, sync_exc)
                 append_run_log_for_run(db, run, f"筛选列表同步失败: {sync_exc}", "WARNING")
-    except ImportError:
-        logger.warning("MovieService not available, marking run as completed with stub")
-        append_run_log_for_run(db, run, "MovieService 不可用，使用空结果完成运行", "WARNING")
-        run.result = {"total_tasks": 0, "completed_tasks": 0, "failed_tasks": 0}
-        run.status = "completed"
-    except Exception as exc:
+    except Exception:
         raise
 
     run.finished_at = datetime.now()
