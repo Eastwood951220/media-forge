@@ -562,3 +562,18 @@ def test_delete_movies_cloud_only_api_deletes_cloud_folders_and_keeps_movie(clie
     detail = client.get(f"/api/content/movies/{movie_id}", headers=headers).json()["data"]
     assert detail["storage_status"] == "not_stored"
     assert detail["storage_summary"]["locations"] == []
+
+
+def test_movie_list_query_helpers_preserve_sort_and_storage_filter(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    seed_filter_movies()
+
+    response = client.get(
+        "/api/content/movies?storage_status=stored&sort_by=rating&sort_order=-1&page=1&limit=10",
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert body["total"] == 1
+    assert body["rows"][0]["code"] == "AAA-100"

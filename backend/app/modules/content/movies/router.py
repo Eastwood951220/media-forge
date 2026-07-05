@@ -11,6 +11,13 @@ from backend.app.modules.content.movies.delete_service import (
     UnsupportedMovieDeleteMode,
     delete_movies,
 )
+from backend.app.modules.content.movies.queries import (
+    VALID_FILTER_TYPES,
+    MovieListFilters,
+    list_filter_values,
+    list_movies_page,
+    movie_matches,
+)
 from backend.app.modules.content.movies.schemas import MovieDeleteRequest, MovieStorageSyncRequest
 from backend.app.modules.content.movies.serializers import serialize_movie
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
@@ -24,121 +31,6 @@ from shared.schemas.common import paginated, success
 
 router = APIRouter(prefix="/api/content/movies", tags=["content-movies"])
 
-ALLOWED_SORT_FIELDS = {
-    "created_at": Movie.created_at,
-    "updated_at": Movie.updated_at,
-    "code": Movie.code,
-    "source_name": Movie.source_name,
-    "release_date": Movie.release_date,
-    "rating": Movie.rating,
-}
-
-VALID_FILTER_TYPES = {"actor", "tag", "director", "maker", "series"}
-
-
-def _unique_sorted(values: list[str | None]) -> list[str]:
-    return sorted({value for value in values if value})
-
-
-def _sqlite_filter_values(db: Session, filter_type: str) -> list[str]:
-    movies = db.query(Movie).all()
-    if filter_type == "actor":
-        return _unique_sorted([actor for movie in movies for actor in (movie.actors or [])])
-    if filter_type == "tag":
-        return _unique_sorted([tag for movie in movies for tag in (movie.tags or [])])
-    return _unique_sorted([getattr(movie, filter_type) for movie in movies])
-
-
-def _cached_filter_values(db: Session, filter_type: str) -> list[str]:
-    return list(db.scalars(
-        select(MovieFilter.name)
-        .where(MovieFilter.type == filter_type, MovieFilter.name != "")
-        .distinct()
-        .order_by(MovieFilter.name.asc())
-    ).all())
-
-
-def _split_csv(value: str | None) -> list[str]:
-    return [item.strip() for item in value.split(",") if item.strip()] if value else []
-
-
-def _movie_matches_python(
-    movie: Movie,
-    *,
-    search: str | None,
-    source_task_id: str | None,
-    rating_min: float | None,
-    rating_max: float | None,
-    actors: str | None,
-    actors_not: str | None,
-    actors_count_min: int | None,
-    actors_count_max: int | None,
-    tags: str | None,
-    tags_not: str | None,
-    director: str | None,
-    director_not: str | None,
-    maker: str | None,
-    maker_not: str | None,
-    series: str | None,
-    series_not: str | None,
-    release_date_from: str | None,
-    release_date_to: str | None,
-    created_at_from: str | None,
-    created_at_to: str | None,
-    storage_status: str | None,
-) -> bool:
-    if search:
-        needle = search.lower()
-        haystack = " ".join([movie.code or "", movie.source_name or "", movie.director or "", movie.maker or "", movie.series or ""]).lower()
-        if needle not in haystack:
-            return False
-    if source_task_id:
-        task_ids = [str(tid) for tid in (movie.source_task_ids or [])]
-        if source_task_id not in task_ids:
-            return False
-    if rating_min is not None and (movie.rating is None or float(movie.rating) < rating_min):
-        return False
-    if rating_max is not None and (movie.rating is None or float(movie.rating) > rating_max):
-        return False
-    movie_actors = set(movie.actors or [])
-    movie_tags = set(movie.tags or [])
-    if _split_csv(actors) and not set(_split_csv(actors)).issubset(movie_actors):
-        return False
-    if _split_csv(actors_not) and set(_split_csv(actors_not)).intersection(movie_actors):
-        return False
-    if _split_csv(tags) and not set(_split_csv(tags)).issubset(movie_tags):
-        return False
-    if _split_csv(tags_not) and set(_split_csv(tags_not)).intersection(movie_tags):
-        return False
-    if _split_csv(director) and movie.director not in _split_csv(director):
-        return False
-    if _split_csv(director_not) and movie.director in _split_csv(director_not):
-        return False
-    if _split_csv(maker) and movie.maker not in _split_csv(maker):
-        return False
-    if _split_csv(maker_not) and movie.maker in _split_csv(maker_not):
-        return False
-    if _split_csv(series) and movie.series not in _split_csv(series):
-        return False
-    if _split_csv(series_not) and movie.series in _split_csv(series_not):
-        return False
-    if actors_count_min is not None and len(movie.actors or []) < actors_count_min:
-        return False
-    if actors_count_max is not None and len(movie.actors or []) > actors_count_max:
-        return False
-    if release_date_from and (movie.release_date is None or movie.release_date.isoformat() < release_date_from):
-        return False
-    if release_date_to and (movie.release_date is None or movie.release_date.isoformat() > release_date_to):
-        return False
-    if created_at_from and (movie.created_at is None or movie.created_at.date().isoformat() < created_at_from):
-        return False
-    if created_at_to and (movie.created_at is None or movie.created_at.date().isoformat() > created_at_to):
-        return False
-    normalized_storage_status = normalized_movie_storage_status(movie)
-    if storage_status and normalized_storage_status != storage_status:
-        return False
-    return True
-
 
 @router.get("/filters")
 def list_filters(
@@ -149,20 +41,7 @@ def list_filters(
     if type not in VALID_FILTER_TYPES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid filter type: {type}")
 
-    cached_names = _cached_filter_values(db, type)
-    if cached_names:
-        return success(data=cached_names)
-
-    if db.bind.dialect.name == "sqlite":
-        return success(data=_sqlite_filter_values(db, type))
-    if type == "actor":
-        names = db.scalars(select(func.unnest(Movie.actors).label("name")).distinct().order_by("name")).all()
-    elif type == "tag":
-        names = db.scalars(select(func.unnest(Movie.tags).label("name")).distinct().order_by("name")).all()
-    else:
-        column = getattr(Movie, type)
-        names = db.scalars(select(column).where(column != "", column.is_not(None)).distinct().order_by(column.asc())).all()
-    return success(data=[name for name in names if name])
+    return success(data=list_filter_values(db, type))
 
 
 @router.get("")
@@ -198,18 +77,9 @@ def list_movies(
     storage_status: str | None = Query(default=None),
 ) -> dict:
     search_text = search or keyword
-    try:
-        normalized_sort_order = int(sort_order)
-    except (TypeError, ValueError):
-        normalized_sort_order = 1 if sort_order == "asc" else -1
-    if normalized_sort_order not in (-1, 1):
-        normalized_sort_order = -1
-
-    rows = db.query(Movie).options(selectinload(Movie.magnets)).all()
-    filtered = [
-        movie for movie in rows
-        if _movie_matches_python(
-            movie,
+    rows, total = list_movies_page(
+        db,
+        MovieListFilters(
             search=search_text,
             source_task_id=source_task_id,
             rating_min=rating_min,
@@ -231,17 +101,14 @@ def list_movies(
             created_at_from=created_at_from,
             created_at_to=created_at_to,
             storage_status=storage_status,
-        )
-    ]
-
-    sort_column = sort_by if sort_by in ALLOWED_SORT_FIELDS else "created_at"
-    filtered.sort(key=lambda movie: getattr(movie, sort_column) is None)
-    filtered.sort(key=lambda movie: getattr(movie, sort_column) or "", reverse=normalized_sort_order == -1)
-
-    total = len(filtered)
-    offset = skip if skip is not None else (page - 1) * limit
-    page_rows = filtered[offset:offset + limit]
-    return paginated(rows=[serialize_movie(movie, include_magnets=True, db=db) for movie in page_rows], total=total)
+        ),
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        limit=limit,
+        skip=skip,
+    )
+    return paginated(rows=[serialize_movie(movie, include_magnets=True, db=db) for movie in rows], total=total)
 
 
 @router.get("/filter-config")
@@ -269,29 +136,31 @@ def sync_movie_storage_statuses(
         rows = query.all()
         movies = [
             movie for movie in rows
-            if _movie_matches_python(
+            if movie_matches(
                 movie,
-                search=filters.get("search"),
-                source_task_id=filters.get("source_task_id"),
-                rating_min=filters.get("rating_min"),
-                rating_max=filters.get("rating_max"),
-                actors=filters.get("actors"),
-                actors_not=filters.get("actors_not"),
-                actors_count_min=filters.get("actors_count_min"),
-                actors_count_max=filters.get("actors_count_max"),
-                tags=filters.get("tags"),
-                tags_not=filters.get("tags_not"),
-                director=filters.get("director"),
-                director_not=filters.get("director_not"),
-                maker=filters.get("maker"),
-                maker_not=filters.get("maker_not"),
-                series=filters.get("series"),
-                series_not=filters.get("series_not"),
-                release_date_from=filters.get("release_date_from"),
-                release_date_to=filters.get("release_date_to"),
-                created_at_from=filters.get("created_at_from"),
-                created_at_to=filters.get("created_at_to"),
-                storage_status=filters.get("storage_status"),
+                MovieListFilters(
+                    search=filters.get("search"),
+                    source_task_id=filters.get("source_task_id"),
+                    rating_min=filters.get("rating_min"),
+                    rating_max=filters.get("rating_max"),
+                    actors=filters.get("actors"),
+                    actors_not=filters.get("actors_not"),
+                    actors_count_min=filters.get("actors_count_min"),
+                    actors_count_max=filters.get("actors_count_max"),
+                    tags=filters.get("tags"),
+                    tags_not=filters.get("tags_not"),
+                    director=filters.get("director"),
+                    director_not=filters.get("director_not"),
+                    maker=filters.get("maker"),
+                    maker_not=filters.get("maker_not"),
+                    series=filters.get("series"),
+                    series_not=filters.get("series_not"),
+                    release_date_from=filters.get("release_date_from"),
+                    release_date_to=filters.get("release_date_to"),
+                    created_at_from=filters.get("created_at_from"),
+                    created_at_to=filters.get("created_at_to"),
+                    storage_status=filters.get("storage_status"),
+                ),
             )
         ]
 
