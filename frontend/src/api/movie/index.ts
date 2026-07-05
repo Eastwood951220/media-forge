@@ -103,18 +103,6 @@ export function deleteMovies(payload: MovieDeletePayload): Promise<MovieDeleteRe
   return request.post<MovieDeleteResult>(`${BASE_URL}/delete`, payload)
 }
 
-export function getMovies(params?: MovieQueryParams): Promise<PaginatedMovies> {
-  return request.get<PaginatedMovies>(BASE_URL, params)
-}
-
-export function getMovie(id: string): Promise<Movie> {
-  return fetchMovie(id)
-}
-
-export function fetchTaskNames(): Promise<{ name: string }[]> {
-  return request.get<{ name: string }[]>(`${BASE_URL}/task-names`)
-}
-
 export function fetchFilters(type: FilterType): Promise<string[]> {
   return request.get<string[]>(`${BASE_URL}/filters`, { type })
 }

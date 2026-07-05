@@ -8,7 +8,6 @@ import {
   fetchMovie,
   fetchMovieFilterConfig,
   fetchMovies,
-  fetchTaskNames,
   updateMovieFilterConfig,
 } from '../src/api/movie'
 import { getTaskDict } from '../src/api/crawlTask'
@@ -16,7 +15,6 @@ import { getTaskDict } from '../src/api/crawlTask'
 vi.mock('../src/api/movie', () => ({
   fetchMovies: vi.fn(),
   fetchMovie: vi.fn(),
-  fetchTaskNames: vi.fn(),
   fetchFilters: vi.fn(),
   fetchMovieFilterConfig: vi.fn(),
   updateMovieFilterConfig: vi.fn(),
@@ -94,7 +92,6 @@ describe('MovieListPage', () => {
       total_pages: 1,
     })
     vi.mocked(fetchMovie).mockResolvedValue(movie)
-    vi.mocked(fetchTaskNames).mockResolvedValue([{ name: '任务A' }])
     vi.mocked(getTaskDict).mockResolvedValue([{ id: 'task-1', name: '任务A' }])
     vi.mocked(fetchFilters).mockImplementation(async (type) => {
       if (type === 'actor') return ['演员A']
