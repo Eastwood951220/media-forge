@@ -75,3 +75,41 @@ def test_list_movies_page_uses_sql_offset_and_limit_for_scalar_filters(db_sessio
 
     assert total == 2
     assert [movie.code for movie in rows] == ["BBB-200"]
+
+
+def test_list_movies_page_preserves_storage_status_fallback(db_session) -> None:
+    db_session.add_all([
+        Movie(code="STORE-1", source_url="https://example.test/store1", source_name="Stored", storage_summary={"storage_status": "stored", "last_status": "stored"}),
+        Movie(code="STORE-2", source_url="https://example.test/store2", source_name="Missing", storage_summary={}),
+    ])
+    db_session.commit()
+
+    rows, total = list_movies_page(
+        db_session,
+        MovieListFilters(storage_status="not_stored"),
+        sort_by="code",
+        sort_order="asc",
+        page=1,
+        limit=20,
+        skip=None,
+    )
+
+    assert total == 1
+    assert [movie.code for movie in rows] == ["STORE-2"]
+
+
+def test_list_movies_page_preserves_sqlite_array_filter_fallback(db_session) -> None:
+    seed_query_movies(db_session)
+
+    rows, total = list_movies_page(
+        db_session,
+        MovieListFilters(actors="Actor A", tags_not="Tag B"),
+        sort_by="code",
+        sort_order="asc",
+        page=1,
+        limit=20,
+        skip=None,
+    )
+
+    assert total == 1
+    assert [movie.code for movie in rows] == ["AAA-100"]
