@@ -1,3 +1,5 @@
+export type MovieStorageStatus = 'not_stored' | 'storing' | 'stored'
+
 export interface MovieMagnet {
   _id: string
   id: string
@@ -44,8 +46,10 @@ export interface Movie {
   source_task_names: string[]
   storage_locations?: string[]
   marked: boolean
+  storage_status: MovieStorageStatus
   storage_summary: {
-    last_status?: string
+    last_status?: MovieStorageStatus
+    storage_status?: MovieStorageStatus
     locations?: StorageLocation[]
     synced_at?: string
     [key: string]: unknown

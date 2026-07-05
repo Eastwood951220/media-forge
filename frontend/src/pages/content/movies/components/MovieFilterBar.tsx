@@ -76,10 +76,8 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
         seriesNot: <Select {...tagSelectProps} placeholder="排除系列" value={selectedSeriesNot} onChange={(v) => patchForm({selectedSeriesNot: v})} options={seriesOptions} />,
         storageStatus: <Select style={{width: 160}} value={storageStatus} onChange={(v) => patchForm({storageStatus: v})} placeholder="存储状态筛选" allowClear options={[
             {value: "not_stored", label: "未存储"},
-            {value: "completed", label: "已完成"}, {value: "missing", label: "文件缺失"},
-            {value: "failed", label: "失败"}, {value: "pending", label: "等待中"},
-            {value: "running", label: "运行中"}, {value: "waiting_download", label: "等待下载"},
-            {value: "waiting_retry", label: "等待重试"}, {value: "retryable", label: "可重试"},
+            {value: "storing", label: "入库中"},
+            {value: "stored", label: "已存储"},
         ]} />,
         ratingMin: <InputNumber style={{width: 120}} placeholder="最低评分" min={0} max={5} step={0.1} value={ratingMin} onChange={(v) => patchForm({ratingMin: v ?? undefined})} />,
         ratingMax: <InputNumber style={{width: 120}} placeholder="最高评分" min={0} max={5} step={0.1} value={ratingMax} onChange={(v) => patchForm({ratingMax: v ?? undefined})} />,

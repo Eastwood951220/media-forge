@@ -1,4 +1,4 @@
-import { Button, Space, Tag, Typography } from 'antd'
+import { Button, Space, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { Movie } from '@/api/movie/types'
 
@@ -8,31 +8,15 @@ export interface MovieColumnsOptions {
 }
 
 const storageStatusColor: Record<string, string> = {
-  pending: 'processing',
-  running: 'processing',
-  waiting_download: 'processing',
-  waiting_retry: 'warning',
-  downloading: 'processing',
-  moving: 'processing',
-  completed: 'success',
-  failed: 'error',
-  retryable: 'warning',
-  missing: 'error',
-  skipped: 'default',
+  not_stored: 'default',
+  storing: 'processing',
+  stored: 'success',
 }
 
 const storageStatusText: Record<string, string> = {
-  pending: '等待中',
-  running: '运行中',
-  waiting_download: '等待下载',
-  waiting_retry: '等待重试',
-  downloading: '下载中',
-  moving: '移动中',
-  completed: '已完成',
-  failed: '失败',
-  retryable: '可重试',
-  missing: '文件缺失',
-  skipped: '已跳过',
+  not_stored: '未存储',
+  storing: '入库中',
+  stored: '已存储',
 }
 
 function unique(values: string[] | undefined) {
@@ -94,8 +78,7 @@ export function createMovieColumns({ onViewDetail, onPush }: MovieColumnsOptions
       key: 'storage_status',
       width: 100,
       render: (_: unknown, record) => {
-        const status = record.storage_summary?.last_status
-        if (!status) return <Typography.Text type="secondary">-</Typography.Text>
+        const status = record.storage_status || record.storage_summary?.storage_status || 'not_stored'
         return <Tag color={storageStatusColor[status]}>{storageStatusText[status] || status}</Tag>
       },
     },

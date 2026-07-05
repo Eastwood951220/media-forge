@@ -1,7 +1,7 @@
 import { request } from '@/request'
-import type { Movie, MovieListResponse } from './types'
+import type { Movie, MovieListResponse, MovieStorageStatus } from './types'
 
-export type { Movie, MovieListResponse, StorageLocation } from './types'
+export type { Movie, MovieListResponse, MovieStorageStatus, StorageLocation } from './types'
 
 const BASE_URL = '/api/content/movies'
 
@@ -68,6 +68,30 @@ export function fetchMovies(params: MovieQueryParams): Promise<MovieListResponse
 
 export function fetchMovie(id: string): Promise<Movie> {
   return request.get<Movie>(`${BASE_URL}/${id}`)
+}
+
+export interface MovieStorageSyncPayload {
+  movie_ids?: string[]
+  filters?: MovieQueryParams
+}
+
+export interface MovieStorageSyncResult {
+  movie_id: string
+  status: MovieStorageStatus
+  found_count: number
+  checked_targets: string[]
+  locations: Record<string, unknown>[]
+}
+
+export interface MovieStorageSyncResponse {
+  total: number
+  stored_count: number
+  not_stored_count: number
+  results: MovieStorageSyncResult[]
+}
+
+export function syncMovieStorageStatus(payload: MovieStorageSyncPayload): Promise<MovieStorageSyncResponse> {
+  return request.post<MovieStorageSyncResponse>(`${BASE_URL}/storage-sync`, payload)
 }
 
 export function getMovies(params?: MovieQueryParams): Promise<PaginatedMovies> {
