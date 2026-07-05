@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import logging
-import random
-import time
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
+from backend.app.modules.storage.worker.download import (
+    is_submit_task_exists_error,
+    poll_downloaded_video_files,
+    recover_existing_downloaded_video_files,
+)
 from backend.app.modules.storage.worker.file_ops import (
     cleanup_download_folder,
     move_renamed_videos,
     rename_selected_videos,
     scan_found_files,
     verify_moved_files,
+)
+from backend.app.modules.storage.worker.results import (
+    mark_subtask_skipped_for_existing_targets,
+    mark_subtask_skipped_for_move_result,
+    mark_subtask_success_from_existing_targets,
 )
 from backend.app.modules.storage.worker.target_files import (
     copy_existing_target_to_missing_targets,
@@ -29,107 +37,6 @@ def _subtask_log(context, level: str, message: str, extra: dict | None = None) -
     if subtask_id is None:
         return
     write_storage_subtask_log(str(subtask_id), level, message, extra or {})
-
-
-def _log_search_result(context, result) -> None:
-    context.log(
-        "INFO",
-        "查找下载文件",
-        result.log_context,
-        step="waiting_download",
-    )
-
-
-def recover_existing_downloaded_video_files(context, search_terms: list[str], task_download_folder: str, download_root: str) -> list[dict]:
-    from backend.app.modules.storage.worker.file_finder import find_recovery_video_files
-
-    movie_code = getattr(context.subtask, "movie_code", search_terms[0] if search_terms else "")
-    result = find_recovery_video_files(
-        provider=context.provider,
-        search_terms=search_terms,
-        task_download_folder=task_download_folder,
-        download_root=download_root,
-        movie_code=movie_code,
-        config=context.config,
-    )
-    result.log_context["recovery_reason"] = "submit_task_exists"
-    _log_search_result(context, result)
-    return result.accepted_files
-
-
-def poll_downloaded_video_files(context, search_terms: list[str], task_download_folder: str, download_root: str) -> list[dict]:
-    from backend.app.modules.storage.worker.file_finder import find_listed_video_files
-
-    config = context.config
-    movie_code = getattr(context.subtask, "movie_code", search_terms[0] if search_terms else "")
-    max_poll_count = int(config.get("download_max_poll_count", 10) or 10)
-    poll_min = float(config.get("download_poll_interval_min", 5.0) or 0)
-    poll_max = float(config.get("download_poll_interval_max", poll_min) or poll_min)
-    if poll_max < poll_min:
-        poll_max = poll_min
-
-    for poll_index in range(1, max_poll_count + 1):
-        result = find_listed_video_files(
-            provider=context.provider,
-            search_path=task_download_folder,
-            search_scope="task_download_folder",
-            movie_code=movie_code,
-            task_download_folder=task_download_folder,
-            config=config,
-        )
-        result.log_context["poll_index"] = poll_index
-        result.log_context["max_poll_count"] = max_poll_count
-        _log_search_result(context, result)
-        if result.accepted_files:
-            return result.accepted_files
-
-        context.log(
-            "INFO",
-            f"轮询 #{poll_index}: 任务下载目录未发现可用视频文件，等待中",
-            {"poll_index": poll_index, "max_poll_count": max_poll_count, "search_path": task_download_folder},
-            step="waiting_download",
-        )
-        if poll_index < max_poll_count:
-            time.sleep(random.uniform(poll_min, poll_max))
-
-    context.log(
-        "WARNING",
-        f"轮询次数超过上限: {max_poll_count}/{max_poll_count}，任务目录未发现可用视频文件，跳过当前磁力",
-        {"max_poll_count": max_poll_count, "task_download_folder": task_download_folder},
-        step="waiting_download",
-    )
-    return []
-
-
-def mark_subtask_skipped_for_existing_targets(context, existing_result, expected_name: str) -> None:
-    skipped_files = [
-        {
-            "renamed_name": expected_name,
-            "existing_targets": existing_result.existing_targets,
-            "skip_reason": "target_exists",
-        }
-    ]
-    context.subtask.status = "skipped"
-    context.subtask.skip_reason = "target_exists"
-    context.subtask.skipped_files = skipped_files
-    context.subtask.result = {
-        "status": "skipped",
-        "reason": "target_exists",
-        "files": skipped_files,
-    }
-    context.log(
-        "INFO",
-        "目标文件已全部存在，子任务标记为跳过",
-        {
-            "skipped_files": skipped_files,
-            "target_paths": existing_result.checked_targets,
-            "existing_targets": existing_result.existing_targets,
-            "expected_names": existing_result.expected_names,
-        },
-        step="waiting_download",
-        event="subtask_skipped",
-    )
-    context.publish_subtask()
 
 
 def execute_current_magnet_attempt(context, magnet: dict) -> bool:
@@ -185,8 +92,7 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
             step="submit_magnet",
         )
     except Exception as exc:
-        message = str(exc)
-        if "10008" not in message and "任务已存在" not in message:
+        if not is_submit_task_exists_error(exc):
             context.log("ERROR", f"提交磁力失败: {exc}", {"magnet_id": magnet.get("id")}, step="submit_magnet")
             return False
         submit_task_exists = True
@@ -234,32 +140,7 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
                 step="waiting_download",
             )
             if existing_result.all_targets_exist:
-                subtask.status = "skipped"
-                subtask.skip_reason = "target_exists"
-                subtask.moved_files = []
-                subtask.skipped_files = [
-                    {
-                        "name": existing_result.source_name or preview_name,
-                        "skip_reason": "target_exists",
-                        "existing_targets": [
-                            item["path"]
-                            for item in existing_result.existing_files
-                        ],
-                    }
-                ]
-                subtask.result = {
-                    "status": "skipped",
-                    "reason": "target_exists",
-                    "files": subtask.skipped_files,
-                }
-                context.log(
-                    "INFO",
-                    "目标文件已全部存在，子任务标记为跳过",
-                    {"skipped_files": subtask.skipped_files, "target_paths": target_paths},
-                    step="move_files",
-                    event="subtask_skipped",
-                )
-                context.publish_subtask()
+                mark_subtask_skipped_for_existing_targets(context, existing_result, preview_name)
                 context.set_step("cleanup_files")
                 cleanup_download_folder(context, download_folder, config)
                 return True
@@ -275,21 +156,7 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
                     return False
                 context.set_step("cleanup_files")
                 cleanup_download_folder(context, download_folder, config)
-                subtask.result = {
-                    "status": "success",
-                    "reason": "copied_from_existing_target",
-                    "files": copied_files,
-                    "existing_targets": existing_result.existing_targets,
-                    "missing_targets": existing_result.missing_targets,
-                }
-                context.log(
-                    "INFO",
-                    "磁力任务处理成功",
-                    {"magnet_id": magnet.get("id"), "files": copied_files, "reason": "copied_from_existing_target"},
-                    step="cleanup_files",
-                    event="magnet_success",
-                )
-                context.publish_subtask()
+                mark_subtask_success_from_existing_targets(context, copied_files, existing_result, magnet)
                 return True
         return False
 
@@ -328,41 +195,13 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
     subtask.skipped_files = skipped_files
     context.publish_subtask()
     if move_result.all_targets_exist:
-        subtask.status = "skipped"
-        subtask.skip_reason = "target_exists"
-        subtask.result = {
-            "status": "skipped",
-            "reason": "target_exists",
-            "files": skipped_files,
-        }
-        context.log(
-            "INFO",
-            "目标文件已全部存在，子任务标记为跳过",
-            {"skipped_files": skipped_files, "target_paths": target_paths},
-            step="move_files",
-            event="subtask_skipped",
-        )
-        context.publish_subtask()
+        mark_subtask_skipped_for_move_result(context, "target_exists", skipped_files, target_paths)
         context.set_step("cleanup_files")
         cleanup_download_folder(context, download_folder, config)
         return True
 
     if move_result.all_rename_name_exists:
-        subtask.status = "skipped"
-        subtask.skip_reason = "rename_name_exists"
-        subtask.result = {
-            "status": "skipped",
-            "reason": "rename_name_exists",
-            "files": skipped_files,
-        }
-        context.log(
-            "INFO",
-            "重命名目标已存在，子任务标记为跳过",
-            {"skipped_files": skipped_files, "target_paths": target_paths},
-            step="move_files",
-            event="subtask_skipped",
-        )
-        context.publish_subtask()
+        mark_subtask_skipped_for_move_result(context, "rename_name_exists", skipped_files, target_paths)
         context.set_step("cleanup_files")
         cleanup_download_folder(context, download_folder, config)
         return True

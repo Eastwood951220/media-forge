@@ -141,7 +141,7 @@ def test_execute_current_magnet_attempt_polls_until_file_appears(monkeypatch, tm
     from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
 
     monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     class Result:
         success = True
@@ -273,7 +273,7 @@ def test_execute_current_magnet_attempt_fails_after_download_poll_limit(monkeypa
     from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
 
     monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     class Result:
         success = True
@@ -377,7 +377,7 @@ def test_execute_current_magnet_attempt_marks_subtask_skipped_when_all_targets_e
     from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
 
     monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     target_folder = "/Movies/巨乳/MIDA-628"
     target_file = f"{target_folder}/MIDA-628.mp4"
@@ -1156,9 +1156,9 @@ def test_execute_subtask_pipeline_stops_after_rename_existing_source_target_skip
 def test_poll_downloaded_video_files_uses_list_subfiles_and_does_not_search_root(monkeypatch):
     from dataclasses import dataclass
 
-    from backend.app.modules.storage.worker.steps import poll_downloaded_video_files
+    from backend.app.modules.storage.worker.download import poll_downloaded_video_files
 
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     @dataclass
     class RemoteFile:
@@ -1235,9 +1235,9 @@ def test_poll_downloaded_video_files_uses_list_subfiles_and_does_not_search_root
 def test_poll_downloaded_video_files_does_not_search_root_when_task_folder_has_file(monkeypatch):
     from dataclasses import dataclass
 
-    from backend.app.modules.storage.worker.steps import poll_downloaded_video_files
+    from backend.app.modules.storage.worker.download import poll_downloaded_video_files
 
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     @dataclass
     class RemoteFile:
@@ -1292,9 +1292,9 @@ def test_poll_downloaded_video_files_does_not_search_root_when_task_folder_has_f
 
 
 def test_poll_downloaded_video_files_does_not_search_download_root_after_poll_exhaustion(monkeypatch):
-    from backend.app.modules.storage.worker.steps import poll_downloaded_video_files
+    from backend.app.modules.storage.worker.download import poll_downloaded_video_files
 
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     class Provider:
         def __init__(self) -> None:
@@ -1553,7 +1553,7 @@ def test_execute_current_magnet_attempt_uses_recovery_only_when_submit_task_exis
 
     from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
 
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     @dataclass
     class RemoteFile:
@@ -1686,7 +1686,7 @@ def test_execute_current_magnet_attempt_uses_recovery_only_when_submit_task_exis
 def test_recover_existing_downloaded_video_files_searches_root_after_task_folder_empty() -> None:
     from dataclasses import dataclass
 
-    from backend.app.modules.storage.worker.steps import recover_existing_downloaded_video_files
+    from backend.app.modules.storage.worker.download import recover_existing_downloaded_video_files
 
     @dataclass
     class RemoteFile:
@@ -1880,7 +1880,7 @@ def test_execute_current_magnet_attempt_skips_after_task_exists_when_target_file
 
     from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
 
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     @dataclass
     class RemoteFile:
@@ -2004,7 +2004,7 @@ def test_execute_current_magnet_attempt_skips_after_task_exists_only_when_all_ta
 
     from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
 
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     @dataclass
     class RemoteFile:
@@ -2108,7 +2108,7 @@ def test_execute_current_magnet_attempt_does_not_skip_after_task_exists_when_any
 
     from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
 
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     @dataclass
     class RemoteFile:
@@ -2429,7 +2429,7 @@ def test_execute_current_magnet_attempt_copies_from_existing_target_when_multipl
 
     from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
 
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     @dataclass
     class RemoteFile:
@@ -2561,7 +2561,7 @@ def test_execute_current_magnet_attempt_does_not_copy_between_targets_in_single_
 
     from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
 
-    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
 
     @dataclass
     class RemoteFile:
@@ -2752,3 +2752,11 @@ def test_execute_subtask_pipeline_stops_after_existing_target_copy_success(monke
     assert context.subtask.magnet_attempts[0]["magnet_id"] == "m1"
     assert context.subtask.magnet_attempts[0]["success"] is True
     assert context.subtask.magnet_attempts[0]["status"] == "running"
+
+
+def test_is_submit_task_exists_error_matches_clouddrive_duplicate_messages() -> None:
+    from backend.app.modules.storage.worker.download import is_submit_task_exists_error
+
+    assert is_submit_task_exists_error(RuntimeError("10008 task exists")) is True
+    assert is_submit_task_exists_error("任务已存在") is True
+    assert is_submit_task_exists_error(RuntimeError("network down")) is False
