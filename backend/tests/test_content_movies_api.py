@@ -249,3 +249,70 @@ def test_list_movies_not_stored_filter(client: TestClient, admin_user) -> None:
 
     assert response.status_code == HTTPStatus.OK
     assert [row["code"] for row in response.json()["rows"]] == ["CCC-300"]
+
+
+def test_sync_movie_storage_status_scans_target_folders_and_records_locations(db_session, admin_user):
+    from dataclasses import dataclass
+
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies.storage_status import sync_movie_storage_status
+    from shared.database.models.content import Movie
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path == "/Movies/A/ABC-001":
+                return [
+                    RemoteFile("ABC-001-C.mp4", "/Movies/A/ABC-001/ABC-001-C.mp4", 500 * 1024 * 1024),
+                ]
+            return []
+
+    crawl_task = CrawlTask(name="source-A", storage_location="A", owner_id=admin_user.id)
+    movie = Movie(
+        code="abc-001",
+        source_name="sync movie",
+        source_task_ids=[],
+        storage_summary={},
+    )
+    db_session.add_all([crawl_task, movie])
+    db_session.flush()
+    movie.source_task_ids = [crawl_task.id]
+    db_session.commit()
+
+    result = sync_movie_storage_status(
+        db=db_session,
+        movie=movie,
+        provider=Provider(),
+        config={
+            "target_folder": "/Movies",
+            "video_extensions": [".mp4", ".mkv"],
+            "minimum_video_size_mb": 100,
+        },
+        source="manual_sync",
+    )
+
+    assert result.status == "stored"
+    assert result.found_count == 1
+    assert movie.storage_summary["storage_status"] == "stored"
+    assert movie.storage_summary["last_status"] == "stored"
+    assert movie.storage_summary["locations"] == [
+        {
+            "path": "/Movies/A/ABC-001/ABC-001-C.mp4",
+            "target_folder": "/Movies/A/ABC-001",
+            "storage_location": "A",
+            "file_name": "ABC-001-C.mp4",
+            "size": 500 * 1024 * 1024,
+            "exists": True,
+            "source": "manual_sync",
+        }
+    ]
