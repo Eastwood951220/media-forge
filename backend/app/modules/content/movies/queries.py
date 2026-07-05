@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime
 from typing import Any
+from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, and_, false, func, not_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
@@ -143,6 +145,133 @@ def movie_matches(movie: Movie, filters: MovieListFilters) -> bool:
     return True
 
 
+def _parse_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _parse_datetime_date(value: str | None) -> date | None:
+    return _parse_date(value)
+
+
+def _case_insensitive_like(column, value: str):
+    return func.lower(column).like(f"%{value.lower()}%")
+
+
+def _parse_uuid(value: str | None) -> UUID | None:
+    if not value:
+        return None
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def requires_python_fallback(db: Session, filters: MovieListFilters) -> bool:
+    if filters.storage_status:
+        return True
+    if db.bind.dialect.name == "sqlite":
+        return bool(
+            filters.source_task_id
+            or filters.actors
+            or filters.actors_not
+            or filters.actors_count_min is not None
+            or filters.actors_count_max is not None
+            or filters.tags
+            or filters.tags_not
+        )
+    return False
+
+
+def build_movie_list_statement(
+    filters: MovieListFilters,
+    *,
+    sort_by: str,
+    sort_order: int | str,
+    dialect_name: str | None = None,
+) -> Select:
+    stmt = select(Movie).options(selectinload(Movie.magnets))
+    conditions = []
+
+    if filters.search:
+        conditions.append(or_(
+            _case_insensitive_like(Movie.code, filters.search),
+            _case_insensitive_like(Movie.source_name, filters.search),
+            _case_insensitive_like(Movie.director, filters.search),
+            _case_insensitive_like(Movie.maker, filters.search),
+            _case_insensitive_like(Movie.series, filters.search),
+        ))
+    if filters.rating_min is not None:
+        conditions.append(Movie.rating >= filters.rating_min)
+    if filters.rating_max is not None:
+        conditions.append(Movie.rating <= filters.rating_max)
+
+    release_from = _parse_date(filters.release_date_from)
+    release_to = _parse_date(filters.release_date_to)
+    if release_from is not None:
+        conditions.append(Movie.release_date >= release_from)
+    if release_to is not None:
+        conditions.append(Movie.release_date <= release_to)
+
+    created_from = _parse_datetime_date(filters.created_at_from)
+    created_to = _parse_datetime_date(filters.created_at_to)
+    if created_from is not None:
+        conditions.append(func.date(Movie.created_at) >= created_from.isoformat())
+    if created_to is not None:
+        conditions.append(func.date(Movie.created_at) <= created_to.isoformat())
+
+    for value in split_csv(filters.director):
+        conditions.append(Movie.director == value)
+    for value in split_csv(filters.director_not):
+        conditions.append(Movie.director != value)
+    for value in split_csv(filters.maker):
+        conditions.append(Movie.maker == value)
+    for value in split_csv(filters.maker_not):
+        conditions.append(Movie.maker != value)
+    for value in split_csv(filters.series):
+        conditions.append(Movie.series == value)
+    for value in split_csv(filters.series_not):
+        conditions.append(Movie.series != value)
+
+    # PostgreSQL array conditions
+    if dialect_name == "postgresql":
+        if filters.source_task_id:
+            source_task_id = _parse_uuid(filters.source_task_id)
+            if source_task_id is not None:
+                conditions.append(Movie.source_task_ids.contains([source_task_id]))
+            else:
+                conditions.append(false())
+        for actor in split_csv(filters.actors):
+            conditions.append(Movie.actors.contains([actor]))
+        for actor in split_csv(filters.actors_not):
+            conditions.append(not_(Movie.actors.contains([actor])))
+        for tag in split_csv(filters.tags):
+            conditions.append(Movie.tags.contains([tag]))
+        for tag in split_csv(filters.tags_not):
+            conditions.append(not_(Movie.tags.contains([tag])))
+        if filters.actors_count_min is not None:
+            conditions.append(func.array_length(Movie.actors, 1) >= filters.actors_count_min)
+        if filters.actors_count_max is not None:
+            conditions.append(func.array_length(Movie.actors, 1) <= filters.actors_count_max)
+
+    if conditions:
+        stmt = stmt.where(and_(*conditions))
+
+    normalized_sort_order = normalize_sort_order(sort_order)
+    sort_column = ALLOWED_SORT_FIELDS.get(sort_by, Movie.created_at)
+    order_expression = sort_column.asc() if normalized_sort_order == 1 else sort_column.desc()
+    return stmt.order_by(order_expression)
+
+
+def count_movies_for_statement(db: Session, statement: Select) -> int:
+    count_stmt = select(func.count()).select_from(statement.order_by(None).subquery())
+    return int(db.scalar(count_stmt) or 0)
+
+
 def normalize_sort_order(sort_order: int | str) -> int:
     try:
         normalized = int(sort_order)
@@ -161,14 +290,23 @@ def list_movies_page(
     limit: int,
     skip: int | None,
 ) -> tuple[list[Movie], int]:
-    rows = db.query(Movie).options(selectinload(Movie.magnets)).all()
+    offset = skip if skip is not None else (page - 1) * limit
+    statement = build_movie_list_statement(
+        filters,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        dialect_name=db.bind.dialect.name,
+    )
+
+    # SQL-only path for scalar filters
+    if not requires_python_fallback(db, filters):
+        total = count_movies_for_statement(db, statement)
+        rows = list(db.scalars(statement.offset(offset).limit(limit)).unique().all())
+        return rows, total
+
+    # Python fallback for storage status and SQLite array filters
+    rows = list(db.scalars(statement).unique().all())
     filtered = [movie for movie in rows if movie_matches(movie, filters)]
 
-    normalized_sort_order = normalize_sort_order(sort_order)
-    sort_column = sort_by if sort_by in ALLOWED_SORT_FIELDS else "created_at"
-    filtered.sort(key=lambda movie: getattr(movie, sort_column) is None)
-    filtered.sort(key=lambda movie: getattr(movie, sort_column) or "", reverse=normalized_sort_order == -1)
-
     total = len(filtered)
-    offset = skip if skip is not None else (page - 1) * limit
     return filtered[offset:offset + limit], total
