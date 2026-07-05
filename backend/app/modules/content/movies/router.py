@@ -12,6 +12,7 @@ from backend.app.modules.content.movies.delete_service import (
     delete_movies,
 )
 from backend.app.modules.content.movies.schemas import MovieDeleteRequest, MovieStorageSyncRequest
+from backend.app.modules.content.movies.serializers import serialize_movie
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
 from shared.database.models.content import Movie, MovieFilter
 from backend.app.modules.content.movies.filter_config import (
@@ -55,75 +56,6 @@ def _cached_filter_values(db: Session, filter_type: str) -> list[str]:
         .distinct()
         .order_by(MovieFilter.name.asc())
     ).all())
-
-
-def _movie_payload(movie: Movie, *, include_magnets: bool = False, db: Session | None = None) -> dict:
-    source_task_ids = [str(tid) for tid in (movie.source_task_ids or [])]
-    storage_locations: list[str] = []
-    if db and source_task_ids:
-        from backend.app.models.crawl_task import CrawlTask
-        for task_id_str in source_task_ids:
-            try:
-                task_id = uuid.UUID(task_id_str)
-            except (ValueError, TypeError):
-                continue
-            crawl_task = db.get(CrawlTask, task_id)
-            if crawl_task and crawl_task.storage_location:
-                loc = crawl_task.storage_location
-                if loc not in storage_locations:
-                    storage_locations.append(loc)
-    storage_status = normalized_movie_storage_status(movie)
-    payload = {
-        "_id": str(movie.id),
-        "id": str(movie.id),
-        "code": movie.code or "",
-        "source_url": movie.source_url or "",
-        "source_name": movie.source_name or "",
-        "cover": movie.cover or "",
-        "release_date": movie.release_date.isoformat() if movie.release_date else None,
-        "duration": movie.duration or 0,
-        "director": movie.director or "",
-        "maker": movie.maker or "",
-        "series": movie.series or "",
-        "rating": float(movie.rating) if movie.rating is not None else None,
-        "actors": list(movie.actors or []),
-        "tags": list(movie.tags or []),
-        "source_task_ids": source_task_ids,
-        "storage_locations": storage_locations,
-        "marked": bool(movie.marked),
-        "storage_status": storage_status,
-        "storage_summary": movie.storage_summary or {},
-        "raw_detail": movie.raw_detail or {},
-        "created_at": movie.created_at.isoformat() if movie.created_at else None,
-        "updated_at": movie.updated_at.isoformat() if movie.updated_at else None,
-    }
-    if include_magnets:
-        payload["magnets"] = [
-            {
-                "_id": str(magnet.id),
-                "id": str(magnet.id),
-                "movie_id": str(magnet.movie_id),
-                "magnet": magnet.magnet_url,
-                "magnet_url": magnet.magnet_url,
-                "name": magnet.name or "",
-                "title": magnet.name or "",
-                "size": magnet.size_text or "",
-                "size_mb": float(magnet.size_mb or 0),
-                "size_text": magnet.size_text or "",
-                "file_count": magnet.file_count,
-                "file_text": magnet.file_text or "",
-                "tags": magnet.tags or [],
-                "has_chinese_sub": bool(magnet.has_chinese_sub),
-                "date": magnet.date or "",
-                "dedupe_key": magnet.dedupe_key or "",
-                "weight": magnet.weight or 0,
-                "selected": bool(magnet.selected),
-            }
-            for magnet in (movie.magnets or [])
-        ]
-        selected = next((magnet for magnet in movie.magnets or [] if magnet.selected), None)
-        payload["selected_magnet_dedupe_key"] = selected.dedupe_key if selected else None
-    return payload
 
 
 def _split_csv(value: str | None) -> list[str]:
@@ -309,7 +241,7 @@ def list_movies(
     total = len(filtered)
     offset = skip if skip is not None else (page - 1) * limit
     page_rows = filtered[offset:offset + limit]
-    return paginated(rows=[_movie_payload(movie, include_magnets=True, db=db) for movie in page_rows], total=total)
+    return paginated(rows=[serialize_movie(movie, include_magnets=True, db=db) for movie in page_rows], total=total)
 
 
 @router.get("/filter-config")
@@ -465,4 +397,4 @@ def get_movie(movie_id: uuid.UUID, _current_user: CurrentUser, db: Session = Dep
     movie = db.query(Movie).options(selectinload(Movie.magnets)).filter(Movie.id == movie_id).first()
     if movie is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found")
-    return success(data=_movie_payload(movie, include_magnets=True, db=db))
+    return success(data=serialize_movie(movie, include_magnets=True, db=db))
