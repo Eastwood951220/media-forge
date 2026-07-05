@@ -1,7 +1,10 @@
+import uuid
 from datetime import date
 from decimal import Decimal
 
-from backend.app.modules.content.movies.queries import MovieListFilters, list_movies_page
+from sqlalchemy.dialects import postgresql
+
+from backend.app.modules.content.movies.queries import MovieListFilters, build_movie_list_statement, list_movies_page
 from shared.database.models.content import Movie
 
 
@@ -113,3 +116,38 @@ def test_list_movies_page_preserves_sqlite_array_filter_fallback(db_session) -> 
 
     assert total == 1
     assert [movie.code for movie in rows] == ["AAA-100"]
+
+
+def compile_postgresql_movie_list_sql(filters: MovieListFilters) -> str:
+    statement = build_movie_list_statement(
+        filters,
+        sort_by="code",
+        sort_order=1,
+        dialect_name="postgresql",
+    )
+    return str(statement.compile(dialect=postgresql.dialect()))
+
+
+def test_postgresql_source_task_id_filter_uses_array_constructor_sql() -> None:
+    task_id = uuid.UUID("700b4e30-6090-4221-a37a-4240f39f1208")
+
+    sql = compile_postgresql_movie_list_sql(MovieListFilters(source_task_id=str(task_id)))
+
+    assert "movies.source_task_ids @> ARRAY[" in sql
+    assert "array(" not in sql.lower()
+
+
+def test_postgresql_actor_and_tag_filters_use_array_constructor_sql() -> None:
+    sql = compile_postgresql_movie_list_sql(
+        MovieListFilters(
+            actors="Actor A",
+            actors_not="Actor B",
+            tags="Tag A",
+            tags_not="Tag B",
+        )
+    )
+
+    assert sql.count("@> ARRAY[") == 4
+    assert "movies.actors @> ARRAY[" in sql
+    assert "movies.tags @> ARRAY[" in sql
+    assert "array(" not in sql.lower()
