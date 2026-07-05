@@ -1,4 +1,4 @@
-from scraper.services.movie_result import build_skipped_task_result, build_task_result
+from backend.app.modules.crawler.runtime.results import build_skipped_task_result, build_task_result
 from scraper.spiders.javdb.javdb_constants import (
     TASK_STATUS_COMPLETED,
     TASK_STATUS_FAILED,
