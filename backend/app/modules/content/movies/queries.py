@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import sqlalchemy as sa
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Select, and_, false, func, not_, or_, select
+from sqlalchemy.dialects.postgresql import ARRAY as CompatibleARRAY
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
@@ -242,17 +244,18 @@ def build_movie_list_statement(
         if filters.source_task_id:
             source_task_id = _parse_uuid(filters.source_task_id)
             if source_task_id is not None:
-                conditions.append(Movie.source_task_ids.contains([source_task_id]))
+                # Use @> operator for array containment
+                conditions.append(Movie.source_task_ids.op("@>")(func.cast(func.array(source_task_id), CompatibleARRAY(Uuid))))
             else:
                 conditions.append(false())
         for actor in split_csv(filters.actors):
-            conditions.append(Movie.actors.contains([actor]))
+            conditions.append(Movie.actors.op("@>")(func.cast(func.array(actor), CompatibleARRAY(sa.String))))
         for actor in split_csv(filters.actors_not):
-            conditions.append(not_(Movie.actors.contains([actor])))
+            conditions.append(not_(Movie.actors.op("@>")(func.cast(func.array(actor), CompatibleARRAY(sa.String)))))
         for tag in split_csv(filters.tags):
-            conditions.append(Movie.tags.contains([tag]))
+            conditions.append(Movie.tags.op("@>")(func.cast(func.array(tag), CompatibleARRAY(sa.String))))
         for tag in split_csv(filters.tags_not):
-            conditions.append(not_(Movie.tags.contains([tag])))
+            conditions.append(not_(Movie.tags.op("@>")(func.cast(func.array(tag), CompatibleARRAY(sa.String)))))
         if filters.actors_count_min is not None:
             conditions.append(func.array_length(Movie.actors, 1) >= filters.actors_count_min)
         if filters.actors_count_max is not None:
