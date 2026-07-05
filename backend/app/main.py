@@ -19,7 +19,6 @@ from backend.app.modules.storage.worker.runner import cleanup_interrupted_storag
 from backend.app.modules.crawler.tasks.router import router as crawler_tasks_router
 from backend.app.modules.realtime.router import router as realtime_router
 from backend.app.modules.health.router import router as health_router
-from backend.app.modules.movies.router import router as movies_router
 from backend.app.modules.init.router import router as init_router
 from backend.app.modules.storage.config.router import router as storage_config_router
 from backend.app.modules.storage.tasks.router import router as storage_tasks_router
@@ -122,7 +121,6 @@ app.include_router(crawler_config_router)
 app.include_router(crawler_runs_router)
 app.include_router(crawler_events_router)
 app.include_router(content_movies_router)
-app.include_router(movies_router)
 app.include_router(storage_config_router)
 app.include_router(storage_tasks_router)
 
