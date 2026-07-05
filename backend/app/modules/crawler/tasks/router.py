@@ -10,7 +10,6 @@ from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.modules.crawler.runs.schemas import CrawlRunRead, RunCreateRequest
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from backend.app.modules.crawler.tasks.delete_service import (
-    CloudDeleteNotImplemented,
     UnsupportedDeleteMode,
     delete_task,
     VALID_DELETE_MODES,
@@ -267,14 +266,22 @@ def delete_task_endpoint(
             detail=f"Invalid delete mode: {mode}. Valid modes: {', '.join(VALID_DELETE_MODES)}",
         )
 
+    provider = None
+    client = None
+    if mode == "task_movies_and_cloud":
+        from backend.app.modules.storage.config.service import StorageConfigService
+        config_service = StorageConfigService()
+        config = config_service.get_raw_config()
+        client = config_service.provider_factory.create(config)
+        provider = config_service.gateway_class(client)
+
     try:
-        result = delete_task(db, task_id, mode=mode)
-    except CloudDeleteNotImplemented:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Cloud storage cleanup is not yet implemented",
-        )
+        result = delete_task(db, task_id, mode=mode, provider=provider)
     except UnsupportedDeleteMode as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    finally:
+        close = getattr(client, "close", None)
+        if callable(close):
+            close()
 
     return success(msg="删除成功", data=result.to_dict())

@@ -201,3 +201,70 @@ def test_task_dict_endpoint(client: TestClient, admin_user) -> None:
     data = response.json()["data"]
     assert len(data) == 2
     assert all("id" in item and "name" in item for item in data)
+
+
+def test_delete_task_movies_and_cloud_deletes_task_movies_and_cloud_folders(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    task_response = client.post(
+        "/api/crawler/tasks",
+        json={
+            "name": "云删除任务",
+            "storage_location": "巨乳",
+            "is_skip": False,
+            "urls": [{"url": "https://javdb.com/actors/cloud", "url_type": "actors"}],
+        },
+        headers=headers,
+    )
+    task_id = task_response.json()["data"]["id"]
+
+    session = TestingSessionLocal()
+    movie = Movie(
+        code="CLOUD-001",
+        source_url="https://javdb.com/v/cloud001",
+        source_name="云删除影片",
+        source_task_ids=[uuid.UUID(task_id)],
+        storage_summary={
+            "locations": [
+                {
+                    "path": "/Movies/巨乳/CLOUD-001/CLOUD-001.mp4",
+                    "target_folder": "/Movies/巨乳/CLOUD-001",
+                    "storage_location": "巨乳",
+                }
+            ],
+        },
+    )
+    session.add(movie)
+    session.commit()
+    session.close()
+
+    deleted: list[str] = []
+
+    class Factory:
+        def create(self, config):
+            return object()
+
+    class Gateway:
+        def __init__(self, client):
+            return None
+
+        def delete_file(self, path):
+            deleted.append(path)
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.config.service.StorageConfigService",
+        lambda: type("ConfigService", (), {
+            "get_raw_config": lambda self: {"target_folder": "/Movies"},
+            "provider_factory": Factory(),
+            "gateway_class": Gateway,
+        })(),
+    )
+
+    response = client.delete(f"/api/crawler/tasks/{task_id}?mode=task_movies_and_cloud", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()["data"]
+    assert body["deleted_task"] is True
+    assert body["deleted_movies"] == 1
+    assert body["cloud_delete"] == "completed"
+    assert body["cloud_deleted_folders"] == ["/Movies/巨乳/CLOUD-001"]
+    assert deleted == ["/Movies/巨乳/CLOUD-001"]

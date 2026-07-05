@@ -3,14 +3,15 @@
 Modes:
 - task_only: Delete task, runs, and detail tasks but keep movies
 - task_and_movies: Delete task and associated movies (for shared movies, remove task ID)
-- task_movies_and_cloud: Not implemented (placeholder for future cloud storage cleanup)
+- task_movies_and_cloud: Delete cloud folders for movies associated with the crawler task,
+  scoped to that task's storage_location, then apply the same database behavior as task_and_movies.
 """
 
 from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from sqlalchemy import any_, select
@@ -30,10 +31,6 @@ class UnsupportedDeleteMode(ValueError):
     pass
 
 
-class CloudDeleteNotImplemented(RuntimeError):
-    pass
-
-
 @dataclass
 class DeleteTaskResult:
     deleted_task: bool
@@ -43,6 +40,9 @@ class DeleteTaskResult:
     deleted_movies: int
     deleted_magnets: int
     cloud_delete: str
+    cloud_deleted_folders: list[str] | None = None
+    cloud_missing_folders: list[str] | None = None
+    cloud_failed_folders: list[dict] | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -53,6 +53,9 @@ class DeleteTaskResult:
             "deleted_movies": self.deleted_movies,
             "deleted_magnets": self.deleted_magnets,
             "cloud_delete": self.cloud_delete,
+            "cloud_deleted_folders": self.cloud_deleted_folders or [],
+            "cloud_missing_folders": self.cloud_missing_folders or [],
+            "cloud_failed_folders": self.cloud_failed_folders or [],
         }
 
 
@@ -71,6 +74,7 @@ def delete_task(
     task_id: uuid.UUID,
     *,
     mode: DeleteMode = "task_only",
+    provider=None,
 ) -> DeleteTaskResult:
     """Delete a crawler task with the specified mode.
 
@@ -78,19 +82,16 @@ def delete_task(
         db: Database session
         task_id: The task ID to delete
         mode: Deletion mode
+        provider: CloudDrive provider for cloud deletion
 
     Returns:
         DeleteTaskResult with counts of deleted items
 
     Raises:
         UnsupportedDeleteMode: If mode is invalid
-        CloudDeleteNotImplemented: If mode is task_movies_and_cloud
     """
     if mode not in VALID_DELETE_MODES:
         raise UnsupportedDeleteMode(f"Unsupported delete mode: {mode}")
-
-    if mode == "task_movies_and_cloud":
-        raise CloudDeleteNotImplemented("Cloud storage cleanup is not yet implemented")
 
     task = db.get(CrawlTask, task_id)
     if task is None:
@@ -122,14 +123,33 @@ def delete_task(
     updated_movies = 0
     deleted_movies = 0
     deleted_magnets = 0
+    cloud_deleted_folders: list[str] = []
+    cloud_missing_folders: list[str] = []
+    cloud_failed_folders: list[dict] = []
 
     task_id_str = str(task_id)
 
-    if mode == "task_and_movies":
+    if mode in {"task_and_movies", "task_movies_and_cloud"}:
         # Find movies that reference this task
         # For PostgreSQL ARRAY, we need to check if task_id is in the array
         all_movies = db.scalars(select(Movie)).all()
         movies = [m for m in all_movies if _contains_task_id(m.source_task_ids, task_id_str)]
+
+        # Delete cloud folders first for task_movies_and_cloud mode
+        if mode == "task_movies_and_cloud":
+            if provider is None:
+                raise ValueError("删除云存储需要 CloudDrive provider")
+            from backend.app.modules.content.movies.delete_service import delete_movies
+            cloud_result = delete_movies(
+                db=db,
+                movies=movies,
+                mode="cloud_only",
+                provider=provider,
+                storage_location_filter=task.storage_location or None,
+            )
+            cloud_deleted_folders = cloud_result.cloud_deleted_folders
+            cloud_missing_folders = cloud_result.cloud_missing_folders
+            cloud_failed_folders = cloud_result.cloud_failed_folders
 
         for movie in movies:
             task_ids = list(movie.source_task_ids or [])
@@ -165,5 +185,8 @@ def delete_task(
         updated_movies=updated_movies,
         deleted_movies=deleted_movies,
         deleted_magnets=deleted_magnets,
-        cloud_delete="skipped" if mode != "task_movies_and_cloud" else "pending",
+        cloud_delete="completed" if mode == "task_movies_and_cloud" else "skipped",
+        cloud_deleted_folders=cloud_deleted_folders,
+        cloud_missing_folders=cloud_missing_folders,
+        cloud_failed_folders=cloud_failed_folders,
     )
