@@ -9,6 +9,11 @@ from shared.schemas.common import success
 router = APIRouter(prefix="/api/storage/tasks", tags=["storage-tasks"])
 
 
+@router.get("/next-alias")
+def get_next_alias(current_user: CurrentUser, service=Depends(get_storage_task_service)):
+    return success(data={"alias": service.generate_next_alias()})
+
+
 @router.post("/push")
 def create_single_storage_push(body: StorageSinglePushRequest, current_user: CurrentUser, service=Depends(get_storage_task_service)):
     try:
@@ -73,6 +78,17 @@ def get_storage_main_task(main_task_id: UUID, current_user: CurrentUser, service
     if task.created_by != current_user.id:
         raise HTTPException(status_code=404, detail="Task not found")
     return success(data=service.to_main_response(task))
+
+
+@router.delete("/{main_task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_storage_main_task(main_task_id: UUID, current_user: CurrentUser, service=Depends(get_storage_task_service)):
+    try:
+        service.delete_main_task(main_task_id, current_user.id)
+        return None
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/{main_task_id}/subtasks")

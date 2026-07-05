@@ -66,3 +66,22 @@ def test_delete_storage_subtask_log_removes_jsonl_file(tmp_path, monkeypatch) ->
     assert delete_storage_subtask_log("sub-delete-1") is True
     assert read_storage_subtask_logs("sub-delete-1") == []
     assert delete_storage_subtask_log("sub-delete-1") is False
+
+
+def test_publish_storage_main_deleted_sends_deleted_event_to_owner() -> None:
+    from backend.app.modules.realtime.bus import event_bus
+    from backend.app.modules.storage.tasks.events import publish_storage_main_deleted
+
+    owner_id = "user-storage-delete"
+    queue = event_bus.subscribe(owner_id)
+    try:
+        publish_storage_main_deleted(owner_id, "main-delete-1")
+
+        event = queue.get_nowait()
+        assert event.event == "storage.main.deleted"
+        assert event.scope == "storage.main"
+        assert event.owner_id == owner_id
+        assert event.resource_id == "main-delete-1"
+        assert event.payload == {"id": "main-delete-1"}
+    finally:
+        event_bus.unsubscribe(owner_id, queue)

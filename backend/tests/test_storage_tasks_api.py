@@ -267,3 +267,49 @@ def test_delete_storage_main_task_rejects_active_status(db_session, test_user):
         service.delete_main_task(main.id, test_user.id)
 
     assert db_session.get(StorageMainTask, main.id) is not None
+
+
+def test_delete_storage_main_task_api_removes_task_and_logs(client, db_session, auth_headers, test_user, monkeypatch, tmp_path):
+    from backend.app.modules.storage.tasks.logs import read_storage_subtask_logs, write_storage_subtask_log
+
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
+
+    movie = _movie_with_source_and_magnet(db_session, test_user.id, code="api-del-001")
+    created = client.post(
+        "/api/storage/tasks/push",
+        json={"movie_id": str(movie.id), "storage_mode": "single", "selected_storage_location": "A"},
+        headers=auth_headers,
+    ).json()["data"]
+    subtask_id = client.get(
+        f"/api/storage/tasks/{created['id']}/subtasks",
+        headers=auth_headers,
+    ).json()["data"]["rows"][0]["id"]
+    write_storage_subtask_log(subtask_id, "INFO", "API 删除日志", {"main_task_id": created["id"]})
+
+    from backend.app.models.storage_task import StorageMainTask
+
+    main = db_session.get(StorageMainTask, uuid.UUID(created["id"]))
+    main.status = "completed"
+    db_session.commit()
+
+    response = client.delete(f"/api/storage/tasks/{created['id']}", headers=auth_headers)
+
+    assert response.status_code == 204
+    assert client.get(f"/api/storage/tasks/{created['id']}", headers=auth_headers).status_code == 404
+    assert client.get(f"/api/storage/tasks/subtasks/{subtask_id}", headers=auth_headers).status_code == 404
+    assert read_storage_subtask_logs(subtask_id) == []
+
+
+def test_delete_storage_main_task_api_rejects_running_task(client, db_session, auth_headers, test_user):
+    movie = _movie_with_source_and_magnet(db_session, test_user.id, code="api-del-running")
+    created = client.post(
+        "/api/storage/tasks/push",
+        json={"movie_id": str(movie.id), "storage_mode": "single", "selected_storage_location": "A"},
+        headers=auth_headers,
+    ).json()["data"]
+
+    response = client.delete(f"/api/storage/tasks/{created['id']}", headers=auth_headers)
+
+    assert response.status_code == 400
+    assert "运行中的存储任务不能删除" in response.text
+    assert client.get(f"/api/storage/tasks/{created['id']}", headers=auth_headers).status_code == 200
