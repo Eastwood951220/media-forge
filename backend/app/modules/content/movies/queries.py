@@ -245,7 +245,7 @@ def build_movie_list_statement(
             source_task_id = _parse_uuid(filters.source_task_id)
             if source_task_id is not None:
                 # Use @> operator for array containment
-                conditions.append(Movie.source_task_ids.op("@>")(func.cast(func.array(source_task_id), CompatibleARRAY(Uuid))))
+                conditions.append(Movie.source_task_ids.op("@>")(func.cast(func.array(source_task_id), CompatibleARRAY(sa.dialects.postgresql.UUID))))
             else:
                 conditions.append(false())
         for actor in split_csv(filters.actors):
