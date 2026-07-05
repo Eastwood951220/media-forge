@@ -382,17 +382,34 @@ def test_sync_movie_storage_status_api_syncs_selected_movies(client: TestClient,
     session.commit()
     session.close()
 
-    monkeypatch.setattr(
-        "backend.app.modules.storage.config.service.StorageConfigService",
-        lambda: type("ConfigService", (), {
-            "get_raw_config": lambda self: {
+    from contextlib import contextmanager
+
+    class ConfigService:
+        def __init__(self):
+            self.provider_factory = Factory()
+            self.gateway_class = Gateway
+
+        def get_raw_config(self):
+            return {
                 "target_folder": "/Movies",
                 "video_extensions": [".mp4"],
                 "minimum_video_size_mb": 100,
-            },
-            "provider_factory": Factory(),
-            "gateway_class": Gateway,
-        })(),
+            }
+
+        @contextmanager
+        def open_provider(self):
+            config = self.get_raw_config()
+            client = self.provider_factory.create(config)
+            try:
+                yield config, self.gateway_class(client)
+            finally:
+                close = getattr(client, "close", None)
+                if callable(close):
+                    close()
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.config.service.StorageConfigService",
+        ConfigService,
     )
 
     response = client.post(
@@ -458,17 +475,34 @@ def test_sync_movie_storage_status_api_uses_filters_when_no_selection(client: Te
     session.commit()
     session.close()
 
-    monkeypatch.setattr(
-        "backend.app.modules.storage.config.service.StorageConfigService",
-        lambda: type("ConfigService", (), {
-            "get_raw_config": lambda self: {
+    from contextlib import contextmanager
+
+    class ConfigService:
+        def __init__(self):
+            self.provider_factory = Factory()
+            self.gateway_class = Gateway
+
+        def get_raw_config(self):
+            return {
                 "target_folder": "/Movies",
                 "video_extensions": [".mp4"],
                 "minimum_video_size_mb": 100,
-            },
-            "provider_factory": Factory(),
-            "gateway_class": Gateway,
-        })(),
+            }
+
+        @contextmanager
+        def open_provider(self):
+            config = self.get_raw_config()
+            client = self.provider_factory.create(config)
+            try:
+                yield config, self.gateway_class(client)
+            finally:
+                close = getattr(client, "close", None)
+                if callable(close):
+                    close()
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.config.service.StorageConfigService",
+        ConfigService,
     )
 
     response = client.post(
@@ -542,13 +576,30 @@ def test_delete_movies_cloud_only_api_deletes_cloud_folders_and_keeps_movie(clie
         def delete_file(self, path):
             deleted.append(path)
 
+    from contextlib import contextmanager
+
+    class ConfigService:
+        def __init__(self):
+            self.provider_factory = Factory()
+            self.gateway_class = Gateway
+
+        def get_raw_config(self):
+            return {"target_folder": "/Movies"}
+
+        @contextmanager
+        def open_provider(self):
+            config = self.get_raw_config()
+            client = self.provider_factory.create(config)
+            try:
+                yield config, self.gateway_class(client)
+            finally:
+                close = getattr(client, "close", None)
+                if callable(close):
+                    close()
+
     monkeypatch.setattr(
         "backend.app.modules.storage.config.service.StorageConfigService",
-        lambda: type("ConfigService", (), {
-            "get_raw_config": lambda self: {"target_folder": "/Movies"},
-            "provider_factory": Factory(),
-            "gateway_class": Gateway,
-        })(),
+        ConfigService,
     )
 
     response = client.post(
@@ -577,3 +628,18 @@ def test_movie_list_query_helpers_preserve_sort_and_storage_filter(client: TestC
     body = response.json()
     assert body["total"] == 1
     assert body["rows"][0]["code"] == "AAA-100"
+
+
+def test_movie_storage_sync_closes_provider_client_on_sync_error(client: TestClient, admin_user, monkeypatch) -> None:
+    """Verify that the storage sync endpoint returns 500 when sync fails."""
+    headers = auth_headers(client, admin_user)
+    movie_id = seed_movie()
+
+    def fail_sync(*args, **kwargs):
+        raise RuntimeError("sync failed")
+
+    monkeypatch.setattr("backend.app.modules.content.movies.storage_status.sync_movie_storage_status", fail_sync)
+
+    response = client.post("/api/content/movies/storage-sync", json={"movie_ids": [movie_id]}, headers=headers)
+
+    assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
