@@ -1,5 +1,16 @@
 export type MovieStorageStatus = 'not_stored' | 'storing' | 'stored'
 
+export type MovieDeleteMode = 'database_only' | 'cloud_only' | 'database_and_cloud'
+
+export interface MovieDeleteResult {
+  deleted_movies: number
+  deleted_magnets: number
+  updated_movies: number
+  cloud_deleted_folders: string[]
+  cloud_missing_folders: string[]
+  cloud_failed_folders: Array<Record<string, unknown>>
+}
+
 export interface MovieMagnet {
   _id: string
   id: string
