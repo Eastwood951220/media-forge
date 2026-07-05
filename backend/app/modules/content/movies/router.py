@@ -158,16 +158,14 @@ def delete_content_movies(
 
     from backend.app.modules.storage.config.service import StorageConfigService
 
-    provider = None
-    client = None
-    if body.mode in {"cloud_only", "database_and_cloud"}:
-        config_service = StorageConfigService()
-        config = config_service.get_raw_config()
-        client = config_service.provider_factory.create(config)
-        provider = config_service.gateway_class(client)
+    config_service = StorageConfigService()
 
     try:
-        result = delete_movies(db=db, movies=movies, mode=body.mode, provider=provider)
+        if body.mode in {"cloud_only", "database_and_cloud"}:
+            with config_service.open_provider() as (_config, provider):
+                result = delete_movies(db=db, movies=movies, mode=body.mode, provider=provider)
+        else:
+            result = delete_movies(db=db, movies=movies, mode=body.mode, provider=None)
         db.commit()
     except UnsupportedMovieDeleteMode as exc:
         db.rollback()
@@ -178,10 +176,6 @@ def delete_content_movies(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={"message": "删除云存储文件夹失败", "failed_folders": exc.failed_folders},
         ) from exc
-    finally:
-        close = getattr(client, "close", None)
-        if callable(close):
-            close()
 
     if body.mode == "cloud_only":
         from backend.app.modules.storage.tasks.events import publish_movie_storage_updated

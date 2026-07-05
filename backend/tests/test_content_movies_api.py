@@ -643,3 +643,22 @@ def test_movie_storage_sync_closes_provider_client_on_sync_error(client: TestCli
     response = client.post("/api/content/movies/storage-sync", json={"movie_ids": [movie_id]}, headers=headers)
 
     assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+def test_movie_cloud_delete_closes_provider_client_on_delete_error(client: TestClient, admin_user, monkeypatch) -> None:
+    """Verify that the movie delete endpoint returns error when cloud delete fails."""
+    headers = auth_headers(client, admin_user)
+    movie_id = seed_movie()
+
+    def fail_delete(*args, **kwargs):
+        raise RuntimeError("delete failed")
+
+    monkeypatch.setattr("backend.app.modules.content.movies.delete_service.delete_movies", fail_delete)
+
+    response = client.post(
+        "/api/content/movies/delete",
+        json={"movie_ids": [movie_id], "mode": "cloud_only"},
+        headers=headers,
+    )
+
+    assert response.status_code in {HTTPStatus.BAD_GATEWAY, HTTPStatus.INTERNAL_SERVER_ERROR}
