@@ -190,3 +190,80 @@ def test_single_push_enqueues_runtime_and_starts_worker(db_session, test_user, m
 
     assert fake_runtime.enqueued == [str(main_task.id)]
     assert started == ["started"]
+
+
+def test_delete_storage_main_task_removes_rows_and_subtask_logs(db_session, test_user, monkeypatch, tmp_path):
+    from backend.app.models.storage_task import StorageMainTask, StorageSubTask
+    from backend.app.modules.storage.config.service import StorageConfigService
+    from backend.app.modules.storage.tasks.logs import read_storage_subtask_logs, write_storage_subtask_log
+    from backend.app.modules.storage.tasks.service import StorageTaskService
+
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
+
+    movie = _movie_with_source_and_magnet(db_session, test_user.id, code="del-001")
+    main = StorageMainTask(
+        alias="delete-main",
+        display_name="delete-main",
+        source="single",
+        storage_mode="single",
+        status="completed",
+        total_count=1,
+        created_by=test_user.id,
+        config_snapshot={},
+    )
+    db_session.add(main)
+    db_session.flush()
+    sub = StorageSubTask(
+        main_task_id=main.id,
+        movie_id=movie.id,
+        movie_code="DEL-001",
+        movie_title="delete movie",
+        status="completed",
+        step="done",
+        storage_mode="single",
+    )
+    db_session.add(sub)
+    db_session.flush()
+    write_storage_subtask_log(str(sub.id), "INFO", "待删除日志", {"main_task_id": str(main.id)})
+    db_session.commit()
+
+    service = StorageTaskService(db_session, StorageConfigService())
+
+    result = service.delete_main_task(main.id, test_user.id)
+
+    assert result == {
+        "id": str(main.id),
+        "deleted_subtask_count": 1,
+        "deleted_log_count": 1,
+    }
+    assert db_session.get(StorageMainTask, main.id) is None
+    assert db_session.get(StorageSubTask, sub.id) is None
+    assert read_storage_subtask_logs(str(sub.id)) == []
+
+
+def test_delete_storage_main_task_rejects_active_status(db_session, test_user):
+    import pytest
+
+    from backend.app.models.storage_task import StorageMainTask
+    from backend.app.modules.storage.config.service import StorageConfigService
+    from backend.app.modules.storage.tasks.service import StorageTaskService
+
+    main = StorageMainTask(
+        alias="active-main",
+        display_name="active-main",
+        source="batch",
+        storage_mode="single",
+        status="running",
+        total_count=0,
+        created_by=test_user.id,
+        config_snapshot={},
+    )
+    db_session.add(main)
+    db_session.commit()
+
+    service = StorageTaskService(db_session, StorageConfigService())
+
+    with pytest.raises(ValueError, match="运行中的存储任务不能删除，请先停止任务"):
+        service.delete_main_task(main.id, test_user.id)
+
+    assert db_session.get(StorageMainTask, main.id) is not None

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -16,7 +17,13 @@ class StorageTaskRepository:
         return self.db.get(StorageMainTask, task_id)
 
     def count_today_main_tasks(self) -> int:
-        return int(self.db.query(func.count(StorageMainTask.id)).scalar() or 0)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        return int(
+            self.db.query(func.count(StorageMainTask.id))
+            .filter(StorageMainTask.created_at >= today_start)
+            .scalar()
+            or 0
+        )
 
     def recompute_counts(self, main_task: StorageMainTask) -> None:
         subtasks = list(main_task.subtasks or [])
@@ -57,3 +64,15 @@ class StorageTaskRepository:
 
     def get_subtask(self, subtask_id: uuid.UUID) -> StorageSubTask | None:
         return self.db.get(StorageSubTask, subtask_id)
+
+    def list_subtask_ids(self, main_task_id: uuid.UUID) -> list[uuid.UUID]:
+        rows = (
+            self.db.query(StorageSubTask.id)
+            .filter(StorageSubTask.main_task_id == main_task_id)
+            .order_by(StorageSubTask.created_at.asc())
+            .all()
+        )
+        return [row[0] for row in rows]
+
+    def delete_main_task(self, main_task: StorageMainTask) -> None:
+        self.db.delete(main_task)

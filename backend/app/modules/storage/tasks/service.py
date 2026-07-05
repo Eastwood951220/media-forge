@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.storage_task import StorageMainTask, StorageSubTask
 from backend.app.modules.storage.config.service import StorageConfigService
-from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
+from backend.app.modules.storage.tasks.logs import delete_storage_subtask_log, write_storage_subtask_log
 from backend.app.modules.storage.tasks.policies import generate_default_alias
 from backend.app.modules.storage.tasks.repository import StorageTaskRepository
 from backend.app.modules.storage.worker.runner import ensure_storage_worker_started
@@ -107,6 +107,33 @@ class StorageTaskService:
         publish_storage_main_updated(task)
 
         return task
+
+    def delete_main_task(self, task_id: uuid.UUID, user_id: uuid.UUID) -> dict:
+        task = self.repository.get_main(task_id)
+        if task is None or task.created_by != user_id:
+            raise LookupError("存储任务不存在")
+        if task.status in {"queued", "running", "stopping"}:
+            raise ValueError("运行中的存储任务不能删除，请先停止任务")
+
+        subtask_ids = self.repository.list_subtask_ids(task.id)
+        task_id_text = str(task.id)
+        owner_id = str(task.created_by)
+        deleted_log_count = 0
+        for subtask_id in subtask_ids:
+            if delete_storage_subtask_log(str(subtask_id)):
+                deleted_log_count += 1
+
+        self.repository.delete_main_task(task)
+        self.db.commit()
+
+        from backend.app.modules.storage.tasks.events import publish_storage_main_deleted
+        publish_storage_main_deleted(owner_id, task_id_text)
+
+        return {
+            "id": task_id_text,
+            "deleted_subtask_count": len(subtask_ids),
+            "deleted_log_count": deleted_log_count,
+        }
 
     def to_main_response(self, task: StorageMainTask) -> dict:
         return {

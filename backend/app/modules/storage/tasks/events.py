@@ -50,6 +50,16 @@ def publish_storage_sub_log_appended(owner_id: str, subtask_id: str, entry: dict
     ))
 
 
+def publish_storage_main_deleted(owner_id: str, task_id: str) -> None:
+    event_bus.publish(make_realtime_event(
+        event="storage.main.deleted",
+        scope="storage.main",
+        owner_id=owner_id,
+        resource_id=task_id,
+        payload={"id": task_id},
+    ))
+
+
 def publish_movie_storage_updated(db: Session, owner_id: str, movie_id) -> None:
     movie = db.get(Movie, movie_id)
     if movie is None:
