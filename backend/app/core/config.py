@@ -18,7 +18,7 @@ class Settings:
     )
     access_token_expire_minutes: int = field(
         default_factory=lambda: int(
-            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
+            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080")
         )
     )
     log_dir: str = field(

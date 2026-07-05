@@ -180,6 +180,7 @@ function MovieListPage() {
         movies={push.pushMovies}
         selectedRowKeys={push.selectedKeys}
         loading={push.submitting}
+        defaultAlias={push.defaultAlias}
         onCancel={push.closeModal}
         onSubmit={push.submitPush}
       />

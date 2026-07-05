@@ -31,6 +31,24 @@ const ROUTE_TAGS: Array<{ pattern: RegExp; meta: RouteTagMeta }> = [
     },
   },
   { pattern: /^\/content\/movies$/, meta: { title: '影片列表' } },
+  { pattern: /^\/storage\/config$/, meta: { title: '存储配置' } },
+  { pattern: /^\/storage\/tasks$/, meta: { title: '存储任务' } },
+  {
+    pattern: /^\/storage\/tasks\/[^/]+$/,
+    meta: {
+      title: '存储任务详情',
+      activeMenu: '/storage/tasks',
+      singletonKey: '/storage/tasks/:id',
+    },
+  },
+  {
+    pattern: /^\/storage\/tasks\/subtasks\/[^/]+$/,
+    meta: {
+      title: '子任务详情',
+      activeMenu: '/storage/tasks',
+      singletonKey: '/storage/tasks/subtasks/:id',
+    },
+  },
 ]
 
 export function getRouteTagMeta(pathname: string): RouteTagMeta {

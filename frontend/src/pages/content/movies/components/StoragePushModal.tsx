@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Form, Input, Modal, Select } from 'antd'
 import type { StorageMode } from '@/api/storage/storageTasks/types'
 
@@ -15,11 +15,12 @@ type Props = {
   movies: PushMovie[]
   selectedRowKeys: React.Key[]
   loading: boolean
+  defaultAlias?: string
   onCancel: () => void
   onSubmit: (values: { alias?: string; storageMode: StorageMode; selectedStorageLocation?: string }) => void
 }
 
-function StoragePushModal({ open, mode, movies, selectedRowKeys, loading, onCancel, onSubmit }: Props) {
+function StoragePushModal({ open, mode, movies, selectedRowKeys, loading, defaultAlias, onCancel, onSubmit }: Props) {
   const [form] = Form.useForm<{ alias?: string; selectedStorageLocation?: string }>()
   const [storageMode, setStorageMode] = useState<StorageMode>('single')
   const firstMovie = movies[0]
@@ -27,6 +28,12 @@ function StoragePushModal({ open, mode, movies, selectedRowKeys, loading, onCanc
     () => (firstMovie?.storage_locations ?? []).map((value) => ({ value, label: value })),
     [firstMovie],
   )
+
+  useEffect(() => {
+    if (open && defaultAlias) {
+      form.setFieldsValue({ alias: defaultAlias })
+    }
+  }, [open, defaultAlias, form])
 
   return (
     <Modal

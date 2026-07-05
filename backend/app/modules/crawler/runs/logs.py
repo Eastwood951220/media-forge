@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from scraper.config.settings import RUN_DATA_DIR
+from scraper.config.settings import LOG_DIR
 from shared.logging.jsonl import append_jsonl_log, build_log_entry, delete_jsonl_logs, load_jsonl_logs
 
-RUN_LOG_DIR = str(RUN_DATA_DIR / "logs" / "crawler" / "runs")
+RUN_LOG_DIR = str(LOG_DIR / "crawler" / "runs")
 
 
 def run_log_filename(run_id: str) -> str:

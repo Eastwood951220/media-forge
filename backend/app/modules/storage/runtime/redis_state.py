@@ -6,6 +6,13 @@ class StorageRuntimeState:
     def __init__(self, redis_client) -> None:
         self.redis = redis_client
 
+    def _decode_value(self, value) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        return str(value)
+
     def enqueue_main_task(self, task_id: str) -> None:
         self.redis.rpush(self.QUEUE_KEY, task_id)
 
@@ -13,7 +20,7 @@ class StorageRuntimeState:
         value = self.redis.lpop(self.QUEUE_KEY)
         if value is None:
             return None
-        task_id = str(value)
+        task_id = self._decode_value(value)
         self.redis.set(self.CURRENT_KEY, task_id)
         return task_id
 
@@ -27,7 +34,7 @@ class StorageRuntimeState:
         self.redis.set(f"{self.STOP_PREFIX}{task_id}", "1")
 
     def should_stop(self, task_id: str) -> bool:
-        return self.redis.get(f"{self.STOP_PREFIX}{task_id}") == "1"
+        return self._decode_value(self.redis.get(f"{self.STOP_PREFIX}{task_id}")) == "1"
 
     def clear_stop(self, task_id: str) -> None:
         self.redis.delete(f"{self.STOP_PREFIX}{task_id}")

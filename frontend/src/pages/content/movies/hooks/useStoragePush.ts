@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { App } from 'antd'
-import { createBatchStoragePush, createStoragePush } from '@/api/storage/storageTasks'
+import { createBatchStoragePush, createStoragePush, getNextAlias } from '@/api/storage/storageTasks'
 import type { StorageMode } from '@/api/storage/storageTasks/types'
 import type { Movie } from '@/api/movie/types'
 
@@ -17,13 +17,24 @@ export function useStoragePush(onSuccess: () => void) {
   const [pushMovies, setPushMovies] = useState<PushMovie[]>([])
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const [defaultAlias, setDefaultAlias] = useState<string>('')
+
+  const fetchNextAlias = useCallback(async () => {
+    try {
+      const data = await getNextAlias()
+      setDefaultAlias(data.alias)
+    } catch {
+      setDefaultAlias('')
+    }
+  }, [])
 
   const openSinglePush = useCallback((movie: PushMovie) => {
     setPushMode('single')
     setPushMovies([movie])
     setSelectedKeys([movie._id])
     setModalOpen(true)
-  }, [])
+    fetchNextAlias()
+  }, [fetchNextAlias])
 
   const openBatchPush = useCallback((movies: PushMovie[], keys: React.Key[]) => {
     if (keys.length === 0) {
@@ -34,7 +45,8 @@ export function useStoragePush(onSuccess: () => void) {
     setPushMovies(movies.filter((m) => keys.includes(m._id)))
     setSelectedKeys(keys)
     setModalOpen(true)
-  }, [message])
+    fetchNextAlias()
+  }, [message, fetchNextAlias])
 
   const submitPush = useCallback(async (values: { alias?: string; storageMode: StorageMode; selectedStorageLocation?: string }) => {
     setSubmitting(true)
@@ -75,6 +87,7 @@ export function useStoragePush(onSuccess: () => void) {
     pushMovies,
     selectedKeys,
     submitting,
+    defaultAlias,
     openSinglePush,
     openBatchPush,
     submitPush,
