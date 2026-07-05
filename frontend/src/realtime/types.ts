@@ -31,6 +31,10 @@ export type StorageMainUpdatedPayload = Pick<
   'id' | 'status' | 'total_count' | 'success_count' | 'failed_count' | 'skipped_count'
 > & Partial<StorageMainTask>
 
+export type StorageMainDeletedPayload = {
+  id: string
+}
+
 export type StorageSubUpdatedPayload = {
   id: string
   main_task_id: string
@@ -56,6 +60,7 @@ export type RealtimeEventName =
   | 'crawler.queue.updated'
   | 'crawler.task.status.updated'
   | 'storage.main.updated'
+  | 'storage.main.deleted'
   | 'storage.sub.updated'
   | 'storage.sub.log.appended'
   | 'storage.queue.updated'

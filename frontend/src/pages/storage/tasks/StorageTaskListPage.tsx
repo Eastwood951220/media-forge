@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
-import { Button, Card, Space, Table, Tag } from 'antd'
+import { Button, Card, Popconfirm, Space, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { listStorageMainTasks, restartStorageMainTask, stopStorageMainTask } from '@/api/storage/storageTasks'
+import {
+  deleteStorageMainTask,
+  listStorageMainTasks,
+  restartStorageMainTask,
+  stopStorageMainTask,
+} from '@/api/storage/storageTasks'
 import type { StorageMainTask, StorageMainTaskStatus, StorageMode } from '@/api/storage/storageTasks/types'
 import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
-import type { RealtimeEvent } from '@/realtime/types'
+import type { RealtimeEvent, StorageMainDeletedPayload } from '@/realtime/types'
 import styles from './StorageTasks.module.less'
 
 const statusLabels: Record<StorageMainTaskStatus, { text: string; color: string }> = {
@@ -51,7 +56,7 @@ function StorageTaskListPage() {
   useEffect(() => {
     connectRealtime()
 
-    const unsubscribe = subscribeRealtime<StorageMainTask>(
+    const unsubscribeUpdated = subscribeRealtime<StorageMainTask>(
       'storage.main.updated',
       (event: RealtimeEvent<StorageMainTask>) => {
         const updatedTask = event.payload
@@ -63,7 +68,18 @@ function StorageTaskListPage() {
       },
     )
 
-    return unsubscribe
+    const unsubscribeDeleted = subscribeRealtime<StorageMainDeletedPayload>(
+      'storage.main.deleted',
+      (event: RealtimeEvent<StorageMainDeletedPayload>) => {
+        setTasks((prev) => prev.filter((task) => task.id !== event.payload.id))
+        setTotal((count) => Math.max(0, count - 1))
+      },
+    )
+
+    return () => {
+      unsubscribeUpdated()
+      unsubscribeDeleted()
+    }
   }, [])
 
   const handleStop = useCallback(async (task: StorageMainTask) => {
@@ -83,6 +99,19 @@ function StorageTaskListPage() {
       // error handled by request interceptor
     }
   }, [current, pageSize, fetchTasks])
+
+  const handleDelete = useCallback(async (task: StorageMainTask) => {
+    try {
+      await deleteStorageMainTask(task.id)
+      if (tasks.length === 1 && current > 1) {
+        setCurrent((page) => page - 1)
+        return
+      }
+      void fetchTasks(current, pageSize)
+    } catch {
+      // error handled by request interceptor
+    }
+  }, [current, fetchTasks, pageSize, tasks.length])
 
   const columns: ColumnsType<StorageMainTask> = [
     {
@@ -177,6 +206,23 @@ function StorageTaskListPage() {
             >
               重启
             </Button>
+          )}
+          {!['queued', 'running', 'stopping'].includes(record.status) && (
+            <Popconfirm
+              title="删除存储任务"
+              description="将删除主任务、子任务和对应日志，不会删除网盘文件。"
+              okText="确定"
+              cancelText="取消"
+              onConfirm={() => void handleDelete(record)}
+            >
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+              >
+                删除
+              </Button>
+            </Popconfirm>
           )}
         </Space>
       ),

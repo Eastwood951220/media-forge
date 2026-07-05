@@ -43,6 +43,10 @@ export function restartStorageMainTask(id: string): Promise<StorageMainTask> {
   return request.post<StorageMainTask>(`${BASE_URL}/${id}/restart`)
 }
 
+export function deleteStorageMainTask(id: string): Promise<void> {
+  return request.delete<void>(`${BASE_URL}/${id}`)
+}
+
 export function listStorageSubTasks(
   mainTaskId: string,
   params?: {
