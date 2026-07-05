@@ -37,7 +37,7 @@ class Runtime:
         self.cleared.append(run_id)
 
 
-class MovieServiceStub:
+class CrawlerEngineStub:
     def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
         if callbacks.on_tasks_batch_created:
             callbacks.on_tasks_batch_created([
@@ -51,7 +51,7 @@ class MovieServiceStub:
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
 
-class PersistingMovieServiceStub:
+class PersistingCrawlerEngineStub:
     def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
         if callbacks.on_tasks_batch_created:
             callbacks.on_tasks_batch_created([
@@ -77,7 +77,7 @@ class PersistingMovieServiceStub:
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
 
-class FilterSyncMovieServiceStub:
+class FilterSyncCrawlerEngineStub:
     def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
         if callbacks.on_tasks_batch_created:
             callbacks.on_tasks_batch_created([
@@ -101,7 +101,7 @@ class FilterSyncMovieServiceStub:
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
 
-class FailingPersistenceMovieServiceStub:
+class FailingPersistenceCrawlerEngineStub:
     def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
         if callbacks.on_tasks_batch_created:
             callbacks.on_tasks_batch_created([
@@ -119,7 +119,7 @@ class FailingPersistenceMovieServiceStub:
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
 
-class ListPhaseDedupeMovieServiceStub:
+class ListPhaseDedupeCrawlerEngineStub:
     def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
         existing_codes = callbacks.db_check_callback(["AAA-010", "AAA-011"])
         batch = [
@@ -140,7 +140,7 @@ class ListPhaseDedupeMovieServiceStub:
         }
 
 
-class DetailPhaseDedupeMovieServiceStub:
+class DetailPhaseDedupeCrawlerEngineStub:
     def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
         detail_task = {"code": "AAA-020", "url": "https://javdb.com/v/aaa020", "name": "AAA 020"}
         if callbacks.on_tasks_batch_created:
@@ -205,7 +205,7 @@ def test_process_next_run_marks_saved(monkeypatch) -> None:
     session.commit()
     runtime = Runtime(str(run.id))
 
-    # Mock the _execute_run function to avoid importing MovieService
+    # Mock _execute_run so this test only verifies queue processing.
     def mock_execute_run(db, run_obj, runtime_obj):
         run_obj.status = "completed"
         run_obj.result = {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
@@ -240,7 +240,7 @@ def test_process_next_run_marks_saved(monkeypatch) -> None:
 def test_execute_run_persists_movie_before_marking_detail_saved(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: PersistingMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: PersistingCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("persist")
 
@@ -266,7 +266,7 @@ def test_execute_run_publishes_run_detail_events_to_realtime_bus(monkeypatch) ->
     from backend.app.modules.crawler.runtime.service import _execute_run
     from backend.app.modules.realtime.bus import event_bus as realtime_bus
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: PersistingMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: PersistingCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("realtime")
     task = session.get(CrawlTask, run.task_id)
@@ -299,7 +299,7 @@ def test_execute_run_publishes_run_detail_events_to_realtime_bus(monkeypatch) ->
 def test_execute_run_syncs_movie_filters_after_movie_persistence(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: FilterSyncMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: FilterSyncCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("filter-sync")
 
@@ -322,7 +322,7 @@ def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monke
     def fail_persistence(db, item_data):
         raise RuntimeError("movie repository returned no id")
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: FailingPersistenceMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: FailingPersistenceCrawlerEngineStub())
     monkeypatch.setattr("backend.app.modules.crawler.runtime.service.upsert_movie_with_magnets", fail_persistence)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("save-failed")
@@ -341,7 +341,7 @@ def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monke
 def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ListPhaseDedupeMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ListPhaseDedupeCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("list-dedupe")
     session.add(Movie(code="AAA-010", source_url="https://javdb.com/v/aaa010", source_task_ids=[]))
@@ -366,7 +366,7 @@ def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> No
 def test_execute_run_marks_detail_phase_existing_movies_skipped(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: DetailPhaseDedupeMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: DetailPhaseDedupeCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("detail-dedupe")
     session.add(Movie(code="AAA-020", source_url="https://javdb.com/v/aaa020", source_task_ids=[]))
@@ -392,7 +392,7 @@ class StopRequestedRuntime(Runtime):
         return True
 
 
-class StopAwareMovieServiceStub:
+class StopAwareCrawlerEngineStub:
     def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
         assert callbacks.stop_check() is True
         if callbacks.on_tasks_batch_created:
@@ -407,7 +407,7 @@ class StopAwareMovieServiceStub:
         }
 
 
-class ExistingDetailReuseMovieServiceStub:
+class ExistingDetailReuseCrawlerEngineStub:
     def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
         raise AssertionError("detail-stage restart must not run list collection")
 
@@ -421,7 +421,7 @@ class ExistingDetailReuseMovieServiceStub:
         return {"total_tasks": 1, "completed_tasks": 1, "failed_tasks": 0}
 
 
-class ListPhaseRestartMovieServiceStub:
+class ListPhaseRestartCrawlerEngineStub:
     def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks):
         if callbacks.on_tasks_batch_created:
             callbacks.on_tasks_batch_created([
@@ -436,7 +436,7 @@ class ListPhaseRestartMovieServiceStub:
 def test_execute_run_stops_when_runtime_stop_requested(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: StopAwareMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: StopAwareCrawlerEngineStub())
     session = TestingSessionLocal()
     run, _runtime = create_run_with_task("stop-requested")
     runtime = StopRequestedRuntime(str(run.id))
@@ -456,7 +456,7 @@ def test_execute_run_stops_when_runtime_stop_requested(monkeypatch) -> None:
 def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ExistingDetailReuseMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ExistingDetailReuseCrawlerEngineStub())
     monkeypatch.setattr("backend.app.modules.crawler.runtime.service.upsert_movie_with_magnets", lambda db, item_data: uuid.uuid4())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("reuse-existing")
@@ -484,7 +484,7 @@ def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch
 def test_execute_run_does_not_treat_list_stage_pending_details_as_detail_restart(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.service import _execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ListPhaseRestartMovieServiceStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ListPhaseRestartCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("list-stage")
     session.add(CrawlRunDetailTask(

@@ -146,14 +146,6 @@ const contentMoviesRoute = createRoute({
   component: MovieListPage,
 })
 
-const legacyCrawlTasksRoute = createRoute({
-  getParentRoute: () => layoutRoute,
-  path: '/crawl-tasks',
-  beforeLoad: () => {
-    throw redirect({ to: '/crawler/tasks' })
-  },
-})
-
 const routeTree = rootRoute.addChildren([
   initRoute,
   loginRoute,
@@ -171,7 +163,6 @@ const routeTree = rootRoute.addChildren([
     storageTaskDetailRoute,
     storageSubTaskDetailRoute,
     contentMoviesRoute,
-    legacyCrawlTasksRoute,
   ]),
 ])
 
