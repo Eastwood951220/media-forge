@@ -82,3 +82,36 @@ def test_storage_task_serializers_preserve_response_shape(test_user) -> None:
     assert sub_payload["movie_code"] == "ABC-123"
     assert sub_payload["target_locations"] == ["A"]
     assert sub_payload["current_magnet_id"] is None
+
+
+def test_storage_task_creator_creates_skipped_subtask_for_movie_without_magnets(db_session, test_user) -> None:
+    from backend.app.modules.storage.config.service import StorageConfigService
+    from backend.app.modules.storage.tasks.creation import StorageTaskCreator
+    from backend.app.modules.storage.tasks.repository import StorageTaskRepository
+
+    movie = Movie(code="NO-MAG", source_name="No Magnet")
+    db_session.add(movie)
+    db_session.flush()
+
+    class ConfigService:
+        def get_raw_config(self):
+            return {"target_folder": "/Movies"}
+
+    creator = StorageTaskCreator(
+        db=db_session,
+        repository=StorageTaskRepository(db_session),
+        config_service=ConfigService(),
+    )
+
+    main = creator.create_main_task(
+        movie_ids=[movie.id],
+        user_id=test_user.id,
+        source="single",
+        alias="manual",
+        storage_mode="single",
+        selected_storage_location=None,
+    )
+
+    assert main.alias == "manual"
+    assert main.subtasks[0].status == "skipped"
+    assert main.subtasks[0].skip_reason == "no_magnets"
