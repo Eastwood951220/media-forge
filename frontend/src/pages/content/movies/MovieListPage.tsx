@@ -73,7 +73,8 @@ function MovieListPage() {
     if (!current.includes(value)) {
       filters.patchForm({ [stateKey]: [...current, value] } as Partial<MovieFilterState>)
     }
-    list.search()
+    // Reset to page 1 when filter changes - the useEffect in useMovieList will handle the search
+    list.setPage(DEFAULT_MOVIE_PAGE)
   }, [detail, filters, list])
 
   const handleBulkPush = useCallback(() => {
