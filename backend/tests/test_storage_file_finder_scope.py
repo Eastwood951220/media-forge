@@ -487,3 +487,40 @@ def test_list_subfiles_discovery_stops_recursive_directory_loops() -> None:
             "reason": "recursive_loop",
         }
     ]
+
+
+def test_search_result_original_path_failure_is_rejected() -> None:
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.file_finder import find_scoped_video_files
+
+    @dataclass
+    class File:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+        is_search_result: bool = True
+
+    class Provider:
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            return [File("ABC-123.mp4", "/[Search]/ABC-123.mp4", 500 * 1024 * 1024)]
+
+        def get_original_path(self, path):
+            raise RuntimeError("original path failed")
+
+        def list_files(self, path):
+            return []
+
+    result = find_scoped_video_files(
+        provider=Provider(),
+        search_terms=["ABC-123"],
+        search_path="/Downloads",
+        search_scope="download_root",
+        movie_code="ABC-123",
+        task_download_folder="/Downloads/storage-1",
+        config={"video_extensions": [".mp4"], "minimum_video_size_mb": 100},
+    )
+
+    assert result.accepted_files == []
+    assert result.log_context["rejected_files"][0]["reason"] == "missing_original_path"
