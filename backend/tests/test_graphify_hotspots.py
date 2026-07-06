@@ -1,5 +1,9 @@
 import json
+import sys
 from pathlib import Path
+
+# Add project root to path for scripts module
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from scripts.analyze_graphify_hotspots import analyze_graph, is_noise_path
 
