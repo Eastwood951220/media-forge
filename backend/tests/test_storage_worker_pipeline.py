@@ -632,7 +632,7 @@ def test_is_rename_name_exists_error_detects_clouddrive_20004() -> None:
 def test_rename_name_exists_reuses_existing_canonical_source_file() -> None:
     from types import SimpleNamespace
 
-    from backend.app.modules.storage.worker.steps import rename_selected_videos
+    from backend.app.modules.storage.worker.rename_ops import rename_selected_videos
 
     class RenameNameExistsProvider:
         def __init__(self) -> None:
@@ -690,7 +690,7 @@ def test_rename_name_exists_reuses_existing_canonical_source_file() -> None:
 
 
 def test_rename_name_exists_without_resolved_file_becomes_terminal_skip() -> None:
-    from backend.app.modules.storage.worker.steps import move_renamed_videos
+    from backend.app.modules.storage.worker.move_ops import move_renamed_videos
 
     class Provider:
         def ensure_directory(self, path):
@@ -836,7 +836,7 @@ def test_execute_subtask_pipeline_stops_after_rename_name_exists_skip(monkeypatc
 def test_rename_existing_source_skips_when_single_target_already_has_file() -> None:
     from types import SimpleNamespace
 
-    from backend.app.modules.storage.worker.steps import move_renamed_videos
+    from backend.app.modules.storage.worker.move_ops import move_renamed_videos
 
     target_file = "/Movies/巨乳/MIDA-628/MIDA-628.mp4"
 
@@ -912,7 +912,7 @@ def test_rename_existing_source_skips_when_single_target_already_has_file() -> N
 def test_rename_existing_source_skips_when_all_multi_targets_already_have_file() -> None:
     from types import SimpleNamespace
 
-    from backend.app.modules.storage.worker.steps import move_renamed_videos
+    from backend.app.modules.storage.worker.move_ops import move_renamed_videos
 
     target_files = {
         "/Movies/巨乳/MIDA-628/MIDA-628.mp4",
@@ -982,7 +982,7 @@ def test_rename_existing_source_skips_when_all_multi_targets_already_have_file()
 def test_rename_existing_source_copies_missing_multi_target_and_keeps_existing_move_target() -> None:
     from types import SimpleNamespace
 
-    from backend.app.modules.storage.worker.steps import move_renamed_videos
+    from backend.app.modules.storage.worker.move_ops import move_renamed_videos
 
     existing_move_target = "/Movies/中字/MIDA-628/MIDA-628.mp4"
 
@@ -1519,7 +1519,7 @@ def test_deduped_single_real_file_renames_without_cd_suffix() -> None:
 
 
 def test_scan_found_files_rejects_virtual_search_paths() -> None:
-    from backend.app.modules.storage.worker.steps import scan_found_files
+    from backend.app.modules.storage.worker.file_ops import scan_found_files
 
     scanned = scan_found_files([
         {
@@ -1772,7 +1772,7 @@ def test_recover_existing_downloaded_video_files_searches_root_after_task_folder
 def test_find_existing_target_files_uses_list_files_for_single_target() -> None:
     from dataclasses import dataclass
 
-    from backend.app.modules.storage.worker.steps import find_existing_target_files
+    from backend.app.modules.storage.worker.target_files import find_existing_target_files
 
     @dataclass
     class RemoteFile:
@@ -1813,7 +1813,7 @@ def test_find_existing_target_files_uses_list_files_for_single_target() -> None:
 def test_find_existing_target_files_requires_all_targets_to_exist() -> None:
     from dataclasses import dataclass
 
-    from backend.app.modules.storage.worker.steps import find_existing_target_files
+    from backend.app.modules.storage.worker.target_files import find_existing_target_files
 
     @dataclass
     class RemoteFile:
@@ -1849,7 +1849,7 @@ def test_find_existing_target_files_requires_all_targets_to_exist() -> None:
 def test_find_existing_target_files_accepts_suffix_filename() -> None:
     from dataclasses import dataclass
 
-    from backend.app.modules.storage.worker.steps import find_existing_target_files
+    from backend.app.modules.storage.worker.target_files import find_existing_target_files
 
     @dataclass
     class RemoteFile:
@@ -2304,7 +2304,7 @@ def test_subtask_pipeline_stops_after_existing_target_skip_from_task_exists(monk
 def test_find_existing_target_files_reports_source_and_missing_targets() -> None:
     from dataclasses import dataclass
 
-    from backend.app.modules.storage.worker.steps import find_existing_target_files
+    from backend.app.modules.storage.worker.target_files import find_existing_target_files
 
     @dataclass
     class RemoteFile:
@@ -2813,3 +2813,14 @@ def test_append_magnet_attempt_records_status_and_success() -> None:
     assert subtask.magnet_attempts[0]["magnet_id"] == "m1"
     assert subtask.magnet_attempts[0]["success"] is False
     assert subtask.magnet_attempts[0]["status"] == "running"
+
+
+def test_storage_attempt_flow_modules_export_public_functions() -> None:
+    from backend.app.modules.storage.worker.download_flow import DownloadFlowResult, run_download_flow
+    from backend.app.modules.storage.worker.existing_target_flow import handle_existing_target_fallback
+    from backend.app.modules.storage.worker.file_pipeline import run_found_files_pipeline
+
+    assert DownloadFlowResult(found_files=[], submit_task_exists=False).found_files == []
+    assert callable(run_download_flow)
+    assert callable(handle_existing_target_fallback)
+    assert callable(run_found_files_pipeline)
