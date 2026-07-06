@@ -389,3 +389,20 @@ def test_movie_sync_module_exports_worker_sync_function() -> None:
     from backend.app.modules.storage.worker.movie_sync import sync_movie_storage_after_subtask
 
     assert callable(sync_movie_storage_after_subtask)
+
+
+def test_runner_process_main_task_delegates_to_task_processor(monkeypatch) -> None:
+    from backend.app.modules.storage.worker import runner
+
+    calls: list[str] = []
+
+    def fake_process(runtime, provider_factory, config_service, task_id: str) -> bool:
+        calls.append(task_id)
+        return True
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.task_processor.process_main_task", fake_process, raising=False)
+
+    result = runner.process_main_task(object(), object(), object(), "main-1")
+
+    assert result is True
+    assert calls == ["main-1"]
