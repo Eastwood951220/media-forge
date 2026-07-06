@@ -4,7 +4,7 @@ from datetime import date
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, and_, false, func, not_, or_, select
+from sqlalchemy import Select, Text, and_, false, func, not_, or_, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session, selectinload
 
@@ -126,13 +126,13 @@ def build_movie_list_statement(
             else:
                 conditions.append(false())
         for actor in split_csv(filters.actors):
-            conditions.append(_postgres_array_contains(Movie.actors, actor, postgresql.TEXT()))
+            conditions.append(_postgres_array_contains(Movie.actors, actor, Text))
         for actor in split_csv(filters.actors_not):
-            conditions.append(not_(_postgres_array_contains(Movie.actors, actor, postgresql.TEXT())))
+            conditions.append(not_(_postgres_array_contains(Movie.actors, actor, Text)))
         for tag in split_csv(filters.tags):
-            conditions.append(_postgres_array_contains(Movie.tags, tag, postgresql.TEXT()))
+            conditions.append(_postgres_array_contains(Movie.tags, tag, Text))
         for tag in split_csv(filters.tags_not):
-            conditions.append(not_(_postgres_array_contains(Movie.tags, tag, postgresql.TEXT())))
+            conditions.append(not_(_postgres_array_contains(Movie.tags, tag, Text)))
         if filters.actors_count_min is not None:
             conditions.append(func.array_length(Movie.actors, 1) >= filters.actors_count_min)
         if filters.actors_count_max is not None:

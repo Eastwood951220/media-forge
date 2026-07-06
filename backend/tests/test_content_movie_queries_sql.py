@@ -153,6 +153,24 @@ def test_postgresql_actor_and_tag_filters_use_array_constructor_sql() -> None:
     assert "array(" not in sql.lower()
 
 
+def test_postgresql_tag_filter_uses_text_type_not_varchar() -> None:
+    """Regression test: PostgreSQL text[] columns must use text type, not varchar."""
+    from sqlalchemy.dialects import postgresql
+
+    statement = build_movie_list_statement(
+        MovieListFilters(tags="VR"),
+        sort_by="code",
+        sort_order=1,
+        dialect_name="postgresql",
+    )
+    sql = str(statement.compile(dialect=postgresql.dialect()))
+
+    # Should use TEXT type, not VARCHAR
+    assert "::VARCHAR" not in sql or "::text" in sql.lower()
+    # Should use array containment operator
+    assert "@>" in sql
+
+
 def test_queries_module_keeps_public_imports() -> None:
     from backend.app.modules.content.movies import queries
 
@@ -162,3 +180,22 @@ def test_queries_module_keeps_public_imports() -> None:
     assert callable(queries.requires_python_fallback)
     assert callable(queries.movie_matches)
     assert queries.MovieListFilters(search="x").search == "x"
+
+
+def test_postgresql_tag_filter_uses_text_type_not_varchar() -> None:
+    """Regression test: PostgreSQL text[] columns must use text type, not varchar."""
+    from sqlalchemy import inspect
+    from sqlalchemy.dialects import postgresql
+
+    statement = build_movie_list_statement(
+        MovieListFilters(tags="VR"),
+        sort_by="code",
+        sort_order=1,
+        dialect_name="postgresql",
+    )
+    sql = str(statement.compile(dialect=postgresql.dialect()))
+
+    # Should use TEXT type, not VARCHAR
+    assert "::VARCHAR" not in sql or "::text" in sql.lower()
+    # Should use array containment operator
+    assert "@>" in sql
