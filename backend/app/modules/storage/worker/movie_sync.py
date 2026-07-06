@@ -4,11 +4,11 @@ from sqlalchemy.orm import Session
 
 
 def sync_movie_storage_after_subtask(db: Session, context) -> None:
+    from backend.app.modules.content.movies.storage_locations import target_folder_specs_from_subtask
     from backend.app.modules.content.movies.storage_status import (
         STORAGE_STATUS_NOT_STORED,
         set_movie_storage_status,
         sync_movie_storage_status,
-        target_folder_specs_from_subtask,
     )
     from backend.app.modules.storage.tasks.events import publish_movie_storage_updated
     from shared.database.models.content import Movie

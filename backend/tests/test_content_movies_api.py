@@ -527,6 +527,29 @@ def test_delete_movies_cloud_only_api_deletes_cloud_folders_and_keeps_movie(clie
     assert detail["storage_summary"]["locations"] == []
 
 
+def test_storage_scan_ignores_small_non_video_and_provider_errors() -> None:
+    from shared.database.models.content import Movie
+    from backend.app.modules.content.movies.storage_scan import is_matching_video, scan_movie_storage_locations
+
+    movie = Movie(code="ABC-001", source_name="Movie")
+    assert is_matching_video(movie, {"name": "ABC-001.txt", "path": "/Movies/ABC-001.txt", "size": 999999999, "is_dir": False}, {"video_extensions": [".mp4"], "minimum_video_size_mb": 100}) is False
+    assert is_matching_video(movie, {"name": "ABC-001.mp4", "path": "/Movies/ABC-001.mp4", "size": 1, "is_dir": False}, {"video_extensions": [".mp4"], "minimum_video_size_mb": 100}) is False
+
+    class Provider:
+        def list_files(self, path):
+            raise RuntimeError("remote down")
+
+    checked, found = scan_movie_storage_locations(
+        movie,
+        Provider(),
+        {"video_extensions": [".mp4"], "minimum_video_size_mb": 100},
+        [{"target_folder": "/Movies/A/ABC-001", "storage_location": "A"}],
+        "test",
+    )
+    assert checked == ["/Movies/A/ABC-001"]
+    assert found == []
+
+
 def test_movie_list_query_helpers_preserve_sort_and_storage_filter(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
     seed_filter_movies()
