@@ -323,7 +323,7 @@ def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monke
         raise RuntimeError("movie repository returned no id")
 
     monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: FailingPersistenceCrawlerEngineStub())
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.upsert_movie_with_magnets", fail_persistence)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.callbacks.upsert_movie_with_magnets", fail_persistence)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("save-failed")
 
@@ -457,7 +457,7 @@ def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch
     from backend.app.modules.crawler.runtime.executor import execute_run
 
     monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: ExistingDetailReuseCrawlerEngineStub())
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.upsert_movie_with_magnets", lambda db, item_data: uuid.uuid4())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.callbacks.upsert_movie_with_magnets", lambda db, item_data: uuid.uuid4())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("reuse-existing")
     existing = CrawlRunDetailTask(
@@ -552,3 +552,35 @@ def test_progress_helpers_write_runtime_progress() -> None:
     write_progress(runtime, "run-1", progress)
 
     assert runtime.writes == [("run-1", {"total": 3, "saved": 1, "failed": 0, "skipped": 0, "save_failed": 0})]
+
+
+def test_crawler_callback_context_builds_callbacks(db_session) -> None:
+    import uuid
+    from backend.app.models.crawl_run import CrawlRun
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.crawler.runtime.callbacks import CrawlerCallbackContext, build_crawl_callbacks
+    from backend.app.modules.crawler.runtime.detail_index import DetailTaskIndex
+    from backend.app.modules.crawler.runtime.progress import new_progress
+
+    task = CrawlTask(id=uuid.uuid4(), name="task", owner_id=uuid.uuid4())
+    run = CrawlRun(id=uuid.uuid4(), task_id=task.id, task_name=task.name, status="running")
+
+    class Runtime:
+        def write_progress(self, run_id: str, progress: dict[str, int]) -> None:
+            return None
+
+        def is_stop_requested(self, run_id: str) -> bool:
+            return False
+
+    callbacks = build_crawl_callbacks(CrawlerCallbackContext(
+        db=db_session,
+        run=run,
+        task=task,
+        runtime=Runtime(),
+        detail_index=DetailTaskIndex(),
+        progress=new_progress(),
+    ))
+
+    assert callable(callbacks.on_item_saved)
+    assert callable(callbacks.on_detail_failed)
+    assert callable(callbacks.log_callback)
