@@ -2774,3 +2774,42 @@ def test_storage_file_operation_modules_export_current_public_functions() -> Non
     assert file_ops.move_renamed_videos is move_ops.move_renamed_videos
     assert file_ops.verify_moved_files is verify_ops.verify_moved_files
     assert file_ops.cleanup_download_folder is cleanup_ops.cleanup_download_folder
+
+
+def test_plan_storage_attempt_uses_selected_storage_location() -> None:
+    import uuid
+    from types import SimpleNamespace
+    from backend.app.modules.storage.worker.target_planning import plan_storage_attempt
+
+    subtask = SimpleNamespace(
+        id=uuid.UUID("00000000-0000-0000-0000-000000000123"),
+        movie_code="ABC-123",
+        target_locations=["A", "B"],
+        selected_storage_location="B",
+        download_path="",
+        target_paths=[],
+    )
+
+    plan = plan_storage_attempt(
+        subtask,
+        {"download_root_folder": "/Downloads", "target_folder": "/Movies"},
+        {"id": "m1", "tags": ["中字"]},
+    )
+
+    assert plan.download_folder == "/Downloads/storage_00000000-0000-0000-0000-000000000123"
+    assert plan.target_paths == ["/Movies/B/ABC-123-C"]
+    assert subtask.download_path == plan.download_folder
+    assert subtask.target_paths == plan.target_paths
+
+
+def test_append_magnet_attempt_records_status_and_success() -> None:
+    from types import SimpleNamespace
+    from backend.app.modules.storage.worker.attempts import append_magnet_attempt
+
+    subtask = SimpleNamespace(status="running", magnet_attempts=None)
+
+    append_magnet_attempt(subtask, {"id": "m1"}, success=False)
+
+    assert subtask.magnet_attempts[0]["magnet_id"] == "m1"
+    assert subtask.magnet_attempts[0]["success"] is False
+    assert subtask.magnet_attempts[0]["status"] == "running"

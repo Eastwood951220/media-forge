@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from pathlib import PurePosixPath
 
 from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
 from backend.app.modules.storage.worker.download import (
@@ -26,6 +25,8 @@ from backend.app.modules.storage.worker.target_files import (
     find_existing_target_files,
 )
 from backend.app.modules.storage.worker.timeline import classify_scanned_files
+from backend.app.modules.storage.worker.attempts import append_magnet_attempt, ordered_magnet_attempts
+from backend.app.modules.storage.worker.target_planning import plan_storage_attempt
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +40,6 @@ def _subtask_log(context, level: str, message: str, extra: dict | None = None) -
 
 def execute_current_magnet_attempt(context, magnet: dict) -> bool:
     """Execute a single magnet download attempt through the full step pipeline."""
-    from backend.app.modules.storage.tasks.policies import build_video_filename, code_folder_from_filename
-
     subtask = context.subtask
     config = context.config
     provider = context.provider
@@ -49,22 +48,13 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
         context.log("WARNING", "磁力缺少链接", {"magnet_id": magnet.get("id")}, step="prepare")
         return False
 
-    download_root = config.get("download_root_folder", "/Downloads")
-    download_folder = f"{download_root}/storage_{subtask.id}"
-    subtask.download_path = download_folder
-
     context.set_step("prepare")
+    plan = plan_storage_attempt(subtask, config, magnet)
+    download_root = plan.download_root
+    download_folder = plan.download_folder
+    preview_name = plan.preview_name
+    target_paths = plan.target_paths
     tags = list(magnet.get("tags") or [])
-    preview_name = build_video_filename(subtask.movie_code, f"{subtask.movie_code}.mp4", tags, 0, 1)
-    code_folder = code_folder_from_filename(preview_name)
-    target_root = config.get("target_folder", "/Movies")
-    target_locations = list(subtask.target_locations or [])
-    selected_location = getattr(subtask, "selected_storage_location", None) or ""
-    if selected_location:
-        target_paths = [f"{target_root}/{selected_location}/{code_folder}"]
-    else:
-        target_paths = [f"{target_root}/{location}/{code_folder}" for location in target_locations] or [f"{target_root}/{code_folder}"]
-    subtask.target_paths = target_paths
     context.log(
         "INFO",
         f"准备完成: download={download_folder}, target={target_paths[-1]}, targets={target_paths}, suffix={preview_name.replace(subtask.movie_code.upper(), '').rsplit('.', 1)[0]}",
@@ -222,8 +212,6 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
 
 def execute_subtask_pipeline(context) -> None:
     """Execute the full subtask pipeline."""
-    from backend.app.modules.storage.tasks.policies import order_magnet_candidates
-
     subtask = context.subtask
     config = context.config
 
@@ -244,27 +232,14 @@ def execute_subtask_pipeline(context) -> None:
         context.publish_subtask()
         return
 
-    magnets = [m for m in (movie.magnets or []) if m.magnet_url]
-    if not magnets:
+    # Order magnets by priority
+    ordered = ordered_magnet_attempts(movie, int(config.get("magnet_max_attempts_per_subtask", 3)))
+    if not ordered:
         subtask.status = "failed"
         subtask.error_message = "无可用磁力链接"
         subtask.finished_at = datetime.now(timezone.utc)
         context.publish_subtask()
         return
-
-    # Order magnets by priority
-    max_attempts = config.get("magnet_max_attempts_per_subtask", 3)
-    magnet_dicts = [
-        {
-            "id": str(m.id),
-            "magnet_url": m.magnet_url,
-            "tags": list(m.tags or []),
-            "weight": m.weight,
-            "selected": m.selected,
-        }
-        for m in magnets
-    ]
-    ordered = order_magnet_candidates(magnet_dicts, max_attempts)
 
     # Try each magnet
     for magnet in ordered:
@@ -291,15 +266,7 @@ def execute_subtask_pipeline(context) -> None:
             {"magnet_id": magnet.get("id"), "success": success},
         )
 
-        attempt_record = {
-            "magnet_id": magnet.get("id"),
-            "success": success,
-            "status": subtask.status,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-        attempts = list(subtask.magnet_attempts or [])
-        attempts.append(attempt_record)
-        subtask.magnet_attempts = attempts
+        append_magnet_attempt(subtask, magnet, success)
 
         if success:
             if subtask.status != "skipped":
