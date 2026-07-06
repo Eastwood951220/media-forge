@@ -12,12 +12,13 @@ from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_r
 from backend.app.modules.crawler.tasks.delete_service import (
     UnsupportedDeleteMode,
     delete_task,
-    VALID_DELETE_MODES,
 )
+from backend.app.modules.crawler.tasks.errors import raise_task_integrity_error
+from backend.app.modules.crawler.tasks.serializers import serialize_task
+from backend.app.modules.crawler.tasks.validation import check_urls_unique, ensure_delete_mode_supported
 from backend.app.repositories.crawl_task import CrawlTaskRepository
 from backend.app.schemas.crawl_task import (
     CrawlTaskCreate,
-    CrawlTaskRead,
     CrawlTaskStats,
     CrawlTaskUpdate,
     ExtractNameRequest,
@@ -39,53 +40,6 @@ router = APIRouter(prefix="/api/crawler/tasks", tags=["crawler-tasks"])
 logger = logging.getLogger(__name__)
 
 
-def _check_urls_unique(urls) -> None:
-    seen: set[str] = set()
-    for entry in urls:
-        if entry.url in seen:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"URL 重复: {entry.url}")
-        seen.add(entry.url)
-
-
-def _constraint_name_from_integrity_error(exc: IntegrityError) -> str:
-    orig = getattr(exc, "orig", None)
-    diag = getattr(orig, "diag", None)
-    constraint_name = getattr(diag, "constraint_name", None)
-    if constraint_name:
-        return str(constraint_name)
-
-    text = str(orig or exc).lower()
-    if "uq_crawl_tasks_owner_name" in text or ("crawl_tasks" in text and "owner_id" in text and "name" in text):
-        return "uq_crawl_tasks_owner_name"
-    if "uq_crawl_task_urls_task_url" in text or ("crawl_task_urls" in text and "task_id" in text and "url" in text):
-        return "uq_crawl_task_urls_task_url"
-    return ""
-
-
-def _raise_task_integrity_error(exc: IntegrityError, *, name: str | None = None) -> None:
-    constraint_name = _constraint_name_from_integrity_error(exc)
-    if constraint_name == "uq_crawl_tasks_owner_name":
-        msg = f"任务名称 '{name}' 已存在" if name else "任务名称已存在"
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg) from exc
-    if constraint_name == "uq_crawl_task_urls_task_url":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="任务 URL 重复") from exc
-    logger.exception(
-        "Unexpected crawler task integrity error, constraint=%s, orig=%s",
-        constraint_name or "<unknown>",
-        getattr(exc, "orig", exc),
-    )
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="创建任务失败，请检查数据库表结构") from exc
-
-
-def _serialize(task, latest_run=None) -> CrawlTaskRead:
-    data = CrawlTaskRead.model_validate(task)
-    data._id = data.id
-    if latest_run is not None:
-        data.last_run_at = latest_run.created_at
-        data.last_run_status = latest_run.status
-    return data
-
-
 @router.get("")
 def list_tasks(
     current_user: CurrentUser,
@@ -100,7 +54,7 @@ def list_tasks(
     latest_runs = repo.get_latest_runs_by_task_ids([row.id for row in rows])
     return paginated(
         rows=[
-            _serialize(row, latest_runs.get(row.id)).model_dump(mode="json")
+            serialize_task(row, latest_runs.get(row.id)).model_dump(mode="json")
             for row in rows
         ],
         total=total,
@@ -160,7 +114,7 @@ def get_task(task_id: uuid.UUID, current_user: CurrentUser, db: Session = Depend
     task = repo.get_owned(task_id, current_user.id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    return success(data=_serialize(task).model_dump(mode="json"))
+    return success(data=serialize_task(task).model_dump(mode="json"))
 
 
 @router.post("/{task_id}/run", status_code=status.HTTP_201_CREATED)
@@ -190,7 +144,7 @@ def create_task(data: CrawlTaskCreate, current_user: CurrentUser, db: Session = 
     repo = CrawlTaskRepository(db)
     if repo.get_by_name(current_user.id, data.name):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"任务名称 '{data.name}' 已存在")
-    _check_urls_unique(data.urls)
+    check_urls_unique(data.urls)
     try:
         created = repo.create_with_urls(
             owner_id=current_user.id,
@@ -201,8 +155,8 @@ def create_task(data: CrawlTaskCreate, current_user: CurrentUser, db: Session = 
         )
     except IntegrityError as exc:
         db.rollback()
-        _raise_task_integrity_error(exc, name=data.name)
-    return success(data=_serialize(created).model_dump(mode="json"))
+        raise_task_integrity_error(exc, name=data.name)
+    return success(data=serialize_task(created).model_dump(mode="json"))
 
 
 @router.put("/{task_id}")
@@ -227,15 +181,15 @@ def update_task(
         setattr(task, field, value)
 
     if data.urls is not None:
-        _check_urls_unique(data.urls)
+        check_urls_unique(data.urls)
         repo.replace_urls(task, data.urls)
 
     try:
         updated = repo.update(task)
     except IntegrityError as exc:
         db.rollback()
-        _raise_task_integrity_error(exc, name=update_data.get("name") or task.name)
-    return success(data=_serialize(updated).model_dump(mode="json"))
+        raise_task_integrity_error(exc, name=update_data.get("name") or task.name)
+    return success(data=serialize_task(updated).model_dump(mode="json"))
 
 
 @router.delete("/{task_id}")
@@ -260,11 +214,7 @@ def delete_task_endpoint(
             detail="只有空闲中的任务才能删除",
         )
 
-    if mode not in VALID_DELETE_MODES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid delete mode: {mode}. Valid modes: {', '.join(VALID_DELETE_MODES)}",
-        )
+    ensure_delete_mode_supported(mode)
 
     provider = None
     client = None
