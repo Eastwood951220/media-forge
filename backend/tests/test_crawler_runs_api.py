@@ -24,6 +24,9 @@ class FakeRuntime:
     def enqueue_run(self, run_id: str) -> None:
         self.enqueued.append(run_id)
 
+    def claim_next_run(self):
+        return self.enqueued.pop(0) if self.enqueued else None
+
     def queue_status(self):
         return {"queue_size": len(self.enqueued), "is_running": False, "current_run_id": None, "stop_requested": False}
 
