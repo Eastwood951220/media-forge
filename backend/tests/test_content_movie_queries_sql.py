@@ -165,8 +165,8 @@ def test_postgresql_tag_filter_uses_text_type_not_varchar() -> None:
     )
     sql = str(statement.compile(dialect=postgresql.dialect()))
 
-    # Should use TEXT type, not VARCHAR
-    assert "::VARCHAR" not in sql or "::text" in sql.lower()
+    # Must NOT contain ::VARCHAR - psycopg binds str as VARCHAR which breaks text[] @> operator
+    assert "::VARCHAR" not in sql
     # Should use array containment operator
     assert "@>" in sql
 

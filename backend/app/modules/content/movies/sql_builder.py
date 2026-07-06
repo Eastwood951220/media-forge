@@ -4,7 +4,7 @@ from datetime import date
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, Text, and_, false, func, not_, or_, select
+from sqlalchemy import Select, Text, and_, cast, false, func, not_, or_, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session, selectinload
 
@@ -48,7 +48,12 @@ def _parse_uuid(value: str | None) -> UUID | None:
 
 
 def _postgres_array_contains(column: Any, value: Any, item_type: Any):
-    return column.op("@>")(postgresql.array([value], type_=item_type))
+    """Check if a PostgreSQL array column contains a value.
+
+    Uses cast() to explicitly convert the value to the target type,
+    preventing psycopg from binding Python str as VARCHAR.
+    """
+    return column.op("@>")(postgresql.array([cast(value, item_type)]))
 
 
 def requires_python_fallback(db: Session, filters: MovieListFilters) -> bool:
