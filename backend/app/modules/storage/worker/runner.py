@@ -6,6 +6,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.models.storage_task import StorageMainTask, StorageSubTask
 from backend.app.modules.storage.tasks.logs import write_storage_subtask_log  # noqa: F401
+from backend.app.modules.storage.worker.movie_sync import sync_movie_storage_after_subtask
+from backend.app.modules.storage.worker.provider_session import (
+    close_storage_provider,
+    mark_provider_creation_failed,
+    open_storage_provider,
+)
 
 logger = logging.getLogger(__name__)
 _worker_lock = threading.Lock()
@@ -75,44 +81,6 @@ def _publish_main_with_recomputed_counts(db: Session, repository, main_task: Sto
     publish_storage_main_updated(main_task)
 
 
-def _sync_movie_storage_after_subtask(db: Session, context) -> None:
-    from backend.app.modules.content.movies.storage_status import (
-        STORAGE_STATUS_NOT_STORED,
-        set_movie_storage_status,
-        sync_movie_storage_status,
-        target_folder_specs_from_subtask,
-    )
-    from backend.app.modules.storage.tasks.events import publish_movie_storage_updated
-    from shared.database.models.content import Movie
-
-    movie = db.get(Movie, context.subtask.movie_id)
-    if movie is None:
-        return
-    if context.subtask.status == "completed":
-        sync_movie_storage_status(
-            db=db,
-            movie=movie,
-            provider=context.provider,
-            config=context.config,
-            source="storage_worker",
-            target_folders=target_folder_specs_from_subtask(context.subtask),
-            main_task_id=str(context.main_task.id),
-            sub_task_id=str(context.subtask.id),
-            storage_mode=context.subtask.storage_mode,
-        )
-    elif context.subtask.status in {"failed", "skipped"}:
-        set_movie_storage_status(
-            movie,
-            STORAGE_STATUS_NOT_STORED,
-            source="storage_worker",
-            main_task_id=str(context.main_task.id),
-            sub_task_id=str(context.subtask.id),
-            storage_mode=context.subtask.storage_mode,
-        )
-    db.flush()
-    publish_movie_storage_updated(db, context.owner_id, movie.id)
-
-
 def process_main_task(runtime, provider_factory, config_service, task_id: str) -> bool:
     from backend.app.modules.storage.runtime.redis_state import StorageRuntimeState
     from backend.app.modules.storage.tasks.events import publish_storage_main_updated
@@ -160,20 +128,10 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
 
             # Create provider from config
             try:
-                client = provider_factory.create(config)
-                from shared.integrations.storage_providers.clouddrive2.gateway import CloudDrive2Gateway
-                provider = CloudDrive2Gateway(client)
+                client, provider = open_storage_provider(provider_factory, config)
             except Exception as exc:
-                subtask.status = "failed"
-                subtask.error_message = f"创建 CloudDrive2 客户端失败: {exc}"
-                subtask.finished_at = datetime.now(timezone.utc)
+                mark_provider_creation_failed(subtask, str(main_task.id), exc)
                 has_failure = True
-                write_storage_subtask_log(
-                    str(subtask.id),
-                    "ERROR",
-                    f"创建 CloudDrive2 客户端失败: {exc}",
-                    {"main_task_id": str(main_task.id)},
-                )
                 _publish_main_with_recomputed_counts(db, repository, main_task)
                 continue
 
@@ -200,7 +158,7 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
                     event="subtask_finished",
                 )
                 context.publish_subtask()
-                _sync_movie_storage_after_subtask(db, context)
+                sync_movie_storage_after_subtask(db, context)
             except Exception as exc:
                 subtask.status = "failed"
                 subtask.error_message = str(exc)
@@ -217,15 +175,12 @@ def process_main_task(runtime, provider_factory, config_service, task_id: str) -
                     event="subtask_failed",
                 )
                 context.publish_subtask()
-                _sync_movie_storage_after_subtask(db, context)
+                sync_movie_storage_after_subtask(db, context)
                 logger.exception("Storage subtask %s failed", subtask.id)
 
             _publish_main_with_recomputed_counts(db, repository, main_task)
 
-            # Close client
-            close = getattr(client, "close", None)
-            if callable(close):
-                close()
+            close_storage_provider(client)
 
         repository.recompute_counts(main_task)
 

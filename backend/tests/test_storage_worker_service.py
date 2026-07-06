@@ -369,3 +369,23 @@ def test_storage_worker_syncs_movie_to_stored_after_successful_subtask(db_sessio
     refreshed = db_session.get(Movie, movie.id)
     assert refreshed.storage_summary["storage_status"] == "stored"
     assert refreshed.storage_summary["locations"][0]["path"] == "/Movies/A/WORK-001/WORK-001.mp4"
+
+
+def test_storage_provider_session_closes_client() -> None:
+    from backend.app.modules.storage.worker.provider_session import close_storage_provider
+
+    class Client:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    client = Client()
+    close_storage_provider(client)
+    assert client.closed is True
+
+
+def test_movie_sync_module_exports_worker_sync_function() -> None:
+    from backend.app.modules.storage.worker.movie_sync import sync_movie_storage_after_subtask
+
+    assert callable(sync_movie_storage_after_subtask)
