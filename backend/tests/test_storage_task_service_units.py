@@ -115,3 +115,34 @@ def test_storage_task_creator_creates_skipped_subtask_for_movie_without_magnets(
     assert main.alias == "manual"
     assert main.subtasks[0].status == "skipped"
     assert main.subtasks[0].skip_reason == "no_magnets"
+
+
+def test_storage_task_service_create_single_push_uses_creator_path(db_session, test_user, monkeypatch) -> None:
+    from backend.app.modules.storage.config.service import StorageConfigService
+    from backend.app.modules.storage.tasks.schemas import StorageSinglePushRequest
+    from backend.app.modules.storage.tasks.service import StorageTaskService
+    from shared.database.models.content import Movie
+
+    movie = Movie(code="SVC-001", source_name="Service Movie")
+    db_session.add(movie)
+    db_session.flush()
+
+    class ConfigService:
+        provider_factory = None
+
+        def get_raw_config(self):
+            return {"target_folder": "/Movies"}
+
+    service = StorageTaskService(db_session, ConfigService(), runtime=None)
+    body = StorageSinglePushRequest(
+        movie_id=movie.id,
+        alias="service-path",
+        storage_mode="single",
+        selected_storage_location=None,
+    )
+
+    main_task = service.create_single_push(body, test_user.id)
+
+    assert main_task.alias == "service-path"
+    assert main_task.subtasks[0].status == "skipped"
+    assert main_task.subtasks[0].skip_reason == "no_magnets"
