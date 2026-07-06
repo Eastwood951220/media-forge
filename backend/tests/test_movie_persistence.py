@@ -143,3 +143,27 @@ def test_sync_movie_filters_rebuilds_filter_cache() -> None:
     assert session.scalar(select(MovieFilter).where(MovieFilter.type == "actor", MovieFilter.name == "演员A")) is not None
 
     session.close()
+
+
+def test_magnet_identity_and_scoring_helpers() -> None:
+    from backend.app.modules.content.movies.magnet_identity import build_magnet_dedupe_key, extract_info_hash
+    from backend.app.modules.content.movies.magnet_scoring import compute_magnet_weight, parse_size_mb
+
+    assert extract_info_hash("magnet:?xt=urn:btih:ABCDEF") == "abcdef"
+    assert parse_size_mb("1.5 GB") == 1536
+    assert parse_size_mb("1024 KB") == 1
+    assert parse_size_mb("1 TB") == 1024 * 1024
+    assert build_magnet_dedupe_key("movie-1", {"name": "a", "size_text": "1 GB"})
+    assert compute_magnet_weight({"name": "ABC 中文字幕", "size_text": "3 GB", "file_count": 1}) > compute_magnet_weight({"name": "ABC", "size_text": "500 MB", "file_count": 10})
+
+
+def test_movie_persistence_facade_exports_existing_public_functions() -> None:
+    from backend.app.modules.content.movies import persistence
+    from backend.app.modules.content.movies import magnet_identity, magnet_persistence, magnet_scoring, movie_persistence, filter_sync
+
+    assert persistence.extract_info_hash is magnet_identity.extract_info_hash
+    assert persistence.compute_magnet_weight is magnet_scoring.compute_magnet_weight
+    assert persistence.upsert_magnets is magnet_persistence.upsert_magnets
+    assert persistence.upsert_movie is movie_persistence.upsert_movie
+    assert persistence.append_source_task_id is movie_persistence.append_source_task_id
+    assert persistence.sync_movie_filters is filter_sync.sync_movie_filters
