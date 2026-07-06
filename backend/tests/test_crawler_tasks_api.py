@@ -21,3 +21,19 @@ def test_check_urls_unique_rejects_duplicate_url() -> None:
 
     assert exc.value.status_code == 400
     assert "URL 重复" in exc.value.detail
+
+
+def test_extract_task_name_from_search_url_without_scraper() -> None:
+    from backend.app.modules.crawler.tasks.name_extractor import extract_task_name
+    from backend.app.schemas.crawl_task import ExtractNameRequest
+
+    name = extract_task_name(ExtractNameRequest(url="https://javdb.com/search?q=ABC-123&f=all", url_type="search"))
+
+    assert name == "ABC-123"
+
+
+def test_open_delete_provider_returns_empty_session_for_task_only() -> None:
+    from backend.app.modules.crawler.tasks.provider import open_delete_provider
+
+    with open_delete_provider("task_only") as provider:
+        assert provider is None

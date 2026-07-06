@@ -72,7 +72,7 @@ def test_task_run_endpoint_creates_queued_run(client: TestClient, admin_user, mo
     task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
     task_id = task_response.json()["data"]["id"]
     runtime = FakeRuntime()
-    monkeypatch.setattr("backend.app.modules.crawler.tasks.router.get_runtime_state", lambda: runtime)
+    monkeypatch.setattr("backend.app.modules.crawler.tasks.service.get_runtime_state", lambda: runtime)
 
     response = client.post(
         f"/api/crawler/tasks/{task_id}/run",
@@ -92,7 +92,7 @@ def test_run_list_and_detail_endpoints(client: TestClient, admin_user, monkeypat
     headers = auth_headers(client, admin_user)
     task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
     task_id = task_response.json()["data"]["id"]
-    monkeypatch.setattr("backend.app.modules.crawler.tasks.router.get_runtime_state", lambda: FakeRuntime())
+    monkeypatch.setattr("backend.app.modules.crawler.tasks.service.get_runtime_state", lambda: FakeRuntime())
 
     run_response = client.post(f"/api/crawler/tasks/{task_id}/run", json={"crawl_mode": "full"}, headers=headers)
     run_id = run_response.json()["data"]["id"]
