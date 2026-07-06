@@ -11,6 +11,19 @@ from backend.app.core.dependencies import get_redis
 from shared.database.session import get_session_factory
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
+from backend.app.modules.crawler.runtime.details import (
+    RESTARTABLE_DETAIL_STATUSES,
+    clear_run_detail_tasks,
+    count_run_detail_tasks,
+    has_detail_phase_started,
+    reset_unfinished_detail_tasks_to_pending,
+)
+from backend.app.modules.crawler.runtime.events import (
+    append_run_log_for_run,
+    publish_queue_updated,
+    publish_run_detail_updated,
+    publish_run_updated,
+)
 from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
 from backend.app.modules.crawler.runtime.source_task_names import (
     find_existing_movie_codes,
@@ -31,15 +44,10 @@ from backend.app.modules.crawler.tasks.runtime_status import (
 
 logger = logging.getLogger(__name__)
 
-UNFINISHED_DETAIL_STATUSES = {"pending_crawl", "crawl_failed", "save_failed"}
-
 
 def _read_incremental_threshold_from_conf() -> int:
     """Read INCREMENTAL_EXIST_THRESHOLD from crawler.conf."""
     return read_incremental_threshold_from_conf()
-RESTARTABLE_DETAIL_STATUSES = UNFINISHED_DETAIL_STATUSES
-TERMINAL_DETAIL_STATUSES = {"saved", "skipped"}
-DETAIL_PHASE_STARTED_STATUSES = {"saved", "crawl_failed", "save_failed"}
 
 _worker_lock = threading.Lock()
 _worker_running = False
@@ -61,43 +69,6 @@ def cleanup_interrupted_runs(db: Session, runtime: CrawlerRuntimeState) -> int:
         publish_task_status_updated(db, run)
     db.commit()
     return len(rows)
-
-
-def has_detail_phase_started(db: Session, run: CrawlRun) -> bool:
-    return db.query(CrawlRunDetailTask.id).filter(
-        CrawlRunDetailTask.run_id == run.id,
-        (
-            CrawlRunDetailTask.status.in_(DETAIL_PHASE_STARTED_STATUSES)
-            | CrawlRunDetailTask.crawled_at.isnot(None)
-            | CrawlRunDetailTask.saved_at.isnot(None)
-        ),
-    ).first() is not None
-
-
-def reset_unfinished_detail_tasks_to_pending(
-    db: Session,
-    run: CrawlRun,
-) -> list[CrawlRunDetailTask]:
-    details = (
-        db.query(CrawlRunDetailTask)
-        .filter(
-            CrawlRunDetailTask.run_id == run.id,
-            CrawlRunDetailTask.status.notin_(TERMINAL_DETAIL_STATUSES),
-        )
-        .order_by(CrawlRunDetailTask.created_at.asc())
-        .all()
-    )
-    for detail in details:
-        detail.status = "pending_crawl"
-        detail.error = None
-        detail.crawled_at = None
-        detail.saved_at = None
-    db.flush()
-    return details
-
-
-def clear_run_detail_tasks(db: Session, run: CrawlRun) -> None:
-    db.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).delete(synchronize_session=False)
 
 
 class CrawlerRunService:
@@ -239,143 +210,8 @@ def process_run(db_factory: sessionmaker, runtime: CrawlerRuntimeState, run_id: 
         db.close()
 
 
-def _append_run_log(run_id: str, message: str, level: str = "INFO", **context: Any) -> dict[str, Any] | None:
-    from backend.app.modules.crawler.runs.logs import append_run_log, build_run_log
-
-    entry = build_run_log(level, message, **context)
-    try:
-        append_run_log(run_id, entry)
-    except Exception as exc:
-        logger.warning("Failed to append crawler run log for %s: %s", run_id, exc)
-        return None
-    return entry
-
-
-def _run_owner_id(db: Session, run: CrawlRun) -> str | None:
-    if run.task_id is None:
-        return None
-    task = db.get(CrawlTask, run.task_id)
-    return str(task.owner_id) if task is not None else None
-
-
-def publish_run_updated(db: Session, run: CrawlRun) -> None:
-    from backend.app.modules.realtime.bus import event_bus as realtime_bus
-    from backend.app.modules.realtime.schemas import make_realtime_event
-
-    owner_id = _run_owner_id(db, run)
-    if owner_id is None:
-        return
-    payload = {
-        "id": str(run.id),
-        "task_id": str(run.task_id) if run.task_id else None,
-        "task_name": run.task_name,
-        "status": run.status,
-        "crawl_mode": run.crawl_mode,
-        "error": run.error,
-        "logs": [],
-    }
-    realtime_bus.publish(
-        make_realtime_event(
-            event="crawler.run.updated",
-            scope="crawler.run",
-            owner_id=owner_id,
-            resource_id=str(run.id),
-            payload=payload,
-        )
-    )
-    publish_task_status_updated(db, run)
-
-
-def publish_run_detail_updated(
-    db: Session,
-    run: CrawlRun,
-    details: list[CrawlRunDetailTask],
-) -> None:
-    from backend.app.modules.realtime.bus import event_bus as realtime_bus
-    from backend.app.modules.realtime.schemas import make_realtime_event
-
-    owner_id = _run_owner_id(db, run)
-    if owner_id is None:
-        return
-    realtime_bus.publish(
-        make_realtime_event(
-            event="crawler.run.detail.updated",
-            scope="crawler.run",
-            owner_id=owner_id,
-            resource_id=str(run.id),
-            payload={
-                "run_id": str(run.id),
-                "tasks": [
-                    {
-                        "id": str(detail.id),
-                        "run_id": str(detail.run_id),
-                        "task_name": detail.task_name,
-                        "code": detail.code,
-                        "source_url": detail.source_url,
-                        "source_name": detail.source_name,
-                        "status": detail.status,
-                        "error": detail.error,
-                        "created_at": detail.created_at.isoformat() if detail.created_at else None,
-                    }
-                    for detail in details
-                ],
-            },
-        )
-    )
-
-
-def publish_queue_updated(db: Session, runtime: CrawlerRuntimeState, owner_id: str | None = None) -> None:
-    from backend.app.modules.realtime.bus import event_bus as realtime_bus
-    from backend.app.modules.realtime.schemas import make_realtime_event
-
-    if owner_id is None:
-        return
-    realtime_bus.publish(
-        make_realtime_event(
-            event="crawler.queue.updated",
-            scope="crawler.queue",
-            owner_id=owner_id,
-            payload=runtime.queue_status(),
-        )
-    )
-
-
-def append_run_log_for_run(
-    db: Session,
-    run: CrawlRun,
-    message: str,
-    level: str = "INFO",
-    **context: Any,
-) -> None:
-    from backend.app.modules.crawler.runs.logs import append_run_log, build_run_log
-    from backend.app.modules.realtime.bus import event_bus as realtime_bus
-    from backend.app.modules.realtime.schemas import make_realtime_event
-
-    entry = build_run_log(level, message, **context)
-    append_run_log(str(run.id), entry)
-    owner_id = _run_owner_id(db, run)
-    if owner_id is None:
-        return
-    realtime_bus.publish(
-        make_realtime_event(
-            event="crawler.run.log.appended",
-            scope="crawler.run",
-            owner_id=owner_id,
-            resource_id=str(run.id),
-            payload={"run_id": str(run.id), "log": entry},
-        )
-    )
-
-
 def _persist_crawled_item(db: Session, item_data: dict[str, Any]) -> uuid.UUID:
     return upsert_movie_with_magnets(db, item_data)
-
-
-def _count_run_detail_tasks(db: Session, run_id: uuid.UUID, status: str | None = None) -> int:
-    query = db.query(func.count(CrawlRunDetailTask.id)).filter(CrawlRunDetailTask.run_id == run_id)
-    if status is not None:
-        query = query.filter(CrawlRunDetailTask.status == status)
-    return int(query.scalar() or 0)
 
 
 def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> None:
@@ -599,11 +435,11 @@ def _execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> No
             if reset_details:
                 publish_run_detail_updated(db, run, reset_details)
 
-        total_count = _count_run_detail_tasks(db, run.id)
-        saved_count = _count_run_detail_tasks(db, run.id, "saved")
-        save_failed_count = _count_run_detail_tasks(db, run.id, "save_failed")
-        crawl_failed_count = _count_run_detail_tasks(db, run.id, "crawl_failed")
-        skipped_count = _count_run_detail_tasks(db, run.id, "skipped")
+        total_count = count_run_detail_tasks(db, run.id)
+        saved_count = count_run_detail_tasks(db, run.id, "saved")
+        save_failed_count = count_run_detail_tasks(db, run.id, "save_failed")
+        crawl_failed_count = count_run_detail_tasks(db, run.id, "crawl_failed")
+        skipped_count = count_run_detail_tasks(db, run.id, "skipped")
         run.result = {
             **(result or {}),
             "total_tasks": total_count,

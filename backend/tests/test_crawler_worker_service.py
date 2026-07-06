@@ -503,3 +503,13 @@ def test_execute_run_does_not_treat_list_stage_pending_details_as_detail_restart
     session.expire_all()
     codes = [row.code for row in session.query(CrawlRunDetailTask).order_by(CrawlRunDetailTask.created_at.asc()).all()]
     assert "LIST-001" in codes
+
+
+def test_crawler_runtime_service_keeps_public_runtime_imports() -> None:
+    from backend.app.modules.crawler.runtime import service
+
+    assert callable(service.process_next_run)
+    assert callable(service.process_run)
+    assert callable(service.publish_run_updated)
+    assert callable(service.publish_run_detail_updated)
+    assert callable(service.append_run_log_for_run)
