@@ -26,8 +26,17 @@ function unique(values: string[] | undefined) {
 
 export function createMovieColumns({ onViewDetail, onPush, onDelete }: MovieColumnsOptions): ColumnsType<Movie> {
   return [
-    { title: '番号', dataIndex: 'code', key: 'code', width: 120 },
-    { title: '标题', dataIndex: 'source_name', key: 'source_name', ellipsis: true },
+    { title: '番号',
+      dataIndex: 'code',
+      key: 'code',
+      width: 120
+    },
+    { title: '标题',
+      dataIndex: 'source_name',
+      key: 'source_name',
+      width: 200,
+      ellipsis: true
+    },
     {
       title: '评分',
       dataIndex: 'rating',
