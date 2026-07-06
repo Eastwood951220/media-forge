@@ -524,3 +524,12 @@ def test_search_result_original_path_failure_is_rejected() -> None:
 
     assert result.accepted_files == []
     assert result.log_context["rejected_files"][0]["reason"] == "missing_original_path"
+
+
+def test_file_finder_facade_exports_public_search_functions() -> None:
+    from backend.app.modules.storage.worker import file_finder
+
+    assert callable(file_finder.find_listed_video_files)
+    assert callable(file_finder.find_scoped_video_files)
+    assert callable(file_finder.find_existing_video_files)
+    assert callable(file_finder.find_recovery_video_files)
