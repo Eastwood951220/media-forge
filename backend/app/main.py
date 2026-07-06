@@ -2,9 +2,13 @@ import logging
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
 
 from backend.app.core.config import get_settings
 from backend.app.core.dependencies import close_redis
@@ -28,6 +32,9 @@ from shared.runtime_config import load_runtime_config, runtime_config_exists
 # -- Logging setup --
 
 settings = get_settings()
+
+FRONTEND_STATIC_DIR = Path(__file__).resolve().parent / "static"
+FRONTEND_INDEX_FILE = "index.html"
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -123,6 +130,35 @@ app.include_router(storage_config_router)
 app.include_router(storage_tasks_router)
 
 
-@app.get("/")
-def root() -> dict[str, str]:
-    return {"message": f"{settings.app_name} API", "version": settings.app_version}
+def configure_frontend(
+    target_app: FastAPI,
+    static_dir: Path = FRONTEND_STATIC_DIR,
+) -> None:
+    """Serve built frontend assets when the Vite dist output is present."""
+    index_file = static_dir / FRONTEND_INDEX_FILE
+    assets_dir = static_dir / "assets"
+    if not index_file.exists():
+        return
+
+    if assets_dir.exists():
+        target_app.mount(
+            "/assets",
+            StaticFiles(directory=assets_dir),
+            name="frontend-assets",
+        )
+
+    @target_app.get("/", include_in_schema=False)
+    def frontend_root() -> FileResponse:
+        return FileResponse(index_file)
+
+    @target_app.get("/{full_path:path}", include_in_schema=False)
+    def frontend_fallback(full_path: str) -> Response:
+        if full_path == "api" or full_path.startswith("api/"):
+            return Response(status_code=404, media_type="application/json", content='{"detail":"Not Found"}')
+        requested_file = static_dir / full_path
+        if requested_file.is_file():
+            return FileResponse(requested_file)
+        return FileResponse(index_file)
+
+
+configure_frontend(app)
