@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
 import {
-  Alert,
   App,
   Button,
   Card,
-  Descriptions,
   Form,
   Input,
   InputNumber,
@@ -25,107 +23,11 @@ import {
   type StorageConfig,
   type StorageTestResult,
 } from '@/api/storage/storageConfig'
+import SectionTitle from './components/SectionTitle'
+import SelectTags from './components/SelectTags'
+import TestResultCard from './components/TestResultCard'
+import { getErrorMessage } from './utils/error'
 import styles from './StorageConfigPage.module.less'
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  return '操作失败'
-}
-
-function SectionTitle({ icon, text }: { icon: React.ReactNode; text: string }) {
-  return (
-    <span className={styles.sectionTitle}>
-      {icon}
-      {text}
-    </span>
-  )
-}
-
-function SelectTags({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value?: string[]
-  onChange?: (val: string[]) => void
-  placeholder?: string
-}) {
-  const [input, setInput] = useState('')
-
-  const handleInputConfirm = () => {
-    const trimmed = input.trim()
-    if (trimmed && !value?.includes(trimmed)) {
-      onChange?.([...(value ?? []), trimmed])
-    }
-    setInput('')
-  }
-
-  const handleClose = (removed: string) => {
-    onChange?.(value?.filter((item) => item !== removed) ?? [])
-  }
-
-  return (
-    <div>
-      <div className={styles.tagList}>
-        {value?.map((tag) => (
-          <Tag key={tag} closable onClose={() => handleClose(tag)}>
-            {tag}
-          </Tag>
-        ))}
-      </div>
-      <Input
-        size="small"
-        placeholder={placeholder}
-        value={input}
-        onBlur={handleInputConfirm}
-        onChange={(event) => setInput(event.target.value)}
-        onPressEnter={handleInputConfirm}
-      />
-    </div>
-  )
-}
-
-function TestResultCard({ result }: { result: StorageTestResult }) {
-  const items = [
-    { label: 'gRPC 连接', value: result.grpc_reachable, error: result.grpc_error },
-    { label: 'API 授权', value: result.api_authorized, error: result.api_error },
-    { label: '下载目录', value: result.download_root_exists, error: result.download_root_error },
-    { label: '目标文件夹', value: result.target_folder_accessible, error: result.target_folder_error },
-  ]
-  const failedItems = items.filter((item) => !item.value && item.error)
-  const allPassed = items.every((item) => item.value)
-
-  return (
-    <Card title="测试结果" className={styles.resultCard} size="small">
-      <Descriptions column={2} size="small">
-        {items.map((item) => (
-          <Descriptions.Item key={item.label} label={item.label}>
-            <Tag color={item.value ? 'success' : 'error'}>{item.value ? '通过' : '失败'}</Tag>
-          </Descriptions.Item>
-        ))}
-      </Descriptions>
-
-      {failedItems.length > 0 && (
-        <Alert
-          type="error"
-          message="错误详情"
-          description={
-            <ul>
-              {failedItems.map((item) => (
-                <li key={item.label}>
-                  {item.label}: {item.error}
-                </li>
-              ))}
-            </ul>
-          }
-          showIcon
-        />
-      )}
-
-      {allPassed && <Alert type="success" message="所有测试通过" showIcon />}
-    </Card>
-  )
-}
 
 export default function StorageConfigPage() {
   const { message } = App.useApp()
