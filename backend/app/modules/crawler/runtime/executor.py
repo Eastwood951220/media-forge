@@ -14,6 +14,7 @@ from backend.app.modules.content.movies.persistence import (
     upsert_movie_with_magnets,
 )
 from backend.app.modules.crawler.runtime.config import read_incremental_threshold_from_conf
+from backend.app.modules.crawler.runtime.detail_index import DetailTaskIndex
 from backend.app.modules.crawler.runtime.details import (
     RESTARTABLE_DETAIL_STATUSES,
     count_run_detail_tasks,
@@ -27,6 +28,7 @@ from backend.app.modules.crawler.runtime.events import (
     publish_run_detail_updated,
     publish_run_updated,
 )
+from backend.app.modules.crawler.runtime.progress import increment_progress, new_progress, write_progress
 from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
 from backend.app.modules.crawler.runtime.source_task_names import (
     find_existing_movie_codes,
@@ -49,25 +51,8 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
         raise ValueError("任务没有URL")
 
     # Track progress
-    progress = {"total": 0, "saved": 0, "failed": 0, "skipped": 0, "save_failed": 0}
-    detail_tasks_by_code: dict[str, CrawlRunDetailTask] = {}
-    detail_tasks_by_source_url: dict[str, CrawlRunDetailTask] = {}
-
-    def remember_detail(detail: CrawlRunDetailTask) -> None:
-        if detail.code:
-            detail_tasks_by_code[detail.code] = detail
-        if detail.source_url:
-            detail_tasks_by_source_url[detail.source_url] = detail
-
-    def find_detail(task_info: dict[str, Any], item_data: dict[str, Any] | None = None) -> CrawlRunDetailTask | None:
-        item_data = item_data or {}
-        code = item_data.get("code") or task_info.get("code")
-        source_url = task_info.get("url") or task_info.get("source_url") or item_data.get("source_url")
-        if code and code in detail_tasks_by_code:
-            return detail_tasks_by_code[code]
-        if source_url and source_url in detail_tasks_by_source_url:
-            return detail_tasks_by_source_url[source_url]
-        return None
+    progress = new_progress()
+    detail_index = DetailTaskIndex()
 
     def on_tasks_batch_created(items: list[dict[str, Any]]) -> None:
         skipped_count = 0
@@ -75,7 +60,7 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
         for item in items:
             is_skipped = item.get("status") == "skipped"
             reason = item.get("reason") if is_skipped else None
-            detail = find_detail(item)
+            detail = detail_index.find(item)
             if detail is None:
                 detail = CrawlRunDetailTask(
                     run_id=run.id,
@@ -95,22 +80,22 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
                 detail.item_data = None
                 detail.crawled_at = None
                 detail.saved_at = None
-            remember_detail(detail)
+            detail_index.remember(detail)
             created_details.append(detail)
             if is_skipped:
                 skipped_count += 1
                 if append_source_task_id(db, item.get("code"), task.id):
                     append_run_log_for_run(db, run, f"已存在影片追加任务ID: {item.get('code')} -> {task.id}", "INFO", code=item.get("code"))
-        progress["total"] += len(items)
-        progress["skipped"] += skipped_count
-        runtime.write_progress(str(run.id), progress)
+        increment_progress(progress, "total", len(items))
+        increment_progress(progress, "skipped", skipped_count)
+        write_progress(runtime, str(run.id), progress)
         db.commit()
         publish_run_detail_updated(db, run, created_details)
         if items:
             append_run_log_for_run(db, run, f"创建子任务 {len(items)} 条，跳过 {skipped_count} 条")
 
     def on_item_saved(task_info: dict[str, Any], item_data: dict[str, Any]) -> None:
-        detail = find_detail(task_info, item_data)
+        detail = detail_index.find(task_info, item_data)
         code = item_data.get("code") or task_info.get("code") or "-"
         # Inject source_task_ids into item_data for persistence
         item_data_with_task_ids = {**item_data, "source_task_ids": [task.id]}
@@ -122,7 +107,7 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
                 detail.error = None
                 detail.crawled_at = datetime.now()
                 detail.saved_at = datetime.now()
-            progress["saved"] += 1
+            increment_progress(progress, "saved")
             append_run_log_for_run(db, run, f"入库成功: {code}", "INFO", code=code, movie_id=str(movie_id))
         except Exception as exc:
             if detail:
@@ -131,28 +116,28 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
                 detail.error = str(exc)[:500]
                 detail.crawled_at = datetime.now()
                 detail.saved_at = None
-            progress["save_failed"] += 1
+            increment_progress(progress, "save_failed")
             append_run_log_for_run(db, run, f"入库失败: {code}: {exc}", "ERROR", code=code)
-        runtime.write_progress(str(run.id), progress)
+        write_progress(runtime, str(run.id), progress)
         db.commit()
         if detail:
             publish_run_detail_updated(db, run, [detail])
 
     def on_detail_failed(task_info: dict[str, Any], error: str) -> None:
-        detail = find_detail(task_info)
+        detail = detail_index.find(task_info)
         if detail:
             detail.status = "crawl_failed"
             detail.error = error[:500]
             detail.crawled_at = datetime.now()
-        progress["failed"] += 1
-        runtime.write_progress(str(run.id), progress)
+        increment_progress(progress, "failed")
+        write_progress(runtime, str(run.id), progress)
         db.commit()
         if detail:
             publish_run_detail_updated(db, run, [detail])
         append_run_log_for_run(db, run, f"爬取失败: {task_info.get('code') or task_info.get('url')}: {error}", "ERROR")
 
     def on_item_already_exists(task_info: dict[str, Any]) -> None:
-        detail = find_detail(task_info)
+        detail = detail_index.find(task_info)
         code = task_info.get("code")
         was_skipped = detail is not None and detail.status == "skipped"
         if detail:
@@ -162,8 +147,8 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
             detail.saved_at = None
         append_source_task_id(db, code, task.id)
         if not was_skipped:
-            progress["skipped"] += 1
-        runtime.write_progress(str(run.id), progress)
+            increment_progress(progress, "skipped")
+        write_progress(runtime, str(run.id), progress)
         db.commit()
         if detail:
             publish_run_detail_updated(db, run, [detail])
@@ -192,7 +177,7 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
         .all()
     )
     for detail in existing_details:
-        remember_detail(detail)
+        detail_index.remember(detail)
 
     # Execute crawl
     try:

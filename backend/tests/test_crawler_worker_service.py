@@ -512,3 +512,43 @@ def test_crawler_runtime_service_keeps_public_runtime_imports() -> None:
     assert callable(service.process_run)
     assert callable(service.publish_run_updated)
     assert callable(service.publish_run_detail_updated)
+
+
+def test_detail_task_index_finds_by_code_and_source_url() -> None:
+    import uuid
+    from backend.app.models.crawl_run import CrawlRunDetailTask
+    from backend.app.modules.crawler.runtime.detail_index import DetailTaskIndex
+
+    detail = CrawlRunDetailTask(
+        run_id=uuid.uuid4(),
+        task_name="task",
+        code="ABC-001",
+        source_url="https://example.test/abc",
+        source_name="Movie",
+        status="pending_crawl",
+    )
+    index = DetailTaskIndex()
+    index.remember(detail)
+
+    assert index.find({"code": "ABC-001"}) is detail
+    assert index.find({"url": "https://example.test/abc"}) is detail
+    assert index.find({"code": "ABC-002"}) is None
+
+
+def test_progress_helpers_write_runtime_progress() -> None:
+    from backend.app.modules.crawler.runtime.progress import increment_progress, new_progress, write_progress
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.writes: list[tuple[str, dict[str, int]]] = []
+
+        def write_progress(self, run_id: str, progress: dict[str, int]) -> None:
+            self.writes.append((run_id, dict(progress)))
+
+    runtime = Runtime()
+    progress = new_progress()
+    increment_progress(progress, "saved")
+    increment_progress(progress, "total", 3)
+    write_progress(runtime, "run-1", progress)
+
+    assert runtime.writes == [("run-1", {"total": 3, "saved": 1, "failed": 0, "skipped": 0, "save_failed": 0})]
