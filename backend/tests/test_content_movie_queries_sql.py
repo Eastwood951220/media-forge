@@ -151,3 +151,14 @@ def test_postgresql_actor_and_tag_filters_use_array_constructor_sql() -> None:
     assert "movies.actors @> ARRAY[" in sql
     assert "movies.tags @> ARRAY[" in sql
     assert "array(" not in sql.lower()
+
+
+def test_queries_module_keeps_public_imports() -> None:
+    from backend.app.modules.content.movies import queries
+
+    assert callable(queries.list_movies_page)
+    assert callable(queries.list_filter_values)
+    assert callable(queries.build_movie_list_statement)
+    assert callable(queries.requires_python_fallback)
+    assert callable(queries.movie_matches)
+    assert queries.MovieListFilters(search="x").search == "x"
