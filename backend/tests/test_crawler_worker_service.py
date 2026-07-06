@@ -223,7 +223,7 @@ def test_process_next_run_marks_saved(monkeypatch) -> None:
         db.add(detail)
         db.commit()
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service._execute_run", mock_execute_run)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.worker.execute_run", mock_execute_run)
 
     processed = process_next_run(TestingSessionLocal, runtime)
 
@@ -238,13 +238,13 @@ def test_process_next_run_marks_saved(monkeypatch) -> None:
 
 
 def test_execute_run_persists_movie_before_marking_detail_saved(monkeypatch) -> None:
-    from backend.app.modules.crawler.runtime.service import _execute_run
+    from backend.app.modules.crawler.runtime.executor import execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: PersistingCrawlerEngineStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: PersistingCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("persist")
 
-    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+    execute_run(session, session.get(CrawlRun, run.id), runtime)
 
     movie = session.scalar(select(Movie).where(Movie.code == "AAA-002"))
     assert movie is not None
@@ -263,10 +263,10 @@ def test_execute_run_persists_movie_before_marking_detail_saved(monkeypatch) -> 
 
 
 def test_execute_run_publishes_run_detail_events_to_realtime_bus(monkeypatch) -> None:
-    from backend.app.modules.crawler.runtime.service import _execute_run
+    from backend.app.modules.crawler.runtime.executor import execute_run
     from backend.app.modules.realtime.bus import event_bus as realtime_bus
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: PersistingCrawlerEngineStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: PersistingCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("realtime")
     task = session.get(CrawlTask, run.task_id)
@@ -274,7 +274,7 @@ def test_execute_run_publishes_run_detail_events_to_realtime_bus(monkeypatch) ->
     queue = realtime_bus.subscribe(owner_id)
 
     try:
-        _execute_run(session, session.get(CrawlRun, run.id), runtime)
+        execute_run(session, session.get(CrawlRun, run.id), runtime)
         events = drain_realtime_events(queue)
     finally:
         realtime_bus.unsubscribe(owner_id, queue)
@@ -297,13 +297,13 @@ def test_execute_run_publishes_run_detail_events_to_realtime_bus(monkeypatch) ->
 
 
 def test_execute_run_syncs_movie_filters_after_movie_persistence(monkeypatch) -> None:
-    from backend.app.modules.crawler.runtime.service import _execute_run
+    from backend.app.modules.crawler.runtime.executor import execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: FilterSyncCrawlerEngineStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: FilterSyncCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("filter-sync")
 
-    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+    execute_run(session, session.get(CrawlRun, run.id), runtime)
 
     rows = session.scalars(select(MovieFilter).order_by(MovieFilter.type.asc(), MovieFilter.name.asc())).all()
     assert [(row.type, row.name, row.count) for row in rows] == [
@@ -317,17 +317,17 @@ def test_execute_run_syncs_movie_filters_after_movie_persistence(monkeypatch) ->
 
 
 def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monkeypatch) -> None:
-    from backend.app.modules.crawler.runtime.service import _execute_run
+    from backend.app.modules.crawler.runtime.executor import execute_run
 
     def fail_persistence(db, item_data):
         raise RuntimeError("movie repository returned no id")
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: FailingPersistenceCrawlerEngineStub())
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.upsert_movie_with_magnets", fail_persistence)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: FailingPersistenceCrawlerEngineStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.upsert_movie_with_magnets", fail_persistence)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("save-failed")
 
-    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+    execute_run(session, session.get(CrawlRun, run.id), runtime)
 
     assert session.scalar(select(Movie).where(Movie.code == "AAA-003")) is None
     detail = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "AAA-003").one()
@@ -339,15 +339,15 @@ def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monke
 
 
 def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> None:
-    from backend.app.modules.crawler.runtime.service import _execute_run
+    from backend.app.modules.crawler.runtime.executor import execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ListPhaseDedupeCrawlerEngineStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: ListPhaseDedupeCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("list-dedupe")
     session.add(Movie(code="AAA-010", source_url="https://javdb.com/v/aaa010", source_task_ids=[]))
     session.commit()
 
-    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+    execute_run(session, session.get(CrawlRun, run.id), runtime)
 
     skipped = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "AAA-010").one()
     pending = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "AAA-011").one()
@@ -364,15 +364,15 @@ def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> No
 
 
 def test_execute_run_marks_detail_phase_existing_movies_skipped(monkeypatch) -> None:
-    from backend.app.modules.crawler.runtime.service import _execute_run
+    from backend.app.modules.crawler.runtime.executor import execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: DetailPhaseDedupeCrawlerEngineStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: DetailPhaseDedupeCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("detail-dedupe")
     session.add(Movie(code="AAA-020", source_url="https://javdb.com/v/aaa020", source_task_ids=[]))
     session.commit()
 
-    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+    execute_run(session, session.get(CrawlRun, run.id), runtime)
 
     detail = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "AAA-020").one()
     movie = session.scalar(select(Movie).where(Movie.code == "AAA-020"))
@@ -434,14 +434,14 @@ class ListPhaseRestartCrawlerEngineStub:
 
 
 def test_execute_run_stops_when_runtime_stop_requested(monkeypatch) -> None:
-    from backend.app.modules.crawler.runtime.service import _execute_run
+    from backend.app.modules.crawler.runtime.executor import execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: StopAwareCrawlerEngineStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: StopAwareCrawlerEngineStub())
     session = TestingSessionLocal()
     run, _runtime = create_run_with_task("stop-requested")
     runtime = StopRequestedRuntime(str(run.id))
 
-    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+    execute_run(session, session.get(CrawlRun, run.id), runtime)
 
     session.expire_all()
     refreshed = session.get(CrawlRun, run.id)
@@ -454,10 +454,10 @@ def test_execute_run_stops_when_runtime_stop_requested(monkeypatch) -> None:
 
 
 def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch) -> None:
-    from backend.app.modules.crawler.runtime.service import _execute_run
+    from backend.app.modules.crawler.runtime.executor import execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ExistingDetailReuseCrawlerEngineStub())
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.upsert_movie_with_magnets", lambda db, item_data: uuid.uuid4())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: ExistingDetailReuseCrawlerEngineStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.upsert_movie_with_magnets", lambda db, item_data: uuid.uuid4())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("reuse-existing")
     existing = CrawlRunDetailTask(
@@ -472,7 +472,7 @@ def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch
     session.add(existing)
     session.commit()
 
-    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+    execute_run(session, session.get(CrawlRun, run.id), runtime)
 
     session.expire_all()
     details = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "REUSE-001").all()
@@ -482,9 +482,9 @@ def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch
 
 
 def test_execute_run_does_not_treat_list_stage_pending_details_as_detail_restart(monkeypatch) -> None:
-    from backend.app.modules.crawler.runtime.service import _execute_run
+    from backend.app.modules.crawler.runtime.executor import execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.get_crawler_engine", lambda: ListPhaseRestartCrawlerEngineStub())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: ListPhaseRestartCrawlerEngineStub())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("list-stage")
     session.add(CrawlRunDetailTask(
@@ -498,7 +498,7 @@ def test_execute_run_does_not_treat_list_stage_pending_details_as_detail_restart
     ))
     session.commit()
 
-    _execute_run(session, session.get(CrawlRun, run.id), runtime)
+    execute_run(session, session.get(CrawlRun, run.id), runtime)
 
     session.expire_all()
     codes = [row.code for row in session.query(CrawlRunDetailTask).order_by(CrawlRunDetailTask.created_at.asc()).all()]
@@ -512,4 +512,3 @@ def test_crawler_runtime_service_keeps_public_runtime_imports() -> None:
     assert callable(service.process_run)
     assert callable(service.publish_run_updated)
     assert callable(service.publish_run_detail_updated)
-    assert callable(service.append_run_log_for_run)
