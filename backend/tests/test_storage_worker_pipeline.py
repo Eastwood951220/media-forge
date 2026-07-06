@@ -2760,3 +2760,17 @@ def test_is_submit_task_exists_error_matches_clouddrive_duplicate_messages() -> 
     assert is_submit_task_exists_error(RuntimeError("10008 task exists")) is True
     assert is_submit_task_exists_error("任务已存在") is True
     assert is_submit_task_exists_error(RuntimeError("network down")) is False
+
+
+def test_storage_file_operation_modules_export_current_public_functions() -> None:
+    from backend.app.modules.storage.worker import cleanup_ops, file_ops, move_ops, rename_ops, verify_ops
+
+    assert rename_ops.is_rename_name_exists_error("名称已存在")
+    assert callable(rename_ops.rename_selected_videos)
+    assert callable(move_ops.move_renamed_videos)
+    assert callable(verify_ops.verify_moved_files)
+    assert callable(cleanup_ops.cleanup_download_folder)
+    assert file_ops.rename_selected_videos is rename_ops.rename_selected_videos
+    assert file_ops.move_renamed_videos is move_ops.move_renamed_videos
+    assert file_ops.verify_moved_files is verify_ops.verify_moved_files
+    assert file_ops.cleanup_download_folder is cleanup_ops.cleanup_download_folder
