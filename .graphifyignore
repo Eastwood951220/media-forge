@@ -47,3 +47,15 @@ data/
 
 docs/
 docs/CloudDrive2_gRPC_API_Guide_zh-CN.md
+
+# Generated protocol files
+shared/integrations/storage_providers/clouddrive2/proto/
+
+# Tests are excluded from architecture hotspot analysis
+backend/tests/
+frontend/src/**/__tests__/
+scraper/tests/
+
+# Python bytecode created during local test runs
+**/__pycache__/
+*.pyc
