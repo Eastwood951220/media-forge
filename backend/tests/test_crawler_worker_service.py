@@ -584,3 +584,43 @@ def test_crawler_callback_context_builds_callbacks(db_session) -> None:
     assert callable(callbacks.on_item_saved)
     assert callable(callbacks.on_detail_failed)
     assert callable(callbacks.log_callback)
+
+
+class DetailOnlyRecordingEngineStub:
+    def __init__(self) -> None:
+        self.detail_tasks = []
+
+    def crawl_detail_tasks(self, task, *, detail_tasks, task_id=None, callbacks):
+        self.detail_tasks = list(detail_tasks)
+        return {
+            "total_tasks": len(detail_tasks),
+            "completed_tasks": 0,
+            "failed_tasks": 0,
+        }
+
+    def crawl_task(self, task, *, task_id=None, crawl_mode="incremental", incremental_threshold=0, callbacks=None):
+        raise AssertionError("detail retry must not run list crawl")
+
+
+def test_execute_run_detail_retry_uses_only_pending_crawl_rows(monkeypatch) -> None:
+    from backend.app.modules.crawler.runtime.executor import execute_run
+
+    session = TestingSessionLocal()
+    run, runtime = create_run_with_task("detail-retry")
+    task = session.get(CrawlTask, run.task_id)
+    run_obj = session.get(CrawlRun, run.id)
+    run_obj.status = "queued"
+    run_obj.started_at = datetime.now()
+    session.add_all([
+        CrawlRunDetailTask(run_id=run.id, task_name=task.name, code="PENDING-001", source_url="https://pending", source_name="Pending", status="pending_crawl", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name=task.name, code="FAILED-001", source_url="https://failed", source_name="Failed", status="crawl_failed", error="old", created_at=datetime.now(), crawled_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name=task.name, code="SAVE-001", source_url="https://save", source_name="Save", status="save_failed", error="db", created_at=datetime.now(), crawled_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name=task.name, code="SAVED-001", source_url="https://saved", source_name="Saved", status="saved", created_at=datetime.now(), crawled_at=datetime.now(), saved_at=datetime.now()),
+    ])
+    session.commit()
+    engine = DetailOnlyRecordingEngineStub()
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: engine)
+
+    execute_run(session, session.get(CrawlRun, run.id), runtime)
+
+    assert [task_info["code"] for task_info in engine.detail_tasks] == ["PENDING-001"]

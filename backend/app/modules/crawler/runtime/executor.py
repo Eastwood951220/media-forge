@@ -8,7 +8,6 @@ from backend.app.modules.crawler.runtime.callbacks import CrawlerCallbackContext
 from backend.app.modules.crawler.runtime.config import read_incremental_threshold_from_conf
 from backend.app.modules.crawler.runtime.detail_index import DetailTaskIndex
 from backend.app.modules.crawler.runtime.details import (
-    RESTARTABLE_DETAIL_STATUSES,
     detail_row_to_task_info,
     has_detail_phase_started,
 )
@@ -52,20 +51,25 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
         engine = get_crawler_engine()
 
         detail_phase_restart = has_detail_phase_started(db, run)
-        restartable_existing_details = [
-            detail for detail in db.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
-            if detail.status in RESTARTABLE_DETAIL_STATUSES
-        ]
-        if detail_phase_restart and restartable_existing_details:
+        pending_detail_retry_rows = (
+            db.query(CrawlRunDetailTask)
+            .filter(
+                CrawlRunDetailTask.run_id == run.id,
+                CrawlRunDetailTask.status == "pending_crawl",
+            )
+            .order_by(CrawlRunDetailTask.created_at.asc())
+            .all()
+        )
+        if detail_phase_restart and pending_detail_retry_rows:
             append_run_log_for_run(
                 db,
                 run,
-                f"检测到已有详情子任务 {len(restartable_existing_details)} 条，跳过列表收集直接重试详情",
+                f"检测到待重试详情子任务 {len(pending_detail_retry_rows)} 条，跳过列表收集直接重试详情",
                 "INFO",
             )
             result = engine.crawl_detail_tasks(
                 engine_task,
-                detail_tasks=[detail_row_to_task_info(detail) for detail in restartable_existing_details],
+                detail_tasks=[detail_row_to_task_info(detail) for detail in pending_detail_retry_rows],
                 task_id=str(run.task_id) if run.task_id else None,
                 callbacks=build_crawl_callbacks(callback_context, include_list_callbacks=False),
             )
