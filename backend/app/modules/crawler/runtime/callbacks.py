@@ -94,6 +94,7 @@ def build_crawl_callbacks(
     def on_item_saved(task_info: dict[str, Any], item_data: dict[str, Any]) -> None:
         detail = ctx.detail_index.find(task_info, item_data)
         code = item_data.get("code") or task_info.get("code") or "-"
+        run_id_str = str(ctx.run.id)
         # Inject source_task_ids into item_data for persistence
         item_data_with_task_ids = {**item_data, "source_task_ids": [ctx.task.id]}
         try:
@@ -107,18 +108,31 @@ def build_crawl_callbacks(
             increment_progress(ctx.progress, "saved")
             append_run_log_for_run(ctx.db, ctx.run, f"入库成功: {code}", "INFO", code=code, movie_id=str(movie_id))
         except Exception as exc:
+            ctx.db.rollback()
             if detail:
-                detail.status = "save_failed"
-                detail.item_data = item_data
-                detail.error = str(exc)[:500]
-                detail.crawled_at = datetime.now()
-                detail.saved_at = None
+                try:
+                    detail.status = "save_failed"
+                    detail.item_data = item_data
+                    detail.error = str(exc)[:500]
+                    detail.crawled_at = datetime.now()
+                    detail.saved_at = None
+                except Exception:
+                    pass
             increment_progress(ctx.progress, "save_failed")
-            append_run_log_for_run(ctx.db, ctx.run, f"入库失败: {code}: {exc}", "ERROR", code=code)
-        write_progress(ctx.runtime, str(ctx.run.id), ctx.progress)
-        ctx.db.commit()
+            try:
+                append_run_log_for_run(ctx.db, ctx.run, f"入库失败: {code}: {exc}", "ERROR", code=code)
+            except Exception:
+                logger.warning("入库失败且日志写入异常: code=%s error=%s", code, exc)
+        write_progress(ctx.runtime, run_id_str, ctx.progress)
+        try:
+            ctx.db.commit()
+        except Exception:
+            ctx.db.rollback()
         if detail:
-            publish_run_detail_updated(ctx.db, ctx.run, [detail])
+            try:
+                publish_run_detail_updated(ctx.db, ctx.run, [detail])
+            except Exception:
+                pass
 
     def on_detail_failed(task_info: dict[str, Any], error: str) -> None:
         detail = ctx.detail_index.find(task_info)

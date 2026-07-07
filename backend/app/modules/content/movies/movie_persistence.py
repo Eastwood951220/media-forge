@@ -28,11 +28,12 @@ def upsert_movie(session: Session, item: dict[str, Any]) -> UUID:
     if existing is not None:
         return existing.id
 
+    release_date = item.get("release_date") or None
     movie = Movie(
         code=item.get("code"),
         source_url=item.get("source_url"),
         source_name=item.get("source_name", ""),
-        release_date=item.get("release_date"),
+        release_date=release_date,
         duration=item.get("duration", 0),
         director=item.get("director", ""),
         maker=item.get("maker", ""),
