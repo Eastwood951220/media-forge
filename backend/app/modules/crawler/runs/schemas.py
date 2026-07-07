@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RunCreateRequest(BaseModel):
@@ -52,3 +52,8 @@ class CrawlRunDetailTaskRead(BaseModel):
     created_at: datetime
     crawled_at: datetime | None
     saved_at: datetime | None
+
+
+class RunDetailRetryRequest(BaseModel):
+    detail_ids: list[uuid.UUID] = Field(default_factory=list)
+    retry_all: bool = False

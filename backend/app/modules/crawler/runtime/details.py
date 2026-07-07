@@ -12,6 +12,8 @@ UNFINISHED_DETAIL_STATUSES = {"pending_crawl", "crawl_failed", "save_failed"}
 RESTARTABLE_DETAIL_STATUSES = UNFINISHED_DETAIL_STATUSES
 TERMINAL_DETAIL_STATUSES = {"saved", "skipped"}
 DETAIL_PHASE_STARTED_STATUSES = {"saved", "crawl_failed", "save_failed"}
+ENDED_RUN_STATUSES = {"completed", "failed", "stopped"}
+DETAIL_RETRY_STATUS = "pending_crawl"
 
 
 def has_detail_phase_started(db: Session, run: CrawlRun) -> bool:

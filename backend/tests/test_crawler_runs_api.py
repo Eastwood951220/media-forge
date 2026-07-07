@@ -369,3 +369,191 @@ def test_restart_stopped_run_without_subtasks_requeues_same_run(client: TestClie
 
     tasks_response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=headers)
     assert tasks_response.json()["rows"] == []
+
+
+def test_retry_one_failed_detail_requeues_same_run(client: TestClient, admin_user, monkeypatch) -> None:
+    import uuid
+    headers = auth_headers(client, admin_user)
+    task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
+    task_id = uuid.UUID(task_response.json()["data"]["id"])
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.ensure_crawler_worker_started", lambda runtime: None)
+    session = TestingSessionLocal()
+    run = CrawlRun(
+        task_id=task_id,
+        task_name="任务",
+        status="completed",
+        crawl_mode="incremental",
+        queued_at=datetime.now(),
+        started_at=datetime.now(),
+        finished_at=datetime.now(),
+        result={"total_tasks": 2},
+        error="old error",
+    )
+    session.add(run)
+    session.flush()
+    failed = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name="任务",
+        code="FAIL-001",
+        source_url="https://example.test/fail-001",
+        source_name="FAIL 001",
+        status="crawl_failed",
+        error="timeout",
+        item_data={"stale": True},
+        created_at=datetime.now(),
+        crawled_at=datetime.now(),
+    )
+    other_failed = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name="任务",
+        code="FAIL-002",
+        source_url="https://example.test/fail-002",
+        source_name="FAIL 002",
+        status="crawl_failed",
+        error="dns",
+        created_at=datetime.now(),
+        crawled_at=datetime.now(),
+    )
+    saved = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name="任务",
+        code="SAVED-001",
+        source_url="https://example.test/saved-001",
+        source_name="SAVED 001",
+        status="saved",
+        created_at=datetime.now(),
+        crawled_at=datetime.now(),
+        saved_at=datetime.now(),
+    )
+    session.add_all([failed, other_failed, saved])
+    session.commit()
+    runtime = RuntimeForStopRestart()
+    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: runtime)
+
+    response = client.post(
+        f"/api/crawler/runs/{run.id}/tasks/retry",
+        json={"detail_ids": [str(failed.id)], "retry_all": False},
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    body = response.json()["data"]
+    assert body["id"] == str(run.id)
+    assert body["status"] == "queued"
+    assert body["started_at"] is None
+    assert body["finished_at"] is None
+    assert body["result"] is None
+    assert body["error"] is None
+    assert runtime.cleared == [str(run.id)]
+    assert runtime.enqueued == [str(run.id)]
+
+    session.expire_all()
+    statuses = {
+        row.code: (row.status, row.error, row.item_data, row.crawled_at, row.saved_at)
+        for row in session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
+    }
+    assert statuses["FAIL-001"] == ("pending_crawl", None, None, None, None)
+    assert statuses["FAIL-002"][0] == "crawl_failed"
+    assert statuses["SAVED-001"][0] == "saved"
+
+
+def test_retry_all_failed_details_requeues_all_crawl_failed_rows(client: TestClient, admin_user, monkeypatch) -> None:
+    import uuid
+    headers = auth_headers(client, admin_user)
+    task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
+    task_id = uuid.UUID(task_response.json()["data"]["id"])
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.ensure_crawler_worker_started", lambda runtime: None)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_id=task_id, task_name="任务", status="failed", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    session.add_all([
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="A", source_url="https://a", source_name="A", status="crawl_failed", error="a", created_at=datetime.now(), crawled_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="B", source_url="https://b", source_name="B", status="crawl_failed", error="b", created_at=datetime.now(), crawled_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="C", source_url="https://c", source_name="C", status="save_failed", error="db", created_at=datetime.now(), crawled_at=datetime.now()),
+    ])
+    session.commit()
+    runtime = RuntimeForStopRestart()
+    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: runtime)
+
+    response = client.post(
+        f"/api/crawler/runs/{run.id}/tasks/retry",
+        json={"retry_all": True},
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    assert response.json()["data"]["status"] == "queued"
+    session.expire_all()
+    statuses = {
+        row.code: row.status
+        for row in session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
+    }
+    assert statuses == {"A": "pending_crawl", "B": "pending_crawl", "C": "save_failed"}
+
+
+def test_retry_failed_details_rejects_running_run(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="running", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    detail = CrawlRunDetailTask(run_id=run.id, task_name="任务", code="A", source_url="https://a", source_name="A", status="crawl_failed", created_at=datetime.now())
+    session.add(detail)
+    session.commit()
+    runtime = RuntimeForStopRestart()
+    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: runtime)
+
+    response = client.post(
+        f"/api/crawler/runs/{run.id}/tasks/retry",
+        json={"detail_ids": [str(detail.id)]},
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    body = response.json()
+    assert "运行中" in str(body)
+    assert runtime.enqueued == []
+
+
+def test_retry_failed_details_rejects_non_crawl_failed_selection(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="completed", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    detail = CrawlRunDetailTask(run_id=run.id, task_name="任务", code="A", source_url="https://a", source_name="A", status="save_failed", created_at=datetime.now())
+    session.add(detail)
+    session.commit()
+    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: RuntimeForStopRestart())
+
+    response = client.post(
+        f"/api/crawler/runs/{run.id}/tasks/retry",
+        json={"detail_ids": [str(detail.id)]},
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "crawl_failed" in str(response.json())
+
+
+def test_retry_failed_details_rejects_detail_from_other_run(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务1", status="completed", crawl_mode="incremental")
+    other_run = CrawlRun(task_name="任务2", status="completed", crawl_mode="incremental")
+    session.add_all([run, other_run])
+    session.flush()
+    detail = CrawlRunDetailTask(run_id=other_run.id, task_name="任务2", code="A", source_url="https://a", source_name="A", status="crawl_failed", created_at=datetime.now())
+    session.add(detail)
+    session.commit()
+    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: RuntimeForStopRestart())
+
+    response = client.post(
+        f"/api/crawler/runs/{run.id}/tasks/retry",
+        json={"detail_ids": [str(detail.id)]},
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "不属于当前运行" in str(response.json()) or "无效" in str(response.json())

@@ -12,12 +12,14 @@ from shared.database.session import get_session_factory
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.crawler.runtime.details import (
+    ENDED_RUN_STATUSES,
     RESTARTABLE_DETAIL_STATUSES,
     clear_run_detail_tasks,
     has_detail_phase_started,
     reset_unfinished_detail_tasks_to_pending,
 )
 from backend.app.modules.crawler.runtime.events import (
+    append_run_log_for_run,
     publish_run_detail_updated,
     publish_run_updated,
 )
@@ -126,6 +128,77 @@ class CrawlerRunService:
         self.runtime.enqueue_run(str(run.id))
         self._ensure_worker_started()
         publish_run_updated(self.db, run)
+        return run
+
+    def retry_failed_details(
+        self,
+        run_id: uuid.UUID,
+        *,
+        detail_ids: list[uuid.UUID] | None = None,
+        retry_all: bool = False,
+    ) -> CrawlRun:
+        run = self.db.get(CrawlRun, run_id)
+        if run is None:
+            raise ValueError("运行记录不存在")
+        if run.status not in ENDED_RUN_STATUSES:
+            raise ValueError("运行中不能重试失败子任务")
+
+        if retry_all:
+            details = (
+                self.db.query(CrawlRunDetailTask)
+                .filter(
+                    CrawlRunDetailTask.run_id == run.id,
+                    CrawlRunDetailTask.status == "crawl_failed",
+                )
+                .order_by(CrawlRunDetailTask.created_at.asc())
+                .all()
+            )
+            retry_label = "全部失败"
+        else:
+            if not detail_ids:
+                raise ValueError("请选择要重新爬取的失败子任务")
+            details = (
+                self.db.query(CrawlRunDetailTask)
+                .filter(CrawlRunDetailTask.id.in_(detail_ids))
+                .order_by(CrawlRunDetailTask.created_at.asc())
+                .all()
+            )
+            found_ids = {detail.id for detail in details}
+            missing_ids = [detail_id for detail_id in detail_ids if detail_id not in found_ids]
+            if missing_ids:
+                raise ValueError("包含无效的子任务选择")
+            retry_label = "选中项" if len(details) > 1 else "单条"
+
+        if not details:
+            raise ValueError("没有爬取失败的子任务可重试")
+        for detail in details:
+            if detail.run_id != run.id:
+                raise ValueError("包含不属于当前运行的子任务")
+            if detail.status != "crawl_failed":
+                raise ValueError("只能重试 crawl_failed 状态的子任务")
+
+        for detail in details:
+            detail.status = "pending_crawl"
+            detail.error = None
+            detail.item_data = None
+            detail.crawled_at = None
+            detail.saved_at = None
+
+        run.status = "queued"
+        run.queued_at = datetime.now()
+        run.started_at = None
+        run.finished_at = None
+        run.result = None
+        run.error = None
+        self.db.commit()
+        self.db.refresh(run)
+
+        self.runtime.clear_stop(str(run.id))
+        self.runtime.enqueue_run(str(run.id))
+        self._ensure_worker_started()
+        publish_run_detail_updated(self.db, run, details)
+        publish_run_updated(self.db, run)
+        append_run_log_for_run(self.db, run, f"重新爬取{retry_label}失败子任务: {len(details)} 条", "INFO")
         return run
 
     def _ensure_worker_started(self) -> None:

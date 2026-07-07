@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.modules.crawler.runs.logs import load_run_logs
-from backend.app.modules.crawler.runs.schemas import CrawlRunDetailTaskRead, CrawlRunRead
+from backend.app.modules.crawler.runs.schemas import CrawlRunDetailTaskRead, CrawlRunRead, RunDetailRetryRequest
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from shared.schemas.common import paginated, success
 
@@ -87,6 +87,27 @@ def list_run_tasks(
         rows=[CrawlRunDetailTaskRead.model_validate(r).model_dump(mode="json") for r in rows],
         total=total,
     )
+
+
+@router.post("/{run_id}/tasks/retry", status_code=status.HTTP_201_CREATED)
+def retry_run_tasks(
+    run_id: uuid.UUID,
+    payload: RunDetailRetryRequest,
+    _current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        run = CrawlerRunService(db, get_runtime_state()).retry_failed_details(
+            run_id,
+            detail_ids=payload.detail_ids,
+            retry_all=payload.retry_all,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
+    return success(data=CrawlRunRead.model_validate(run).model_dump(mode="json"))
 
 
 @router.delete("/{run_id}")
