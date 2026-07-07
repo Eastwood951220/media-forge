@@ -26,7 +26,9 @@ vi.mock('@/realtime/eventSourceClient', () => ({
   subscribeRealtime: vi.fn().mockReturnValue(() => {}),
 }))
 
-const endedRun = {
+import type { CrawlRun, CrawlRunDetailTask } from '@/api/crawlerRun/types'
+
+const endedRun: CrawlRun = {
   id: 'run-1',
   task_id: 'task-1',
   task_name: '任务',
@@ -43,7 +45,7 @@ const endedRun = {
   logs: [],
 }
 
-const failedTask = {
+const failedTask: CrawlRunDetailTask = {
   id: 'detail-1',
   run_id: 'run-1',
   task_name: '任务',
@@ -58,7 +60,7 @@ const failedTask = {
   saved_at: null,
 }
 
-const savedTask = {
+const savedTask: CrawlRunDetailTask = {
   ...failedTask,
   id: 'detail-2',
   code: 'SAVED-001',

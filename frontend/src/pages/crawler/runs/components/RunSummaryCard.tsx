@@ -5,7 +5,7 @@ import { runDetailStatusLabels } from '../utils/status'
 
 interface RunSummaryCardProps {
   run: CrawlRun | null
-  actionLoading: 'stop' | 'restart' | null
+  actionLoading: 'stop' | 'restart' | 'retry' | null
   onStop: () => void
   onRestart: () => void
 }
