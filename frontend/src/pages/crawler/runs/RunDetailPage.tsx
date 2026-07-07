@@ -30,12 +30,17 @@ function RunDetailPage() {
         run={detail.run}
       />
       <RunTaskTable
+        actionLoading={detail.actionLoading}
         keyword={detail.keyword}
         loading={detail.loading}
         onKeywordSearch={detail.setKeyword}
         onPageSizeChange={detail.setPageSize}
+        onRetryAllFailed={detail.handleRetryAllFailedTasks}
+        onRetrySelected={detail.handleRetrySelectedTasks}
+        onRetryTask={detail.handleRetryTask}
         onStatusChange={detail.setStatusFilter}
         pageSize={detail.pageSize}
+        runStatus={detail.run?.status}
         statusFilter={detail.statusFilter}
         tasks={detail.tasks}
       />

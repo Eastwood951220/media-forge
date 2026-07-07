@@ -4,6 +4,7 @@ import type {
   CrawlRunDetailTask,
   CrawlMode,
   QueueStatus,
+  RetryCrawlerRunTasksRequest,
   RunLogEntry,
 } from './types'
 import type { PaginatedResponse } from '../crawlTask/types'
@@ -49,6 +50,13 @@ export function deleteCrawlerRun(runId: string): Promise<void> {
 
 export function restartCrawlerRun(runId: string): Promise<CrawlRun> {
   return request.post<CrawlRun>(`${BASE_URL}/${runId}/restart`)
+}
+
+export function retryCrawlerRunTasks(
+  runId: string,
+  payload: RetryCrawlerRunTasksRequest,
+): Promise<CrawlRun> {
+  return request.post<CrawlRun>(`${BASE_URL}/${runId}/tasks/retry`, payload)
 }
 
 export function getCrawlerQueueStatus(): Promise<QueueStatus> {

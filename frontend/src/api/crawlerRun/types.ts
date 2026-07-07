@@ -49,3 +49,8 @@ export interface QueueStatus {
   current_run_id: string | null
   stop_requested: boolean
 }
+
+export interface RetryCrawlerRunTasksRequest {
+  detail_ids?: string[]
+  retry_all?: boolean
+}

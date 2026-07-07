@@ -1,0 +1,119 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import RunDetailPage from '../RunDetailPage'
+import {
+  getCrawlerRun,
+  getCrawlerRunLogs,
+  getCrawlerRunTasks,
+  retryCrawlerRunTasks,
+} from '@/api/crawlerRun'
+
+vi.mock('@tanstack/react-router', () => ({
+  useParams: vi.fn().mockReturnValue({ id: 'run-1' }),
+}))
+
+vi.mock('@/api/crawlerRun', () => ({
+  getCrawlerRun: vi.fn(),
+  getCrawlerRunLogs: vi.fn().mockResolvedValue([]),
+  getCrawlerRunTasks: vi.fn(),
+  restartCrawlerRun: vi.fn(),
+  stopCrawlerRun: vi.fn(),
+  retryCrawlerRunTasks: vi.fn(),
+}))
+
+vi.mock('@/realtime/eventSourceClient', () => ({
+  connectRealtime: vi.fn(),
+  subscribeRealtime: vi.fn().mockReturnValue(() => {}),
+}))
+
+const endedRun = {
+  id: 'run-1',
+  task_id: 'task-1',
+  task_name: '任务',
+  status: 'completed',
+  crawl_mode: 'incremental',
+  queued_at: null,
+  started_at: null,
+  finished_at: null,
+  result: null,
+  error: null,
+  resumed_from: null,
+  created_at: '2026-07-08T00:00:00Z',
+  updated_at: null,
+  logs: [],
+}
+
+const failedTask = {
+  id: 'detail-1',
+  run_id: 'run-1',
+  task_name: '任务',
+  code: 'FAIL-001',
+  source_url: 'https://example.test/fail',
+  source_name: 'FAIL 001',
+  status: 'crawl_failed',
+  error: 'timeout',
+  item_data: null,
+  created_at: '2026-07-08T00:00:00Z',
+  crawled_at: null,
+  saved_at: null,
+}
+
+const savedTask = {
+  ...failedTask,
+  id: 'detail-2',
+  code: 'SAVED-001',
+  source_name: 'SAVED 001',
+  status: 'saved',
+  error: null,
+}
+
+describe('RunDetail retry controls', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getCrawlerRun).mockResolvedValue(endedRun)
+    vi.mocked(getCrawlerRunLogs).mockResolvedValue([])
+    vi.mocked(getCrawlerRunTasks).mockResolvedValue({ rows: [failedTask, savedTask], total: 2 })
+    vi.mocked(retryCrawlerRunTasks).mockResolvedValue({ ...endedRun, status: 'queued' })
+  })
+
+  it('retries one failed row with one detail id', async () => {
+    render(<RunDetailPage />)
+
+    expect(await screen.findByText('FAIL-001')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重新爬取' }))
+    const okButton = await screen.findByRole('button', { name: '确 定' })
+    fireEvent.click(okButton)
+
+    await waitFor(() => {
+      expect(retryCrawlerRunTasks).toHaveBeenCalledWith('run-1', {
+        detail_ids: ['detail-1'],
+        retry_all: false,
+      })
+    })
+  })
+
+  it('retries all failed rows with retry_all payload', async () => {
+    render(<RunDetailPage />)
+
+    expect(await screen.findByText('FAIL-001')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重新爬取全部失败' }))
+    const okButton = await screen.findByRole('button', { name: '确 定' })
+    fireEvent.click(okButton)
+
+    await waitFor(() => {
+      expect(retryCrawlerRunTasks).toHaveBeenCalledWith('run-1', {
+        retry_all: true,
+      })
+    })
+  })
+
+  it('hides retry controls while run is running', async () => {
+    vi.mocked(getCrawlerRun).mockResolvedValueOnce({ ...endedRun, status: 'running' })
+
+    render(<RunDetailPage />)
+
+    expect(await screen.findByText('FAIL-001')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重新爬取' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重新爬取全部失败' })).not.toBeInTheDocument()
+  })
+})

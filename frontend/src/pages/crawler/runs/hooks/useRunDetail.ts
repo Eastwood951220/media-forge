@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { message } from 'antd'
-import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
+import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks, restartCrawlerRun, retryCrawlerRunTasks, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
 
 export function useRunDetail(id: string | undefined) {
@@ -11,7 +11,7 @@ export function useRunDetail(id: string | undefined) {
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
   const [keyword, setKeyword] = useState('')
   const [pageSize, setPageSize] = useState(50)
-  const [actionLoading, setActionLoading] = useState<'stop' | 'restart' | null>(null)
+  const [actionLoading, setActionLoading] = useState<'stop' | 'restart' | 'retry' | null>(null)
 
   // Reset state when run ID changes
   useEffect(() => {
@@ -88,6 +88,44 @@ export function useRunDetail(id: string | undefined) {
     }
   }, [id, resyncSnapshot])
 
+  const runRetryRequest = useCallback(
+    async (payload: { detail_ids?: string[]; retry_all?: boolean }, successText: string) => {
+      if (!id) return
+      setActionLoading('retry')
+      try {
+        const retriedRun = await retryCrawlerRunTasks(id, payload)
+        setRun(retriedRun)
+        message.success(successText)
+        resyncSnapshot()
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : '重新爬取失败'
+        message.error(msg)
+        resyncSnapshot()
+      } finally {
+        setActionLoading(null)
+      }
+    },
+    [id, resyncSnapshot],
+  )
+
+  const handleRetryTask = useCallback(
+    async (detailId: string) => {
+      await runRetryRequest({ detail_ids: [detailId], retry_all: false }, '已重新爬取该失败子任务')
+    },
+    [runRetryRequest],
+  )
+
+  const handleRetrySelectedTasks = useCallback(
+    async (detailIds: string[]) => {
+      await runRetryRequest({ detail_ids: detailIds, retry_all: false }, '已重新爬取选中失败子任务')
+    },
+    [runRetryRequest],
+  )
+
+  const handleRetryAllFailedTasks = useCallback(async () => {
+    await runRetryRequest({ retry_all: true }, '已重新爬取全部失败子任务')
+  }, [runRetryRequest])
+
   // Initial fetch effects
   useEffect(() => {
     void fetchRun()
@@ -107,6 +145,9 @@ export function useRunDetail(id: string | undefined) {
     fetchRun,
     fetchTasks,
     handleRestart,
+    handleRetryAllFailedTasks,
+    handleRetrySelectedTasks,
+    handleRetryTask,
     handleStop,
     keyword,
     loading,
