@@ -61,7 +61,22 @@ describe('RunDetailPage logs', () => {
       { timestamp: '2026-07-02T00:00:01Z', level: 'INFO', message: '任务开始执行' },
       { timestamp: '2026-07-02T00:00:02Z', level: 'ERROR', message: '入库失败: AAA-001' },
     ])
-    vi.mocked(getCrawlerRunTasks).mockResolvedValue({ rows: [], total: 0 })
+    vi.mocked(getCrawlerRunTasks).mockResolvedValue({
+      rows: [],
+      total: 0,
+      summary: {
+        total: 6,
+        pending_crawl: 1,
+        crawling: 1,
+        saved: 1,
+        skipped: 1,
+        crawl_failed: 1,
+        save_failed: 1,
+        completed: 2,
+        waiting: 2,
+        failed: 2,
+      },
+    })
   })
 
   it('renders run logs on the detail page', async () => {
@@ -79,9 +94,20 @@ describe('RunDetailPage logs', () => {
     expect(getCrawlerRun).toHaveBeenCalledWith('run-1')
     expect(getCrawlerRunLogs).toHaveBeenCalledWith('run-1')
     expect(getCrawlerRunTasks).toHaveBeenCalledWith('run-1', {
-      limit: 200,
+      page: 1,
+      size: 50,
       status: undefined,
       keyword: undefined,
     })
+  })
+
+  it('renders full-run child task summary from API', async () => {
+    renderDetailPage()
+
+    expect(await screen.findByText('总数')).toBeInTheDocument()
+    expect(screen.getByText('6')).toBeInTheDocument()
+    expect(screen.getByText('完成')).toBeInTheDocument()
+    expect(screen.getByText('等待')).toBeInTheDocument()
+    expect(screen.getByText('失败')).toBeInTheDocument()
   })
 })

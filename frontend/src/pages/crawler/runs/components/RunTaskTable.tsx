@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button, Card, Input, Modal, Select, Space, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import type { CrawlRunDetailTask } from '@/api/crawlerRun/types'
+import type { CrawlRunDetailTask, RunTaskSummary } from '@/api/crawlerRun/types'
 import { runDetailStatusLabels } from '../utils/status'
 
 interface RunTaskTableProps {
@@ -12,6 +12,7 @@ interface RunTaskTableProps {
   pageSize: number
   current: number
   total: number
+  summary: RunTaskSummary
   actionLoading: 'stop' | 'restart' | 'retry' | null
   runStatus: string | undefined
   onStatusChange: (value: string | undefined) => void
@@ -30,6 +31,7 @@ function RunTaskTable({
   pageSize,
   current,
   total,
+  summary,
   actionLoading,
   runStatus,
   onStatusChange,
@@ -140,6 +142,28 @@ function RunTaskTable({
 
   return (
     <Card title="子任务列表">
+      <Space size={12} wrap style={{ marginBottom: 16 }}>
+        {[
+          ['总数', summary.total],
+          ['完成', summary.completed],
+          ['等待', summary.waiting],
+          ['跳过', summary.skipped],
+          ['失败', summary.failed],
+        ].map(([label, value]) => (
+          <div
+            key={label}
+            style={{
+              minWidth: 88,
+              padding: '8px 12px',
+              border: '1px solid rgba(5, 5, 5, 0.08)',
+              borderRadius: 6,
+            }}
+          >
+            <div style={{ fontSize: 12, color: 'rgba(0, 0, 0, 0.45)' }}>{label}</div>
+            <div style={{ fontSize: 18, fontWeight: 600 }}>{value}</div>
+          </div>
+        ))}
+      </Space>
       <Space style={{ marginBottom: 16 }}>
         <Select
           placeholder="状态筛选"

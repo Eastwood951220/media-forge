@@ -58,3 +58,16 @@ export interface RetryCrawlerRunTasksRequest {
   detail_ids?: string[]
   retry_all?: boolean
 }
+
+export interface RunTaskSummary {
+  total: number
+  pending_crawl: number
+  crawling: number
+  saved: number
+  skipped: number
+  crawl_failed: number
+  save_failed: number
+  completed: number
+  waiting: number
+  failed: number
+}

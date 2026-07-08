@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import { message } from 'antd'
 import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks, restartCrawlerRun, retryCrawlerRunTasks, stopCrawlerRun } from '@/api/crawlerRun'
-import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
+import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawlerRun/types'
+
+const emptyTaskSummary: RunTaskSummary = {
+  total: 0,
+  pending_crawl: 0,
+  crawling: 0,
+  saved: 0,
+  skipped: 0,
+  crawl_failed: 0,
+  save_failed: 0,
+  completed: 0,
+  waiting: 0,
+  failed: 0,
+}
 
 export function useRunDetail(id: string | undefined) {
   const [run, setRun] = useState<CrawlRun | null>(null)
@@ -13,6 +26,7 @@ export function useRunDetail(id: string | undefined) {
   const [pageSize, setPageSize] = useState(50)
   const [taskPage, setTaskPage] = useState(1)
   const [taskTotal, setTaskTotal] = useState(0)
+  const [taskSummary, setTaskSummary] = useState<RunTaskSummary>(emptyTaskSummary)
   const [actionLoading, setActionLoading] = useState<'stop' | 'restart' | 'retry' | null>(null)
 
   // Reset state when run ID changes
@@ -24,6 +38,7 @@ export function useRunDetail(id: string | undefined) {
     setKeyword('')
     setTaskPage(1)
     setTaskTotal(0)
+    setTaskSummary(emptyTaskSummary)
   }, [id])
 
   // Fetch helpers
@@ -51,6 +66,7 @@ export function useRunDetail(id: string | undefined) {
       })
       setTasks(data.rows)
       setTaskTotal(data.total)
+      setTaskSummary(data.summary)
     } finally {
       setLoading(false)
     }
@@ -185,6 +201,7 @@ export function useRunDetail(id: string | undefined) {
     statusFilter,
     taskPage,
     taskTotal,
+    taskSummary,
     tasks,
   }
 }

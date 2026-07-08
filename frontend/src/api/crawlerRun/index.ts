@@ -6,8 +6,13 @@ import type {
   QueueStatus,
   RetryCrawlerRunTasksRequest,
   RunLogEntry,
+  RunTaskSummary,
 } from './types'
 import type { PaginatedResponse } from '../crawlTask/types'
+
+export type CrawlerRunTasksResponse = PaginatedResponse<CrawlRunDetailTask> & {
+  summary: RunTaskSummary
+}
 
 const BASE_URL = '/api/crawler/runs'
 
@@ -36,8 +41,8 @@ export function getCrawlerRunTasks(
     status?: string
     keyword?: string
   },
-): Promise<PaginatedResponse<CrawlRunDetailTask>> {
-  return request.get<PaginatedResponse<CrawlRunDetailTask>>(`${BASE_URL}/${runId}/tasks`, params)
+): Promise<CrawlerRunTasksResponse> {
+  return request.get<CrawlerRunTasksResponse>(`${BASE_URL}/${runId}/tasks`, params)
 }
 
 export function stopCrawlerRun(runId: string): Promise<CrawlRun> {

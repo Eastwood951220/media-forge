@@ -44,6 +44,7 @@ function RunDetailPage() {
         pageSize={detail.pageSize}
         runStatus={detail.run?.status}
         statusFilter={detail.statusFilter}
+        summary={detail.taskSummary}
         tasks={detail.tasks}
         total={detail.taskTotal}
       />
