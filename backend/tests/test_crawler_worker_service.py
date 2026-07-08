@@ -19,6 +19,7 @@ class Runtime:
         self.current = None
         self.progress = {}
         self.cleared = []
+        self.purged = []
 
     def claim_next_run(self):
         run_id, self._run_id = self._run_id, None
@@ -35,6 +36,9 @@ class Runtime:
 
     def clear_stop(self, run_id):
         self.cleared.append(run_id)
+
+    def purge_run(self, run_id):
+        self.purged.append(run_id)
 
 
 class CrawlerEngineStub:
@@ -693,3 +697,16 @@ def test_execute_run_detail_retry_uses_only_pending_crawl_rows(monkeypatch) -> N
     execute_run(session, session.get(CrawlRun, run.id), runtime)
 
     assert [task_info["code"] for task_info in engine.detail_tasks] == ["PENDING-001"]
+
+
+def test_process_run_purges_runtime_for_missing_run() -> None:
+    from backend.app.modules.crawler.runtime.worker import process_run
+
+    run_id = str(uuid.uuid4())
+    runtime = Runtime(run_id)
+
+    processed = process_run(TestingSessionLocal, runtime, run_id)
+
+    assert processed is False
+    assert runtime.current is None
+    assert runtime.purged == [run_id]

@@ -70,6 +70,7 @@ def process_run(db_factory: sessionmaker, runtime: CrawlerRuntimeState, run_id: 
         run = db.get(CrawlRun, uuid.UUID(run_id))
         if run is None:
             logger.error("Run %s not found", run_id)
+            runtime.purge_run(run_id)
             return False
 
         run.status = "running"
