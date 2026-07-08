@@ -123,14 +123,14 @@ describe('RunDetail retry controls', () => {
     expect(screen.queryByRole('button', { name: '重新爬取全部失败' })).not.toBeInTheDocument()
   })
 
-  it('fetches first task page with skip and limit', async () => {
+  it('fetches first task page with page and size', async () => {
     render(<RunDetailPage />)
 
     await screen.findByText('FAIL-001')
 
     expect(getCrawlerRunTasks).toHaveBeenCalledWith('run-1', {
-      skip: 0,
-      limit: 50,
+      page: 1,
+      size: 50,
       status: undefined,
       keyword: undefined,
     })
@@ -142,8 +142,8 @@ describe('RunDetail retry controls', () => {
     await screen.findByText('FAIL-001')
 
     expect(getCrawlerRunTasks).toHaveBeenCalledWith('run-1', {
-      skip: 0,
-      limit: 50,
+      page: 1,
+      size: 50,
       status: undefined,
       keyword: undefined,
     })

@@ -44,8 +44,8 @@ export function useRunDetail(id: string | undefined) {
     setLoading(true)
     try {
       const data = await getCrawlerRunTasks(id, {
-        skip: (taskPage - 1) * pageSize,
-        limit: pageSize,
+        page: taskPage,
+        size: pageSize,
         status: statusFilter,
         keyword: keyword || undefined,
       })

@@ -31,8 +31,8 @@ export function getCrawlerRunLogs(runId: string): Promise<RunLogEntry[]> {
 export function getCrawlerRunTasks(
   runId: string,
   params?: {
-    skip?: number
-    limit?: number
+    page?: number
+    size?: number
     status?: string
     keyword?: string
   },
