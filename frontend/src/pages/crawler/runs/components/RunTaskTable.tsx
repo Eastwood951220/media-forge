@@ -10,11 +10,13 @@ interface RunTaskTableProps {
   statusFilter: string | undefined
   keyword: string
   pageSize: number
+  current: number
+  total: number
   actionLoading: 'stop' | 'restart' | 'retry' | null
   runStatus: string | undefined
   onStatusChange: (value: string | undefined) => void
   onKeywordSearch: (value: string) => void
-  onPageSizeChange: (size: number) => void
+  onPageChange: (page: number, size: number) => void
   onRetryTask: (detailId: string) => Promise<void>
   onRetrySelected: (detailIds: string[]) => Promise<void>
   onRetryAllFailed: () => Promise<void>
@@ -26,11 +28,13 @@ function RunTaskTable({
   statusFilter,
   keyword,
   pageSize,
+  current,
+  total,
   actionLoading,
   runStatus,
   onStatusChange,
   onKeywordSearch,
-  onPageSizeChange,
+  onPageChange,
   onRetryTask,
   onRetrySelected,
   onRetryAllFailed,
@@ -91,6 +95,14 @@ function RunTaskTable({
       dataIndex: 'source_name',
       key: 'source_name',
       ellipsis: true,
+    },
+    {
+      title: 'URL来源',
+      dataIndex: 'source_url_name',
+      key: 'source_url_name',
+      width: 140,
+      ellipsis: true,
+      render: (_, record) => record.source_url_name || record.task_url_type || '-',
     },
     {
       title: '状态',
@@ -175,10 +187,13 @@ function RunTaskTable({
             : undefined
         }
         pagination={{
+          current,
           pageSize,
+          total,
           showSizeChanger: true,
           pageSizeOptions: ['20', '50', '100', '200'],
-          onChange: (_page, size) => onPageSizeChange(size),
+          showTotal: (count) => `共 ${count} 条`,
+          onChange: onPageChange,
         }}
       />
     </Card>

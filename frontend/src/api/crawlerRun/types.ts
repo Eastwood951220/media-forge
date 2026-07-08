@@ -35,6 +35,10 @@ export interface CrawlRunDetailTask {
   code: string | null
   source_url: string
   source_name: string
+  source_url_name?: string | null
+  task_url?: string | null
+  task_final_url?: string | null
+  task_url_type?: string | null
   status: DetailTaskStatus
   error: string | null
   item_data: Record<string, unknown> | null

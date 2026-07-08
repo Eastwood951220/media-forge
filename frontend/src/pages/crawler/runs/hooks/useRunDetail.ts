@@ -11,6 +11,8 @@ export function useRunDetail(id: string | undefined) {
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
   const [keyword, setKeyword] = useState('')
   const [pageSize, setPageSize] = useState(50)
+  const [taskPage, setTaskPage] = useState(1)
+  const [taskTotal, setTaskTotal] = useState(0)
   const [actionLoading, setActionLoading] = useState<'stop' | 'restart' | 'retry' | null>(null)
 
   // Reset state when run ID changes
@@ -20,6 +22,8 @@ export function useRunDetail(id: string | undefined) {
     setTasks([])
     setStatusFilter(undefined)
     setKeyword('')
+    setTaskPage(1)
+    setTaskTotal(0)
   }, [id])
 
   // Fetch helpers
@@ -40,15 +44,17 @@ export function useRunDetail(id: string | undefined) {
     setLoading(true)
     try {
       const data = await getCrawlerRunTasks(id, {
-        limit: 200,
+        skip: (taskPage - 1) * pageSize,
+        limit: pageSize,
         status: statusFilter,
         keyword: keyword || undefined,
       })
       setTasks(data.rows)
+      setTaskTotal(data.total)
     } finally {
       setLoading(false)
     }
-  }, [id, keyword, statusFilter])
+  }, [id, keyword, pageSize, statusFilter, taskPage])
 
   const resyncSnapshot = useCallback(() => {
     void fetchRun()
@@ -126,6 +132,21 @@ export function useRunDetail(id: string | undefined) {
     await runRetryRequest({ retry_all: true }, '已重新爬取全部失败子任务')
   }, [runRetryRequest])
 
+  const handleStatusChange = useCallback((value: string | undefined) => {
+    setStatusFilter(value)
+    setTaskPage(1)
+  }, [])
+
+  const handleKeywordSearch = useCallback((value: string) => {
+    setKeyword(value)
+    setTaskPage(1)
+  }, [])
+
+  const handleTaskPageChange = useCallback((page: number, size: number) => {
+    setTaskPage(page)
+    setPageSize(size)
+  }, [])
+
   // Initial fetch effects
   useEffect(() => {
     void fetchRun()
@@ -144,24 +165,26 @@ export function useRunDetail(id: string | undefined) {
     fetchLogs,
     fetchRun,
     fetchTasks,
+    handleKeywordSearch,
     handleRestart,
     handleRetryAllFailedTasks,
     handleRetrySelectedTasks,
     handleRetryTask,
+    handleStatusChange,
     handleStop,
+    handleTaskPageChange,
     keyword,
     loading,
     logs,
     pageSize,
     resyncSnapshot,
     run,
-    setKeyword,
     setLogs,
-    setPageSize,
     setRun,
-    setStatusFilter,
     setTasks,
     statusFilter,
+    taskPage,
+    taskTotal,
     tasks,
   }
 }

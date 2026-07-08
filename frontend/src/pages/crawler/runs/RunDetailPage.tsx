@@ -13,6 +13,7 @@ function RunDetailPage() {
   useRunDetailRealtime({
     id,
     fetchLogs: detail.fetchLogs,
+    fetchTasks: detail.fetchTasks,
     keyword: detail.keyword,
     resyncSnapshot: detail.resyncSnapshot,
     setLogs: detail.setLogs,
@@ -31,18 +32,20 @@ function RunDetailPage() {
       />
       <RunTaskTable
         actionLoading={detail.actionLoading}
+        current={detail.taskPage}
         keyword={detail.keyword}
         loading={detail.loading}
-        onKeywordSearch={detail.setKeyword}
-        onPageSizeChange={detail.setPageSize}
+        onKeywordSearch={detail.handleKeywordSearch}
+        onPageChange={detail.handleTaskPageChange}
         onRetryAllFailed={detail.handleRetryAllFailedTasks}
         onRetrySelected={detail.handleRetrySelectedTasks}
         onRetryTask={detail.handleRetryTask}
-        onStatusChange={detail.setStatusFilter}
+        onStatusChange={detail.handleStatusChange}
         pageSize={detail.pageSize}
         runStatus={detail.run?.status}
         statusFilter={detail.statusFilter}
         tasks={detail.tasks}
+        total={detail.taskTotal}
       />
       {detail.run && (
         <Card title="运行日志" style={{ marginTop: 16 }}>

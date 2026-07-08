@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RunDetailPage from '../RunDetailPage'
 import {
@@ -52,6 +53,10 @@ const failedTask: CrawlRunDetailTask = {
   code: 'FAIL-001',
   source_url: 'https://example.test/fail',
   source_name: 'FAIL 001',
+  source_url_name: '演员A',
+  task_url: 'https://javdb.com/actors/a',
+  task_final_url: 'https://javdb.com/actors/a?page=1',
+  task_url_type: 'actors',
   status: 'crawl_failed',
   error: 'timeout',
   item_data: null,
@@ -117,5 +122,31 @@ describe('RunDetail retry controls', () => {
     expect(await screen.findByText('FAIL-001')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重新爬取' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重新爬取全部失败' })).not.toBeInTheDocument()
+  })
+
+  it('fetches first task page with skip and limit', async () => {
+    render(<RunDetailPage />)
+
+    await screen.findByText('FAIL-001')
+
+    expect(getCrawlerRunTasks).toHaveBeenCalledWith('run-1', {
+      skip: 0,
+      limit: 50,
+      status: undefined,
+      keyword: undefined,
+    })
+  })
+
+  it('fetches tasks with server-side pagination params', async () => {
+    render(<RunDetailPage />)
+
+    await screen.findByText('FAIL-001')
+
+    expect(getCrawlerRunTasks).toHaveBeenCalledWith('run-1', {
+      skip: 0,
+      limit: 50,
+      status: undefined,
+      keyword: undefined,
+    })
   })
 })
