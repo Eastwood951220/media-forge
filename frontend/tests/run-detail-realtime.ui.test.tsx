@@ -90,6 +90,18 @@ describe('RunDetailPage realtime events', () => {
     vi.mocked(getCrawlerRunTasks).mockResolvedValue({
       rows: [],
       total: 0,
+      summary: {
+        total: 0,
+        pending_crawl: 0,
+        crawling: 0,
+        saved: 0,
+        skipped: 0,
+        crawl_failed: 0,
+        save_failed: 0,
+        completed: 0,
+        waiting: 0,
+        failed: 0,
+      },
     })
   })
 
@@ -100,7 +112,8 @@ describe('RunDetailPage realtime events', () => {
     expect(getCrawlerRun).toHaveBeenCalledWith('run-1')
     expect(getCrawlerRunLogs).toHaveBeenCalledWith('run-1')
     expect(getCrawlerRunTasks).toHaveBeenCalledWith('run-1', {
-      limit: 200,
+      page: 1,
+      size: 50,
       status: undefined,
       keyword: undefined,
     })
@@ -143,6 +156,24 @@ describe('RunDetailPage realtime events', () => {
     expect(screen.getByText('详情 53/53 跳过')).toBeInTheDocument()
   })
 
+  it('refetches tasks when a url completion refresh event arrives', async () => {
+    renderPage()
+    await screen.findByText('运行详情 - 任务A')
+
+    const initialTasksCalls = vi.mocked(getCrawlerRunTasks).mock.calls.length
+
+    emit('crawler.run.detail.updated', {
+      run_id: 'run-1',
+      tasks: [],
+      refresh_tasks: true,
+      reason: 'url_completed',
+    })
+
+    await waitFor(() => {
+      expect(vi.mocked(getCrawlerRunTasks).mock.calls.length).toBeGreaterThan(initialTasksCalls)
+    })
+  })
+
   it('reloads final logs from the logs endpoint when a run completes', async () => {
     vi.mocked(getCrawlerRunLogs)
       .mockResolvedValueOnce([])
@@ -161,6 +192,7 @@ describe('RunDetailPage realtime events', () => {
     await screen.findByText('运行详情 - 任务A')
 
     const initialCallCount = vi.mocked(getCrawlerRunLogs).mock.calls.length as number
+    const initialTasksCalls = vi.mocked(getCrawlerRunTasks).mock.calls.length as number
 
     emit('crawler.run.updated', {
       id: 'run-1',
@@ -181,6 +213,7 @@ describe('RunDetailPage realtime events', () => {
 
     await waitFor(() => {
       expect(vi.mocked(getCrawlerRunLogs).mock.calls.length).toBeGreaterThan(initialCallCount)
+      expect(vi.mocked(getCrawlerRunTasks).mock.calls.length).toBeGreaterThan(initialTasksCalls)
     })
     expect(await screen.findByText('详情处理完成: 总计=54 已完成=0 失败=0 跳过=54')).toBeInTheDocument()
   })

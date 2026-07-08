@@ -17,6 +17,8 @@ export type CrawlerRunUpdatedPayload = CrawlRun
 export type CrawlerRunDetailUpdatedPayload = {
   run_id: string
   tasks: CrawlRunDetailTask[]
+  refresh_tasks?: boolean
+  reason?: string
 }
 
 export type CrawlerRunLogAppendedPayload = {

@@ -34,6 +34,7 @@ export function useRunDetailRealtime(args: {
         }))
         if (['completed', 'failed', 'stopped'].includes(event.payload.status)) {
           void fetchLogs()
+          void fetchTasks()
         }
       },
     )
@@ -42,6 +43,10 @@ export function useRunDetailRealtime(args: {
       'crawler.run.detail.updated',
       (event) => {
         if (event.resource_id !== id || event.payload.run_id !== id) return
+        if (event.payload.refresh_tasks) {
+          void fetchTasks()
+          return
+        }
         let needsRefresh = false
         setTasks((currentTasks) => {
           const byId = new Map(currentTasks.map((task) => [task.id, task]))
