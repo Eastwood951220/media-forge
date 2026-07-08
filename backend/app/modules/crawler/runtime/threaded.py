@@ -86,12 +86,23 @@ def _run_detail_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any,
     failed_count = 0
     skipped_count = 0
 
+    from scraper.core.throttle import random_sleep
+
     while True:
         if runtime.is_stop_requested(str(run.id)):
             break
         detail = claim_next_pending_detail(db, run.id)
         if detail is None:
             break
+
+        append_run_log_for_run(
+            db, run,
+            f"[{task.name}][URL: {detail.source_url_name or detail.task_url_type or '-'}] 详情开始: code={detail.code} name={detail.source_name}",
+            "INFO",
+            detail_id=str(detail.id), code=detail.code,
+            source_url=detail.source_url, source_url_name=detail.source_url_name,
+            detail_status="crawling",
+        )
 
         try:
             _process_single_detail(db, run, task, detail, runtime)
@@ -108,6 +119,8 @@ def _run_detail_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any,
             detail.error = str(exc)[:500]
             failed_count += 1
             db.commit()
+
+        random_sleep(config.DETAIL_PAGE_DELAY_MIN, config.DETAIL_PAGE_DELAY_MAX)
 
     progress["saved"] = saved_count
     progress["failed"] = failed_count

@@ -66,6 +66,26 @@ def build_crawl_callbacks(
             return None
         return detail
 
+    def detail_log_context(
+        task_info: dict[str, Any],
+        detail: CrawlRunDetailTask | None,
+        *,
+        item_data: dict[str, Any] | None = None,
+        detail_status: str | None = None,
+    ) -> dict[str, Any]:
+        item_data = item_data or {}
+        context: dict[str, Any] = {
+            "code": item_data.get("code") or task_info.get("code"),
+            "source_url": task_info.get("url") or item_data.get("source_url"),
+            "source_url_name": task_info.get("_task_url_name"),
+            "detail_status": detail_status,
+        }
+        if detail is not None:
+            context["detail_id"] = str(detail.id)
+            context["source_url"] = detail.source_url or context.get("source_url")
+            context["source_url_name"] = detail.source_url_name or context.get("source_url_name")
+        return {key: value for key, value in context.items() if value is not None}
+
     def on_tasks_batch_created(items: list[dict[str, Any]]) -> None:
         skipped_count = 0
         created_details: list[CrawlRunDetailTask] = []
@@ -136,7 +156,11 @@ def build_crawl_callbacks(
                 detail.crawled_at = datetime.now()
                 detail.saved_at = datetime.now()
             increment_progress(ctx.progress, "saved")
-            append_run_log_for_run(ctx.db, ctx.run, f"入库成功: {code}", "INFO", code=code, movie_id=str(movie_id))
+            append_run_log_for_run(
+                ctx.db, ctx.run, f"入库成功: {code}", "INFO",
+                **detail_log_context(task_info, detail, item_data=item_data, detail_status="saved"),
+                movie_id=str(movie_id),
+            )
         except Exception as exc:
             ctx.db.rollback()
             if detail:
@@ -150,7 +174,10 @@ def build_crawl_callbacks(
                     pass
             increment_progress(ctx.progress, "save_failed")
             try:
-                append_run_log_for_run(ctx.db, ctx.run, f"入库失败: {code}: {exc}", "ERROR", code=code)
+                append_run_log_for_run(
+                    ctx.db, ctx.run, f"入库失败: {code}: {exc}", "ERROR",
+                    **detail_log_context(task_info, detail, item_data=item_data, detail_status="save_failed"),
+                )
             except Exception:
                 logger.warning("入库失败且日志写入异常: code=%s error=%s", code, exc)
         write_progress(ctx.runtime, run_id_str, ctx.progress)
@@ -175,7 +202,10 @@ def build_crawl_callbacks(
         ctx.db.commit()
         if detail:
             publish_run_detail_updated(ctx.db, ctx.run, [detail])
-        append_run_log_for_run(ctx.db, ctx.run, f"爬取失败: {task_info.get('code') or task_info.get('url')}: {error}", "ERROR")
+        append_run_log_for_run(
+            ctx.db, ctx.run, f"详情失败: {task_info.get('code') or task_info.get('url')}: {error}", "ERROR",
+            **detail_log_context(task_info, detail, detail_status="crawl_failed"),
+        )
 
     def on_item_already_exists(task_info: dict[str, Any]) -> None:
         detail = active_indexed_detail(task_info)
@@ -193,7 +223,10 @@ def build_crawl_callbacks(
         ctx.db.commit()
         if detail:
             publish_run_detail_updated(ctx.db, ctx.run, [detail])
-        append_run_log_for_run(ctx.db, ctx.run, f"跳过已存在影片并追加任务ID: {code}", "INFO", code=code)
+        append_run_log_for_run(
+            ctx.db, ctx.run, f"跳过已存在影片并追加任务ID: {code}", "INFO",
+            **detail_log_context(task_info, detail, detail_status="skipped"),
+        )
 
     def log_callback(message: str, level: str = "INFO") -> None:
         append_run_log_for_run(ctx.db, ctx.run, message, level)

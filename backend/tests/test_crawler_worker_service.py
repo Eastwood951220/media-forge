@@ -924,3 +924,64 @@ def test_finalize_resets_crawling_details_when_stopped(db_session) -> None:
 
     db_session.refresh(detail)
     assert detail.status == "pending_crawl"
+
+
+def test_callbacks_write_detail_logs_with_context(db_session, admin_user, monkeypatch, tmp_path) -> None:
+    from backend.app.modules.crawler.runs import logs as run_logs
+    from backend.app.modules.crawler.runtime.callbacks import CrawlerCallbackContext, build_crawl_callbacks
+    from backend.app.modules.crawler.runtime.detail_index import DetailTaskIndex
+    from backend.app.modules.crawler.runtime.progress import new_progress
+
+    monkeypatch.setattr(run_logs, "RUN_LOG_DIR", str(tmp_path))
+    task = CrawlTask(name="任务-log-context", owner_id=admin_user.id, is_skip=False)
+    db_session.add(task)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="incremental", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code="LOG-001",
+        source_url="https://javdb.com/v/log001",
+        source_name="LOG 001",
+        source_url_name="演员A",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+
+    index = DetailTaskIndex()
+    index.remember(detail)
+
+    class Runtime:
+        def write_progress(self, run_id: str, progress: dict[str, int]) -> None:
+            return None
+
+        def is_stop_requested(self, run_id: str) -> bool:
+            return False
+
+    callbacks = build_crawl_callbacks(CrawlerCallbackContext(
+        db=db_session,
+        run=run,
+        task=task,
+        runtime=Runtime(),
+        detail_index=index,
+        progress=new_progress(),
+    ))
+
+    callbacks.log_callback("[任务-log-context][URL: 演员A] 详情开始: code=LOG-001 name=LOG 001", "INFO")
+    callbacks.on_item_saved(
+        {"code": "LOG-001", "url": "https://javdb.com/v/log001", "name": "LOG 001"},
+        {"code": "LOG-001", "source_url": "https://javdb.com/v/log001", "source_name": "LOG 001"},
+    )
+
+    loaded = run_logs.load_run_logs(str(run.id))
+    assert any("详情开始" in entry["message"] for entry in loaded)
+    saved_entry = next(entry for entry in loaded if "入库成功" in entry["message"])
+    assert saved_entry["context"]["code"] == "LOG-001"
+    assert saved_entry["context"]["detail_id"] == str(detail.id)
+    assert saved_entry["context"]["source_url"] == "https://javdb.com/v/log001"
+    assert saved_entry["context"]["source_url_name"] == "演员A"
+    assert saved_entry["context"]["detail_status"] == "saved"
