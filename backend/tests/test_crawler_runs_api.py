@@ -640,12 +640,49 @@ def test_run_tasks_uses_server_side_pagination(client: TestClient, admin_user) -
         )
     session.commit()
 
-    response = client.get(f"/api/crawler/runs/{run.id}/tasks?skip=2&limit=2", headers=headers)
+    response = client.get(f"/api/crawler/runs/{run.id}/tasks?page=2&size=2", headers=headers)
 
     assert response.status_code == HTTPStatus.OK
     body = response.json()
     assert body["total"] == 5
     assert [row["code"] for row in body["rows"]] == ["PAGE-2", "PAGE-3"]
+
+
+def test_list_run_tasks_accepts_page_and_size(client: TestClient, admin_user) -> None:
+    """page/size params return correct slice."""
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="completed", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    first = CrawlRunDetailTask(
+        run_id=run.id, task_name="任务", code="FIRST",
+        source_url="https://a", source_name="A",
+        status="saved", created_at=datetime(2026, 7, 8, 0, 0, 0),
+    )
+    second = CrawlRunDetailTask(
+        run_id=run.id, task_name="任务", code="SECOND",
+        source_url="https://b", source_name="B",
+        status="saved", created_at=datetime(2026, 7, 8, 0, 0, 1),
+    )
+    session.add_all([first, second])
+    session.commit()
+    run_id = str(run.id)
+
+    # page=1, size=1 -> first item
+    resp = client.get(f"/api/crawler/runs/{run_id}/tasks?page=1&size=1", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["rows"]) == 1
+    assert body["rows"][0]["code"] == "FIRST"
+    assert body["total"] == 2
+
+    # page=2, size=1 -> second item
+    resp2 = client.get(f"/api/crawler/runs/{run_id}/tasks?page=2&size=1", headers=headers)
+    body2 = resp2.json()
+    assert len(body2["rows"]) == 1
+    assert body2["rows"][0]["code"] == "SECOND"
+    assert body2["rows"][0]["id"] != body["rows"][0]["id"]
 
 
 def test_detail_row_to_task_info_preserves_url_context() -> None:

@@ -65,8 +65,8 @@ def list_run_tasks(
     run_id: uuid.UUID,
     _current_user: CurrentUser,
     db: Session = Depends(get_db),
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=200),
+    page: int = Query(default=1, ge=1, description="Page number, 1-based"),
+    size: int = Query(default=50, ge=1, le=200, description="Page size"),
     status_filter: str | None = Query(default=None, alias="status"),
     keyword: str | None = Query(default=None, max_length=200),
 ) -> dict:
@@ -83,7 +83,8 @@ def list_run_tasks(
             | CrawlRunDetailTask.source_url_name.ilike(f"%{keyword}%")
         )
     total = query.count()
-    rows = query.order_by(CrawlRunDetailTask.created_at.asc()).offset(skip).limit(limit).all()
+    offset = (page - 1) * size
+    rows = query.order_by(CrawlRunDetailTask.created_at.asc()).offset(offset).limit(size).all()
     return paginated(
         rows=[CrawlRunDetailTaskRead.model_validate(r).model_dump(mode="json") for r in rows],
         total=total,
