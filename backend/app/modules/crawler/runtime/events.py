@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from sqlalchemy.orm.exc import ObjectDeletedError
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
@@ -59,6 +60,28 @@ def publish_run_detail_updated(
     owner_id = run_owner_id(db, run)
     if owner_id is None:
         return
+    detail_payloads = []
+    for detail in details:
+        try:
+            detail_payloads.append(
+                {
+                    "id": str(detail.id),
+                    "run_id": str(detail.run_id),
+                    "task_name": detail.task_name,
+                    "code": detail.code,
+                    "source_url": detail.source_url,
+                    "source_name": detail.source_name,
+                    "source_url_name": detail.source_url_name,
+                    "task_url": detail.task_url,
+                    "task_final_url": detail.task_final_url,
+                    "task_url_type": detail.task_url_type,
+                    "status": detail.status,
+                    "error": detail.error,
+                    "created_at": detail.created_at.isoformat() if detail.created_at else None,
+                }
+            )
+        except ObjectDeletedError:
+            logger.warning("Skip realtime update for deleted crawl detail task")
     realtime_bus.publish(
         make_realtime_event(
             event="crawler.run.detail.updated",
@@ -67,20 +90,7 @@ def publish_run_detail_updated(
             resource_id=str(run.id),
             payload={
                 "run_id": str(run.id),
-                "tasks": [
-                    {
-                        "id": str(detail.id),
-                        "run_id": str(detail.run_id),
-                        "task_name": detail.task_name,
-                        "code": detail.code,
-                        "source_url": detail.source_url,
-                        "source_name": detail.source_name,
-                        "status": detail.status,
-                        "error": detail.error,
-                        "created_at": detail.created_at.isoformat() if detail.created_at else None,
-                    }
-                    for detail in details
-                ],
+                "tasks": detail_payloads,
             },
         )
     )

@@ -4,7 +4,8 @@ import uuid
 
 from fastapi.testclient import TestClient
 
-from backend.app.models.crawl_run import CrawlRun
+from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+from backend.app.models.crawl_task import CrawlTask
 from backend.app.modules.crawler.runs.logs import append_run_log, build_run_log
 from backend.tests.conftest import TestingSessionLocal
 
@@ -645,3 +646,113 @@ def test_run_tasks_uses_server_side_pagination(client: TestClient, admin_user) -
     body = response.json()
     assert body["total"] == 5
     assert [row["code"] for row in body["rows"]] == ["PAGE-2", "PAGE-3"]
+
+
+def test_detail_row_to_task_info_preserves_url_context() -> None:
+    detail = CrawlRunDetailTask(
+        run_id=uuid.uuid4(),
+        task_name="任务",
+        code="AAA-001",
+        source_url="https://javdb.com/v/aaa001",
+        source_name="AAA 001",
+        source_url_name="演员A",
+        task_url="https://javdb.com/actors/a",
+        task_final_url="https://javdb.com/actors/a?page=1",
+        task_url_type="actors",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    )
+
+    from backend.app.modules.crawler.runtime.details import detail_row_to_task_info
+
+    assert detail_row_to_task_info(detail) == {
+        "code": "AAA-001",
+        "url": "https://javdb.com/v/aaa001",
+        "name": "AAA 001",
+        "_task_url": "https://javdb.com/actors/a",
+        "_task_final_url": "https://javdb.com/actors/a?page=1",
+        "_task_url_type": "actors",
+        "_task_url_name": "演员A",
+    }
+
+
+def test_on_tasks_batch_created_persists_url_context(admin_user) -> None:
+    from backend.app.modules.crawler.runtime.callbacks import CrawlerCallbackContext, build_crawl_callbacks
+    from backend.app.modules.crawler.runtime.detail_index import DetailTaskIndex
+    from backend.app.modules.crawler.runtime.progress import new_progress
+
+    class Runtime:
+        def write_progress(self, _run_id: str, _progress: dict) -> None:
+            return None
+
+        def is_stop_requested(self, _run_id: str) -> bool:
+            return False
+
+    session = TestingSessionLocal()
+    task = CrawlTask(name="任务", storage_location="local", owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    run = CrawlRun(task_id=task.id, task_name="任务", status="running", crawl_mode="incremental")
+    session.add(run)
+    session.commit()
+
+    ctx = CrawlerCallbackContext(
+        db=session,
+        run=run,
+        task=task,
+        runtime=Runtime(),
+        detail_index=DetailTaskIndex(),
+        progress=new_progress(),
+    )
+    callbacks = build_crawl_callbacks(ctx)
+
+    callbacks.on_tasks_batch_created([
+        {
+            "code": "AAA-001",
+            "url": "https://javdb.com/v/aaa001",
+            "name": "AAA 001",
+            "_task_url_name": "演员A",
+            "_task_url": "https://javdb.com/actors/a",
+            "_task_final_url": "https://javdb.com/actors/a?page=1",
+            "_task_url_type": "actors",
+        }
+    ])
+
+    detail = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).one()
+
+    assert detail.source_url_name == "演员A"
+    assert detail.task_url == "https://javdb.com/actors/a"
+    assert detail.task_final_url == "https://javdb.com/actors/a?page=1"
+    assert detail.task_url_type == "actors"
+
+
+def test_run_task_rows_created_from_spider_payload_keep_url_context(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="running", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name="任务",
+        code="AAA-001",
+        source_url="https://javdb.com/v/aaa001",
+        source_name="AAA 001",
+        source_url_name="演员A",
+        task_url="https://javdb.com/actors/a",
+        task_final_url="https://javdb.com/actors/a?page=1",
+        task_url_type="actors",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    )
+    session.add(detail)
+    session.commit()
+
+    response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    row = response.json()["rows"][0]
+    assert row["source_url_name"] == "演员A"
+    assert row["task_url"] == "https://javdb.com/actors/a"
+    assert row["task_final_url"] == "https://javdb.com/actors/a?page=1"
+    assert row["task_url_type"] == "actors"

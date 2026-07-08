@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy.orm.exc import ObjectDeletedError
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
@@ -51,13 +52,27 @@ def build_crawl_callbacks(
     omitted.
     """
 
+    def active_indexed_detail(
+        task_info: dict[str, Any],
+        item_data: dict[str, Any] | None = None,
+    ) -> CrawlRunDetailTask | None:
+        detail = ctx.detail_index.find(task_info, item_data)
+        if detail is None:
+            return None
+        try:
+            detail.id
+        except ObjectDeletedError:
+            ctx.detail_index.forget(detail)
+            return None
+        return detail
+
     def on_tasks_batch_created(items: list[dict[str, Any]]) -> None:
         skipped_count = 0
         created_details: list[CrawlRunDetailTask] = []
         for item in items:
             is_skipped = item.get("status") == "skipped"
             reason = item.get("reason") if is_skipped else None
-            detail = ctx.detail_index.find(item)
+            detail = active_indexed_detail(item)
             if detail is None:
                 detail = CrawlRunDetailTask(
                     run_id=ctx.run.id,
@@ -65,6 +80,10 @@ def build_crawl_callbacks(
                     code=item.get("code"),
                     source_url=item.get("url", ""),
                     source_name=item.get("name", ""),
+                    source_url_name=item.get("_task_url_name"),
+                    task_url=item.get("_task_url"),
+                    task_final_url=item.get("_task_final_url"),
+                    task_url_type=item.get("_task_url_type"),
                     status="skipped" if is_skipped else "pending_crawl",
                     error=reason,
                     created_at=datetime.now(),
@@ -77,6 +96,10 @@ def build_crawl_callbacks(
                 detail.item_data = None
                 detail.crawled_at = None
                 detail.saved_at = None
+                detail.source_url_name = item.get("_task_url_name")
+                detail.task_url = item.get("_task_url")
+                detail.task_final_url = item.get("_task_final_url")
+                detail.task_url_type = item.get("_task_url_type")
             ctx.detail_index.remember(detail)
             created_details.append(detail)
             if is_skipped:
@@ -92,7 +115,7 @@ def build_crawl_callbacks(
             append_run_log_for_run(ctx.db, ctx.run, f"创建子任务 {len(items)} 条，跳过 {skipped_count} 条")
 
     def on_item_saved(task_info: dict[str, Any], item_data: dict[str, Any]) -> None:
-        detail = ctx.detail_index.find(task_info, item_data)
+        detail = active_indexed_detail(task_info, item_data)
         code = item_data.get("code") or task_info.get("code") or "-"
         run_id_str = str(ctx.run.id)
         # Inject source_task_ids into item_data for persistence
@@ -135,7 +158,7 @@ def build_crawl_callbacks(
                 pass
 
     def on_detail_failed(task_info: dict[str, Any], error: str) -> None:
-        detail = ctx.detail_index.find(task_info)
+        detail = active_indexed_detail(task_info)
         if detail:
             detail.status = "crawl_failed"
             detail.error = error[:500]
@@ -148,7 +171,7 @@ def build_crawl_callbacks(
         append_run_log_for_run(ctx.db, ctx.run, f"爬取失败: {task_info.get('code') or task_info.get('url')}: {error}", "ERROR")
 
     def on_item_already_exists(task_info: dict[str, Any]) -> None:
-        detail = ctx.detail_index.find(task_info)
+        detail = active_indexed_detail(task_info)
         code = task_info.get("code")
         was_skipped = detail is not None and detail.status == "skipped"
         if detail:

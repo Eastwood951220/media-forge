@@ -65,4 +65,8 @@ def detail_row_to_task_info(detail: CrawlRunDetailTask) -> dict[str, Any]:
         "code": detail.code,
         "url": detail.source_url,
         "name": detail.source_name,
+        "_task_url": detail.task_url,
+        "_task_final_url": detail.task_final_url,
+        "_task_url_type": detail.task_url_type,
+        "_task_url_name": detail.source_url_name,
     }
