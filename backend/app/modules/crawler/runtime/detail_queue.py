@@ -62,7 +62,7 @@ def claim_next_pending_detail(db: Session, run_id: uuid.UUID) -> CrawlRunDetailT
         return None
     detail.status = "crawling"
     detail.error = None
-    db.commit()
+    db.flush()
     db.refresh(detail)
     return detail
 
