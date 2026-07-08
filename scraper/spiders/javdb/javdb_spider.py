@@ -35,6 +35,30 @@ class JavdbSpider(BaseSpider):
         if log_callback:
             log_callback(message, level)
 
+    @staticmethod
+    def _url_label(url_entry: CrawlTaskUrlEntry) -> str:
+        return (
+            (url_entry.url_name or "").strip()
+            or (url_entry.url_type or "").strip()
+            or (url_entry.final_url or url_entry.url or "").strip()
+            or "-"
+        )
+
+    @staticmethod
+    def _detail_url_label(task: dict) -> str:
+        return (
+            str(task.get("_task_url_name") or "").strip()
+            or str(task.get("_task_url_type") or "").strip()
+            or str(task.get("_task_final_url") or task.get("_task_url") or "").strip()
+        )
+
+    @staticmethod
+    def _task_prefix(task_name: str | None, url_label: str | None = None) -> str:
+        prefix = f"[{task_name}]" if task_name else ""
+        if url_label:
+            prefix = f"{prefix}[URL: {url_label}]"
+        return prefix
+
     def collect_detail_tasks_for_url(
         self,
         url_entry: CrawlTaskUrlEntry,
@@ -52,22 +76,25 @@ class JavdbSpider(BaseSpider):
         seen_codes: set[str] = set()
         verification_count = 0
 
-        msg = f"[{task_name}] 增量阈值: {incremental_threshold}, 爬取模式: {crawl_mode}"
+        url_label = self._url_label(url_entry)
+        prefix = self._task_prefix(task_name, url_label)
+
+        msg = f"{prefix} 增量阈值: {incremental_threshold}, 爬取模式: {crawl_mode}"
         self._emit(msg, log_callback, "INFO")
 
         final_url = url_entry.final_url or url_entry.url
-        msg = f"[{task_name}] 开始收集列表页 url={final_url}, 最大页数={max_pages}"
+        msg = f"{prefix} 开始收集列表页 url={final_url}, 最大页数={max_pages}"
         self._emit(msg, log_callback)
 
         page_no = 1
 
         while page_no <= max_pages:
             if stop_check and stop_check():
-                msg = f"[{task_name}] 列表页 {page_no} 收到停止信号"
+                msg = f"{prefix} 列表页 {page_no} 收到停止信号"
                 self._emit(msg, log_callback, "WARNING")
                 break
             page_url = build_task_page_url(final_url, page_no)
-            msg = f"[{task_name}] 正在获取列表页 {page_no}/{max_pages}"
+            msg = f"{prefix} 正在获取列表页 {page_no}/{max_pages}"
             self._emit(msg, log_callback)
             self.logger.info("List page: %s", page_url)
 
@@ -76,13 +103,13 @@ class JavdbSpider(BaseSpider):
             if is_security_check_page(page):
                 verification_count += 1
                 msg = (
-                    f"[{task_name}] 列表页 {page_no} 触发安全验证, "
+                    f"{prefix} 列表页 {page_no} 触发安全验证, "
                     f"等待 {SECURITY_WAIT_SECONDS}s 后重试"
                 )
                 self._emit(msg, log_callback, "WARNING")
                 if verification_count >= 5:
                     msg = (
-                        f"[{task_name}] 连续验证次数={verification_count}, "
+                        f"{prefix} 连续验证次数={verification_count}, "
                         "请手动刷新 cookies 或完成浏览器验证"
                     )
                     self._emit(msg, log_callback, "ERROR")
@@ -96,7 +123,7 @@ class JavdbSpider(BaseSpider):
             )
 
             if not page_tasks:
-                msg = f"[{task_name}] 列表页 {page_no} 无数据, 停止收集"
+                msg = f"{prefix} 列表页 {page_no} 无数据, 停止收集"
                 self._emit(msg, log_callback)
                 break
 
@@ -131,7 +158,7 @@ class JavdbSpider(BaseSpider):
                             t["reason"] = "already_exists"
                             db_skipped += 1
                     if db_skipped:
-                        msg = f"[{task_name}] 列表页 {page_no}: {db_skipped} 条已存在于数据库, 跳过"
+                        msg = f"{prefix} 列表页 {page_no}: {db_skipped} 条已存在于数据库, 跳过"
                         self._emit(msg, log_callback, "INFO")
 
                         # 增量爬取: 如果本页已存在的条目数 >= 阈值，跳过后续页面
@@ -139,7 +166,7 @@ class JavdbSpider(BaseSpider):
                             and incremental_threshold > 0
                             and db_skipped >= incremental_threshold):
                             msg = (
-                                f"[{task_name}] 列表页 {page_no} 已存在 {db_skipped} 条 "
+                                f"{prefix} 列表页 {page_no} 已存在 {db_skipped} 条 "
                                 f"(>= 阈值 {incremental_threshold}), 跳过后续页面"
                             )
                             self._emit(msg, log_callback, "INFO")
@@ -152,7 +179,7 @@ class JavdbSpider(BaseSpider):
                                 if on_tasks_batch_created:
                                     on_tasks_batch_created(non_skipped_tasks)
                             msg = (
-                                f"[{task_name}] 当前 URL 达到增量阈值，"
+                                f"{prefix} 当前 URL 达到增量阈值，"
                                 "停止该 URL 后续列表页，继续下一个 URL"
                             )
                             self._emit(msg, log_callback, "INFO")
@@ -170,7 +197,7 @@ class JavdbSpider(BaseSpider):
             pending_count = total_count - skipped_count
 
             msg = (
-                f"[{task_name}] 列表页 {page_no} 完成: 本页={len(fresh_tasks)}条(去重后), "
+                f"{prefix} 列表页 {page_no} 完成: 本页={len(fresh_tasks)}条(去重后), "
                 f"总计={total_count}, 待处理={pending_count}, 跳过={skipped_count}"
             )
             self._emit(msg, log_callback)
@@ -180,7 +207,7 @@ class JavdbSpider(BaseSpider):
 
             page_no += 1
 
-        msg = f"[{task_name}] URL 列表收集完成: 共 {len(detail_tasks)} 条任务"
+        msg = f"{prefix} URL 列表收集完成: 共 {len(detail_tasks)} 条任务"
         self._emit(msg, log_callback)
 
         return detail_tasks
@@ -205,7 +232,8 @@ class JavdbSpider(BaseSpider):
                 self._emit(msg, log_callback, "WARNING")
                 break
 
-            msg = f"[{task.name}] 处理 URL {i}/{len(task.urls)}: {url_entry.url_type}"
+            url_label = self._url_label(url_entry)
+            msg = f"[{task.name}][URL: {url_label}] 处理 URL {i}/{len(task.urls)}: {url_entry.url_type}"
             self._emit(msg, log_callback)
 
             url_tasks = self.collect_detail_tasks_for_url(
@@ -260,6 +288,8 @@ class JavdbSpider(BaseSpider):
                 break
             task = tasks[index]
 
+            detail_prefix = self._task_prefix(task_name, self._detail_url_label(task))
+
             completed_count = sum(
                 1 for item in tasks if item.get("status") == TASK_STATUS_COMPLETED
             )
@@ -272,7 +302,7 @@ class JavdbSpider(BaseSpider):
 
             if task.get("status") == TASK_STATUS_SKIPPED:
                 msg = (
-                    f"{prefix} 详情 {index + 1}/{total} 跳过: "
+                    f"{detail_prefix} 详情 {index + 1}/{total} 跳过: "
                     f"name={task.get('name')} reason={task.get('reason')}"
                 )
                 self._emit(msg, log_callback)
@@ -288,7 +318,7 @@ class JavdbSpider(BaseSpider):
                 task["status"] = TASK_STATUS_SKIPPED
                 task["reason"] = "already_exists"
                 msg = (
-                    f"{prefix} 详情 {index + 1}/{total} 跳过: "
+                    f"{detail_prefix} 详情 {index + 1}/{total} 跳过: "
                     f"code={code} 已存在于数据库"
                 )
                 self._emit(msg, log_callback, "INFO")
@@ -303,13 +333,13 @@ class JavdbSpider(BaseSpider):
             if not url:
                 task["status"] = TASK_STATUS_FAILED
                 task["reason"] = "missing_url"
-                msg = f"{prefix} 详情 {index + 1}/{total} 失败: 缺少URL"
+                msg = f"{detail_prefix} 详情 {index + 1}/{total} 失败: 缺少URL"
                 self._emit(msg, log_callback, "ERROR")
                 index += 1
                 continue
 
             msg = (
-                f"{prefix} 详情 {index + 1}/{total} 处理中: "
+                f"{detail_prefix} 详情 {index + 1}/{total} 处理中: "
                 f"已完成={completed_count} 失败={failed_count} 跳过={skipped_count} "
                 f"name={task.get('name')}"
             )
@@ -325,13 +355,13 @@ class JavdbSpider(BaseSpider):
                     verification_count += 1
                     task["status"] = TASK_STATUS_PENDING
                     msg = (
-                        f"{prefix} 详情 {index + 1}/{total} 触发安全验证, "
+                        f"{detail_prefix} 详情 {index + 1}/{total} 触发安全验证, "
                         f"等待 {SECURITY_WAIT_SECONDS}s 后重试"
                     )
                     self._emit(msg, log_callback, "WARNING")
                     if verification_count >= 5:
                         msg = (
-                            f"{prefix} 连续验证次数={verification_count}, "
+                            f"{detail_prefix} 连续验证次数={verification_count}, "
                             "请手动刷新 cookies 或完成浏览器验证"
                         )
                         self._emit(msg, log_callback, "ERROR")
@@ -344,7 +374,7 @@ class JavdbSpider(BaseSpider):
                 task["detail"] = detail
                 task["status"] = TASK_STATUS_COMPLETED
 
-                msg = f"{prefix} 详情 {index + 1}/{total} 完成: {task.get('name')}"
+                msg = f"{detail_prefix} 详情 {index + 1}/{total} 完成: {task.get('name')}"
                 self._emit(msg, log_callback)
 
                 if on_detail_completed:
@@ -363,7 +393,7 @@ class JavdbSpider(BaseSpider):
                 if on_detail_failed:
                     on_detail_failed(task, str(exc))
 
-                msg = f"{prefix} 详情 {index + 1}/{total} 失败: {task.get('name')} error={exc}"
+                msg = f"{detail_prefix} 详情 {index + 1}/{total} 失败: {task.get('name')} error={exc}"
                 self._emit(msg, log_callback, "ERROR")
 
                 index += 1
