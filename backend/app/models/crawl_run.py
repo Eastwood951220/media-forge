@@ -48,6 +48,8 @@ class CrawlRunDetailTask(Base, UUIDPrimaryKeyMixin):
         Index("idx_crawl_detail_run_status", "run_id", "status"),
         Index("idx_crawl_detail_run_source", "run_id", "source_url"),
         Index("idx_crawl_detail_created_at", "created_at"),
+        Index("idx_crawl_detail_claim", "run_id", "status", "created_at"),
+        Index("idx_crawl_detail_run_code", "run_id", "code"),
     )
 
     run_id: Mapped[uuid.UUID] = mapped_column(

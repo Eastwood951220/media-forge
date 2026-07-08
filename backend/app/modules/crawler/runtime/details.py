@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 
-UNFINISHED_DETAIL_STATUSES = {"pending_crawl", "crawl_failed", "save_failed"}
+UNFINISHED_DETAIL_STATUSES = {"pending_crawl", "crawling", "crawl_failed", "save_failed"}
 RESTARTABLE_DETAIL_STATUSES = UNFINISHED_DETAIL_STATUSES
 TERMINAL_DETAIL_STATUSES = {"saved", "skipped"}
 DETAIL_PHASE_STARTED_STATUSES = {"saved", "crawl_failed", "save_failed"}
