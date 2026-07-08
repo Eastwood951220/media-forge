@@ -1,16 +1,40 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.modules.crawler.runs.logs import load_run_logs
-from backend.app.modules.crawler.runs.schemas import CrawlRunDetailTaskRead, CrawlRunRead, RunDetailRetryRequest
+from backend.app.modules.crawler.runs.schemas import CrawlRunDetailTaskRead, CrawlRunRead, RunDetailRetryRequest, RunTaskSummary
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from shared.schemas.common import paginated, success
 
 router = APIRouter(prefix="/api/crawler/runs", tags=["crawler-runs"])
+
+
+def _run_task_summary(db: Session, run_id: uuid.UUID) -> dict:
+    rows = (
+        db.query(CrawlRunDetailTask.status, func.count(CrawlRunDetailTask.id))
+        .filter(CrawlRunDetailTask.run_id == run_id)
+        .group_by(CrawlRunDetailTask.status)
+        .all()
+    )
+    counts = {status: int(count) for status, count in rows}
+    summary = RunTaskSummary(
+        total=sum(counts.values()),
+        pending_crawl=counts.get("pending_crawl", 0),
+        crawling=counts.get("crawling", 0),
+        saved=counts.get("saved", 0),
+        skipped=counts.get("skipped", 0),
+        crawl_failed=counts.get("crawl_failed", 0),
+        save_failed=counts.get("save_failed", 0),
+    )
+    summary.completed = summary.saved + summary.skipped
+    summary.waiting = summary.pending_crawl + summary.crawling
+    summary.failed = summary.crawl_failed + summary.save_failed
+    return summary.model_dump()
 
 
 @router.get("/queue-status")
@@ -85,10 +109,12 @@ def list_run_tasks(
     total = query.count()
     offset = (page - 1) * size
     rows = query.order_by(CrawlRunDetailTask.created_at.asc()).offset(offset).limit(size).all()
-    return paginated(
+    payload = paginated(
         rows=[CrawlRunDetailTaskRead.model_validate(r).model_dump(mode="json") for r in rows],
         total=total,
     )
+    payload["summary"] = _run_task_summary(db, run_id)
+    return payload
 
 
 @router.post("/{run_id}/tasks/retry", status_code=status.HTTP_201_CREATED)

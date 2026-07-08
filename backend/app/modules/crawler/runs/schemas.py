@@ -61,3 +61,16 @@ class CrawlRunDetailTaskRead(BaseModel):
 class RunDetailRetryRequest(BaseModel):
     detail_ids: list[uuid.UUID] = Field(default_factory=list)
     retry_all: bool = False
+
+
+class RunTaskSummary(BaseModel):
+    total: int = 0
+    pending_crawl: int = 0
+    crawling: int = 0
+    saved: int = 0
+    skipped: int = 0
+    crawl_failed: int = 0
+    save_failed: int = 0
+    completed: int = 0
+    waiting: int = 0
+    failed: int = 0

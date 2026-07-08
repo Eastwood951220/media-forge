@@ -796,3 +796,42 @@ def test_run_task_rows_created_from_spider_payload_keep_url_context(client: Test
     assert row["task_url"] == "https://javdb.com/actors/a"
     assert row["task_final_url"] == "https://javdb.com/actors/a?page=1"
     assert row["task_url_type"] == "actors"
+
+
+def test_run_tasks_endpoint_returns_full_run_summary(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="running", crawl_mode="incremental", queued_at=datetime.now())
+    session.add(run)
+    session.flush()
+    session.add_all([
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="P", source_url="https://p", source_name="P", status="pending_crawl", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="R", source_url="https://r", source_name="R", status="crawling", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="S", source_url="https://s", source_name="S", status="saved", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="K", source_url="https://k", source_name="K", status="skipped", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="C", source_url="https://c", source_name="C", status="crawl_failed", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="F", source_url="https://f", source_name="F", status="save_failed", created_at=datetime.now()),
+    ])
+    session.commit()
+
+    response = client.get(
+        f"/api/crawler/runs/{run.id}/tasks",
+        params={"status": "saved", "page": 1, "size": 1},
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert body["total"] == 1
+    assert body["summary"] == {
+        "total": 6,
+        "pending_crawl": 1,
+        "crawling": 1,
+        "saved": 1,
+        "skipped": 1,
+        "crawl_failed": 1,
+        "save_failed": 1,
+        "completed": 2,
+        "waiting": 2,
+        "failed": 2,
+    }
