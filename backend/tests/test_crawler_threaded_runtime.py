@@ -108,6 +108,7 @@ def test_list_phase_db_callbacks_use_isolated_sessions(db_session, monkeypatch) 
             on_item_already_exists,
         ):
             self.list_started = True
+            log_callback(f"worker collected {url_entry.url_type}")
             existing_codes = db_check_callback([f"{url_entry.url_type}-001"])
             if f"{url_entry.url_type}-001" in existing_codes:
                 on_item_already_exists(

@@ -51,6 +51,24 @@ def _find_existing_movie_codes_in_worker_session(
         worker_db.close()
 
 
+def _append_run_log_in_worker_session(
+    session_factory: sessionmaker,
+    run: CrawlRun,
+    message: str,
+    level: str = "INFO",
+) -> None:
+    worker_db = session_factory()
+    try:
+        worker_run = worker_db.merge(run, load=False)
+        append_run_log_for_run(worker_db, worker_run, message, level)
+        worker_db.commit()
+    except Exception:
+        worker_db.rollback()
+        raise
+    finally:
+        worker_db.close()
+
+
 def _handle_already_exists_in_worker_session(
     session_factory: sessionmaker,
     run: CrawlRun,
@@ -94,7 +112,12 @@ def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, c
             crawl_mode=run.crawl_mode,
             incremental_threshold=config.INCREMENTAL_EXIST_THRESHOLD,
             stop_check=lambda: runtime.is_stop_requested(str(run.id)),
-            log_callback=lambda msg, level="INFO": append_run_log_for_run(db, run, msg, level),
+            log_callback=lambda msg, level="INFO": _append_run_log_in_worker_session(
+                worker_session_factory,
+                run,
+                msg,
+                level,
+            ),
             db_check_callback=lambda codes: _find_existing_movie_codes_in_worker_session(worker_session_factory, codes),
             on_item_already_exists=lambda task_info: _handle_already_exists_in_worker_session(
                 worker_session_factory,
