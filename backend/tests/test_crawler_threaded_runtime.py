@@ -142,3 +142,84 @@ def test_list_phase_db_callbacks_use_isolated_sessions(db_session, monkeypatch) 
     rows = db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
     assert [row.code for row in rows] == [f"B-{suffix}"]
     assert rows[0].status == "saved"
+
+
+def test_list_phase_snapshots_worker_inputs_before_main_commit(db_session, monkeypatch) -> None:
+    task, run = make_task_and_run(db_session)
+    suffix = run.id.hex[:8]
+    db_session.add(Movie(code=f"B-{suffix}", source_name="Existing B"))
+    db_session.commit()
+
+    main_thread_id = threading.get_ident()
+    first_list_commit_seen = threading.Event()
+
+    def guard_session_method(method_name: str) -> None:
+        original = getattr(db_session, method_name)
+
+        def guarded(*args, **kwargs):
+            if threading.get_ident() != main_thread_id:
+                raise AssertionError("main crawler session was used from a list worker thread")
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(db_session, method_name, guarded)
+
+    for method_name in ("get", "scalars", "scalar", "flush", "add", "add_all", "merge", "refresh", "execute"):
+        if hasattr(db_session, method_name):
+            guard_session_method(method_name)
+
+    original_commit = db_session.commit
+
+    def guarded_commit(*args, **kwargs):
+        if threading.get_ident() != main_thread_id:
+            raise AssertionError("main crawler session was used from a list worker thread")
+        result = original_commit(*args, **kwargs)
+        first_list_commit_seen.set()
+        return result
+
+    monkeypatch.setattr(db_session, "commit", guarded_commit)
+
+    class ExpirationRaceSpider(FakeSpider):
+        def collect_detail_tasks_for_url(
+            self,
+            *,
+            url_entry,
+            task_name,
+            crawl_mode,
+            incremental_threshold,
+            stop_check,
+            log_callback,
+            db_check_callback,
+            on_item_already_exists,
+        ):
+            if url_entry.url_type == "A":
+                return [
+                    {
+                        "code": f"A-{suffix}",
+                        "url": f"https://javdb.com/v/a{suffix}",
+                        "name": url_entry.url_type,
+                    }
+                ]
+
+            assert first_list_commit_seen.wait(timeout=2), "main thread did not commit the first list future"
+            log_callback(f"worker collected {url_entry.url_type}")
+            code = f"{url_entry.url_type}-{suffix}"
+            assert code in db_check_callback([code])
+            on_item_already_exists(
+                {
+                    "code": code,
+                    "url": f"https://javdb.com/v/{url_entry.url_type.lower()}{suffix}",
+                    "name": url_entry.url_type,
+                }
+            )
+            return []
+
+    spider = ExpirationRaceSpider()
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: spider)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
+
+    result = execute_threaded_crawl(db_session, run, task, Runtime())
+
+    assert result["total_tasks"] == 1
+    assert result["saved"] == 1
+    rows = db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
+    assert [row.code for row in rows] == [f"A-{suffix}"]

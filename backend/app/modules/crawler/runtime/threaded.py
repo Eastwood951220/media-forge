@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -23,6 +24,21 @@ from scraper.pipelines.movie_pipeline import MoviePipeline
 from scraper.spiders.javdb.javdb_spider import JavdbSpider
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class ThreadedUrlEntry:
+    id: Any
+    task_id: Any
+    position: int
+    url: str
+    url_type: str
+    has_magnet: bool
+    has_chinese_sub: bool
+    sort_type: int
+    source: str
+    final_url: str
+    url_name: str | None
 
 
 def build_spider() -> JavdbSpider:
@@ -52,34 +68,40 @@ def _find_existing_movie_codes_in_worker_session(
 
 
 def _append_run_log_in_worker_session(
-    session_factory: sessionmaker,
-    run: CrawlRun,
+    run_id: Any,
+    owner_id: str | None,
     message: str,
     level: str = "INFO",
 ) -> None:
-    worker_db = session_factory()
-    try:
-        worker_run = worker_db.merge(run, load=False)
-        append_run_log_for_run(worker_db, worker_run, message, level)
-        worker_db.commit()
-    except Exception:
-        worker_db.rollback()
-        raise
-    finally:
-        worker_db.close()
+    from backend.app.modules.crawler.runs.logs import append_run_log, build_run_log
+    from backend.app.modules.realtime.bus import event_bus as realtime_bus
+    from backend.app.modules.realtime.schemas import make_realtime_event
+
+    entry = build_run_log(level, message)
+    append_run_log(str(run_id), entry)
+    if owner_id is None:
+        return
+    realtime_bus.publish(
+        make_realtime_event(
+            event="crawler.run.log.appended",
+            scope="crawler.run",
+            owner_id=owner_id,
+            resource_id=str(run_id),
+            payload={"run_id": str(run_id), "log": entry},
+        )
+    )
 
 
 def _handle_already_exists_in_worker_session(
     session_factory: sessionmaker,
-    run: CrawlRun,
-    task: CrawlTask,
+    run_id: Any,
+    task_id: Any,
+    owner_id: str | None,
     task_info: dict,
 ) -> None:
     worker_db = session_factory()
     try:
-        worker_run = worker_db.merge(run, load=False)
-        worker_task = worker_db.merge(task, load=False)
-        _handle_already_exists(worker_db, worker_run, worker_task, task_info)
+        _handle_already_exists(worker_db, run_id, task_id, owner_id, task_info)
         worker_db.commit()
     except Exception:
         worker_db.rollback()
@@ -104,44 +126,61 @@ def execute_threaded_crawl(db: Session, run: CrawlRun, task: CrawlTask, runtime:
 def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, config: Any) -> None:
     spider = build_spider()
     worker_session_factory = _worker_session_factory(db)
+    run_id = run.id
+    task_id = task.id
+    task_name = task.name
+    owner_id = str(task.owner_id)
+    crawl_mode = run.crawl_mode
+    url_entries = [
+        ThreadedUrlEntry(
+            id=url_entry.id,
+            task_id=url_entry.task_id,
+            position=url_entry.position,
+            url=url_entry.url,
+            url_type=url_entry.url_type,
+            has_magnet=url_entry.has_magnet,
+            has_chinese_sub=url_entry.has_chinese_sub,
+            sort_type=url_entry.sort_type,
+            source=url_entry.source,
+            final_url=url_entry.final_url,
+            url_name=url_entry.url_name,
+        )
+        for url_entry in task.urls
+    ]
 
     def _collect_url(url_entry):
         return spider.collect_detail_tasks_for_url(
             url_entry=url_entry,
-            task_name=task.name,
-            crawl_mode=run.crawl_mode,
+            task_name=task_name,
+            crawl_mode=crawl_mode,
             incremental_threshold=config.INCREMENTAL_EXIST_THRESHOLD,
-            stop_check=lambda: runtime.is_stop_requested(str(run.id)),
-            log_callback=lambda msg, level="INFO": _append_run_log_in_worker_session(
-                worker_session_factory,
-                run,
-                msg,
-                level,
-            ),
+            stop_check=lambda: runtime.is_stop_requested(str(run_id)),
+            log_callback=lambda msg, level="INFO": _append_run_log_in_worker_session(run_id, owner_id, msg, level),
             db_check_callback=lambda codes: _find_existing_movie_codes_in_worker_session(worker_session_factory, codes),
             on_item_already_exists=lambda task_info: _handle_already_exists_in_worker_session(
                 worker_session_factory,
-                run,
-                task,
+                run_id,
+                task_id,
+                owner_id,
                 task_info,
             ),
         )
 
     with ThreadPoolExecutor(max_workers=max(1, config.LIST_MAX_WORKERS)) as pool:
-        futures = [pool.submit(_collect_url, entry) for entry in task.urls]
+        futures = [pool.submit(_collect_url, entry) for entry in url_entries]
         for future in as_completed(futures):
             for item in future.result():
-                upsert_detail_task(db, run=run, task_name=task.name, item=item)
+                upsert_detail_task(db, run=run, task_name=task_name, item=item)
             db.commit()
 
     append_run_log_for_run(db, run, "列表收集完成，详情子任务已持久化", "INFO")
 
 
-def _handle_already_exists(db: Session, run: CrawlRun, task: CrawlTask, task_info: dict) -> None:
+def _handle_already_exists(db: Session, run_id: Any, task_id: Any, owner_id: str | None, task_info: dict) -> None:
     code = task_info.get("code")
     if code:
-        append_source_task_id(db, code, task.id)
-    append_run_log_for_run(db, run, f"跳过已存在影片并追加任务ID: {code}", "INFO", code=code)
+        append_source_task_id(db, code, task_id)
+    _append_run_log_in_worker_session(run_id, owner_id, f"跳过已存在影片并追加任务ID: {code}", "INFO")
 
 
 def _run_detail_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, config: Any, progress: dict) -> None:
