@@ -75,7 +75,8 @@ def test_execute_threaded_crawl_finishes_list_before_detail(db_session, monkeypa
 
 def test_list_phase_db_callbacks_use_isolated_sessions(db_session, monkeypatch) -> None:
     task, run = make_task_and_run(db_session)
-    db_session.add(Movie(code="A-001", source_name="Existing A"))
+    suffix = run.id.hex[:8]
+    db_session.add(Movie(code=f"A-{suffix}", source_name="Existing A"))
     db_session.commit()
 
     main_thread_id = threading.get_ident()
@@ -109,20 +110,21 @@ def test_list_phase_db_callbacks_use_isolated_sessions(db_session, monkeypatch) 
         ):
             self.list_started = True
             log_callback(f"worker collected {url_entry.url_type}")
-            existing_codes = db_check_callback([f"{url_entry.url_type}-001"])
-            if f"{url_entry.url_type}-001" in existing_codes:
+            code = f"{url_entry.url_type}-{suffix}"
+            existing_codes = db_check_callback([code])
+            if code in existing_codes:
                 on_item_already_exists(
                     {
-                        "code": f"{url_entry.url_type}-001",
-                        "url": f"https://javdb.com/v/{url_entry.url_type.lower()}001",
+                        "code": code,
+                        "url": f"https://javdb.com/v/{url_entry.url_type.lower()}{suffix}",
                         "name": url_entry.url_type,
                     }
                 )
                 return []
             return [
                 {
-                    "code": f"{url_entry.url_type}-001",
-                    "url": f"https://javdb.com/v/{url_entry.url_type.lower()}001",
+                    "code": code,
+                    "url": f"https://javdb.com/v/{url_entry.url_type.lower()}{suffix}",
                     "name": url_entry.url_type,
                 }
             ]
@@ -138,5 +140,5 @@ def test_list_phase_db_callbacks_use_isolated_sessions(db_session, monkeypatch) 
     assert spider.list_started is True
     assert spider.detail_started is True
     rows = db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
-    assert [row.code for row in rows] == ["B-001"]
+    assert [row.code for row in rows] == [f"B-{suffix}"]
     assert rows[0].status == "saved"
