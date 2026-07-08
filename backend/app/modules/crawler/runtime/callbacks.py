@@ -180,7 +180,7 @@ def build_crawl_callbacks(
             detail.crawled_at = detail.crawled_at or datetime.now()
             detail.saved_at = None
         append_source_task_id(ctx.db, code, ctx.task.id)
-        if not was_skipped:
+        if detail is not None and not was_skipped:
             increment_progress(ctx.progress, "skipped")
         write_progress(ctx.runtime, str(ctx.run.id), ctx.progress)
         ctx.db.commit()

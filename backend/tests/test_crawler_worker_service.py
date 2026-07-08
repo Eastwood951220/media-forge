@@ -126,17 +126,22 @@ class ListPhaseDedupeCrawlerEngineStub:
             {"code": "AAA-010", "url": "https://javdb.com/v/aaa010", "name": "AAA 010"},
             {"code": "AAA-011", "url": "https://javdb.com/v/aaa011", "name": "AAA 011"},
         ]
+        crawlable = []
         for item in batch:
             if item["code"] in existing_codes:
                 item["status"] = "skipped"
                 item["reason"] = "already_exists"
+                if callbacks.on_item_already_exists:
+                    callbacks.on_item_already_exists(item)
+            else:
+                crawlable.append(item)
         if callbacks.on_tasks_batch_created:
-            callbacks.on_tasks_batch_created(batch)
+            callbacks.on_tasks_batch_created(crawlable)
         return {
-            "total_tasks": 2,
+            "total_tasks": 1,
             "completed_tasks": 0,
             "failed_tasks": 0,
-            "skipped_tasks": 1,
+            "skipped_tasks": 0,
         }
 
 
@@ -338,7 +343,7 @@ def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monke
     assert refreshed.result["save_failed"] == 1
 
 
-def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> None:
+def test_execute_run_excludes_list_phase_existing_movies_from_detail_tasks(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.executor import execute_run
 
     monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: ListPhaseDedupeCrawlerEngineStub())
@@ -349,18 +354,17 @@ def test_execute_run_marks_list_phase_existing_movies_skipped(monkeypatch) -> No
 
     execute_run(session, session.get(CrawlRun, run.id), runtime)
 
-    skipped = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "AAA-010").one()
+    existing_detail = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "AAA-010").one_or_none()
     pending = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "AAA-011").one()
     movie = session.scalar(select(Movie).where(Movie.code == "AAA-010"))
 
-    assert skipped.status == "skipped"
-    assert skipped.error == "already_exists"
-    assert skipped.saved_at is None
+    assert existing_detail is None
     assert pending.status == "pending_crawl"
-    # source_task_ids should contain the run's task_id (compare as strings for SQLite compatibility)
     assert str(run.task_id) in [str(tid) for tid in movie.source_task_ids]
     refreshed = session.get(CrawlRun, run.id)
-    assert refreshed.result["skipped_tasks"] == 1
+    assert refreshed.result["total_tasks"] == 1
+    assert refreshed.result["skipped_tasks"] == 0
+    assert runtime.progress == {"total": 1, "saved": 0, "failed": 0, "skipped": 0, "save_failed": 0}
 
 
 def test_execute_run_marks_detail_phase_existing_movies_skipped(monkeypatch) -> None:
@@ -460,13 +464,14 @@ def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch
     monkeypatch.setattr("backend.app.modules.crawler.runtime.callbacks.upsert_movie_with_magnets", lambda db, item_data: uuid.uuid4())
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("reuse-existing")
+    session.get(CrawlRun, run.id).result = {"detail_retry": True}
     existing = CrawlRunDetailTask(
         run_id=run.id,
         task_name="任务",
         code="REUSE-001",
         source_url="https://javdb.com/v/reuse001",
         source_name="REUSE 001",
-        status="save_failed",
+        status="pending_crawl",
         created_at=datetime.now(),
     )
     session.add(existing)
@@ -584,6 +589,70 @@ def test_crawler_callback_context_builds_callbacks(db_session) -> None:
     assert callable(callbacks.on_item_saved)
     assert callable(callbacks.on_detail_failed)
     assert callable(callbacks.log_callback)
+
+
+def test_on_tasks_batch_created_recreates_deleted_indexed_detail(db_session, admin_user) -> None:
+    from backend.app.modules.crawler.runtime.callbacks import CrawlerCallbackContext, build_crawl_callbacks
+    from backend.app.modules.crawler.runtime.detail_index import DetailTaskIndex
+    from backend.app.modules.crawler.runtime.progress import new_progress
+
+    task = CrawlTask(name="任务-stale-index", owner_id=admin_user.id, is_skip=False)
+    db_session.add(task)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="incremental", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    stale_detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code="STALE-001",
+        source_url="https://example.test/stale-001",
+        source_name="Stale 001",
+        status="crawl_failed",
+        created_at=datetime.now(),
+    )
+    db_session.add(stale_detail)
+    db_session.commit()
+    db_session.refresh(run)
+    db_session.refresh(task)
+    db_session.refresh(stale_detail)
+
+    detail_index = DetailTaskIndex()
+    detail_index.remember(stale_detail)
+    stale_detail_id = stale_detail.id
+    db_session.expire(stale_detail)
+
+    delete_session = TestingSessionLocal()
+    try:
+        row = delete_session.get(CrawlRunDetailTask, stale_detail_id)
+        delete_session.delete(row)
+        delete_session.commit()
+    finally:
+        delete_session.close()
+
+    class Runtime:
+        def write_progress(self, run_id: str, progress: dict[str, int]) -> None:
+            return None
+
+        def is_stop_requested(self, run_id: str) -> bool:
+            return False
+
+    callbacks = build_crawl_callbacks(CrawlerCallbackContext(
+        db=db_session,
+        run=run,
+        task=task,
+        runtime=Runtime(),
+        detail_index=detail_index,
+        progress=new_progress(),
+    ))
+
+    callbacks.on_tasks_batch_created([
+        {"code": "STALE-001", "url": "https://example.test/stale-001", "name": "Stale 001"}
+    ])
+
+    rows = db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.code == "STALE-001").all()
+    assert len(rows) == 1
+    assert rows[0].status == "pending_crawl"
 
 
 class DetailOnlyRecordingEngineStub:
