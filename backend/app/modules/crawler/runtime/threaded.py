@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
@@ -59,12 +60,14 @@ def _worker_session_factory(db: Session) -> sessionmaker:
 def _find_existing_movie_codes_in_worker_session(
     session_factory: sessionmaker,
     codes: list[str | None],
+    db_lock: threading.Lock,
 ) -> set[str]:
-    worker_db = session_factory()
-    try:
-        return find_existing_movie_codes(worker_db, codes)
-    finally:
-        worker_db.close()
+    with db_lock:
+        worker_db = session_factory()
+        try:
+            return find_existing_movie_codes(worker_db, codes)
+        finally:
+            worker_db.close()
 
 
 def _append_run_log_in_worker_session(
@@ -99,16 +102,18 @@ def _handle_already_exists_in_worker_session(
     task_id: Any,
     owner_id: str | None,
     task_info: dict,
+    db_lock: threading.Lock,
 ) -> None:
-    worker_db = session_factory()
-    try:
-        _handle_already_exists(worker_db, run_id, task_id, owner_id, task_info)
-        worker_db.commit()
-    except Exception:
-        worker_db.rollback()
-        raise
-    finally:
-        worker_db.close()
+    with db_lock:
+        worker_db = session_factory()
+        try:
+            _handle_already_exists(worker_db, run_id, task_id, owner_id, task_info)
+            worker_db.commit()
+        except Exception:
+            worker_db.rollback()
+            raise
+        finally:
+            worker_db.close()
 
 
 def execute_threaded_crawl(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, *, detail_only: bool = False) -> dict[str, Any]:
@@ -127,6 +132,7 @@ def execute_threaded_crawl(db: Session, run: CrawlRun, task: CrawlTask, runtime:
 def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, config: Any) -> None:
     spider = build_spider()
     worker_session_factory = _worker_session_factory(db)
+    list_db_lock = threading.Lock()
     run_id = run.id
     task_id = task.id
     task_name = task.name
@@ -163,22 +169,28 @@ def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, c
                 level,
                 **context,
             ),
-            db_check_callback=lambda codes: _find_existing_movie_codes_in_worker_session(worker_session_factory, codes),
+            db_check_callback=lambda codes: _find_existing_movie_codes_in_worker_session(
+                worker_session_factory,
+                codes,
+                list_db_lock,
+            ),
             on_item_already_exists=lambda task_info: _handle_already_exists_in_worker_session(
                 worker_session_factory,
                 run_id,
                 task_id,
                 owner_id,
                 task_info,
+                list_db_lock,
             ),
         )
 
     with ThreadPoolExecutor(max_workers=max(1, config.LIST_MAX_WORKERS)) as pool:
         futures = [pool.submit(_collect_url, entry) for entry in url_entries]
         for future in as_completed(futures):
-            for item in future.result():
-                upsert_detail_task(db, run=run, task_name=task_name, item=item)
-            db.commit()
+            with list_db_lock:
+                for item in future.result():
+                    upsert_detail_task(db, run=run, task_name=task_name, item=item)
+                db.commit()
 
     append_run_log_for_run(db, run, "列表收集完成，详情子任务已持久化", "INFO")
 
