@@ -1,5 +1,6 @@
 from datetime import datetime
 from http import HTTPStatus
+import uuid
 
 from fastapi.testclient import TestClient
 
@@ -70,9 +71,10 @@ def test_queue_status_endpoint_returns_runtime_state(client: TestClient, admin_u
 def test_task_run_endpoint_creates_queued_run(client: TestClient, admin_user, monkeypatch) -> None:
     headers = auth_headers(client, admin_user)
     task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
-    task_id = task_response.json()["data"]["id"]
+    task_id = uuid.UUID(task_response.json()["data"]["id"])
     runtime = FakeRuntime()
     monkeypatch.setattr("backend.app.modules.crawler.tasks.service.get_runtime_state", lambda: runtime)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.ensure_crawler_worker_started", lambda runtime: None)
 
     response = client.post(
         f"/api/crawler/tasks/{task_id}/run",
@@ -82,7 +84,7 @@ def test_task_run_endpoint_creates_queued_run(client: TestClient, admin_user, mo
 
     assert response.status_code == HTTPStatus.CREATED
     body = response.json()["data"]
-    assert body["task_id"] == task_id
+    assert body["task_id"] == str(task_id)
     assert body["status"] == "queued"
     assert body["crawl_mode"] == "incremental"
     assert runtime.enqueued == [body["id"]]
@@ -91,7 +93,7 @@ def test_task_run_endpoint_creates_queued_run(client: TestClient, admin_user, mo
 def test_run_list_and_detail_endpoints(client: TestClient, admin_user, monkeypatch) -> None:
     headers = auth_headers(client, admin_user)
     task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
-    task_id = task_response.json()["data"]["id"]
+    task_id = uuid.UUID(task_response.json()["data"]["id"])
     monkeypatch.setattr("backend.app.modules.crawler.tasks.service.get_runtime_state", lambda: FakeRuntime())
 
     run_response = client.post(f"/api/crawler/tasks/{task_id}/run", json={"crawl_mode": "full"}, headers=headers)
@@ -187,6 +189,7 @@ def test_stop_running_run_sets_stop_signal(client: TestClient, admin_user, monke
 
 def test_restart_copies_unfinished_subtasks(client: TestClient, admin_user, monkeypatch) -> None:
     headers = auth_headers(client, admin_user)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.ensure_crawler_worker_started", lambda runtime: None)
     session = TestingSessionLocal()
     run = CrawlRun(task_name="任务", status="stopped", crawl_mode="incremental")
     session.add(run)
@@ -203,11 +206,15 @@ def test_restart_copies_unfinished_subtasks(client: TestClient, admin_user, monk
 
     assert response.status_code == HTTPStatus.CREATED
     new_run = response.json()["data"]
-    assert new_run["resumed_from"] == str(run.id)
-    assert runtime.enqueued == [new_run["id"]]
+    assert new_run["id"] == str(run.id)
+    assert new_run["resumed_from"] is None
+    assert runtime.enqueued == [str(run.id)]
 
-    tasks_response = client.get(f"/api/crawler/runs/{new_run['id']}/tasks", headers=headers)
-    assert [row["code"] for row in tasks_response.json()["rows"]] == ["B"]
+    tasks_response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=headers)
+    assert [(row["code"], row["status"]) for row in tasks_response.json()["rows"]] == [
+        ("A", "saved"),
+        ("B", "pending_crawl"),
+    ]
 
 
 def test_stop_running_run_resets_unfinished_detail_tasks_to_pending(client: TestClient, admin_user, monkeypatch) -> None:
@@ -256,20 +263,22 @@ def test_delete_run_removes_only_run_and_detail_tasks(client: TestClient, admin_
         CrawlRunDetailTask(run_id=run.id, task_name="任务", code="B", source_url="https://b", source_name="B", status="pending_crawl", created_at=datetime.now()),
     ])
     session.commit()
+    run_id = run.id
 
     response = client.delete(f"/api/crawler/runs/{run.id}", headers=headers)
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json()["data"] == {"id": str(run.id), "deleted": True}
+    assert response.json()["data"] == {"id": str(run_id), "deleted": True}
     session.expire_all()
-    assert session.get(CrawlRun, run.id) is None
-    assert session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).count() == 0
+    assert session.get(CrawlRun, run_id) is None
+    assert session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run_id).count() == 0
 
 
 def test_restart_after_detail_phase_requeues_same_run_and_keeps_terminal_details(client: TestClient, admin_user, monkeypatch) -> None:
     headers = auth_headers(client, admin_user)
     task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
-    task_id = task_response.json()["data"]["id"]
+    task_id = uuid.UUID(task_response.json()["data"]["id"])
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.ensure_crawler_worker_started", lambda runtime: None)
     session = TestingSessionLocal()
     run = CrawlRun(
         task_id=task_id,
@@ -299,7 +308,7 @@ def test_restart_after_detail_phase_requeues_same_run_and_keeps_terminal_details
     body = response.json()["data"]
     assert body["id"] == str(run.id)
     assert body["status"] == "queued"
-    assert body["task_id"] == task_id
+    assert body["task_id"] == str(task_id)
     assert body["started_at"] is None
     assert body["finished_at"] is None
     assert body["result"] is None
@@ -319,7 +328,8 @@ def test_restart_after_detail_phase_requeues_same_run_and_keeps_terminal_details
 def test_restart_after_list_phase_discards_partial_list_tasks_and_requeues_same_run(client: TestClient, admin_user, monkeypatch) -> None:
     headers = auth_headers(client, admin_user)
     task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
-    task_id = task_response.json()["data"]["id"]
+    task_id = uuid.UUID(task_response.json()["data"]["id"])
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.ensure_crawler_worker_started", lambda runtime: None)
     session = TestingSessionLocal()
     run = CrawlRun(task_id=task_id, task_name="任务", status="stopped", crawl_mode="incremental")
     session.add(run)
@@ -338,7 +348,7 @@ def test_restart_after_list_phase_discards_partial_list_tasks_and_requeues_same_
     body = response.json()["data"]
     assert body["id"] == str(run.id)
     assert body["status"] == "queued"
-    assert body["task_id"] == task_id
+    assert body["task_id"] == str(task_id)
     assert runtime.enqueued == [str(run.id)]
     assert runtime.cleared == [str(run.id)]
 
@@ -349,7 +359,8 @@ def test_restart_after_list_phase_discards_partial_list_tasks_and_requeues_same_
 def test_restart_stopped_run_without_subtasks_requeues_same_run(client: TestClient, admin_user, monkeypatch) -> None:
     headers = auth_headers(client, admin_user)
     task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
-    task_id = task_response.json()["data"]["id"]
+    task_id = uuid.UUID(task_response.json()["data"]["id"])
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.ensure_crawler_worker_started", lambda runtime: None)
     session = TestingSessionLocal()
     run = CrawlRun(task_id=task_id, task_name="任务", status="stopped", crawl_mode="incremental")
     session.add(run)
@@ -363,7 +374,7 @@ def test_restart_stopped_run_without_subtasks_requeues_same_run(client: TestClie
     body = response.json()["data"]
     assert body["id"] == str(run.id)
     assert body["status"] == "queued"
-    assert body["task_id"] == task_id
+    assert body["task_id"] == str(task_id)
     assert runtime.enqueued == [str(run.id)]
     assert runtime.cleared == [str(run.id)]
 
@@ -442,7 +453,7 @@ def test_retry_one_failed_detail_requeues_same_run(client: TestClient, admin_use
     assert body["status"] == "queued"
     assert body["started_at"] is None
     assert body["finished_at"] is None
-    assert body["result"] is None
+    assert body["result"] == {"detail_retry": True}
     assert body["error"] is None
     assert runtime.cleared == [str(run.id)]
     assert runtime.enqueued == [str(run.id)]
@@ -557,3 +568,80 @@ def test_retry_failed_details_rejects_detail_from_other_run(client: TestClient, 
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     assert "不属于当前运行" in str(response.json()) or "无效" in str(response.json())
+
+
+def test_run_tasks_returns_url_context_and_supports_keyword_filter(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="completed", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    session.add_all([
+        CrawlRunDetailTask(
+            run_id=run.id,
+            task_name="任务",
+            code="AAA-001",
+            source_url="https://javdb.com/v/aaa001",
+            source_name="AAA 001",
+            source_url_name="演员A",
+            task_url="https://javdb.com/actors/a",
+            task_final_url="https://javdb.com/actors/a?page=1",
+            task_url_type="actors",
+            status="saved",
+            created_at=datetime.now(),
+        ),
+        CrawlRunDetailTask(
+            run_id=run.id,
+            task_name="任务",
+            code="BBB-001",
+            source_url="https://javdb.com/v/bbb001",
+            source_name="BBB 001",
+            source_url_name="标签B",
+            task_url="https://javdb.com/tags/b",
+            task_final_url="https://javdb.com/tags/b?page=1",
+            task_url_type="tags",
+            status="pending_crawl",
+            created_at=datetime.now(),
+        ),
+    ])
+    session.commit()
+
+    response = client.get(f"/api/crawler/runs/{run.id}/tasks?keyword=标签B", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert body["total"] == 1
+    assert body["rows"][0]["code"] == "BBB-001"
+    assert body["rows"][0]["source_url_name"] == "标签B"
+    assert body["rows"][0]["task_url"] == "https://javdb.com/tags/b"
+    assert body["rows"][0]["task_final_url"] == "https://javdb.com/tags/b?page=1"
+    assert body["rows"][0]["task_url_type"] == "tags"
+
+
+def test_run_tasks_uses_server_side_pagination(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="completed", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    for index in range(5):
+        session.add(
+            CrawlRunDetailTask(
+                run_id=run.id,
+                task_name="任务",
+                code=f"PAGE-{index}",
+                source_url=f"https://javdb.com/v/page-{index}",
+                source_name=f"PAGE {index}",
+                source_url_name="分页来源",
+                status="pending_crawl",
+                created_at=datetime(2026, 7, 8, 0, 0, index),
+            )
+        )
+    session.commit()
+
+    response = client.get(f"/api/crawler/runs/{run.id}/tasks?skip=2&limit=2", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert body["total"] == 5
+    assert [row["code"] for row in body["rows"]] == ["PAGE-2", "PAGE-3"]

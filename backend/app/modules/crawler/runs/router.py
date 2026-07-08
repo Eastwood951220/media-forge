@@ -80,6 +80,7 @@ def list_run_tasks(
         query = query.filter(
             CrawlRunDetailTask.code.ilike(f"%{keyword}%")
             | CrawlRunDetailTask.source_name.ilike(f"%{keyword}%")
+            | CrawlRunDetailTask.source_url_name.ilike(f"%{keyword}%")
         )
     total = query.count()
     rows = query.order_by(CrawlRunDetailTask.created_at.asc()).offset(skip).limit(limit).all()

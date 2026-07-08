@@ -46,6 +46,10 @@ class CrawlRunDetailTaskRead(BaseModel):
     code: str | None
     source_url: str
     source_name: str
+    source_url_name: str | None = None
+    task_url: str | None = None
+    task_final_url: str | None = None
+    task_url_type: str | None = None
     status: str
     error: str | None
     item_data: dict[str, Any] | None
