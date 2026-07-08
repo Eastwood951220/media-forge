@@ -26,6 +26,15 @@ docker load -i output/media-forge-linux-arm64.tar
 
 The image does not include PostgreSQL or Redis. Provide external PostgreSQL and Redis services that the container can reach from fnOS.
 
+Do not enter `localhost`, `127.0.0.1`, or `::1` as the PostgreSQL or Redis host in the `/init` page for Docker deployments. Inside the Media Forge container, those addresses point back to the Media Forge container itself, not the fnOS host.
+
+Use one of these values instead:
+
+- PostgreSQL or Redis on the fnOS host: use the fnOS LAN IP, for example `192.168.1.20`.
+- PostgreSQL or Redis on another machine: use that machine's reachable LAN IP or DNS name.
+- PostgreSQL or Redis in another Docker container: put both containers on the same Docker network and use the database container name, for example `postgres`.
+- Docker Desktop host services: use `host.docker.internal`.
+
 Only one host directory is required for persistence:
 
 ```text

@@ -87,6 +87,56 @@ def test_publish_detail_updated_event_for_owner(admin_user) -> None:
     assert events[0].payload["tasks"][0]["status"] == "saved"
 
 
+def test_publish_detail_updated_skips_deleted_detail_instances(admin_user) -> None:
+    session = TestingSessionLocal()
+    task = CrawlTask(name="任务A", storage_location="A", owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    run = CrawlRun(
+        task_id=task.id,
+        task_name=task.name,
+        status="running",
+        crawl_mode="incremental",
+        created_at=datetime.now(),
+    )
+    session.add(run)
+    session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code="AAA-DELETE",
+        source_url="https://example.test/delete",
+        source_name="AAA-DELETE",
+        status="crawl_failed",
+        created_at=datetime.now(),
+    )
+    session.add(detail)
+    session.commit()
+    session.refresh(run)
+    session.refresh(detail)
+    queue = event_bus.subscribe(str(admin_user.id))
+
+    detail_id = detail.id
+    session.expire(detail)
+    delete_session = TestingSessionLocal()
+    try:
+        row = delete_session.get(CrawlRunDetailTask, detail_id)
+        if row is not None:
+            delete_session.delete(row)
+            delete_session.commit()
+    finally:
+        delete_session.close()
+
+    service.publish_run_detail_updated(session, run, [detail])
+
+    events = drain(queue)
+    event_bus.unsubscribe(str(admin_user.id), queue)
+    session.close()
+
+    assert [event.event for event in events] == ["crawler.run.detail.updated"]
+    assert events[0].payload["tasks"] == []
+
+
 def test_publish_run_log_event_for_owner(admin_user) -> None:
     session = TestingSessionLocal()
     task = CrawlTask(name="任务A", storage_location="A", owner_id=admin_user.id)

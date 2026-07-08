@@ -16,6 +16,18 @@ class DetailTaskIndex:
         if detail.source_url:
             self.by_source_url[str(detail.source_url)] = detail
 
+    def forget(self, detail: CrawlRunDetailTask) -> None:
+        self.by_code = {
+            key: value
+            for key, value in self.by_code.items()
+            if value is not detail
+        }
+        self.by_source_url = {
+            key: value
+            for key, value in self.by_source_url.items()
+            if value is not detail
+        }
+
     def find(
         self,
         task_info: dict[str, Any],

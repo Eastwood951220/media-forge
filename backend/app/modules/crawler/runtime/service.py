@@ -188,7 +188,7 @@ class CrawlerRunService:
         run.queued_at = datetime.now()
         run.started_at = None
         run.finished_at = None
-        run.result = None
+        run.result = {"detail_retry": True}
         run.error = None
         self.db.commit()
         self.db.refresh(run)

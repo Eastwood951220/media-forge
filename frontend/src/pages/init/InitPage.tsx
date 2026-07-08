@@ -1,4 +1,4 @@
-import { Form, Button, Divider } from 'antd'
+import { Alert, Form, Button, Divider } from 'antd'
 import type { ConnectionTestResult, InitConfigRequest } from '@/api/init/types'
 import { useInitConnectionTests } from './hooks/useInitConnectionTests'
 import { useInitSubmit } from './hooks/useInitSubmit'
@@ -20,6 +20,13 @@ function InitPage() {
       <div className={styles.card}>
         <h1 className={styles.title}>初始化配置</h1>
         <p className={styles.subtitle}>首次运行需要配置 PostgreSQL 和 Redis 连接信息</p>
+        <Alert
+          className={styles.dockerNotice}
+          type="info"
+          showIcon
+          message="Docker 部署提示"
+          description="在容器中 localhost/127.0.0.1 指向 Media Forge 容器自身。连接外部 PostgreSQL 或 Redis 时，请填写 fnOS 宿主机局域网 IP、外部服务地址，或同一 Docker 网络中的容器名。"
+        />
 
         <Form<InitConfigRequest>
           form={form}

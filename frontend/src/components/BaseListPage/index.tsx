@@ -97,7 +97,7 @@ export default function BaseListPage<T extends object>({
             rowSelection={rowSelection}
             expandable={expandable}
             tableLayout="fixed"
-            scroll={{ y: tableScrollY, x: 'max-content' }}
+            scroll={{ y: tableScrollY}}
             {...tableProps}
           />
         </div>

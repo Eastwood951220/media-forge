@@ -34,7 +34,7 @@ export function createMovieColumns({ onViewDetail, onPush, onDelete }: MovieColu
     { title: '标题',
       dataIndex: 'source_name',
       key: 'source_name',
-      width: 200,
+      width: 400,
       ellipsis: true
     },
     {

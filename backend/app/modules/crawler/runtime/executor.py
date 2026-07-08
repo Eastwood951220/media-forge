@@ -51,6 +51,7 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
         engine = get_crawler_engine()
 
         detail_phase_restart = has_detail_phase_started(db, run)
+        detail_retry_requested = bool((run.result or {}).get("detail_retry"))
         pending_detail_retry_rows = (
             db.query(CrawlRunDetailTask)
             .filter(
@@ -60,7 +61,7 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
             .order_by(CrawlRunDetailTask.created_at.asc())
             .all()
         )
-        if detail_phase_restart and pending_detail_retry_rows:
+        if pending_detail_retry_rows and (detail_phase_restart or detail_retry_requested):
             append_run_log_for_run(
                 db,
                 run,

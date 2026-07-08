@@ -1,0 +1,15 @@
+services:
+  media-forge:
+    image: media-forge:amd64
+    container_name: media-forge
+    restart: unless-stopped
+    ports:
+      - "18642:18642"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - HTTP_PROXY=http://192.168.0.36:7890
+      - HTTPS_PROXY=http://192.168.0.36:7890
+      - NO_PROXY=localhost,127.0.0.1,host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
