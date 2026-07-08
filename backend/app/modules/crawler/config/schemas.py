@@ -3,6 +3,8 @@ from pydantic import BaseModel, Field
 
 class ConfigUpdate(BaseModel):
     MAX_LIST_PAGES: int | None = Field(None, ge=1, le=100)
+    LIST_MAX_WORKERS: int | None = Field(None, ge=1, le=32)
+    DETAIL_MAX_WORKERS: int | None = Field(None, ge=1, le=32)
     LIST_PAGE_DELAY_MIN: float | None = Field(None, ge=0)
     LIST_PAGE_DELAY_MAX: float | None = Field(None, ge=0)
     DETAIL_PAGE_DELAY_MIN: float | None = Field(None, ge=0)

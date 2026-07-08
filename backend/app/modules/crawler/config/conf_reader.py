@@ -9,6 +9,8 @@ from shared.runtime_config import PROJECT_ROOT
 
 CONFIG_KEYS: tuple[str, ...] = (
     "MAX_LIST_PAGES",
+    "LIST_MAX_WORKERS",
+    "DETAIL_MAX_WORKERS",
     "LIST_PAGE_DELAY_MIN",
     "LIST_PAGE_DELAY_MAX",
     "DETAIL_PAGE_DELAY_MIN",
@@ -22,6 +24,8 @@ CONFIG_KEYS: tuple[str, ...] = (
 @dataclass(frozen=True)
 class CrawlerRuntimeConfig:
     MAX_LIST_PAGES: int = 50
+    LIST_MAX_WORKERS: int = 1
+    DETAIL_MAX_WORKERS: int = 1
     LIST_PAGE_DELAY_MIN: float = 4.0
     LIST_PAGE_DELAY_MAX: float = 5.0
     DETAIL_PAGE_DELAY_MIN: float = 2.0
@@ -75,7 +79,7 @@ def read_crawler_config_dict(base_dir: Path | None = None) -> dict[str, int | fl
             result[key] = defaults[key]
             continue
         coerced = _coerce_value(raw_value)
-        if key in {"MAX_LIST_PAGES", "REQUEST_TIMEOUT", "INCREMENTAL_EXIST_THRESHOLD"}:
+        if key in {"MAX_LIST_PAGES", "LIST_MAX_WORKERS", "DETAIL_MAX_WORKERS", "REQUEST_TIMEOUT", "INCREMENTAL_EXIST_THRESHOLD"}:
             try:
                 result[key] = int(coerced)
             except (TypeError, ValueError):
@@ -86,6 +90,8 @@ def read_crawler_config_dict(base_dir: Path | None = None) -> dict[str, int | fl
             except (TypeError, ValueError):
                 result[key] = defaults[key]
     result["MAX_LIST_PAGES"] = min(int(result["MAX_LIST_PAGES"]), 50)
+    result["LIST_MAX_WORKERS"] = max(1, int(result["LIST_MAX_WORKERS"]))
+    result["DETAIL_MAX_WORKERS"] = max(1, int(result["DETAIL_MAX_WORKERS"]))
     return result
 
 

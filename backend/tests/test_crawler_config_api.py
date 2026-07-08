@@ -40,6 +40,10 @@ def test_get_crawler_config_returns_original_keys(
     assert "SECURITY_WAIT_SECONDS" in body["data"]
     assert "REQUEST_TIMEOUT" in body["data"]
     assert "INCREMENTAL_EXIST_THRESHOLD" in body["data"]
+    assert "LIST_MAX_WORKERS" in body["data"]
+    assert "DETAIL_MAX_WORKERS" in body["data"]
+    assert body["data"]["LIST_MAX_WORKERS"] >= 1
+    assert body["data"]["DETAIL_MAX_WORKERS"] >= 1
 
 
 def test_update_crawler_config_matches_original_env_update(
@@ -229,3 +233,20 @@ def test_scraper_settings_no_longer_exposes_crawler_env_values(monkeypatch) -> N
     assert not hasattr(settings, "MAX_LIST_PAGES")
     assert not hasattr(settings, "REQUEST_TIMEOUT")
     assert settings.COOKIE_DIR == settings.BASE_DIR / "data" / "cookies"
+
+
+def test_crawler_config_reads_worker_counts_from_conf_file(tmp_path) -> None:
+    from backend.app.modules.crawler.config.conf_reader import read_crawler_config_dict
+
+    conf_dir = tmp_path / "data" / "configs"
+    conf_dir.mkdir(parents=True)
+    (conf_dir / "crawler.conf").write_text(
+        "LIST_MAX_WORKERS=3\n"
+        "DETAIL_MAX_WORKERS=5\n",
+        encoding="utf-8",
+    )
+
+    data = read_crawler_config_dict(tmp_path)
+
+    assert data["LIST_MAX_WORKERS"] == 3
+    assert data["DETAIL_MAX_WORKERS"] == 5
