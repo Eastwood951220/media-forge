@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.models.crawl_run import CrawlRun
 from backend.app.modules.crawler.runs.schemas import CrawlRunRead, RunCreateRequest
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from backend.app.modules.crawler.tasks.delete_service import UnsupportedDeleteMode, delete_task
@@ -154,9 +155,17 @@ class CrawlerTaskService:
 
         ensure_delete_mode_supported(mode)
 
+        run_ids = [
+            str(row.id)
+            for row in self.db.query(CrawlRun.id)
+            .filter(CrawlRun.task_id == task_id)
+            .all()
+        ]
+
         try:
             with open_delete_provider(mode) as provider:
                 result = delete_task(self.db, task_id, mode=mode, provider=provider)
+                get_runtime_state().purge_runs(run_ids)
         except UnsupportedDeleteMode as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

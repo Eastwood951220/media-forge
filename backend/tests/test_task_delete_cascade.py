@@ -268,3 +268,87 @@ def test_delete_task_movies_and_cloud_deletes_task_movies_and_cloud_folders(clie
     assert body["cloud_delete"] == "completed"
     assert body["cloud_deleted_folders"] == ["/Movies/巨乳/CLOUD-001"]
     assert deleted == ["/Movies/巨乳/CLOUD-001"]
+
+
+def test_stopped_task_can_be_deleted_and_purges_runtime(monkeypatch, admin_user) -> None:
+    from datetime import datetime
+
+    from backend.app.models.crawl_run import CrawlRun
+    from backend.app.modules.crawler.tasks.service import CrawlerTaskService
+
+    session = TestingSessionLocal()
+    task = CrawlTask(name="停止后删除", storage_location="测试", owner_id=admin_user.id, is_skip=False)
+    session.add(task)
+    session.flush()
+    run = CrawlRun(
+        task_id=task.id,
+        task_name=task.name,
+        status="stopped",
+        crawl_mode="incremental",
+        queued_at=datetime.now(),
+        finished_at=datetime.now(),
+        error="用户停止任务",
+    )
+    session.add(run)
+    session.commit()
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.purged: list[list[str]] = []
+
+        def purge_runs(self, run_ids: list[str]) -> None:
+            self.purged.append(run_ids)
+
+    runtime = Runtime()
+    monkeypatch.setattr("backend.app.modules.crawler.tasks.service.get_runtime_state", lambda: runtime)
+
+    result = CrawlerTaskService(session).delete_task(task.id, admin_user.id, mode="task_only")
+
+    assert result["deleted_task"] is True
+    assert result["deleted_runs"] == 1
+    assert runtime.purged == [[str(run.id)]]
+    assert session.get(CrawlTask, task.id) is None
+
+
+def test_delete_task_does_not_purge_runtime_when_database_delete_fails(monkeypatch, admin_user) -> None:
+    from datetime import datetime
+
+    from backend.app.models.crawl_run import CrawlRun
+    from backend.app.modules.crawler.tasks.service import CrawlerTaskService
+
+    session = TestingSessionLocal()
+    task = CrawlTask(name="删除失败", storage_location="测试", owner_id=admin_user.id, is_skip=False)
+    session.add(task)
+    session.flush()
+    run = CrawlRun(
+        task_id=task.id,
+        task_name=task.name,
+        status="stopped",
+        crawl_mode="incremental",
+        queued_at=datetime.now(),
+        finished_at=datetime.now(),
+    )
+    session.add(run)
+    session.commit()
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.purged: list[list[str]] = []
+
+        def purge_runs(self, run_ids: list[str]) -> None:
+            self.purged.append(run_ids)
+
+    runtime = Runtime()
+    monkeypatch.setattr("backend.app.modules.crawler.tasks.service.get_runtime_state", lambda: runtime)
+
+    def fail_delete(*_args, **_kwargs):
+        raise RuntimeError("delete failed")
+
+    monkeypatch.setattr("backend.app.modules.crawler.tasks.service.delete_task", fail_delete)
+
+    try:
+        CrawlerTaskService(session).delete_task(task.id, admin_user.id, mode="task_only")
+    except RuntimeError:
+        pass
+
+    assert runtime.purged == []

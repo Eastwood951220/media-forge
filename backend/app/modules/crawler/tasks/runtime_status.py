@@ -149,15 +149,10 @@ def get_task_runtime_status(
 def can_delete_task_runtime_status(runtime_status: str) -> bool:
     """Check whether a task can be deleted based on its runtime status.
 
-    Only idle tasks can be deleted.
-
-    Args:
-        runtime_status: The derived runtime status.
-
-    Returns:
-        True if the task can be deleted (idle), False otherwise.
+    Idle tasks have no active latest run. Stopped tasks are no longer actively
+    running and can be deleted after their runtime keys are purged.
     """
-    return runtime_status == "idle"
+    return runtime_status in {"idle", "stopped"}
 
 
 def publish_task_status_updated(db: Session, run: CrawlRun) -> None:
