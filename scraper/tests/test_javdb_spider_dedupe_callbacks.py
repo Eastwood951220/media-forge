@@ -185,3 +185,26 @@ def test_spider_reads_max_pages_from_conf_reader(monkeypatch) -> None:
     )
 
     assert [item["code"] for item in result] == ["AAA-1"]
+
+
+def test_run_single_detail_task_processes_one_detail(monkeypatch) -> None:
+    spider = JavdbSpider(fetcher=Fetcher())
+    monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
+    monkeypatch.setattr(spider_module, "is_security_check_page", lambda page: False)
+    monkeypatch.setattr(spider, "fetch", lambda url: "<html>detail</html>")
+    monkeypatch.setattr(
+        spider_module,
+        "parse_detail_page",
+        lambda page: {"code": "AAA-060", "source_name": "AAA 060"},
+    )
+    completed: list[dict] = []
+
+    result = spider.run_single_detail_task(
+        {"code": "AAA-060", "url": "https://javdb.com/v/aaa060", "name": "AAA 060"},
+        task_name="任务",
+        on_detail_completed=completed.append,
+    )
+
+    assert result["status"] == "completed"
+    assert result["detail"]["code"] == "AAA-060"
+    assert completed[0]["code"] == "AAA-060"

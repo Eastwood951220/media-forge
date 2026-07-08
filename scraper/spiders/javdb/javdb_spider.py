@@ -467,3 +467,26 @@ class JavdbSpider(BaseSpider):
 
     def run(self, task: CrawlTask) -> list[dict]:
         return self.run_task(task)
+
+    def run_single_detail_task(
+        self,
+        task: dict,
+        task_name: str | None = None,
+        on_detail_completed=None,
+        on_detail_failed=None,
+        stop_check=None,
+        log_callback=None,
+        on_detail_check_callback=None,
+        on_item_already_exists=None,
+    ) -> dict:
+        result = self.run_detail_tasks(
+            [task],
+            task_name=task_name,
+            on_detail_completed=on_detail_completed,
+            on_detail_failed=on_detail_failed,
+            stop_check=stop_check,
+            log_callback=log_callback,
+            on_detail_check_callback=on_detail_check_callback,
+            on_item_already_exists=on_item_already_exists,
+        )
+        return result[0] if result else task
