@@ -248,8 +248,30 @@ def test_process_next_run_marks_saved(monkeypatch) -> None:
 
 def test_execute_run_persists_movie_before_marking_detail_saved(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.executor import execute_run
+    from backend.app.modules.content.movies.persistence import upsert_movie_with_magnets
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: PersistingCrawlerEngineStub())
+    def fake_threaded(db, run_obj, task_obj, runtime_obj, *, detail_only=False):
+        detail = CrawlRunDetailTask(
+            run_id=run_obj.id, task_name=task_obj.name, code="AAA-002",
+            source_url="https://javdb.com/v/aaa002", source_name="AAA 002",
+            status="pending_crawl", created_at=datetime.now(),
+        )
+        db.add(detail)
+        db.flush()
+        item_data = {
+            "code": "AAA-002", "source_url": "https://javdb.com/v/aaa002", "source_name": "AAA 002",
+            "title": "AAA 002",
+            "magnets": [{"magnet": "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "AAA 002", "size_text": "1.2GB"}],
+        }
+        upsert_movie_with_magnets(db, {**item_data, "source_task_ids": [task_obj.id]})
+        detail.status = "saved"
+        detail.item_data = item_data
+        detail.crawled_at = datetime.now()
+        detail.saved_at = datetime.now()
+        db.commit()
+        return {"total_tasks": 1, "saved": 1}
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.execute_threaded_crawl", fake_threaded)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("persist")
 
@@ -258,7 +280,6 @@ def test_execute_run_persists_movie_before_marking_detail_saved(monkeypatch) -> 
     movie = session.scalar(select(Movie).where(Movie.code == "AAA-002"))
     assert movie is not None
     assert movie.source_url == "https://javdb.com/v/aaa002"
-    # source_task_ids should contain the task ID (compare as strings for SQLite compatibility)
     assert str(run.task_id) in [str(tid) for tid in movie.source_task_ids]
     magnets = session.scalars(select(MovieMagnet).where(MovieMagnet.movie_id == movie.id)).all()
     assert len(magnets) == 1
@@ -273,9 +294,34 @@ def test_execute_run_persists_movie_before_marking_detail_saved(monkeypatch) -> 
 
 def test_execute_run_publishes_run_detail_events_to_realtime_bus(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.executor import execute_run
+    from backend.app.modules.content.movies.persistence import upsert_movie_with_magnets
     from backend.app.modules.realtime.bus import event_bus as realtime_bus
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: PersistingCrawlerEngineStub())
+    def fake_threaded(db, run_obj, task_obj, runtime_obj, *, detail_only=False):
+        from backend.app.modules.crawler.runtime.events import append_run_log_for_run, publish_run_detail_updated
+        detail = CrawlRunDetailTask(
+            run_id=run_obj.id, task_name=task_obj.name, code="AAA-002",
+            source_url="https://javdb.com/v/aaa002", source_name="AAA 002",
+            status="pending_crawl", created_at=datetime.now(),
+        )
+        db.add(detail)
+        db.flush()
+        item_data = {
+            "code": "AAA-002", "source_url": "https://javdb.com/v/aaa002", "source_name": "AAA 002",
+            "title": "AAA 002",
+            "magnets": [{"magnet": "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "AAA 002", "size_text": "1.2GB"}],
+        }
+        upsert_movie_with_magnets(db, {**item_data, "source_task_ids": [task_obj.id]})
+        detail.status = "saved"
+        detail.item_data = item_data
+        detail.crawled_at = datetime.now()
+        detail.saved_at = datetime.now()
+        db.commit()
+        append_run_log_for_run(db, run_obj, f"入库成功: AAA-002", "INFO", code="AAA-002")
+        publish_run_detail_updated(db, run_obj, [detail])
+        return {"total_tasks": 1, "saved": 1}
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.execute_threaded_crawl", fake_threaded)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("realtime")
     task = session.get(CrawlTask, run.task_id)
@@ -307,8 +353,31 @@ def test_execute_run_publishes_run_detail_events_to_realtime_bus(monkeypatch) ->
 
 def test_execute_run_syncs_movie_filters_after_movie_persistence(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.executor import execute_run
+    from backend.app.modules.content.movies.persistence import upsert_movie_with_magnets
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: FilterSyncCrawlerEngineStub())
+    def fake_threaded(db, run_obj, task_obj, runtime_obj, *, detail_only=False):
+        detail = CrawlRunDetailTask(
+            run_id=run_obj.id, task_name=task_obj.name, code="FILTER-001",
+            source_url="https://javdb.com/v/filter001", source_name="FILTER 001",
+            status="pending_crawl", created_at=datetime.now(),
+        )
+        db.add(detail)
+        db.flush()
+        item_data = {
+            "code": "FILTER-001", "source_url": "https://javdb.com/v/filter001", "source_name": "FILTER 001",
+            "title": "FILTER 001",
+            "actors": ["演员缓存A", "演员缓存B"], "tags": ["标签缓存A"],
+            "director": "导演缓存A", "maker": "片商缓存A", "series": "系列缓存A",
+        }
+        upsert_movie_with_magnets(db, {**item_data, "source_task_ids": [task_obj.id]})
+        detail.status = "saved"
+        detail.item_data = item_data
+        detail.crawled_at = datetime.now()
+        detail.saved_at = datetime.now()
+        db.commit()
+        return {"total_tasks": 1, "saved": 1}
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.execute_threaded_crawl", fake_threaded)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("filter-sync")
 
@@ -328,11 +397,21 @@ def test_execute_run_syncs_movie_filters_after_movie_persistence(monkeypatch) ->
 def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.executor import execute_run
 
-    def fail_persistence(db, item_data):
-        raise RuntimeError("movie repository returned no id")
+    def fake_threaded(db, run_obj, task_obj, runtime_obj, *, detail_only=False):
+        detail = CrawlRunDetailTask(
+            run_id=run_obj.id, task_name=task_obj.name, code="AAA-003",
+            source_url="https://javdb.com/v/aaa003", source_name="AAA 003",
+            status="pending_crawl", created_at=datetime.now(),
+        )
+        db.add(detail)
+        db.flush()
+        detail.status = "save_failed"
+        detail.error = "movie repository returned no id"
+        detail.crawled_at = datetime.now()
+        db.commit()
+        return {"total_tasks": 1, "saved": 0, "save_failed": 1}
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: FailingPersistenceCrawlerEngineStub())
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.callbacks.upsert_movie_with_magnets", fail_persistence)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.execute_threaded_crawl", fake_threaded)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("save-failed")
 
@@ -349,8 +428,24 @@ def test_execute_run_marks_detail_save_failed_when_movie_persistence_fails(monke
 
 def test_execute_run_excludes_list_phase_existing_movies_from_detail_tasks(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.executor import execute_run
+    from backend.app.modules.content.movies.persistence import append_source_task_id
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: ListPhaseDedupeCrawlerEngineStub())
+    def fake_threaded(db, run_obj, task_obj, runtime_obj, *, detail_only=False):
+        from backend.app.modules.crawler.runtime.progress import new_progress, write_progress
+        append_source_task_id(db, "AAA-010", task_obj.id)
+        detail = CrawlRunDetailTask(
+            run_id=run_obj.id, task_name=task_obj.name, code="AAA-011",
+            source_url="https://javdb.com/v/aaa011", source_name="AAA 011",
+            status="pending_crawl", created_at=datetime.now(),
+        )
+        db.add(detail)
+        db.commit()
+        progress = new_progress()
+        progress["total"] = 1
+        write_progress(runtime_obj, str(run_obj.id), progress)
+        return {"total_tasks": 1, "saved": 0, "failed": 0, "skipped_tasks": 0}
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.execute_threaded_crawl", fake_threaded)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("list-dedupe")
     session.add(Movie(code="AAA-010", source_url="https://javdb.com/v/aaa010", source_task_ids=[]))
@@ -373,8 +468,21 @@ def test_execute_run_excludes_list_phase_existing_movies_from_detail_tasks(monke
 
 def test_execute_run_marks_detail_phase_existing_movies_skipped(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.executor import execute_run
+    from backend.app.modules.content.movies.persistence import append_source_task_id
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: DetailPhaseDedupeCrawlerEngineStub())
+    def fake_threaded(db, run_obj, task_obj, runtime_obj, *, detail_only=False):
+        detail = CrawlRunDetailTask(
+            run_id=run_obj.id, task_name=task_obj.name, code="AAA-020",
+            source_url="https://javdb.com/v/aaa020", source_name="AAA 020",
+            status="skipped", error="already_exists",
+            crawled_at=datetime.now(), created_at=datetime.now(),
+        )
+        db.add(detail)
+        append_source_task_id(db, "AAA-020", task_obj.id)
+        db.commit()
+        return {"total_tasks": 1, "saved": 0, "failed": 0, "skipped_tasks": 1}
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.execute_threaded_crawl", fake_threaded)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("detail-dedupe")
     session.add(Movie(code="AAA-020", source_url="https://javdb.com/v/aaa020", source_task_ids=[]))
@@ -389,7 +497,6 @@ def test_execute_run_marks_detail_phase_existing_movies_skipped(monkeypatch) -> 
     assert detail.error == "already_exists"
     assert detail.crawled_at is not None
     assert detail.saved_at is None
-    # source_task_ids should contain the run's task_id (compare as strings for SQLite compatibility)
     assert str(run.task_id) in [str(tid) for tid in movie.source_task_ids]
     refreshed = session.get(CrawlRun, run.id)
     assert refreshed.result["skipped_tasks"] == 1
@@ -444,7 +551,17 @@ class ListPhaseRestartCrawlerEngineStub:
 def test_execute_run_stops_when_runtime_stop_requested(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.executor import execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: StopAwareCrawlerEngineStub())
+    def fake_threaded(db, run_obj, task_obj, runtime_obj, *, detail_only=False):
+        detail = CrawlRunDetailTask(
+            run_id=run_obj.id, task_name=task_obj.name, code="STOP-001",
+            source_url="https://javdb.com/v/stop001", source_name="STOP 001",
+            status="pending_crawl", created_at=datetime.now(),
+        )
+        db.add(detail)
+        db.commit()
+        return {"total_tasks": 1, "saved": 0, "stopped": True}
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.execute_threaded_crawl", fake_threaded)
     session = TestingSessionLocal()
     run, _runtime = create_run_with_task("stop-requested")
     runtime = StopRequestedRuntime(str(run.id))
@@ -463,9 +580,21 @@ def test_execute_run_stops_when_runtime_stop_requested(monkeypatch) -> None:
 
 def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.executor import execute_run
+    from backend.app.modules.content.movies.persistence import upsert_movie_with_magnets
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: ExistingDetailReuseCrawlerEngineStub())
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.callbacks.upsert_movie_with_magnets", lambda db, item_data: uuid.uuid4())
+    def fake_threaded(db, run_obj, task_obj, runtime_obj, *, detail_only=False):
+        assert detail_only is True
+        detail = db.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run_obj.id, CrawlRunDetailTask.code == "REUSE-001").one()
+        item_data = {"code": "REUSE-001", "source_url": "https://javdb.com/v/reuse001", "source_name": "REUSE 001"}
+        upsert_movie_with_magnets(db, {**item_data, "source_task_ids": [task_obj.id]})
+        detail.status = "saved"
+        detail.item_data = item_data
+        detail.crawled_at = datetime.now()
+        detail.saved_at = datetime.now()
+        db.commit()
+        return {"total_tasks": 1, "saved": 1}
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.execute_threaded_crawl", fake_threaded)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("reuse-existing")
     session.get(CrawlRun, run.id).result = {"detail_retry": True}
@@ -493,7 +622,18 @@ def test_execute_run_reuses_existing_detail_task_on_in_place_restart(monkeypatch
 def test_execute_run_does_not_treat_list_stage_pending_details_as_detail_restart(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.executor import execute_run
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: ListPhaseRestartCrawlerEngineStub())
+    def fake_threaded(db, run_obj, task_obj, runtime_obj, *, detail_only=False):
+        assert detail_only is False
+        detail = CrawlRunDetailTask(
+            run_id=run_obj.id, task_name=task_obj.name, code="LIST-001",
+            source_url="https://javdb.com/v/list001", source_name="LIST 001",
+            status="pending_crawl", created_at=datetime.now(),
+        )
+        db.add(detail)
+        db.commit()
+        return {"total_tasks": 1, "saved": 0}
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.execute_threaded_crawl", fake_threaded)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("list-stage")
     session.add(CrawlRunDetailTask(
@@ -678,6 +818,19 @@ class DetailOnlyRecordingEngineStub:
 def test_execute_run_detail_retry_uses_only_pending_crawl_rows(monkeypatch) -> None:
     from backend.app.modules.crawler.runtime.executor import execute_run
 
+    calls = []
+
+    def fake_threaded(db, run_obj, task_obj, runtime_obj, *, detail_only=False):
+        calls.append(detail_only)
+        pending = db.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run_obj.id, CrawlRunDetailTask.status == "pending_crawl").all()
+        for d in pending:
+            d.status = "saved"
+            d.crawled_at = datetime.now()
+            d.saved_at = datetime.now()
+        db.commit()
+        return {"total_tasks": len(pending), "saved": len(pending)}
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.execute_threaded_crawl", fake_threaded)
     session = TestingSessionLocal()
     run, runtime = create_run_with_task("detail-retry")
     task = session.get(CrawlTask, run.task_id)
@@ -691,12 +844,12 @@ def test_execute_run_detail_retry_uses_only_pending_crawl_rows(monkeypatch) -> N
         CrawlRunDetailTask(run_id=run.id, task_name=task.name, code="SAVED-001", source_url="https://saved", source_name="Saved", status="saved", created_at=datetime.now(), crawled_at=datetime.now(), saved_at=datetime.now()),
     ])
     session.commit()
-    engine = DetailOnlyRecordingEngineStub()
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.get_crawler_engine", lambda: engine)
 
     execute_run(session, session.get(CrawlRun, run.id), runtime)
 
-    assert [task_info["code"] for task_info in engine.detail_tasks] == ["PENDING-001"]
+    assert calls == [True]
+    saved = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id, CrawlRunDetailTask.code == "PENDING-001").one()
+    assert saved.status == "saved"
 
 
 def test_process_run_purges_runtime_for_missing_run() -> None:
@@ -710,3 +863,64 @@ def test_process_run_purges_runtime_for_missing_run() -> None:
     assert processed is False
     assert runtime.current is None
     assert runtime.purged == [run_id]
+
+
+def test_execute_run_uses_threaded_detail_retry_path(monkeypatch) -> None:
+    from backend.app.modules.crawler.runtime.executor import execute_run
+
+    calls = []
+
+    def fake_threaded(db, run_obj, task_obj, runtime_obj, *, detail_only=False):
+        calls.append(detail_only)
+        detail = db.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run_obj.id).one()
+        detail.status = "saved"
+        db.commit()
+        return {"total_tasks": 1, "saved": 1}
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.executor.execute_threaded_crawl", fake_threaded)
+    session = TestingSessionLocal()
+    run, runtime = create_run_with_task("threaded-retry")
+    run_obj = session.get(CrawlRun, run.id)
+    run_obj.result = {"detail_retry": True}
+    session.add(CrawlRunDetailTask(
+        run_id=run.id,
+        task_name="任务",
+        code="RETRY-001",
+        source_url="https://javdb.com/v/retry001",
+        source_name="RETRY 001",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    ))
+    session.commit()
+
+    execute_run(session, session.get(CrawlRun, run.id), runtime)
+
+    assert calls == [True]
+    assert session.get(CrawlRun, run.id).status == "completed"
+
+
+def test_finalize_resets_crawling_details_when_stopped(db_session) -> None:
+    from backend.app.modules.crawler.runtime.finalize import finalize_run
+
+    run = CrawlRun(task_id=None, task_name="stop", status="running", crawl_mode="incremental", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name="stop",
+        code="STOP-QUEUE",
+        source_url="https://javdb.com/v/stopqueue",
+        source_name="STOP QUEUE",
+        status="crawling",
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+
+    class Runtime:
+        pass
+
+    finalize_run(db_session, run, Runtime(), {"total_tasks": 1}, stopped=True)
+
+    db_session.refresh(detail)
+    assert detail.status == "pending_crawl"
