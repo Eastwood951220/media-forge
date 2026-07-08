@@ -32,6 +32,9 @@ class FakeRuntime:
     def queue_status(self):
         return {"queue_size": len(self.enqueued), "is_running": False, "current_run_id": None, "stop_requested": False}
 
+    def purge_run(self, run_id):
+        pass
+
 
 def test_cleanup_interrupted_runs_marks_queued_and_running_stopped() -> None:
     from backend.app.modules.crawler.runtime.service import cleanup_interrupted_runs
