@@ -228,7 +228,8 @@ class JavdbSpider(BaseSpider):
 
         for i, url_entry in enumerate(task.urls, 1):
             if stop_check and stop_check():
-                msg = f"[{task.name}] URL {i}/{len(task.urls)} 收到停止信号"
+                url_label = self._url_label(url_entry)
+                msg = f"[{task.name}][URL: {url_label}] URL {i}/{len(task.urls)} 收到停止信号"
                 self._emit(msg, log_callback, "WARNING")
                 break
 
