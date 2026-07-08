@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from backend.app.modules.crawler.config.conf_reader import CrawlerRuntimeConfig
 from scraper.spiders.javdb import javdb_spider
 from scraper.spiders.javdb.javdb_spider import JavdbSpider
 from scraper.tasks.task_schema import CrawlTask, CrawlTaskUrlEntry
@@ -19,7 +20,11 @@ def test_collect_all_detail_tasks_continues_to_next_url_after_empty_page(monkeyp
     spider = JavdbSpider(fetcher)
     logs: list[str] = []
 
-    monkeypatch.setattr(javdb_spider, "MAX_LIST_PAGES", 2)
+    monkeypatch.setattr(
+        javdb_spider,
+        "read_crawler_runtime_config",
+        lambda: CrawlerRuntimeConfig(MAX_LIST_PAGES=2),
+    )
     monkeypatch.setattr(javdb_spider, "random_sleep", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(javdb_spider, "is_security_check_page", lambda _page: False)
 

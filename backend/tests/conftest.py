@@ -77,7 +77,7 @@ def auth_headers(test_user) -> dict[str, str]:
 @pytest.fixture
 def client() -> TestClient:
     """TestClient with mocked lifespan to avoid real PostgreSQL/Redis connections."""
-    with patch("backend.app.main.connect_postgres"), \
+    with patch("backend.app.main.connect_or_repair_postgres"), \
          patch("backend.app.main.close_postgres"), \
          patch("backend.app.main.close_redis"), \
          patch("backend.app.main.get_session_factory"), \
