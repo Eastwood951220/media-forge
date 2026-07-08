@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.models.crawl_run import CrawlRun
 from backend.app.models.crawl_task import CrawlTask
@@ -36,6 +36,40 @@ def build_pipeline() -> MoviePipeline:
     return MoviePipeline()
 
 
+def _worker_session_factory(db: Session) -> sessionmaker:
+    return sessionmaker(bind=db.get_bind(), autocommit=False, autoflush=False)
+
+
+def _find_existing_movie_codes_in_worker_session(
+    session_factory: sessionmaker,
+    codes: list[str | None],
+) -> set[str]:
+    worker_db = session_factory()
+    try:
+        return find_existing_movie_codes(worker_db, codes)
+    finally:
+        worker_db.close()
+
+
+def _handle_already_exists_in_worker_session(
+    session_factory: sessionmaker,
+    run: CrawlRun,
+    task: CrawlTask,
+    task_info: dict,
+) -> None:
+    worker_db = session_factory()
+    try:
+        worker_run = worker_db.merge(run, load=False)
+        worker_task = worker_db.merge(task, load=False)
+        _handle_already_exists(worker_db, worker_run, worker_task, task_info)
+        worker_db.commit()
+    except Exception:
+        worker_db.rollback()
+        raise
+    finally:
+        worker_db.close()
+
+
 def execute_threaded_crawl(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, *, detail_only: bool = False) -> dict[str, Any]:
     config = read_crawler_runtime_config()
     progress = new_progress()
@@ -51,6 +85,7 @@ def execute_threaded_crawl(db: Session, run: CrawlRun, task: CrawlTask, runtime:
 
 def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, config: Any) -> None:
     spider = build_spider()
+    worker_session_factory = _worker_session_factory(db)
 
     def _collect_url(url_entry):
         return spider.collect_detail_tasks_for_url(
@@ -60,8 +95,13 @@ def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, c
             incremental_threshold=config.INCREMENTAL_EXIST_THRESHOLD,
             stop_check=lambda: runtime.is_stop_requested(str(run.id)),
             log_callback=lambda msg, level="INFO": append_run_log_for_run(db, run, msg, level),
-            db_check_callback=lambda codes: find_existing_movie_codes(db, codes),
-            on_item_already_exists=lambda task_info: _handle_already_exists(db, run, task, task_info),
+            db_check_callback=lambda codes: _find_existing_movie_codes_in_worker_session(worker_session_factory, codes),
+            on_item_already_exists=lambda task_info: _handle_already_exists_in_worker_session(
+                worker_session_factory,
+                run,
+                task,
+                task_info,
+            ),
         )
 
     with ThreadPoolExecutor(max_workers=max(1, config.LIST_MAX_WORKERS)) as pool:

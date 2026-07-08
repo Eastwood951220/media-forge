@@ -1,9 +1,11 @@
+import threading
 import uuid
 from datetime import datetime
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.crawler.runtime.threaded import execute_threaded_crawl
+from shared.database.models.content import Movie
 
 
 class Runtime:
@@ -69,3 +71,71 @@ def test_execute_threaded_crawl_finishes_list_before_detail(db_session, monkeypa
     assert result["saved"] == 2
     rows = db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
     assert sorted(row.status for row in rows) == ["saved", "saved"]
+
+
+def test_list_phase_db_callbacks_use_isolated_sessions(db_session, monkeypatch) -> None:
+    task, run = make_task_and_run(db_session)
+    db_session.add(Movie(code="A-001", source_name="Existing A"))
+    db_session.commit()
+
+    main_thread_id = threading.get_ident()
+
+    def guard_session_method(method_name: str) -> None:
+        original = getattr(db_session, method_name)
+
+        def guarded(*args, **kwargs):
+            if threading.get_ident() != main_thread_id:
+                raise AssertionError("main crawler session was used from a list worker thread")
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(db_session, method_name, guarded)
+
+    for method_name in ("get", "scalars", "scalar", "flush", "commit", "add", "add_all", "merge"):
+        if hasattr(db_session, method_name):
+            guard_session_method(method_name)
+
+    class DedupeSpider(FakeSpider):
+        def collect_detail_tasks_for_url(
+            self,
+            *,
+            url_entry,
+            task_name,
+            crawl_mode,
+            incremental_threshold,
+            stop_check,
+            log_callback,
+            db_check_callback,
+            on_item_already_exists,
+        ):
+            self.list_started = True
+            existing_codes = db_check_callback([f"{url_entry.url_type}-001"])
+            if f"{url_entry.url_type}-001" in existing_codes:
+                on_item_already_exists(
+                    {
+                        "code": f"{url_entry.url_type}-001",
+                        "url": f"https://javdb.com/v/{url_entry.url_type.lower()}001",
+                        "name": url_entry.url_type,
+                    }
+                )
+                return []
+            return [
+                {
+                    "code": f"{url_entry.url_type}-001",
+                    "url": f"https://javdb.com/v/{url_entry.url_type.lower()}001",
+                    "name": url_entry.url_type,
+                }
+            ]
+
+    spider = DedupeSpider()
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: spider)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
+
+    result = execute_threaded_crawl(db_session, run, task, Runtime())
+
+    assert result["total_tasks"] == 1
+    assert result["saved"] == 1
+    assert spider.list_started is True
+    assert spider.detail_started is True
+    rows = db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
+    assert [row.code for row in rows] == ["B-001"]
+    assert rows[0].status == "saved"
