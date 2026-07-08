@@ -10,7 +10,7 @@ class Fetcher:
         return "<html></html>"
 
 
-def test_list_phase_marks_existing_codes_skipped(monkeypatch) -> None:
+def test_incremental_list_phase_excludes_existing_codes_from_detail_tasks(monkeypatch) -> None:
     spider = JavdbSpider(fetcher=Fetcher())
     monkeypatch.setattr(spider_module, "MAX_LIST_PAGES", 1)
     monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
@@ -24,18 +24,23 @@ def test_list_phase_marks_existing_codes_skipped(monkeypatch) -> None:
         ],
     )
 
-    created_batches = []
+    created_batches: list[list[dict]] = []
+    already_exists: list[dict] = []
     result = spider.collect_detail_tasks_for_url(
         url_entry=CrawlTaskUrlEntry(url="https://javdb.com/actors/a", url_type="actors"),
         task_name="任务",
+        crawl_mode="incremental",
         db_check_callback=lambda codes: {"AAA-030"},
         on_tasks_batch_created=created_batches.append,
+        on_item_already_exists=already_exists.append,
     )
 
-    assert result[0]["status"] == "skipped"
-    assert result[0]["reason"] == "already_exists"
-    assert "status" not in result[1]
-    assert created_batches[0][0]["code"] == "AAA-030"
+    assert [item["code"] for item in result] == ["AAA-031"]
+    assert "status" not in result[0]
+    assert [[item["code"] for item in batch] for batch in created_batches] == [["AAA-031"]]
+    assert [item["code"] for item in already_exists] == ["AAA-030"]
+    assert already_exists[0]["status"] == "skipped"
+    assert already_exists[0]["reason"] == "already_exists"
 
 
 def test_detail_phase_skips_existing_code_without_fetching(monkeypatch) -> None:
@@ -58,6 +63,38 @@ def test_detail_phase_skips_existing_code_without_fetching(monkeypatch) -> None:
     assert result[0]["status"] == "skipped"
     assert result[0]["reason"] == "already_exists"
     assert already_exists[0]["code"] == "AAA-040"
+
+
+def test_full_list_phase_keeps_existing_codes_as_skipped_tasks(monkeypatch) -> None:
+    spider = JavdbSpider(fetcher=Fetcher())
+    monkeypatch.setattr(spider_module, "MAX_LIST_PAGES", 1)
+    monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
+    monkeypatch.setattr(spider_module, "is_security_check_page", lambda page: False)
+    monkeypatch.setattr(
+        spider_module,
+        "parse_search_page",
+        lambda page, source_page: [
+            {"code": "AAA-050", "url": "https://javdb.com/v/aaa050", "name": "AAA 050"},
+            {"code": "AAA-051", "url": "https://javdb.com/v/aaa051", "name": "AAA 051"},
+        ],
+    )
+
+    created_batches: list[list[dict]] = []
+    already_exists: list[dict] = []
+    result = spider.collect_detail_tasks_for_url(
+        url_entry=CrawlTaskUrlEntry(url="https://javdb.com/actors/a", url_type="actors"),
+        task_name="任务",
+        crawl_mode="full",
+        db_check_callback=lambda codes: {"AAA-050"},
+        on_tasks_batch_created=created_batches.append,
+        on_item_already_exists=already_exists.append,
+    )
+
+    assert [item["code"] for item in result] == ["AAA-050", "AAA-051"]
+    assert result[0]["status"] == "skipped"
+    assert result[0]["reason"] == "already_exists"
+    assert [[item["code"] for item in batch] for batch in created_batches] == [["AAA-050", "AAA-051"]]
+    assert already_exists == []
 
 
 def test_incremental_threshold_stops_current_url_and_continues_next_url(monkeypatch) -> None:
@@ -109,4 +146,4 @@ def test_incremental_threshold_stops_current_url_and_continues_next_url(monkeypa
     assert not any("actors/a" in url and "page=2" in url for url in fetched_urls)
     assert any("actors/b" in url and "page=1" in url for url in fetched_urls)
     assert [item["code"] for item in result] == ["BBB-001"]
-    assert all(item[0]["code"] != "AAA-000" for item in created_batches if item)
+    assert [[item["code"] for item in batch] for batch in created_batches] == [["BBB-001"]]

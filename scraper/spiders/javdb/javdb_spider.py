@@ -69,6 +69,7 @@ class JavdbSpider(BaseSpider):
         log_callback=None,
         on_tasks_batch_created=None,
         db_check_callback=None,
+        on_item_already_exists=None,
     ) -> list[dict]:
         """Collect detail tasks from list pages for a single URL entry."""
         max_pages = MAX_LIST_PAGES
@@ -146,38 +147,58 @@ class JavdbSpider(BaseSpider):
                 fresh_tasks.append(t)
 
             # DB dedup: check which codes already exist in movies collection
+            existing_count = 0
             if db_check_callback and fresh_tasks:
                 codes_to_check = [t.get("code") for t in fresh_tasks if t.get("code")]
                 if codes_to_check:
                     existing_codes = db_check_callback(codes_to_check)
-                    db_skipped = 0
-                    for t in fresh_tasks:
-                        code = t.get("code")
-                        if code and code in existing_codes:
-                            t["status"] = TASK_STATUS_SKIPPED
-                            t["reason"] = "already_exists"
-                            db_skipped += 1
-                    if db_skipped:
-                        msg = f"{prefix} 列表页 {page_no}: {db_skipped} 条已存在于数据库, 跳过"
-                        self._emit(msg, log_callback, "INFO")
+                    if existing_codes:
+                        crawlable_tasks: list[dict] = []
+                        ignored_existing_tasks: list[dict] = []
+                        kept_skipped_tasks: list[dict] = []
+                        for t in fresh_tasks:
+                            code = t.get("code")
+                            if code and code in existing_codes:
+                                t["status"] = TASK_STATUS_SKIPPED
+                                t["reason"] = "already_exists"
+                                existing_count += 1
+                                if crawl_mode == "incremental":
+                                    ignored_existing_tasks.append(t)
+                                else:
+                                    kept_skipped_tasks.append(t)
+                                continue
+                            crawlable_tasks.append(t)
 
-                        # 增量爬取: 如果本页已存在的条目数 >= 阈值，跳过后续页面
-                        if (crawl_mode == "incremental"
-                            and incremental_threshold > 0
-                            and db_skipped >= incremental_threshold):
+                        if ignored_existing_tasks:
+                            for task_info in ignored_existing_tasks:
+                                if on_item_already_exists:
+                                    on_item_already_exists(task_info)
                             msg = (
-                                f"{prefix} 列表页 {page_no} 已存在 {db_skipped} 条 "
+                                f"{prefix} 列表页 {page_no}: {len(ignored_existing_tasks)} 条已存在于数据库, "
+                                "不创建子任务"
+                            )
+                            self._emit(msg, log_callback, "INFO")
+
+                        if kept_skipped_tasks:
+                            msg = f"{prefix} 列表页 {page_no}: {len(kept_skipped_tasks)} 条已存在于数据库, 跳过"
+                            self._emit(msg, log_callback, "INFO")
+
+                        fresh_tasks = [*kept_skipped_tasks, *crawlable_tasks]
+
+                        if (
+                            crawl_mode == "incremental"
+                            and incremental_threshold > 0
+                            and existing_count >= incremental_threshold
+                        ):
+                            msg = (
+                                f"{prefix} 列表页 {page_no} 已存在 {existing_count} 条 "
                                 f"(>= 阈值 {incremental_threshold}), 跳过后续页面"
                             )
                             self._emit(msg, log_callback, "INFO")
-                            non_skipped_tasks = [
-                                item for item in fresh_tasks
-                                if item.get("status") != TASK_STATUS_SKIPPED
-                            ]
-                            if non_skipped_tasks:
-                                detail_tasks.extend(non_skipped_tasks)
+                            if fresh_tasks:
+                                detail_tasks.extend(fresh_tasks)
                                 if on_tasks_batch_created:
-                                    on_tasks_batch_created(non_skipped_tasks)
+                                    on_tasks_batch_created(fresh_tasks)
                             msg = (
                                 f"{prefix} 当前 URL 达到增量阈值，"
                                 "停止该 URL 后续列表页，继续下一个 URL"
@@ -221,6 +242,7 @@ class JavdbSpider(BaseSpider):
         log_callback=None,
         on_tasks_batch_created=None,
         db_check_callback=None,
+        on_item_already_exists=None,
     ) -> list[dict]:
         """Collect detail tasks from ALL URLs in a task sequentially."""
         all_detail_tasks: list[dict] = []
@@ -246,6 +268,7 @@ class JavdbSpider(BaseSpider):
                 log_callback=log_callback,
                 on_tasks_batch_created=on_tasks_batch_created,
                 db_check_callback=db_check_callback,
+                on_item_already_exists=on_item_already_exists,
             )
 
             # Dedup within this run: skip codes already seen
@@ -432,6 +455,7 @@ class JavdbSpider(BaseSpider):
             log_callback=log_callback,
             on_tasks_batch_created=on_tasks_batch_created,
             db_check_callback=db_check_callback,
+            on_item_already_exists=on_item_already_exists,
         )
 
         # Phase 2: Process all detail tasks
