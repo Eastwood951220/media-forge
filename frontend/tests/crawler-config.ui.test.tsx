@@ -26,7 +26,7 @@ vi.mock('@monaco-editor/react', () => ({
   ),
 }))
 
-vi.mock('../src/api/crawlerConfig', () => ({
+vi.mock('@/api/crawler/crawlerConfig', () => ({
   fetchConfig: vi.fn(),
   updateConfig: vi.fn(),
   fetchCookiesConfig: vi.fn(),
@@ -45,6 +45,8 @@ describe('ConfigPage', () => {
   beforeEach(() => {
     vi.mocked(fetchConfig).mockResolvedValue({
       MAX_LIST_PAGES: 50,
+      LIST_MAX_WORKERS: 2,
+      DETAIL_MAX_WORKERS: 4,
       LIST_PAGE_DELAY_MIN: 1,
       LIST_PAGE_DELAY_MAX: 3,
       DETAIL_PAGE_DELAY_MIN: 2,
@@ -79,6 +81,8 @@ describe('ConfigPage', () => {
 
     expect(await screen.findByText('爬取参数')).toBeInTheDocument()
     expect(screen.getByText('最大翻页数')).toBeInTheDocument()
+    expect(screen.getByText('列表线程数')).toBeInTheDocument()
+    expect(screen.getByText('详情线程数')).toBeInTheDocument()
     expect(screen.getByText('列表页最小延迟 (秒)')).toBeInTheDocument()
     expect(screen.getByText('列表页最大延迟 (秒)')).toBeInTheDocument()
     expect(screen.getByText('详情页最小延迟 (秒)')).toBeInTheDocument()

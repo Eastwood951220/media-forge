@@ -21,6 +21,8 @@ export interface CookiesConfig {
 /** Application config stored in env vars. */
 export interface AppConfig {
   MAX_LIST_PAGES?: number
+  LIST_MAX_WORKERS?: number
+  DETAIL_MAX_WORKERS?: number
   LIST_PAGE_DELAY_MIN?: number
   LIST_PAGE_DELAY_MAX?: number
   DETAIL_PAGE_DELAY_MIN?: number

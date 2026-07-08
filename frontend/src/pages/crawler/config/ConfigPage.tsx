@@ -144,6 +144,20 @@ export default function ConfigPage() {
                         <Form.Item name="MAX_LIST_PAGES" label="最大翻页数">
                             <InputNumber min={1} max={100} style={{width: '100%'}}/>
                         </Form.Item>
+                        <Form.Item
+                            name="LIST_MAX_WORKERS"
+                            label="列表线程数"
+                            tooltip="列表阶段并发处理 URL 的线程数；每个线程会顺序爬完一个 URL 的所有页"
+                        >
+                            <InputNumber min={1} max={32} style={{width: '100%'}}/>
+                        </Form.Item>
+                        <Form.Item
+                            name="DETAIL_MAX_WORKERS"
+                            label="详情线程数"
+                            tooltip="详情阶段并发领取 pending 子任务的线程数"
+                        >
+                            <InputNumber min={1} max={32} style={{width: '100%'}}/>
+                        </Form.Item>
                         <Form.Item name="LIST_PAGE_DELAY_MIN" label="列表页最小延迟 (秒)">
                             <InputNumber min={0} max={60} step={0.5} style={{width: '100%'}}/>
                         </Form.Item>
