@@ -19,6 +19,9 @@ class CrawlerRuntimeState:
     def enqueue_run(self, run_id: str) -> None:
         self.redis.rpush(self.QUEUE_KEY, run_id)
 
+    def remove_queued_run(self, run_id: str) -> int:
+        return int(self.redis.lrem(self.QUEUE_KEY, 0, run_id) or 0)
+
     def claim_next_run(self) -> str | None:
         value = self.redis.lpop(self.QUEUE_KEY)
         if value is None:
@@ -36,6 +39,22 @@ class CrawlerRuntimeState:
 
     def clear_stop(self, run_id: str) -> None:
         self.redis.delete(self._stop_key(run_id))
+
+    def clear_progress(self, run_id: str) -> None:
+        self.redis.delete(self._progress_key(run_id))
+
+    def purge_run(self, run_id: str) -> None:
+        self.remove_queued_run(run_id)
+        self.clear_stop(run_id)
+        self.clear_progress(run_id)
+        current = self.redis.get(self.CURRENT_KEY)
+        current_run_id = current.decode() if isinstance(current, bytes) else current
+        if str(current_run_id) == str(run_id):
+            self.set_current_run(None)
+
+    def purge_runs(self, run_ids: list[str]) -> None:
+        for run_id in run_ids:
+            self.purge_run(run_id)
 
     def is_stop_requested(self, run_id: str) -> bool:
         return self.redis.get(self._stop_key(run_id)) is not None
