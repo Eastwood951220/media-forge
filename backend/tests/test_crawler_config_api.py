@@ -149,7 +149,7 @@ def test_update_crawler_config_persists_to_conf_file_after_restart(
     monkeypatch,
     tmp_path,
 ) -> None:
-    from backend.app.modules.crawler.config import router as config_router
+    from backend.app.modules.crawler.config import conf_reader
 
     conf_dir = tmp_path / "data" / "configs"
     conf_dir.mkdir(parents=True)
@@ -159,10 +159,7 @@ def test_update_crawler_config_persists_to_conf_file_after_restart(
         "UNCHANGED_VALUE=keep-me\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(settings, "BASE_DIR", tmp_path)
-    monkeypatch.setattr(config_router.cfg, "BASE_DIR", tmp_path)
-    monkeypatch.delenv("MAX_LIST_PAGES", raising=False)
-    monkeypatch.delenv("REQUEST_TIMEOUT", raising=False)
+    monkeypatch.setattr(conf_reader, "crawler_conf_path", lambda base_dir=None: conf_file)
 
     response = client.put(
         "/api/crawler/config",
@@ -179,9 +176,6 @@ def test_update_crawler_config_persists_to_conf_file_after_restart(
     assert "REQUEST_TIMEOUT=46\n" in persisted
     assert "UNCHANGED_VALUE=keep-me\n" in persisted
 
-    monkeypatch.delenv("MAX_LIST_PAGES", raising=False)
-    monkeypatch.delenv("REQUEST_TIMEOUT", raising=False)
-
     get_response = client.get(
         "/api/crawler/config",
         headers=auth_headers(client, admin_user),
@@ -191,3 +185,36 @@ def test_update_crawler_config_persists_to_conf_file_after_restart(
     data = get_response.json()["data"]
     assert data["MAX_LIST_PAGES"] == 17
     assert data["REQUEST_TIMEOUT"] == 46
+
+
+def test_crawler_config_ignores_env_and_uses_conf_defaults(monkeypatch, tmp_path) -> None:
+    from backend.app.modules.crawler.config.conf_reader import read_crawler_config_dict
+
+    monkeypatch.setenv("MAX_LIST_PAGES", "99")
+    monkeypatch.setenv("REQUEST_TIMEOUT", "88")
+
+    data = read_crawler_config_dict(tmp_path)
+
+    assert data["MAX_LIST_PAGES"] == 50
+    assert data["REQUEST_TIMEOUT"] == 30
+
+
+def test_crawler_config_reads_values_from_conf_file(monkeypatch, tmp_path) -> None:
+    from backend.app.modules.crawler.config.conf_reader import read_crawler_config_dict
+
+    conf_dir = tmp_path / "data" / "configs"
+    conf_dir.mkdir(parents=True)
+    (conf_dir / "crawler.conf").write_text(
+        "MAX_LIST_PAGES=17\n"
+        "REQUEST_TIMEOUT=46\n"
+        "LIST_PAGE_DELAY_MIN=1.5\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MAX_LIST_PAGES", "99")
+    monkeypatch.setenv("REQUEST_TIMEOUT", "88")
+
+    data = read_crawler_config_dict(tmp_path)
+
+    assert data["MAX_LIST_PAGES"] == 17
+    assert data["REQUEST_TIMEOUT"] == 46
+    assert data["LIST_PAGE_DELAY_MIN"] == 1.5

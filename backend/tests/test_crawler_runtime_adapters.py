@@ -47,6 +47,12 @@ def test_read_incremental_threshold_from_backend_runtime_config(tmp_path) -> Non
     assert read_incremental_threshold_from_conf(tmp_path) == 7
 
 
+def test_incremental_threshold_ignores_env_when_conf_missing(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("INCREMENTAL_EXIST_THRESHOLD", "99")
+
+    assert read_incremental_threshold_from_conf(tmp_path) == 0
+
+
 def test_build_task_result_matches_existing_shape(admin_user) -> None:
     task = CrawlTask(name="任务B", owner_id=admin_user.id, is_skip=False)
     task.urls = [
