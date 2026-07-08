@@ -72,12 +72,13 @@ def _append_run_log_in_worker_session(
     owner_id: str | None,
     message: str,
     level: str = "INFO",
+    **context: Any,
 ) -> None:
     from backend.app.modules.crawler.runs.logs import append_run_log, build_run_log
     from backend.app.modules.realtime.bus import event_bus as realtime_bus
     from backend.app.modules.realtime.schemas import make_realtime_event
 
-    entry = build_run_log(level, message)
+    entry = build_run_log(level, message, **context)
     append_run_log(str(run_id), entry)
     if owner_id is None:
         return
@@ -155,7 +156,13 @@ def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, c
             crawl_mode=crawl_mode,
             incremental_threshold=config.INCREMENTAL_EXIST_THRESHOLD,
             stop_check=lambda: runtime.is_stop_requested(str(run_id)),
-            log_callback=lambda msg, level="INFO": _append_run_log_in_worker_session(run_id, owner_id, msg, level),
+            log_callback=lambda msg, level="INFO", **context: _append_run_log_in_worker_session(
+                run_id,
+                owner_id,
+                msg,
+                level,
+                **context,
+            ),
             db_check_callback=lambda codes: _find_existing_movie_codes_in_worker_session(worker_session_factory, codes),
             on_item_already_exists=lambda task_info: _handle_already_exists_in_worker_session(
                 worker_session_factory,
@@ -180,7 +187,7 @@ def _handle_already_exists(db: Session, run_id: Any, task_id: Any, owner_id: str
     code = task_info.get("code")
     if code:
         append_source_task_id(db, code, task_id)
-    _append_run_log_in_worker_session(run_id, owner_id, f"跳过已存在影片并追加任务ID: {code}", "INFO")
+    _append_run_log_in_worker_session(run_id, owner_id, f"跳过已存在影片并追加任务ID: {code}", "INFO", code=code)
 
 
 def _run_detail_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, config: Any, progress: dict) -> None:

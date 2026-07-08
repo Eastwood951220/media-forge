@@ -4,6 +4,7 @@ from datetime import datetime
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
+from backend.app.modules.crawler.runs import logs as run_logs
 from backend.app.modules.crawler.runtime.threaded import execute_threaded_crawl
 from shared.database.models.content import Movie
 
@@ -73,11 +74,12 @@ def test_execute_threaded_crawl_finishes_list_before_detail(db_session, monkeypa
     assert sorted(row.status for row in rows) == ["saved", "saved"]
 
 
-def test_list_phase_db_callbacks_use_isolated_sessions(db_session, monkeypatch) -> None:
+def test_list_phase_db_callbacks_use_isolated_sessions(db_session, monkeypatch, tmp_path) -> None:
     task, run = make_task_and_run(db_session)
     suffix = run.id.hex[:8]
     db_session.add(Movie(code=f"A-{suffix}", source_name="Existing A"))
     db_session.commit()
+    monkeypatch.setattr(run_logs, "RUN_LOG_DIR", str(tmp_path))
 
     main_thread_id = threading.get_ident()
 
@@ -142,6 +144,9 @@ def test_list_phase_db_callbacks_use_isolated_sessions(db_session, monkeypatch) 
     rows = db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
     assert [row.code for row in rows] == [f"B-{suffix}"]
     assert rows[0].status == "saved"
+    logs = run_logs.load_run_logs(str(run.id))
+    skipped_log = next(entry for entry in logs if entry["message"].startswith("跳过已存在影片并追加任务ID"))
+    assert skipped_log["context"] == {"code": f"A-{suffix}"}
 
 
 def test_list_phase_snapshots_worker_inputs_before_main_commit(db_session, monkeypatch) -> None:
