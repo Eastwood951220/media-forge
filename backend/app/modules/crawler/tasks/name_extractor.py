@@ -5,8 +5,8 @@ from urllib.parse import parse_qs, urlparse
 
 from fastapi import HTTPException
 
+from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
 from backend.app.schemas.crawl_task import ExtractNameRequest
-from scraper.config.settings import REQUEST_TIMEOUT
 from scraper.config.sites import JAVDB_SITE
 from scraper.cookies.cookie_manager import CookieManager
 from scraper.core.security import is_security_check_page
@@ -29,11 +29,12 @@ def extract_task_name(body: ExtractNameRequest) -> str:
         return q_values[0].strip() if q_values else ""
 
     try:
+        runtime_config = read_crawler_runtime_config()
         cookie_manager = CookieManager(JAVDB_SITE["cookie_file"])
         fetcher = ScraplingFetcher(
             headers=JAVDB_SITE["headers"],
             cookies=cookie_manager.load(),
-            timeout=REQUEST_TIMEOUT,
+            timeout=runtime_config.REQUEST_TIMEOUT,
         )
         page = fetcher.get(body.url)
         if is_security_check_page(page):

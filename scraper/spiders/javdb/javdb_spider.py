@@ -1,12 +1,5 @@
+from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
 from scraper.config.logging import get_logger
-from scraper.config.settings import (
-    DETAIL_PAGE_DELAY_MAX,
-    DETAIL_PAGE_DELAY_MIN,
-    LIST_PAGE_DELAY_MAX,
-    LIST_PAGE_DELAY_MIN,
-    MAX_LIST_PAGES,
-    SECURITY_WAIT_SECONDS,
-)
 from scraper.core.security import is_security_check_page
 from scraper.core.throttle import fixed_sleep, random_sleep
 from scraper.spiders.base_spider import BaseSpider
@@ -72,7 +65,8 @@ class JavdbSpider(BaseSpider):
         on_item_already_exists=None,
     ) -> list[dict]:
         """Collect detail tasks from list pages for a single URL entry."""
-        max_pages = MAX_LIST_PAGES
+        runtime_config = read_crawler_runtime_config()
+        max_pages = runtime_config.MAX_LIST_PAGES
         detail_tasks: list[dict] = []
         seen_codes: set[str] = set()
         verification_count = 0
@@ -105,7 +99,7 @@ class JavdbSpider(BaseSpider):
                 verification_count += 1
                 msg = (
                     f"{prefix} 列表页 {page_no} 触发安全验证, "
-                    f"等待 {SECURITY_WAIT_SECONDS}s 后重试"
+                    f"等待 {runtime_config.SECURITY_WAIT_SECONDS}s 后重试"
                 )
                 self._emit(msg, log_callback, "WARNING")
                 if verification_count >= 5:
@@ -114,7 +108,7 @@ class JavdbSpider(BaseSpider):
                         "请手动刷新 cookies 或完成浏览器验证"
                     )
                     self._emit(msg, log_callback, "ERROR")
-                fixed_sleep(SECURITY_WAIT_SECONDS, reason="列表页触发人工验证")
+                fixed_sleep(runtime_config.SECURITY_WAIT_SECONDS, reason="列表页触发人工验证")
                 continue
 
             verification_count = 0
@@ -224,7 +218,7 @@ class JavdbSpider(BaseSpider):
             self._emit(msg, log_callback)
 
             if page_no < max_pages:
-                random_sleep(LIST_PAGE_DELAY_MIN, LIST_PAGE_DELAY_MAX)
+                random_sleep(runtime_config.LIST_PAGE_DELAY_MIN, runtime_config.LIST_PAGE_DELAY_MAX)
 
             page_no += 1
 
@@ -298,6 +292,7 @@ class JavdbSpider(BaseSpider):
     ) -> list[dict]:
         total = len(tasks)
         verification_count = 0
+        runtime_config = read_crawler_runtime_config()
         prefix = f"[{task_name}]" if task_name else ""
 
         msg = f"{prefix} 开始处理详情页: 共 {total} 条"
@@ -380,7 +375,7 @@ class JavdbSpider(BaseSpider):
                     task["status"] = TASK_STATUS_PENDING
                     msg = (
                         f"{detail_prefix} 详情 {index + 1}/{total} 触发安全验证, "
-                        f"等待 {SECURITY_WAIT_SECONDS}s 后重试"
+                        f"等待 {runtime_config.SECURITY_WAIT_SECONDS}s 后重试"
                     )
                     self._emit(msg, log_callback, "WARNING")
                     if verification_count >= 5:
@@ -389,7 +384,7 @@ class JavdbSpider(BaseSpider):
                             "请手动刷新 cookies 或完成浏览器验证"
                         )
                         self._emit(msg, log_callback, "ERROR")
-                    fixed_sleep(SECURITY_WAIT_SECONDS, reason="详情页触发人工验证")
+                    fixed_sleep(runtime_config.SECURITY_WAIT_SECONDS, reason="详情页触发人工验证")
                     continue
 
                 verification_count = 0
@@ -407,7 +402,7 @@ class JavdbSpider(BaseSpider):
                 index += 1
 
                 if index < total:
-                    random_sleep(DETAIL_PAGE_DELAY_MIN, DETAIL_PAGE_DELAY_MAX)
+                    random_sleep(runtime_config.DETAIL_PAGE_DELAY_MIN, runtime_config.DETAIL_PAGE_DELAY_MAX)
 
             except Exception as exc:
                 verification_count = 0
@@ -423,7 +418,7 @@ class JavdbSpider(BaseSpider):
                 index += 1
 
                 if index < total:
-                    random_sleep(DETAIL_PAGE_DELAY_MIN, DETAIL_PAGE_DELAY_MAX)
+                    random_sleep(runtime_config.DETAIL_PAGE_DELAY_MIN, runtime_config.DETAIL_PAGE_DELAY_MAX)
 
         completed_count = sum(1 for item in tasks if item.get("status") == TASK_STATUS_COMPLETED)
         failed_count = sum(1 for item in tasks if item.get("status") == TASK_STATUS_FAILED)

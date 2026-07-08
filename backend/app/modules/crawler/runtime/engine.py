@@ -4,8 +4,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
 from backend.app.modules.crawler.runtime.results import build_skipped_task_result, build_task_result
-from scraper.config.settings import REQUEST_TIMEOUT
 from scraper.config.sites import JAVDB_SITE
 from scraper.cookies.cookie_manager import CookieManager
 from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
@@ -60,12 +60,13 @@ class JavdbCrawlerEngine:
         self._pipeline_factory = pipeline_factory or MoviePipeline
 
     def _build_spider(self) -> JavdbSpider:
+        runtime_config = read_crawler_runtime_config()
         cookie_manager = CookieManager(JAVDB_SITE["cookie_file"])
         cookies = cookie_manager.load()
         fetcher = ScraplingFetcher(
             headers=JAVDB_SITE["headers"],
             cookies=cookies,
-            timeout=REQUEST_TIMEOUT,
+            timeout=runtime_config.REQUEST_TIMEOUT,
         )
         return JavdbSpider(fetcher=fetcher)
 

@@ -218,3 +218,14 @@ def test_crawler_config_reads_values_from_conf_file(monkeypatch, tmp_path) -> No
     assert data["MAX_LIST_PAGES"] == 17
     assert data["REQUEST_TIMEOUT"] == 46
     assert data["LIST_PAGE_DELAY_MIN"] == 1.5
+
+
+def test_scraper_settings_no_longer_exposes_crawler_env_values(monkeypatch) -> None:
+    monkeypatch.setenv("MAX_LIST_PAGES", "99")
+    monkeypatch.setenv("REQUEST_TIMEOUT", "88")
+
+    from scraper.config import settings
+
+    assert not hasattr(settings, "MAX_LIST_PAGES")
+    assert not hasattr(settings, "REQUEST_TIMEOUT")
+    assert settings.COOKIE_DIR == settings.BASE_DIR / "data" / "cookies"

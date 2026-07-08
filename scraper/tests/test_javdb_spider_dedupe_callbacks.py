@@ -1,5 +1,6 @@
 import pytest
 
+from backend.app.modules.crawler.config.conf_reader import CrawlerRuntimeConfig
 from scraper.spiders.javdb import javdb_spider as spider_module
 from scraper.spiders.javdb.javdb_spider import JavdbSpider
 from scraper.tasks.task_schema import CrawlTaskUrlEntry
@@ -12,7 +13,11 @@ class Fetcher:
 
 def test_incremental_list_phase_excludes_existing_codes_from_detail_tasks(monkeypatch) -> None:
     spider = JavdbSpider(fetcher=Fetcher())
-    monkeypatch.setattr(spider_module, "MAX_LIST_PAGES", 1)
+    monkeypatch.setattr(
+        spider_module,
+        "read_crawler_runtime_config",
+        lambda: CrawlerRuntimeConfig(MAX_LIST_PAGES=1),
+    )
     monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
     monkeypatch.setattr(spider_module, "is_security_check_page", lambda page: False)
     monkeypatch.setattr(
@@ -67,7 +72,11 @@ def test_detail_phase_skips_existing_code_without_fetching(monkeypatch) -> None:
 
 def test_full_list_phase_keeps_existing_codes_as_skipped_tasks(monkeypatch) -> None:
     spider = JavdbSpider(fetcher=Fetcher())
-    monkeypatch.setattr(spider_module, "MAX_LIST_PAGES", 1)
+    monkeypatch.setattr(
+        spider_module,
+        "read_crawler_runtime_config",
+        lambda: CrawlerRuntimeConfig(MAX_LIST_PAGES=1),
+    )
     monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
     monkeypatch.setattr(spider_module, "is_security_check_page", lambda page: False)
     monkeypatch.setattr(
@@ -101,7 +110,11 @@ def test_incremental_threshold_stops_current_url_and_continues_next_url(monkeypa
     from scraper.tasks.task_schema import CrawlTask
 
     spider = JavdbSpider(fetcher=Fetcher())
-    monkeypatch.setattr(spider_module, "MAX_LIST_PAGES", 5)
+    monkeypatch.setattr(
+        spider_module,
+        "read_crawler_runtime_config",
+        lambda: CrawlerRuntimeConfig(MAX_LIST_PAGES=5),
+    )
     monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
     monkeypatch.setattr(spider_module, "is_security_check_page", lambda page: False)
 
@@ -147,3 +160,28 @@ def test_incremental_threshold_stops_current_url_and_continues_next_url(monkeypa
     assert any("actors/b" in url and "page=1" in url for url in fetched_urls)
     assert [item["code"] for item in result] == ["BBB-001"]
     assert [[item["code"] for item in batch] for batch in created_batches] == [["BBB-001"]]
+
+
+def test_spider_reads_max_pages_from_conf_reader(monkeypatch) -> None:
+    spider = JavdbSpider(fetcher=Fetcher())
+    monkeypatch.setattr(
+        spider_module,
+        "read_crawler_runtime_config",
+        lambda: CrawlerRuntimeConfig(MAX_LIST_PAGES=1),
+    )
+    monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
+    monkeypatch.setattr(spider_module, "is_security_check_page", lambda page: False)
+    monkeypatch.setattr(
+        spider_module,
+        "parse_search_page",
+        lambda page, source_page: [
+            {"code": f"AAA-{source_page}", "url": f"https://javdb.com/v/{source_page}", "name": f"AAA {source_page}"}
+        ],
+    )
+
+    result = spider.collect_detail_tasks_for_url(
+        url_entry=CrawlTaskUrlEntry(url="https://javdb.com/actors/a", url_type="actors"),
+        task_name="任务",
+    )
+
+    assert [item["code"] for item in result] == ["AAA-1"]
