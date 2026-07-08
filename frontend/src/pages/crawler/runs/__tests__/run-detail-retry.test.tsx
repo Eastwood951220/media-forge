@@ -78,7 +78,11 @@ describe('RunDetail retry controls', () => {
     vi.clearAllMocks()
     vi.mocked(getCrawlerRun).mockResolvedValue(endedRun)
     vi.mocked(getCrawlerRunLogs).mockResolvedValue([])
-    vi.mocked(getCrawlerRunTasks).mockResolvedValue({ rows: [failedTask, savedTask], total: 2 })
+    vi.mocked(getCrawlerRunTasks).mockResolvedValue({
+      rows: [failedTask, savedTask],
+      total: 2,
+      summary: { total: 2, pending_crawl: 0, crawling: 0, saved: 1, skipped: 0, crawl_failed: 1, save_failed: 0, completed: 1, waiting: 0, failed: 1 },
+    })
     vi.mocked(retryCrawlerRunTasks).mockResolvedValue({ ...endedRun, status: 'queued' })
   })
 
