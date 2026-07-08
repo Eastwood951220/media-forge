@@ -111,6 +111,13 @@ def build_crawl_callbacks(
         write_progress(ctx.runtime, str(ctx.run.id), ctx.progress)
         ctx.db.commit()
         publish_run_detail_updated(ctx.db, ctx.run, created_details)
+        publish_run_detail_updated(
+            ctx.db,
+            ctx.run,
+            [],
+            refresh_tasks=True,
+            reason="url_completed",
+        )
         if items:
             append_run_log_for_run(ctx.db, ctx.run, f"创建子任务 {len(items)} 条，跳过 {skipped_count} 条")
 

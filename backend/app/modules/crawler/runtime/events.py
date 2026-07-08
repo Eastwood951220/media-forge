@@ -53,6 +53,9 @@ def publish_run_detail_updated(
     db: Session,
     run: CrawlRun,
     details: list[CrawlRunDetailTask],
+    *,
+    refresh_tasks: bool = False,
+    reason: str | None = None,
 ) -> None:
     from backend.app.modules.realtime.bus import event_bus as realtime_bus
     from backend.app.modules.realtime.schemas import make_realtime_event
@@ -82,16 +85,21 @@ def publish_run_detail_updated(
             )
         except ObjectDeletedError:
             logger.warning("Skip realtime update for deleted crawl detail task")
+    payload: dict[str, Any] = {
+        "run_id": str(run.id),
+        "tasks": detail_payloads,
+    }
+    if refresh_tasks:
+        payload["refresh_tasks"] = True
+    if reason is not None:
+        payload["reason"] = reason
     realtime_bus.publish(
         make_realtime_event(
             event="crawler.run.detail.updated",
             scope="crawler.run",
             owner_id=owner_id,
             resource_id=str(run.id),
-            payload={
-                "run_id": str(run.id),
-                "tasks": detail_payloads,
-            },
+            payload=payload,
         )
     )
 
