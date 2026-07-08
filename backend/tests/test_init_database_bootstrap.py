@@ -1,5 +1,8 @@
 from pathlib import Path
+from unittest.mock import Mock
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.pool import StaticPool
 
@@ -62,9 +65,13 @@ def test_seed_default_admin_user_is_idempotent() -> None:
     assert rows[0].role == "admin"
 
 
-from unittest.mock import Mock
-
-from backend.app.modules.init.router import save_config
+from backend.app.modules.init.router import (
+    PostgresTestRequest,
+    RedisTestRequest,
+    test_postgres as call_test_postgres,
+    test_redis as call_test_redis,
+    save_config,
+)
 from backend.app.modules.init.schemas import InitConfigRequest
 
 
@@ -81,6 +88,39 @@ def test_save_config_uses_database_bootstrap(monkeypatch, tmp_path) -> None:
 
     assert response["code"] == 200
     assert bootstrap.call_count == 1
+
+
+def test_docker_postgres_test_rejects_localhost(monkeypatch) -> None:
+    monkeypatch.setenv("MEDIA_FORGE_DOCKER", "1")
+
+    response = call_test_postgres(PostgresTestRequest(host="localhost"))
+
+    assert response["code"] == 200
+    assert response["data"]["success"] is False
+    assert "localhost/127.0.0.1 指向 Media Forge 容器自身" in response["data"]["message"]
+
+
+def test_docker_redis_test_rejects_loopback_ip(monkeypatch) -> None:
+    monkeypatch.setenv("MEDIA_FORGE_DOCKER", "1")
+
+    response = call_test_redis(RedisTestRequest(host="127.0.0.1"))
+
+    assert response["code"] == 200
+    assert response["data"]["success"] is False
+    assert "localhost/127.0.0.1 指向 Media Forge 容器自身" in response["data"]["message"]
+
+
+def test_docker_save_config_rejects_localhost_before_bootstrap(monkeypatch) -> None:
+    bootstrap = Mock()
+    monkeypatch.setenv("MEDIA_FORGE_DOCKER", "1")
+    monkeypatch.setattr("backend.app.modules.init.router.bootstrap_application_database", bootstrap)
+
+    with pytest.raises(HTTPException) as exc:
+        save_config(InitConfigRequest(databaseHost="localhost", redisHost="192.168.1.20"))
+
+    assert exc.value.status_code == 400
+    assert "Docker 部署中 PostgreSQL 主机不能填写" in exc.value.detail
+    assert bootstrap.call_count == 0
 
 
 def test_script_imports_shared_bootstrap_functions() -> None:
@@ -187,3 +227,50 @@ def test_runtime_config_exists_requires_storage_file(tmp_path) -> None:
     assert runtime_config_exists(paths) is True
     (tmp_path / "storage.conf").write_text("STORAGE_ENABLED=true\n", encoding="utf-8")
     assert runtime_config_exists(paths) is True
+
+
+def test_build_init_request_from_runtime_config_parses_database_and_redis_urls() -> None:
+    from backend.app.startup_database import build_init_request_from_runtime_config
+
+    request = build_init_request_from_runtime_config({
+        "DATABASE_URL": "postgresql+asyncpg://admin:secret@db.example:5433/mediaforge",
+        "POSTGRES_CONNECT_TIMEOUT": "7",
+        "POSTGRES_POOL_SIZE": "8",
+        "POSTGRES_MAX_OVERFLOW": "9",
+        "POSTGRES_MAX_RETRIES": "4",
+        "POSTGRES_RETRY_DELAY": "2",
+        "REDIS_URL": "redis://:redispass@redis.example:6380/0",
+        "REDIS_SOCKET_TIMEOUT": "11",
+        "REDIS_SOCKET_CONNECT_TIMEOUT": "12",
+        "REDIS_MAX_CONNECTIONS": "13",
+    })
+
+    assert request.databaseHost == "db.example"
+    assert request.databasePort == 5433
+    assert request.databaseName == "mediaforge"
+    assert request.databaseUser == "admin"
+    assert request.databasePassword == "secret"
+    assert request.postgresConnectTimeout == 7
+    assert request.postgresPoolSize == 8
+    assert request.postgresMaxOverflow == 9
+    assert request.postgresMaxRetries == 4
+    assert request.postgresRetryDelay == 2
+    assert request.redisHost == "redis.example"
+    assert request.redisPort == 6380
+    assert request.redisPassword == "redispass"
+    assert request.redisSocketTimeout == 11
+    assert request.redisConnectTimeout == 12
+    assert request.redisMaxConnections == 13
+
+
+def test_build_init_request_from_runtime_config_supports_passwordless_redis() -> None:
+    from backend.app.startup_database import build_init_request_from_runtime_config
+
+    request = build_init_request_from_runtime_config({
+        "DATABASE_URL": "postgresql+asyncpg://admin:secret@localhost:54329/mediaforge",
+        "REDIS_URL": "redis://localhost:6379/0",
+    })
+
+    assert request.redisHost == "localhost"
+    assert request.redisPort == 6379
+    assert request.redisPassword == ""

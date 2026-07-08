@@ -19,13 +19,14 @@ from backend.app.modules.crawler.config.router import router as crawler_config_r
 from backend.app.modules.crawler.runs.router import router as crawler_runs_router
 from backend.app.modules.crawler.runtime.service import cleanup_interrupted_runs, get_runtime_state
 from backend.app.modules.storage.worker.runner import cleanup_interrupted_storage_tasks
+from backend.app.startup_database import connect_or_repair_postgres
 from backend.app.modules.crawler.tasks.router import router as crawler_tasks_router
 from backend.app.modules.realtime.router import router as realtime_router
 from backend.app.modules.health.router import router as health_router
 from backend.app.modules.init.router import router as init_router
 from backend.app.modules.storage.config.router import router as storage_config_router
 from backend.app.modules.storage.tasks.router import router as storage_tasks_router
-from shared.database.session import close_postgres, connect_postgres, get_session_factory
+from shared.database.session import close_postgres, get_session_factory
 from shared.logging.file_log import ensure_log_dir
 from shared.runtime_config import load_runtime_config, runtime_config_exists
 
@@ -67,8 +68,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Load runtime config (database.conf / redis.conf) into env
     load_runtime_config()
 
-    if runtime_config_exists():
-        connect_postgres()
+    if connect_or_repair_postgres():
         logger.info("PostgreSQL connected.")
 
         # Cleanup interrupted crawler runs on startup
