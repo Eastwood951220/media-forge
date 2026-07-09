@@ -43,7 +43,8 @@ The index refresh flow should:
 3. List code folders under each category.
 4. List files under each code folder.
 5. Record only video files that pass the existing extension and minimum-size rules.
-6. Persist records locally as JSONL or a similarly stream-friendly format.
+6. Stream matching records into a temporary JSONL file while refresh is running.
+7. Atomically replace the completed JSONL file only after the refresh finishes.
 
 Bulk movie storage status sync should then:
 
@@ -90,6 +91,28 @@ Store index metadata separately or as a small companion JSON file:
 {"target_folder":"/嘿嘿/日本","started_at":"2026-07-09T00:00:00Z","completed_at":"2026-07-09T00:03:00Z","status":"completed","category_count":20,"code_folder_count":12000,"video_count":11800,"force_refresh_mode":"none"}
 ```
 
+During refresh, write records to a temporary file:
+
+```text
+storage_index.jsonl.tmp
+```
+
+The running refresh should append each accepted video record to the temporary JSONL file and flush it promptly. This makes partial progress visible on disk and prevents a long HTTP request or process interruption from leaving no index data at all.
+
+The completed index remains:
+
+```text
+storage_index.jsonl
+```
+
+Bulk movie storage sync must read only `storage_index.jsonl` when metadata status is `completed`. It must not use `storage_index.jsonl.tmp` for official storage status decisions, because the temporary file can represent a partial scan and would incorrectly mark unscanned movies as not stored.
+
+The metadata file should expose running progress:
+
+```json
+{"target_folder":"/嘿嘿/日本","started_at":"2026-07-09T00:00:00Z","completed_at":null,"status":"running","category_count":8,"code_folder_count":4200,"video_count":4100,"current_path":"/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U","force_refresh_mode":"none"}
+```
+
 ## Matching Rules
 
 Reuse the current video validation rules:
@@ -113,9 +136,11 @@ The index record should store the normalized base movie code separately so bulk 
 
 Index refresh should be resumable enough to avoid corrupting the existing usable index:
 
-- Write to a temporary index file first.
-- Write metadata with `status=running` while refresh is active.
+- Create or truncate `storage_index.jsonl.tmp` at refresh start.
+- Append accepted video records to `storage_index.jsonl.tmp` as they are discovered.
+- Write metadata with `status=running` while refresh is active, including current path and counters.
 - Replace the previous completed index only after refresh completes.
+- Delete stale temporary files after successful replacement.
 - If refresh fails, keep the previous completed index available and record the failure in metadata.
 
 Directory listing failures should be recorded with path and error message, then the refresh should continue where reasonable. A full target-root failure should fail the refresh.
@@ -152,7 +177,9 @@ No visual redesign is required.
 Backend tests should cover:
 
 - Index refresh traverses `target_folder -> category -> code folder -> video file`.
-- Index refresh writes a temporary file and replaces the completed index atomically.
+- Index refresh streams accepted records to `storage_index.jsonl.tmp` while running.
+- Index refresh replaces the completed index atomically only after completion.
+- Bulk sync ignores `storage_index.jsonl.tmp` and reads only a completed `storage_index.jsonl`.
 - Bulk movie storage sync uses the local index without calling per-movie remote listings.
 - Missing index returns a clear error for index-backed bulk sync.
 - Failed refresh preserves the previous completed index.
