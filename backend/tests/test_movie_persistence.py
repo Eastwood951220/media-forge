@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from backend.app.modules.content.movies.persistence import (
     append_source_task_id,
+    append_source_task_ids_for_codes,
     compute_magnet_weight,
     extract_info_hash,
     sync_movie_filters,
@@ -166,4 +167,41 @@ def test_movie_persistence_facade_exports_existing_public_functions() -> None:
     assert persistence.upsert_magnets is magnet_persistence.upsert_magnets
     assert persistence.upsert_movie is movie_persistence.upsert_movie
     assert persistence.append_source_task_id is movie_persistence.append_source_task_id
+    assert persistence.append_source_task_ids_for_codes is movie_persistence.append_source_task_ids_for_codes
     assert persistence.sync_movie_filters is filter_sync.sync_movie_filters
+
+
+def test_append_source_task_ids_for_codes_adds_unique_ids_to_existing_movies() -> None:
+    session = TestingSessionLocal()
+    task_id = uuid.uuid4()
+    existing_task_id = uuid.uuid4()
+    first_id = upsert_movie(session, {"code": "BULK-001", "source_url": "https://javdb.com/v/bulk001"})
+    second_id = upsert_movie(session, {
+        "code": "BULK-002",
+        "source_url": "https://javdb.com/v/bulk002",
+        "source_task_ids": [existing_task_id],
+    })
+    session.commit()
+
+    changed = append_source_task_ids_for_codes(
+        session,
+        ["BULK-001", "BULK-002", "BULK-001", "MISSING-001", None, ""],
+        task_id,
+    )
+    session.commit()
+
+    first = session.get(Movie, first_id)
+    second = session.get(Movie, second_id)
+
+    assert changed == {"BULK-001", "BULK-002"}
+    assert [str(value) for value in first.source_task_ids] == [str(task_id)]
+    assert [str(value) for value in second.source_task_ids] == [str(existing_task_id), str(task_id)]
+
+    changed_again = append_source_task_ids_for_codes(session, ["BULK-001", "BULK-002"], task_id)
+    session.commit()
+
+    assert changed_again == set()
+    assert [str(value) for value in first.source_task_ids] == [str(task_id)]
+    assert [str(value) for value in second.source_task_ids] == [str(existing_task_id), str(task_id)]
+
+    session.close()

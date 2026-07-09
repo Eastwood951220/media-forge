@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 from uuid import UUID
 
@@ -66,3 +67,31 @@ def append_source_task_id(session: Session, code: str | None, task_id: UUID) -> 
     movie.source_task_ids = list(movie.source_task_ids or []) + [task_id]
     session.flush()
     return True
+
+
+def append_source_task_ids_for_codes(session: Session, codes: Iterable[str | None], task_id: UUID) -> set[str]:
+    cleaned_codes: list[str] = []
+    seen_codes: set[str] = set()
+    for code in codes:
+        normalized = str(code or "").strip()
+        if normalized and normalized not in seen_codes:
+            seen_codes.add(normalized)
+            cleaned_codes.append(normalized)
+    if not cleaned_codes:
+        return set()
+
+    movies = session.scalars(select(Movie).where(Movie.code.in_(cleaned_codes))).all()
+    task_id_text = str(task_id)
+    changed_codes: set[str] = set()
+
+    for movie in movies:
+        existing_ids = [str(value) for value in (movie.source_task_ids or [])]
+        if task_id_text in existing_ids:
+            continue
+        movie.source_task_ids = list(movie.source_task_ids or []) + [task_id]
+        if movie.code:
+            changed_codes.add(movie.code)
+
+    if changed_codes:
+        session.flush()
+    return changed_codes
