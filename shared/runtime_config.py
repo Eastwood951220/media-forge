@@ -16,6 +16,8 @@ class RuntimeConfigPaths:
     database_file: Path
     redis_file: Path
     storage_file: Path
+    storage_index_file: Path
+    storage_index_meta_file: Path
 
     @classmethod
     def from_env(cls) -> "RuntimeConfigPaths":
@@ -26,6 +28,8 @@ class RuntimeConfigPaths:
             database_file=config_dir / "database.conf",
             redis_file=config_dir / "redis.conf",
             storage_file=config_dir / "storage.conf",
+            storage_index_file=config_dir / "storage_index.jsonl",
+            storage_index_meta_file=config_dir / "storage_index.meta.json",
         )
 
 
