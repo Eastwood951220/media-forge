@@ -56,3 +56,5 @@ docker/
 
 # Runtime config
 data/
+
+output

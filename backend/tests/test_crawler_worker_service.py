@@ -926,6 +926,32 @@ def test_finalize_resets_crawling_details_when_stopped(db_session) -> None:
     assert detail.status == "pending_crawl"
 
 
+def test_finalize_isolates_filter_sync_session_failure(db_session, monkeypatch) -> None:
+    from sqlalchemy.exc import InvalidRequestError
+
+    from backend.app.modules.crawler.runtime import finalize
+
+    run = CrawlRun(task_id=None, task_name="sync-failure", status="running", crawl_mode="incremental", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.commit()
+
+    def poison_sync_session(sync_session):
+        def fail_commit():
+            raise InvalidRequestError(
+                "This session is in 'prepared' state; no further SQL can be emitted within this transaction."
+            )
+
+        sync_session.commit = fail_commit
+        return {"actors": 0, "tags": 0, "directors": 0, "makers": 0, "series": 0}
+
+    monkeypatch.setattr(finalize, "sync_movie_filters", poison_sync_session)
+
+    finalize.finalize_run(db_session, run, object(), {"total_tasks": 0}, stopped=False)
+
+    db_session.refresh(run)
+    assert run.status == "completed"
+
+
 def test_callbacks_write_detail_logs_with_context(db_session, admin_user, monkeypatch, tmp_path) -> None:
     from backend.app.modules.crawler.runs import logs as run_logs
     from backend.app.modules.crawler.runtime.callbacks import CrawlerCallbackContext, build_crawl_callbacks

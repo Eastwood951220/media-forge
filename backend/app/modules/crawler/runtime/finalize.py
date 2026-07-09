@@ -22,6 +22,21 @@ from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
 logger = logging.getLogger(__name__)
 
 
+def _sync_movie_filters_in_isolated_session(db: Session) -> dict[str, int]:
+    """Run filter cache sync outside the run-finalization transaction."""
+
+    sync_db = Session(bind=db.get_bind())
+    try:
+        sync_result = sync_movie_filters(sync_db)
+        sync_db.commit()
+        return sync_result
+    except Exception:
+        sync_db.rollback()
+        raise
+    finally:
+        sync_db.close()
+
+
 def finalize_run(
     db: Session,
     run: CrawlRun,
@@ -72,7 +87,7 @@ def finalize_run(
             "INFO",
         )
         try:
-            sync_result = sync_movie_filters(db)
+            sync_result = _sync_movie_filters_in_isolated_session(db)
             append_run_log_for_run(
                 db, run,
                 f"筛选列表已同步: 演员={sync_result['actors']}, 标签={sync_result['tags']}, "
