@@ -17,7 +17,7 @@ from backend.app.modules.crawler.runtime.details import detail_row_to_task_info
 from backend.app.modules.crawler.runtime.events import append_run_log_for_run
 from backend.app.modules.crawler.runtime.progress import new_progress, write_progress
 from backend.app.modules.crawler.runtime.source_task_names import find_existing_movie_codes, movie_code_exists
-from backend.app.modules.content.movies.persistence import append_source_task_id, upsert_movie_with_magnets
+from backend.app.modules.content.movies.persistence import append_source_task_id, append_source_task_ids_for_codes, upsert_movie_with_magnets
 from scraper.config.sites import JAVDB_SITE
 from scraper.cookies.cookie_manager import CookieManager
 from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
@@ -60,12 +60,20 @@ def _worker_session_factory(db: Session) -> sessionmaker:
 def _find_existing_movie_codes_in_worker_session(
     session_factory: sessionmaker,
     codes: list[str | None],
+    task_id: Any,
     db_lock: threading.Lock,
 ) -> set[str]:
     with db_lock:
         worker_db = session_factory()
         try:
-            return find_existing_movie_codes(worker_db, codes)
+            existing_codes = find_existing_movie_codes(worker_db, codes)
+            if existing_codes:
+                append_source_task_ids_for_codes(worker_db, existing_codes, task_id)
+                worker_db.commit()
+            return existing_codes
+        except Exception:
+            worker_db.rollback()
+            raise
         finally:
             worker_db.close()
 
@@ -172,6 +180,7 @@ def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, c
             db_check_callback=lambda codes: _find_existing_movie_codes_in_worker_session(
                 worker_session_factory,
                 codes,
+                task_id,
                 list_db_lock,
             ),
             on_item_already_exists=lambda task_info: _handle_already_exists_in_worker_session(

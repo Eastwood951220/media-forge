@@ -2,6 +2,9 @@ import threading
 import uuid
 from datetime import datetime
 
+import pytest
+from sqlalchemy import select
+
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.crawler.runs import logs as run_logs
@@ -147,6 +150,51 @@ def test_list_phase_db_callbacks_use_isolated_sessions(db_session, monkeypatch, 
     logs = run_logs.load_run_logs(str(run.id))
     skipped_log = next(entry for entry in logs if entry["message"].startswith("跳过已存在影片并追加任务ID"))
     assert skipped_log["context"] == {"code": f"A-{suffix}"}
+
+
+@pytest.mark.parametrize("crawl_mode", ["incremental", "full"])
+def test_threaded_list_db_check_appends_source_task_id_without_already_exists_callback(db_session, monkeypatch, crawl_mode) -> None:
+    task, run = make_task_and_run(db_session)
+    run.crawl_mode = crawl_mode
+    existing_code = f"A-{run.id.hex[:8]}"
+    db_session.add(Movie(code=existing_code, source_name="Existing A", source_task_ids=[]))
+    db_session.commit()
+
+    class DbCheckOnlySpider(FakeSpider):
+        def collect_detail_tasks_for_url(
+            self,
+            *,
+            url_entry,
+            task_name,
+            crawl_mode,
+            incremental_threshold,
+            stop_check,
+            log_callback,
+            db_check_callback,
+            on_item_already_exists,
+        ):
+            self.list_started = True
+            if url_entry.url_type == "A":
+                assert existing_code in db_check_callback([existing_code])
+                return []
+            return [
+                {
+                    "code": f"B-{run.id.hex[:8]}",
+                    "url": f"https://javdb.com/v/b{run.id.hex[:8]}",
+                    "name": "B",
+                }
+            ]
+
+    spider = DbCheckOnlySpider()
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: spider)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
+
+    result = execute_threaded_crawl(db_session, run, task, Runtime())
+    movie = db_session.scalar(select(Movie).where(Movie.code == existing_code))
+
+    assert result["total_tasks"] == 1
+    assert result["saved"] == 1
+    assert str(task.id) in [str(value) for value in movie.source_task_ids]
 
 
 def test_list_phase_snapshots_worker_inputs_before_main_commit(db_session, monkeypatch) -> None:
