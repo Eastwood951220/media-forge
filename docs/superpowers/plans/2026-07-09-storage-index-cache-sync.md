@@ -4,7 +4,7 @@
 
 **Goal:** Build a local CloudDrive storage index so bulk movie storage sync matches local JSONL data instead of force-refreshing thousands of remote folders.
 
-**Architecture:** Add a focused `backend/app/modules/storage/index/` package that owns index paths, JSONL records, metadata, traversal, and read-only lookup. Keep CloudDrive2 access in one refresh service that uses `GetSubFiles` level-by-level with `forceRefresh=false` by default; movie bulk sync consumes the completed index and does not issue per-movie remote listings.
+**Architecture:** Add a focused `backend/app/modules/storage/index/` package that owns index paths, JSONL records, metadata, traversal, and read-only lookup. Keep CloudDrive2 access in one refresh service that uses `GetSubFiles` level-by-level with `forceRefresh=false` by default; the refresh writes accepted records incrementally to `storage_index.jsonl.tmp`, then atomically replaces `storage_index.jsonl` only after completion. Movie bulk sync consumes only the completed index and does not issue per-movie remote listings.
 
 **Tech Stack:** Python 3.12+, FastAPI, Pydantic/dataclasses, JSON/JSONL files under `RuntimeConfigPaths.config_dir`, existing CloudDrive2 gateway, pytest, React/TypeScript for minimal storage index status controls.
 
@@ -15,6 +15,8 @@
 - Do not change storage task download, move, copy, rename, or target planning behavior.
 - Do not require a frontend redesign; only add controls or status indicators directly needed for index refresh and sync clarity.
 - Bulk sync must not force-refresh CloudDrive2.
+- Running refreshes write partial records only to `storage_index.jsonl.tmp`.
+- Bulk sync must never read `storage_index.jsonl.tmp`; it reads only completed `storage_index.jsonl`.
 - Existing `storage_summary` records remain valid.
 - File-based metadata is sufficient for the initial implementation.
 
@@ -24,7 +26,7 @@
 
 - Create `backend/app/modules/storage/index/__init__.py`: package marker.
 - Create `backend/app/modules/storage/index/models.py`: dataclasses for index records and metadata.
-- Create `backend/app/modules/storage/index/store.py`: file path resolution, atomic JSON/JSONL writes, metadata reads, index lookup.
+- Create `backend/app/modules/storage/index/store.py`: file path resolution, running JSONL temp writes, atomic completed-index replacement, metadata reads, index lookup.
 - Create `backend/app/modules/storage/index/refresh.py`: CloudDrive traversal from `target_folder -> category -> code folder -> video file`.
 - Create `backend/app/modules/storage/index/router.py`: `POST /api/storage/index/refresh` and `GET /api/storage/index/status`.
 - Modify `shared/runtime_config.py`: expose index file and metadata file paths.
@@ -45,7 +47,9 @@
 **Interfaces:**
 - Produces: `StorageIndexRecord`
 - Produces: `StorageIndexMetadata`
-- Produces: `StorageIndexStore.write_index(records, metadata) -> StorageIndexMetadata`
+- Produces: `StorageIndexStore.begin_temp_index() -> Path`
+- Produces: `StorageIndexStore.append_temp_record(record) -> None`
+- Produces: `StorageIndexStore.finalize_temp_index(metadata) -> StorageIndexMetadata`
 - Produces: `StorageIndexStore.load_index_by_code() -> dict[str, list[StorageIndexRecord]]`
 - Produces: `StorageIndexStore.read_metadata() -> StorageIndexMetadata`
 
@@ -61,7 +65,7 @@ from backend.app.modules.storage.index.store import StorageIndexStore
 from shared.runtime_config import RuntimeConfigPaths
 
 
-def test_storage_index_store_writes_metadata_and_jsonl_atomically(tmp_path):
+def test_storage_index_store_streams_temp_then_finalizes_completed_index(tmp_path):
     paths = RuntimeConfigPaths(
         config_dir=tmp_path,
         database_file=tmp_path / "database.conf",
@@ -92,12 +96,47 @@ def test_storage_index_store_writes_metadata_and_jsonl_atomically(tmp_path):
         indexed_at=datetime.now(timezone.utc).isoformat(),
     )
 
-    store.write_index([record], metadata)
+    temp_path = store.begin_temp_index()
+    store.append_temp_record(record)
 
+    assert temp_path.exists()
+    assert temp_path.read_text(encoding="utf-8").strip()
+    assert not paths.storage_index_file.exists()
+
+    store.finalize_temp_index(metadata)
+
+    assert not temp_path.exists()
     assert paths.storage_index_file.exists()
     assert paths.storage_index_meta_file.exists()
     assert store.read_metadata().status == "completed"
     assert store.load_index_by_code()["ALDN-206"][0].path == record.path
+
+
+def test_storage_index_store_does_not_load_running_temp_index(tmp_path):
+    paths = RuntimeConfigPaths(
+        config_dir=tmp_path,
+        database_file=tmp_path / "database.conf",
+        redis_file=tmp_path / "redis.conf",
+        storage_file=tmp_path / "storage.conf",
+        storage_index_file=tmp_path / "storage_index.jsonl",
+        storage_index_meta_file=tmp_path / "storage_index.meta.json",
+    )
+    store = StorageIndexStore(paths)
+    store.begin_temp_index()
+    store.write_running_metadata(StorageIndexMetadata(
+        target_folder="/嘿嘿/日本",
+        status="running",
+        started_at="2026-07-09T00:00:00+00:00",
+        current_path="/嘿嘿/日本/巨乳|熟女|BBW",
+        video_count=1,
+    ))
+
+    try:
+        store.load_index_by_code()
+    except Exception as exc:
+        assert "存储索引不存在或尚未完成" in str(exc)
+    else:
+        raise AssertionError("running temp index must not be loaded for bulk sync")
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -189,6 +228,7 @@ class StorageIndexMetadata:
     code_folder_count: int = 0
     video_count: int = 0
     force_refresh_mode: str = "none"
+    current_path: str | None = None
     errors: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -209,6 +249,7 @@ class StorageIndexMetadata:
             code_folder_count=int(data.get("code_folder_count") or 0),
             video_count=int(data.get("video_count") or 0),
             force_refresh_mode=str(data.get("force_refresh_mode") or "none"),
+            current_path=data.get("current_path"),
             errors=list(data.get("errors") or []),
         )
 ```
@@ -222,6 +263,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from pathlib import Path
 
 from shared.runtime_config import RuntimeConfigPaths
 from backend.app.modules.storage.index.models import StorageIndexMetadata, StorageIndexRecord
@@ -244,15 +286,29 @@ class StorageIndexStore:
     def write_running_metadata(self, metadata: StorageIndexMetadata) -> None:
         self._write_json_atomic(self.paths.storage_index_meta_file, metadata.to_dict())
 
-    def write_index(self, records: list[StorageIndexRecord], metadata: StorageIndexMetadata) -> StorageIndexMetadata:
-        index_path = self.paths.storage_index_file
-        index_path.parent.mkdir(parents=True, exist_ok=True)
-        temp_path = index_path.with_suffix(index_path.suffix + ".tmp")
-        with temp_path.open("w", encoding="utf-8") as handle:
-            for record in records:
-                handle.write(json.dumps(record.to_dict(), ensure_ascii=False, separators=(",", ":")))
-                handle.write("\n")
-        temp_path.replace(index_path)
+    @property
+    def temp_index_file(self) -> Path:
+        return self.paths.storage_index_file.with_suffix(self.paths.storage_index_file.suffix + ".tmp")
+
+    def begin_temp_index(self) -> Path:
+        temp_path = self.temp_index_file
+        temp_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path.write_text("", encoding="utf-8")
+        return temp_path
+
+    def append_temp_record(self, record: StorageIndexRecord) -> None:
+        temp_path = self.temp_index_file
+        temp_path.parent.mkdir(parents=True, exist_ok=True)
+        with temp_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record.to_dict(), ensure_ascii=False, separators=(",", ":")))
+            handle.write("\n")
+            handle.flush()
+
+    def finalize_temp_index(self, metadata: StorageIndexMetadata) -> StorageIndexMetadata:
+        temp_path = self.temp_index_file
+        if not temp_path.exists():
+            temp_path.write_text("", encoding="utf-8")
+        temp_path.replace(self.paths.storage_index_file)
         self._write_json_atomic(self.paths.storage_index_meta_file, metadata.to_dict())
         return metadata
 
@@ -363,8 +419,40 @@ def test_refresh_builds_index_without_force_refreshing_code_folders(tmp_path):
     assert metadata.status == "completed"
     assert metadata.video_count == 1
     assert all(force_refresh is False for _path, force_refresh in provider.calls)
+    assert not StorageIndexStore(paths).temp_index_file.exists()
     grouped = StorageIndexStore(paths).load_index_by_code()
     assert grouped["ALDN-206"][0].storage_location == "巨乳|熟女|BBW"
+
+
+def test_refresh_writes_running_records_to_temp_jsonl(tmp_path):
+    paths = RuntimeConfigPaths(
+        config_dir=tmp_path,
+        database_file=tmp_path / "database.conf",
+        redis_file=tmp_path / "redis.conf",
+        storage_file=tmp_path / "storage.conf",
+        storage_index_file=tmp_path / "storage_index.jsonl",
+        storage_index_meta_file=tmp_path / "storage_index.meta.json",
+    )
+    store = StorageIndexStore(paths)
+
+    class Provider:
+        def list_files(self, path, force_refresh=False):
+            if path == "/嘿嘿/日本":
+                assert store.temp_index_file.exists()
+                return [RemoteFile("巨乳|熟女|BBW", "/嘿嘿/日本/巨乳|熟女|BBW", 0, True)]
+            if path == "/嘿嘿/日本/巨乳|熟女|BBW":
+                return [RemoteFile("ALDN-206-U", "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U", 0, True)]
+            if path == "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U":
+                return [RemoteFile("ALDN-206-U.mp4", "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U/ALDN-206-U.mp4", 500 * 1024 * 1024)]
+            return []
+
+    StorageIndexRefreshService(store).refresh(
+        {"target_folder": "/嘿嘿/日本", "video_extensions": [".mp4"], "minimum_video_size_mb": 100},
+        Provider(),
+    )
+
+    assert paths.storage_index_file.exists()
+    assert "ALDN-206-U.mp4" in paths.storage_index_file.read_text(encoding="utf-8")
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -402,10 +490,11 @@ class StorageIndexRefreshService:
         target_root = str(config.get("target_folder") or "/Movies").rstrip("/")
         started_at = datetime.now(timezone.utc).isoformat()
         self.store.write_running_metadata(StorageIndexMetadata(target_folder=target_root, status="running", started_at=started_at))
-        records: list[StorageIndexRecord] = []
         errors: list[dict] = []
         category_count = 0
         code_folder_count = 0
+        video_count = 0
+        self.store.begin_temp_index()
 
         try:
             categories = self._safe_list(provider, target_root, force_refresh=False, errors=errors)
@@ -422,8 +511,21 @@ class StorageIndexRefreshService:
                         continue
                     code_folder_count += 1
                     code_folder = code_folder_item["path"] or str(PurePosixPath(category_folder) / code_folder_item["name"])
+                    self.store.write_running_metadata(StorageIndexMetadata(
+                        target_folder=target_root,
+                        status="running",
+                        started_at=started_at,
+                        category_count=category_count,
+                        code_folder_count=code_folder_count,
+                        video_count=video_count,
+                        force_refresh_mode=force_refresh_mode,
+                        current_path=code_folder,
+                        errors=errors,
+                    ))
                     files = self._safe_list(provider, code_folder, force_refresh=False, errors=errors)
-                    records.extend(self._records_from_files(files, code_folder, category["name"], config, started_at))
+                    for record in self._records_from_files(files, code_folder, category["name"], config, started_at):
+                        self.store.append_temp_record(record)
+                        video_count += 1
         except Exception as exc:
             failed = StorageIndexMetadata(target_folder=target_root, status="failed", started_at=started_at, errors=[{"path": target_root, "error": str(exc)}])
             self.store.write_running_metadata(failed)
@@ -436,11 +538,11 @@ class StorageIndexRefreshService:
             completed_at=datetime.now(timezone.utc).isoformat(),
             category_count=category_count,
             code_folder_count=code_folder_count,
-            video_count=len(records),
+            video_count=video_count,
             force_refresh_mode=force_refresh_mode,
             errors=errors,
         )
-        return self.store.write_index(records, completed)
+        return self.store.finalize_temp_index(completed)
 
     def _safe_list(self, provider, path: str, *, force_refresh: bool, errors: list[dict]):
         try:
@@ -535,9 +637,20 @@ def test_bulk_storage_sync_uses_index_without_remote_listing(db_session, admin_u
         storage_index_meta_file=tmp_path / "storage_index.meta.json",
     )
     store = StorageIndexStore(paths)
-    store.write_index(
-        [StorageIndexRecord("ALDN-206", "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U/ALDN-206-U.mp4", "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U", "巨乳|熟女|BBW", "ALDN-206-U.mp4", 500 * 1024 * 1024, "2026-07-09T00:00:00+00:00")],
-        StorageIndexMetadata("/嘿嘿/日本", "completed", completed_at="2026-07-09T00:00:00+00:00", video_count=1),
+    store.begin_temp_index()
+    store.append_temp_record(
+        StorageIndexRecord(
+            "ALDN-206",
+            "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U/ALDN-206-U.mp4",
+            "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U",
+            "巨乳|熟女|BBW",
+            "ALDN-206-U.mp4",
+            500 * 1024 * 1024,
+            "2026-07-09T00:00:00+00:00",
+        )
+    )
+    store.finalize_temp_index(
+        StorageIndexMetadata("/嘿嘿/日本", "completed", completed_at="2026-07-09T00:00:00+00:00", video_count=1)
     )
     monkeypatch.setattr("backend.app.modules.content.movies.storage_sync_service.StorageIndexStore", lambda: store)
     monkeypatch.setattr("backend.app.modules.storage.tasks.events.publish_movie_storage_updated", lambda *args, **kwargs: None)
@@ -722,7 +835,7 @@ Modify `backend/app/main.py`:
 
 ```python
 from backend.app.modules.storage.index.router import router as storage_index_router
-...
+
 app.include_router(storage_index_router)
 ```
 
