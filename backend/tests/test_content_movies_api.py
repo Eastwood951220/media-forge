@@ -641,3 +641,47 @@ def test_movie_list_query_helpers_preserve_sort_and_storage_filter(client: TestC
     body = response.json()
     assert body["total"] == 1
     assert body["rows"][0]["code"] == "AAA-100"
+
+
+def test_bulk_storage_sync_uses_index_without_remote_listing(db_session, admin_user, tmp_path, monkeypatch):
+    from shared.runtime_config import RuntimeConfigPaths
+    from backend.app.modules.storage.index.models import StorageIndexMetadata, StorageIndexRecord
+    from backend.app.modules.storage.index.store import StorageIndexStore
+    from backend.app.modules.content.movies.storage_sync_service import sync_movies_storage_statuses
+    from shared.database.models.content import Movie
+
+    paths = RuntimeConfigPaths(
+        config_dir=tmp_path,
+        database_file=tmp_path / "database.conf",
+        redis_file=tmp_path / "redis.conf",
+        storage_file=tmp_path / "storage.conf",
+        storage_index_file=tmp_path / "storage_index.jsonl",
+        storage_index_meta_file=tmp_path / "storage_index.meta.json",
+    )
+    store = StorageIndexStore(paths)
+    store.begin_temp_index()
+    store.append_temp_record(
+        StorageIndexRecord(
+            "ALDN-206",
+            "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U/ALDN-206-U.mp4",
+            "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U",
+            "巨乳|熟女|BBW",
+            "ALDN-206-U.mp4",
+            500 * 1024 * 1024,
+            "2026-07-09T00:00:00+00:00",
+        )
+    )
+    store.finalize_temp_index(
+        StorageIndexMetadata("/嘿嘿/日本", "completed", completed_at="2026-07-09T00:00:00+00:00", video_count=1)
+    )
+    monkeypatch.setattr("backend.app.modules.content.movies.storage_sync_service.StorageIndexStore", lambda: store)
+    monkeypatch.setattr("backend.app.modules.storage.tasks.events.publish_movie_storage_updated", lambda *args, **kwargs: None)
+
+    movie = Movie(code="ALDN-206", source_name="indexed movie", storage_summary={})
+    db_session.add(movie)
+    db_session.commit()
+
+    payload = sync_movies_storage_statuses(db_session, user_id=str(admin_user.id), movies=[movie])
+
+    assert payload.stored_count == 1
+    assert movie.storage_summary["locations"][0]["path"].endswith("ALDN-206-U.mp4")
