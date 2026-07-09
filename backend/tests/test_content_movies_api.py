@@ -318,6 +318,84 @@ def test_sync_movie_storage_status_scans_target_folders_and_records_locations(db
     ]
 
 
+def test_sync_movie_storage_status_discovers_manual_category_folder(db_session, admin_user):
+    from dataclasses import dataclass
+
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies.storage_status import sync_movie_storage_status
+    from shared.database.models.content import Movie
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def __init__(self) -> None:
+            self.list_calls: list[str] = []
+
+        def list_files(self, path, force_refresh=False):
+            self.list_calls.append(path)
+            if path == "/嘿嘿/日本":
+                return [
+                    RemoteFile("巨乳|熟女|BBW", "/嘿嘿/日本/巨乳|熟女|BBW", 0, True),
+                    RemoteFile("loose.txt", "/嘿嘿/日本/loose.txt", 1, False),
+                ]
+            if path == "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U":
+                return [
+                    RemoteFile(
+                        "ALDN-206-U.mp4",
+                        "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U/ALDN-206-U.mp4",
+                        500 * 1024 * 1024,
+                    ),
+                ]
+            return []
+
+    provider = Provider()
+    crawl_task = CrawlTask(name="source-A", storage_location="A", owner_id=admin_user.id)
+    movie = Movie(
+        code="ALDN-206",
+        source_name="manual category sync movie",
+        source_task_ids=[],
+        storage_summary={},
+    )
+    db_session.add_all([crawl_task, movie])
+    db_session.flush()
+    movie.source_task_ids = [crawl_task.id]
+    db_session.commit()
+
+    result = sync_movie_storage_status(
+        db=db_session,
+        movie=movie,
+        provider=provider,
+        config={
+            "target_folder": "/嘿嘿/日本",
+            "video_extensions": [".mp4", ".mkv"],
+            "minimum_video_size_mb": 100,
+        },
+        source="manual_sync",
+    )
+
+    assert result.status == "stored"
+    assert result.found_count == 1
+    assert "/嘿嘿/日本/A/ALDN-206" in result.checked_targets
+    assert "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U" in result.checked_targets
+    assert movie.storage_summary["storage_status"] == "stored"
+    assert movie.storage_summary["locations"] == [
+        {
+            "path": "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U/ALDN-206-U.mp4",
+            "target_folder": "/嘿嘿/日本/巨乳|熟女|BBW/ALDN-206-U",
+            "storage_location": "巨乳|熟女|BBW",
+            "file_name": "ALDN-206-U.mp4",
+            "size": 500 * 1024 * 1024,
+            "exists": True,
+            "source": "manual_sync",
+        }
+    ]
+
+
 def test_movie_payload_and_filter_use_three_storage_statuses(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
     session = TestingSessionLocal()
