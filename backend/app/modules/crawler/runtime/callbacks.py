@@ -11,6 +11,7 @@ from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask
 from backend.app.modules.content.movies.persistence import (
     append_source_task_id,
+    append_source_task_ids_for_codes,
     upsert_movie_with_magnets,
 )
 from backend.app.modules.crawler.runtime.detail_index import DetailTaskIndex
@@ -234,7 +235,10 @@ def build_crawl_callbacks(
     def db_check_callback(codes: list[str]) -> set[str]:
         existing_codes = find_existing_movie_codes(ctx.db, codes)
         if existing_codes:
+            changed_codes = append_source_task_ids_for_codes(ctx.db, existing_codes, ctx.task.id)
             append_run_log_for_run(ctx.db, ctx.run, f"列表阶段发现已存在影片 {len(existing_codes)} 条", "INFO")
+            if changed_codes:
+                append_run_log_for_run(ctx.db, ctx.run, f"列表阶段已存在影片追加任务ID {len(changed_codes)} 条", "INFO")
         return existing_codes
 
     def on_detail_check_callback(code: str) -> bool:

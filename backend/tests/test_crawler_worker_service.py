@@ -952,6 +952,46 @@ def test_finalize_isolates_filter_sync_session_failure(db_session, monkeypatch) 
     assert run.status == "completed"
 
 
+def test_db_check_callback_appends_source_task_ids_for_list_duplicates_in_incremental_and_full_modes(db_session, admin_user) -> None:
+    from backend.app.modules.crawler.runtime.callbacks import CrawlerCallbackContext, build_crawl_callbacks
+    from backend.app.modules.crawler.runtime.detail_index import DetailTaskIndex
+    from backend.app.modules.crawler.runtime.progress import new_progress
+
+    class Runtime:
+        def write_progress(self, run_id: str, progress: dict[str, int]) -> None:
+            return None
+
+        def is_stop_requested(self, run_id: str) -> bool:
+            return False
+
+    for crawl_mode in ("incremental", "full"):
+        task = CrawlTask(name=f"任务-list-duplicate-{crawl_mode}", owner_id=admin_user.id, is_skip=False)
+        db_session.add(task)
+        db_session.flush()
+        run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode=crawl_mode, queued_at=datetime.now())
+        db_session.add(run)
+        db_session.add(Movie(code=f"LIST-DUP-{crawl_mode.upper()}", source_url=f"https://javdb.com/v/list-dup-{crawl_mode}", source_task_ids=[]))
+        db_session.commit()
+
+        callbacks = build_crawl_callbacks(CrawlerCallbackContext(
+            db=db_session,
+            run=run,
+            task=task,
+            runtime=Runtime(),
+            detail_index=DetailTaskIndex(),
+            progress=new_progress(),
+        ))
+
+        existing_codes = callbacks.db_check_callback([f"LIST-DUP-{crawl_mode.upper()}", "LIST-MISSING"])
+        db_session.commit()
+
+        movie = db_session.scalar(select(Movie).where(Movie.code == f"LIST-DUP-{crawl_mode.upper()}"))
+
+        assert existing_codes == {f"LIST-DUP-{crawl_mode.upper()}"}
+        assert str(task.id) in [str(value) for value in movie.source_task_ids]
+        assert db_session.scalar(select(Movie).where(Movie.code == "LIST-MISSING")) is None
+
+
 def test_callbacks_write_detail_logs_with_context(db_session, admin_user, monkeypatch, tmp_path) -> None:
     from backend.app.modules.crawler.runs import logs as run_logs
     from backend.app.modules.crawler.runtime.callbacks import CrawlerCallbackContext, build_crawl_callbacks
