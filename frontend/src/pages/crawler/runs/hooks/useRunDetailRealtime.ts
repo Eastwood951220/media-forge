@@ -10,6 +10,7 @@ import type {
 export function useRunDetailRealtime(args: {
   id: string | undefined
   fetchLogs: () => Promise<void>
+  fetchRun: () => Promise<void>
   fetchTasks: () => Promise<void>
   keyword: string
   resyncSnapshot: () => void
@@ -18,7 +19,7 @@ export function useRunDetailRealtime(args: {
   setTasks: React.Dispatch<React.SetStateAction<CrawlRunDetailTask[]>>
   statusFilter: string | undefined
 }): void {
-  const { id, fetchLogs, fetchTasks, keyword, resyncSnapshot, setLogs, setRun, setTasks, statusFilter } = args
+  const { id, fetchLogs, fetchRun, fetchTasks, keyword, resyncSnapshot, setLogs, setRun, setTasks, statusFilter } = args
 
   useEffect(() => {
     if (!id) return
@@ -33,6 +34,7 @@ export function useRunDetailRealtime(args: {
           logs: currentRun?.logs ?? [],
         }))
         if (['completed', 'failed', 'stopped'].includes(event.payload.status)) {
+          void fetchRun()
           void fetchLogs()
           void fetchTasks()
         }
@@ -98,5 +100,5 @@ export function useRunDetailRealtime(args: {
       unsubscribeLogs()
       unsubscribeResync()
     }
-  }, [id, fetchLogs, fetchTasks, keyword, resyncSnapshot, setLogs, setRun, setTasks, statusFilter])
+  }, [id, fetchLogs, fetchRun, fetchTasks, keyword, resyncSnapshot, setLogs, setRun, setTasks, statusFilter])
 }

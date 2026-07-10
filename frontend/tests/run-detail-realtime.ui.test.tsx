@@ -130,6 +130,39 @@ describe('RunDetailPage realtime events', () => {
         context: { reason: 'already_exists' },
       },
     ])
+    vi.mocked(getCrawlerRun)
+      .mockResolvedValueOnce({
+        id: 'run-1',
+        task_id: 'task-1',
+        task_name: '任务A',
+        status: 'running',
+        crawl_mode: 'incremental',
+        queued_at: null,
+        started_at: null,
+        finished_at: null,
+        result: null,
+        error: null,
+        resumed_from: null,
+        created_at: '2026-07-03T00:00:00Z',
+        updated_at: null,
+        logs: [],
+      })
+      .mockResolvedValueOnce({
+        id: 'run-1',
+        task_id: 'task-1',
+        task_name: '任务A',
+        status: 'completed',
+        crawl_mode: 'incremental',
+        queued_at: null,
+        started_at: '2026-07-03T00:01:00Z',
+        finished_at: '2026-07-03T00:10:00Z',
+        result: { skipped_tasks: 54 },
+        error: null,
+        resumed_from: null,
+        created_at: '2026-07-03T00:00:00Z',
+        updated_at: null,
+        logs: [],
+      })
 
     renderPage()
 
@@ -152,7 +185,9 @@ describe('RunDetailPage realtime events', () => {
       logs: [],
     })
 
-    expect(await screen.findByText('已完成')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('已完成')).toBeInTheDocument()
+    })
     expect(screen.getByText('详情 53/53 跳过')).toBeInTheDocument()
   })
 
@@ -234,5 +269,68 @@ describe('RunDetailPage realtime events', () => {
       expect(vi.mocked(getCrawlerRunLogs).mock.calls.length).toBeGreaterThan(initialLogsCalls)
       expect(vi.mocked(getCrawlerRunTasks).mock.calls.length).toBeGreaterThan(initialTasksCalls)
     })
+  })
+
+  it('reloads the run snapshot when a terminal run event arrives', async () => {
+    vi.mocked(getCrawlerRun)
+      .mockResolvedValueOnce({
+        id: 'run-1',
+        task_id: 'task-1',
+        task_name: '任务A',
+        status: 'running',
+        crawl_mode: 'incremental',
+        queued_at: null,
+        started_at: null,
+        finished_at: null,
+        result: null,
+        error: null,
+        resumed_from: null,
+        created_at: '2026-07-03T00:00:00Z',
+        updated_at: null,
+        logs: [],
+      })
+      .mockResolvedValueOnce({
+        id: 'run-1',
+        task_id: 'task-1',
+        task_name: '任务A',
+        status: 'completed',
+        crawl_mode: 'incremental',
+        queued_at: null,
+        started_at: '2026-07-03T00:01:00Z',
+        finished_at: '2026-07-03T00:10:00Z',
+        result: { total_tasks: 1, saved: 1 },
+        error: null,
+        resumed_from: null,
+        created_at: '2026-07-03T00:00:00Z',
+        updated_at: null,
+        logs: [],
+      })
+
+    renderPage()
+    await screen.findByText('运行详情 - 任务A')
+
+    const initialRunCalls = vi.mocked(getCrawlerRun).mock.calls.length
+
+    emit('crawler.run.updated', {
+      id: 'run-1',
+      task_id: 'task-1',
+      task_name: '任务A',
+      status: 'completed',
+      crawl_mode: 'incremental',
+      queued_at: null,
+      started_at: null,
+      finished_at: '2026-07-03T00:10:00Z',
+      result: {},
+      error: null,
+      resumed_from: null,
+      created_at: '2026-07-03T00:00:00Z',
+      updated_at: null,
+      logs: [],
+    })
+
+    await waitFor(() => {
+      expect(vi.mocked(getCrawlerRun).mock.calls.length).toBeGreaterThan(initialRunCalls)
+    })
+    expect(await screen.findByText('已完成')).toBeInTheDocument()
   })
 })

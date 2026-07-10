@@ -5,6 +5,7 @@ import RunSummaryCard from './components/RunSummaryCard'
 import RunTaskTable from './components/RunTaskTable'
 import { useRunDetail } from './hooks/useRunDetail'
 import { useRunDetailRealtime } from './hooks/useRunDetailRealtime'
+import styles from './RunDetailPage.module.less'
 
 function RunDetailPage() {
   const { id } = useParams({ strict: false })
@@ -13,6 +14,7 @@ function RunDetailPage() {
   useRunDetailRealtime({
     id,
     fetchLogs: detail.fetchLogs,
+    fetchRun: detail.fetchRun,
     fetchTasks: detail.fetchTasks,
     keyword: detail.keyword,
     resyncSnapshot: detail.resyncSnapshot,
@@ -23,7 +25,7 @@ function RunDetailPage() {
   })
 
   return (
-    <div style={{ padding: 24 }}>
+    <div className={styles.page}>
       <RunSummaryCard
         actionLoading={detail.actionLoading}
         onRestart={detail.handleRestart}
@@ -53,6 +55,7 @@ function RunDetailPage() {
           <RunLogsTimeline
             logs={detail.logs}
             isActive={detail.run.status === 'queued' || detail.run.status === 'running'}
+            loading={detail.loading}
           />
         </Card>
       )}
