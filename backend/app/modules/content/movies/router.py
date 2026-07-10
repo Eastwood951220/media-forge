@@ -143,6 +143,27 @@ def sync_movie_storage_statuses(
     return success(data=payload.to_dict())
 
 
+@router.post("/{movie_id}/storage-sync/cd2")
+def sync_single_movie_storage_status_from_cd2(
+    movie_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    from backend.app.modules.content.movies.storage_sync_service import (
+        sync_single_movie_storage_status_from_cd2 as sync_single_movie_storage_status_from_cd2_service,
+    )
+
+    movie = db.query(Movie).options(selectinload(Movie.magnets)).filter(Movie.id == movie_id).first()
+    if movie is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="影片不存在")
+    payload = sync_single_movie_storage_status_from_cd2_service(
+        db,
+        user_id=str(current_user.id),
+        movie=movie,
+    )
+    return success(data=payload)
+
+
 @router.post("/delete")
 def delete_content_movies(
     body: MovieDeleteRequest,

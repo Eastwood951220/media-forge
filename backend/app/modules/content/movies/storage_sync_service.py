@@ -107,18 +107,9 @@ def sync_movies_storage_statuses(
     movies: list[Movie],
     config_service=None,
 ) -> MovieStorageSyncResultPayload:
-    from backend.app.modules.storage.config.service import StorageConfigService
     from backend.app.modules.storage.tasks.events import publish_movie_storage_updated
 
-    service = config_service or StorageConfigService()
-
-    try:
-        results = _sync_movies_from_index(db, movies)
-    except StorageIndexMissingError:
-        if len(movies) > 1:
-            raise
-        with service.open_provider() as (config, provider):
-            results = [sync_movie_storage_status(db=db, movie=movie, provider=provider, config=config, source="manual_sync") for movie in movies]
+    results = _sync_movies_from_index(db, movies)
 
     db.commit()
 
@@ -141,3 +132,52 @@ def sync_movies_storage_statuses(
             for result in results
         ],
     )
+
+
+def _records_from_locations(movie: Movie, locations: list[dict], indexed_at: str) -> list:
+    from backend.app.modules.storage.index.models import StorageIndexRecord
+
+    records = []
+    code = str(movie.code or "").upper()
+    for location in locations:
+        records.append(StorageIndexRecord(
+            code=code,
+            path=str(location["path"]),
+            target_folder=str(location["target_folder"]),
+            storage_location=str(location.get("storage_location") or ""),
+            file_name=str(location.get("file_name") or ""),
+            size=int(location.get("size") or 0),
+            indexed_at=indexed_at,
+        ))
+    return records
+
+
+def sync_single_movie_storage_status_from_cd2(
+    db: Session,
+    *,
+    user_id: str,
+    movie: Movie,
+    config_service=None,
+) -> dict:
+    from datetime import datetime, timezone
+    from backend.app.modules.storage.config.service import StorageConfigService
+    from backend.app.modules.storage.tasks.events import publish_movie_storage_updated
+
+    service = config_service or StorageConfigService()
+    with service.open_provider() as (config, provider):
+        result = sync_movie_storage_status(db=db, movie=movie, provider=provider, config=config, source="cd2_manual_sync")
+
+    indexed_at = datetime.now(timezone.utc).isoformat()
+    records = _records_from_locations(movie, result.locations, indexed_at)
+    if records:
+        StorageIndexStore().upsert_records(records, target_folder=str(config.get("target_folder") or ""))
+
+    db.commit()
+    publish_movie_storage_updated(db, user_id, movie.id)
+    return {
+        "movie_id": result.movie_id,
+        "status": result.status,
+        "found_count": result.found_count,
+        "checked_targets": result.checked_targets,
+        "locations": result.locations,
+    }
