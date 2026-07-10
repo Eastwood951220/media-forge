@@ -14,7 +14,7 @@ from backend.app.models.crawl_task import CrawlTask
 from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
 from backend.app.modules.crawler.runtime.detail_queue import claim_next_pending_detail, upsert_detail_task
 from backend.app.modules.crawler.runtime.details import detail_row_to_task_info
-from backend.app.modules.crawler.runtime.events import append_run_log_for_run
+from backend.app.modules.crawler.runtime.events import append_run_log_for_run, publish_run_detail_updated
 from backend.app.modules.crawler.runtime.progress import new_progress, write_progress
 from backend.app.modules.crawler.runtime.source_task_names import find_existing_movie_codes, movie_code_exists
 from backend.app.modules.content.movies.persistence import append_source_task_id, append_source_task_ids_for_codes, upsert_movie_with_magnets
@@ -200,6 +200,7 @@ def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, c
                 for item in future.result():
                     upsert_detail_task(db, run=run, task_name=task_name, item=item)
                 db.commit()
+                append_run_log_for_run(db, run, "列表批次已持久化，刷新详情子任务", "INFO")
 
     append_run_log_for_run(db, run, "列表收集完成，详情子任务已持久化", "INFO")
 
@@ -243,12 +244,14 @@ def _run_detail_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any,
             else:
                 failed_count += 1
             db.commit()
+            publish_run_detail_updated(db, run, [detail])
         except Exception as exc:
             logger.exception("Detail worker failed for %s", detail.code)
             detail.status = "crawl_failed"
             detail.error = str(exc)[:500]
             failed_count += 1
             db.commit()
+            publish_run_detail_updated(db, run, [detail])
 
         random_sleep(config.DETAIL_PAGE_DELAY_MIN, config.DETAIL_PAGE_DELAY_MAX)
 

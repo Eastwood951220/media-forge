@@ -187,3 +187,77 @@ def test_publish_detail_updated_can_request_task_refresh(admin_user) -> None:
     assert events[0].payload["tasks"] == []
     assert events[0].payload["refresh_tasks"] is True
     assert events[0].payload["reason"] == "url_completed"
+
+
+def test_crawler_realtime_events_keep_frontend_contract(admin_user) -> None:
+    session = TestingSessionLocal()
+    task = CrawlTask(name="任务A", storage_location="A", owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    run = CrawlRun(
+        task_id=task.id,
+        task_name=task.name,
+        status="running",
+        crawl_mode="incremental",
+        created_at=datetime.now(),
+    )
+    session.add(run)
+    session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code="AAA-001",
+        source_url="https://example.test/aaa",
+        source_name="AAA-001",
+        source_url_name="入口A",
+        task_url="https://example.test/list",
+        task_final_url="https://example.test/list?page=1",
+        task_url_type="list",
+        status="saved",
+        created_at=datetime.now(),
+    )
+    session.add(detail)
+    session.commit()
+    session.refresh(run)
+    session.refresh(detail)
+    queue = event_bus.subscribe(str(admin_user.id))
+
+    service.publish_run_updated(session, run)
+    service.publish_run_detail_updated(session, run, [detail], refresh_tasks=True, reason="detail_saved")
+    service.append_run_log_for_run(session, run, "入库成功: AAA-001", "INFO", code="AAA-001")
+
+    events = drain(queue)
+    event_bus.unsubscribe(str(admin_user.id), queue)
+    session.close()
+
+    run_event = next(event for event in events if event.event == "crawler.run.updated")
+    detail_event = next(event for event in events if event.event == "crawler.run.detail.updated")
+    log_event = next(event for event in events if event.event == "crawler.run.log.appended")
+
+    assert run_event.payload["id"] == str(run.id)
+    assert run_event.payload["task_id"] == str(task.id)
+    assert run_event.payload["status"] == "running"
+    assert run_event.payload["logs"] == []
+
+    assert detail_event.payload["run_id"] == str(run.id)
+    assert detail_event.payload["refresh_tasks"] is True
+    assert detail_event.payload["reason"] == "detail_saved"
+    assert detail_event.payload["tasks"][0] == {
+        "id": str(detail.id),
+        "run_id": str(run.id),
+        "task_name": "任务A",
+        "code": "AAA-001",
+        "source_url": "https://example.test/aaa",
+        "source_name": "AAA-001",
+        "source_url_name": "入口A",
+        "task_url": "https://example.test/list",
+        "task_final_url": "https://example.test/list?page=1",
+        "task_url_type": "list",
+        "status": "saved",
+        "error": None,
+        "created_at": detail.created_at.isoformat(),
+    }
+
+    assert log_event.payload["run_id"] == str(run.id)
+    assert log_event.payload["log"]["message"] == "入库成功: AAA-001"
+    assert log_event.payload["log"]["context"]["code"] == "AAA-001"
