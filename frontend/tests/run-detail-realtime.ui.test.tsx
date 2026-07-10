@@ -191,7 +191,7 @@ describe('RunDetailPage realtime events', () => {
     expect(screen.getByText('详情 53/53 跳过')).toBeInTheDocument()
   })
 
-  it('refetches tasks when a url completion refresh event arrives', async () => {
+  it('refetches tasks for each url completion refresh event', async () => {
     renderPage()
     await screen.findByText('运行详情 - 任务A')
 
@@ -203,9 +203,15 @@ describe('RunDetailPage realtime events', () => {
       refresh_tasks: true,
       reason: 'url_completed',
     })
+    emit('crawler.run.detail.updated', {
+      run_id: 'run-1',
+      tasks: [],
+      refresh_tasks: true,
+      reason: 'url_completed',
+    })
 
     await waitFor(() => {
-      expect(vi.mocked(getCrawlerRunTasks).mock.calls.length).toBeGreaterThan(initialTasksCalls)
+      expect(vi.mocked(getCrawlerRunTasks).mock.calls.length).toBeGreaterThanOrEqual(initialTasksCalls + 2)
     })
   })
 
