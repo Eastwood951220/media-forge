@@ -184,6 +184,7 @@ describe('MovieListPage', () => {
     expect(screen.getByRole('button', { name: /配置/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '隐藏搜索' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '刷新列表' })).toBeInTheDocument()
+    expect(screen.getByTestId('movie-filter-bar').className).toMatch(/filterBar/)
 
     await userEvent.click(screen.getByRole('button', { name: /详情/ }))
 

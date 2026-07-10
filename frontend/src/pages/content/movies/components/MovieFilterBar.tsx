@@ -3,6 +3,7 @@ import {Input, Select, InputNumber, DatePicker, Button, Space} from "antd";
 import {SearchOutlined, ReloadOutlined, SettingOutlined} from "@ant-design/icons";
 import type {MovieFilters} from "../hooks/useMovieFilters";
 import type {MovieFilterConfig, MovieFilterField} from "@/api/movie/types";
+import styles from "../MovieListPage.module.less";
 
 // Module-level constant — defines all filter items with their default order
 const FILTER_ITEMS: {key: MovieFilterField; label: string; defaultOrder: number}[] = [
@@ -109,8 +110,8 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
     const createdAtVisible = filterConfig?.["createdAtFrom"]?.visible !== false || filterConfig?.["createdAtTo"]?.visible !== false;
 
     return (
-        <Space vertical style={{width: "100%"}} size={8}>
-            <Space wrap>
+        <Space vertical className={styles.filterBar} data-testid="movie-filter-bar" size={8}>
+            <Space wrap size={[8, 8]} className={styles.filterControls}>
                 <Select
                     style={{width: 200}}
                     value={selectedTask}
@@ -139,9 +140,11 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
                     {filterConfig?.["createdAtFrom"]?.visible !== false && filterRenderers["createdAtFrom"]}
                     {filterConfig?.["createdAtTo"]?.visible !== false && filterRenderers["createdAtTo"]}
                 </Space>}
-                <Button type="primary" onClick={onSearch}>搜索</Button>
-                <Button icon={<ReloadOutlined/>} onClick={onReset}>刷新</Button>
-                {onConfigClick && <Button icon={<SettingOutlined/>} onClick={onConfigClick}>配置</Button>}
+                <Space size={6} className={styles.filterActions}>
+                    <Button type="primary" icon={<SearchOutlined/>} onClick={onSearch}>搜索</Button>
+                    <Button icon={<ReloadOutlined/>} onClick={onReset}>刷新</Button>
+                    {onConfigClick && <Button icon={<SettingOutlined/>} onClick={onConfigClick}>配置</Button>}
+                </Space>
             </Space>
         </Space>
     );
