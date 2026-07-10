@@ -15,7 +15,6 @@ import {
   CloudOutlined,
   FilterOutlined,
   FolderOutlined,
-  SyncOutlined,
 } from '@ant-design/icons'
 import {
   fetchStorageConfig,
@@ -24,11 +23,6 @@ import {
   type StorageConfig,
   type StorageTestResult,
 } from '@/api/storage/storageConfig'
-import {
-  fetchStorageIndexStatus,
-  refreshStorageIndex,
-  type StorageIndexMetadata,
-} from '@/api/storage/storageIndex'
 import SectionTitle from './components/SectionTitle'
 import SelectTags from './components/SelectTags'
 import TestResultCard from './components/TestResultCard'
@@ -43,8 +37,6 @@ export default function StorageConfigPage() {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<StorageTestResult | null>(null)
   const [tokenInput, setTokenInput] = useState('')
-  const [indexStatus, setIndexStatus] = useState<StorageIndexMetadata | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
 
   const loadConfig = async () => {
     setLoading(true)
@@ -58,18 +50,8 @@ export default function StorageConfigPage() {
     }
   }
 
-  const loadIndexStatus = async () => {
-    try {
-      const data = await fetchStorageIndexStatus()
-      setIndexStatus(data)
-    } catch {
-      // Index status is optional, don't show error
-    }
-  }
-
   useEffect(() => {
     void loadConfig()
-    void loadIndexStatus()
   }, [])
 
   const handleSave = async (values: StorageConfig) => {
@@ -101,19 +83,6 @@ export default function StorageConfigPage() {
       message.error(getErrorMessage(error))
     } finally {
       setTesting(false)
-    }
-  }
-
-  const handleRefreshIndex = async () => {
-    setRefreshing(true)
-    try {
-      const data = await refreshStorageIndex()
-      setIndexStatus(data)
-      message.success('存储索引已刷新')
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error))
-    } finally {
-      setRefreshing(false)
     }
   }
 
@@ -244,24 +213,6 @@ export default function StorageConfigPage() {
           </Space>
         </Card>
       </Form>
-
-      <Card title="存储索引" className={styles.formCard}>
-        <Space direction="vertical" style={{ width: '100%' }}>
-          {indexStatus && (
-            <Space wrap>
-              <Tag color={indexStatus.status === 'completed' ? 'green' : indexStatus.status === 'running' ? 'blue' : 'default'}>
-                {indexStatus.status === 'never_built' ? '未构建' : indexStatus.status === 'running' ? '构建中' : indexStatus.status === 'completed' ? '已完成' : '失败'}
-              </Tag>
-              {indexStatus.video_count > 0 && <Tag>视频: {indexStatus.video_count}</Tag>}
-              {indexStatus.category_count > 0 && <Tag>分类: {indexStatus.category_count}</Tag>}
-              {indexStatus.completed_at && <Tag>完成于: {new Date(indexStatus.completed_at).toLocaleString()}</Tag>}
-            </Space>
-          )}
-          <Button icon={<SyncOutlined />} onClick={() => void handleRefreshIndex()} loading={refreshing}>
-            刷新索引
-          </Button>
-        </Space>
-      </Card>
 
       {testResult && <TestResultCard result={testResult} />}
     </div>

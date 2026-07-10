@@ -6,6 +6,8 @@ export interface MovieColumnsOptions {
   onViewDetail: (id: string) => void
   onPush?: (movie: Movie) => void
   onDelete?: (movie: Movie) => void
+  onCd2Sync?: (movie: Movie) => void
+  cd2SyncingId?: string | null
 }
 
 const storageStatusColor: Record<string, string> = {
@@ -24,7 +26,7 @@ function unique(values: string[] | undefined) {
   return [...new Set(values || [])]
 }
 
-export function createMovieColumns({ onViewDetail, onPush, onDelete }: MovieColumnsOptions): ColumnsType<Movie> {
+export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, cd2SyncingId }: MovieColumnsOptions): ColumnsType<Movie> {
   return [
     { title: '番号',
       dataIndex: 'code',
@@ -96,7 +98,7 @@ export function createMovieColumns({ onViewDetail, onPush, onDelete }: MovieColu
       title: '操作',
       key: 'action',
       fixed: 'right',
-      width: 160,
+      width: 220,
       render: (_: unknown, record) => (
         <Space size={0}>
           <Button type="link" size="small" onClick={() => onViewDetail(record._id)}>
@@ -105,6 +107,11 @@ export function createMovieColumns({ onViewDetail, onPush, onDelete }: MovieColu
           {onPush && (
             <Button type="link" size="small" onClick={() => onPush(record)}>
               推送
+            </Button>
+          )}
+          {onCd2Sync && (
+            <Button type="link" size="small" loading={cd2SyncingId === record._id} onClick={() => onCd2Sync(record)}>
+              CD2同步
             </Button>
           )}
           {onDelete && (

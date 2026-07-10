@@ -94,6 +94,10 @@ export function syncMovieStorageStatus(payload: MovieStorageSyncPayload): Promis
   return request.post<MovieStorageSyncResponse>(`${BASE_URL}/storage-sync`, payload)
 }
 
+export function syncMovieStorageStatusFromCd2(movieId: string): Promise<MovieStorageSyncResult> {
+  return request.post<MovieStorageSyncResult>(`${BASE_URL}/${movieId}/storage-sync/cd2`)
+}
+
 export interface MovieDeletePayload {
   movie_ids: string[]
   mode: MovieDeleteMode

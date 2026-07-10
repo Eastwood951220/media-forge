@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { Button, Space } from 'antd'
-import { SyncOutlined } from '@ant-design/icons'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { App, Button, Dropdown, Space } from 'antd'
+import { DatabaseOutlined, DownOutlined, SyncOutlined } from '@ant-design/icons'
+import { refreshStorageIndex, type StorageIndexRefreshMode } from '@/api/storage/storageIndex'
+import { syncMovieStorageStatusFromCd2 } from '@/api/movie'
 import BaseListPage from '@/components/BaseListPage'
 import type { FilterItemConfig } from '@/api/movie'
 import type { Movie } from '@/api/movie/types'
@@ -21,6 +23,7 @@ import { parseSortDefault } from './utils/sort'
 import styles from './MovieListPage.module.less'
 
 function MovieListPage() {
+  const { message } = App.useApp()
   const configHook = useMovieFilterConfig()
   const filterConfig = useMemo(
     () => configHook.config as Record<string, FilterItemConfig>,
@@ -38,6 +41,33 @@ function MovieListPage() {
   const list = useMovieList(effectiveParams)
   const detail = useMovieDetail()
   const push = useStoragePush(list.reload)
+  const [indexRefreshing, setIndexRefreshing] = useState<StorageIndexRefreshMode | null>(null)
+  const [cd2SyncingId, setCd2SyncingId] = useState<string | null>(null)
+
+  const handleRefreshStorageIndex = useCallback(async (mode: StorageIndexRefreshMode) => {
+    setIndexRefreshing(mode)
+    try {
+      const metadata = await refreshStorageIndex(mode)
+      message.success(`${mode === 'full' ? '全量' : '增量'}索引完成：${metadata.video_count} 个视频`)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '刷新索引失败')
+    } finally {
+      setIndexRefreshing(null)
+    }
+  }, [message])
+
+  const handleCd2Sync = useCallback(async (movie: Movie) => {
+    setCd2SyncingId(movie._id)
+    try {
+      const result = await syncMovieStorageStatusFromCd2(movie._id)
+      message.success(`CD2同步完成：${result.status === 'stored' ? '已存储' : '未存储'}`)
+      list.reload()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'CD2同步失败')
+    } finally {
+      setCd2SyncingId(null)
+    }
+  }, [list.reload, message])
 
   const actions = useMovieListActions({
     config: configHook.config,
@@ -62,8 +92,14 @@ function MovieListPage() {
   useMovieListRealtime(list.updateMovie)
 
   const columns = useMemo(
-    () => createMovieColumns({ onViewDetail: detail.showDetail, onPush: push.openSinglePush, onDelete: (movie) => actions.confirmDeleteMovies([movie]) }),
-    [detail.showDetail, push.openSinglePush, actions.confirmDeleteMovies],
+    () => createMovieColumns({
+      onViewDetail: detail.showDetail,
+      onPush: push.openSinglePush,
+      onDelete: (movie) => actions.confirmDeleteMovies([movie]),
+      onCd2Sync: handleCd2Sync,
+      cd2SyncingId,
+    }),
+    [detail.showDetail, push.openSinglePush, actions.confirmDeleteMovies, handleCd2Sync, cd2SyncingId],
   )
 
   const queryNode = configHook.loaded ? (
@@ -109,13 +145,26 @@ function MovieListPage() {
                 批量删除
               </Button>
             )}
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'full', label: '全量索引', icon: <DatabaseOutlined /> },
+                  { key: 'incremental', label: '增量索引', icon: <SyncOutlined /> },
+                ],
+                onClick: ({ key }) => void handleRefreshStorageIndex(key as StorageIndexRefreshMode),
+              }}
+            >
+              <Button size="small" loading={indexRefreshing !== null}>
+                存储索引 <DownOutlined />
+              </Button>
+            </Dropdown>
             <Button
               size="small"
               icon={<SyncOutlined />}
               loading={list.syncingStorage}
               onClick={() => void list.syncStorageStatus()}
             >
-              同步存储状态
+              索引同步
             </Button>
           </Space>
         )}
