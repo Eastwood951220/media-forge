@@ -200,6 +200,13 @@ def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, c
                 for item in future.result():
                     upsert_detail_task(db, run=run, task_name=task_name, item=item)
                 db.commit()
+                publish_run_detail_updated(
+                    db,
+                    run,
+                    [],
+                    refresh_tasks=True,
+                    reason="url_completed",
+                )
                 append_run_log_for_run(db, run, "列表批次已持久化，刷新详情子任务", "INFO")
 
     append_run_log_for_run(db, run, "列表收集完成，详情子任务已持久化", "INFO")
