@@ -43,7 +43,7 @@ describe('StorageTaskListPage', () => {
 
   it('renders storage task list heading', () => {
     render(<StorageTaskListPage />)
-    expect(screen.getByText('存储任务')).toBeInTheDocument()
+    expect(screen.getByText('任务列表')).toBeInTheDocument()
   })
 
   it('deletes a completed storage task after confirmation', async () => {
@@ -100,5 +100,33 @@ describe('StorageTaskListPage', () => {
     expect(screen.getByText('成功')).toBeInTheDocument()
     expect(screen.getByText('失败')).toBeInTheDocument()
     expect(screen.getByText('跳过')).toBeInTheDocument()
+  })
+
+  it('renders storage task list with progress-focused table copy', async () => {
+    vi.mocked(listStorageMainTasks).mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'task-list-1',
+          alias: '云存储_列表测试',
+          display_name: '云存储_列表测试',
+          source: 'batch',
+          storage_mode: 'batch',
+          status: 'running',
+          total_count: 4,
+          success_count: 2,
+          failed_count: 1,
+          skipped_count: 0,
+          created_at: '2026-07-10T01:00:00Z',
+        },
+      ],
+      total: 1,
+    })
+
+    render(<StorageTaskListPage />)
+
+    expect(await screen.findByText('任务列表')).toBeInTheDocument()
+    expect(screen.getByText('云存储_列表测试')).toBeInTheDocument()
+    // Check for the progress column header
+    expect(screen.getByRole('columnheader', { name: '处理进度' })).toBeInTheDocument()
   })
 })

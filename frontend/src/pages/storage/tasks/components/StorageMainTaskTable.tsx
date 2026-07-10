@@ -1,8 +1,9 @@
 import { DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
-import { Button, Card, Popconfirm, Space, Table, Tag } from 'antd'
+import { Button, Card, Popconfirm, Progress, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { StorageMainTask, StorageMainTaskStatus, StorageMode } from '@/api/storage/storageTasks/types'
+import styles from '../StorageTasks.module.less'
 import { modeLabels, PAGE_SIZE_OPTIONS, statusLabels } from '../utils/status'
 
 interface StorageMainTaskTableProps {
@@ -17,6 +18,12 @@ interface StorageMainTaskTableProps {
   onRefresh: () => void
   onPageChange: (page: number) => void
   onPageSizeChange: (size: number) => void
+}
+
+function getProgressPercent(task: StorageMainTask) {
+  if (!task.total_count) return 0
+  const finished = task.success_count + task.failed_count + task.skipped_count
+  return Math.min(100, Math.round((finished / task.total_count) * 100))
 }
 
 export function StorageMainTaskTable({
@@ -40,6 +47,11 @@ export function StorageMainTaskTable({
       dataIndex: 'alias',
       key: 'alias',
       ellipsis: true,
+      render: (alias: string | null, record) => (
+        <Typography.Text ellipsis title={alias || record.id}>
+          {alias || record.id}
+        </Typography.Text>
+      ),
     },
     {
       title: '状态',
@@ -59,34 +71,24 @@ export function StorageMainTaskTable({
       render: (mode: StorageMode) => modeLabels[mode] || mode,
     },
     {
-      title: '总数',
-      dataIndex: 'total_count',
-      key: 'total_count',
-      width: 70,
-      align: 'center',
-    },
-    {
-      title: '成功',
-      dataIndex: 'success_count',
-      key: 'success_count',
-      width: 70,
-      align: 'center',
-      render: (count: number) => <span style={{ color: '#52c41a' }}>{count}</span>,
-    },
-    {
-      title: '失败',
-      dataIndex: 'failed_count',
-      key: 'failed_count',
-      width: 70,
-      align: 'center',
-      render: (count: number) => (count > 0 ? <span style={{ color: '#ff4d4f' }}>{count}</span> : count),
-    },
-    {
-      title: '跳过',
-      dataIndex: 'skipped_count',
-      key: 'skipped_count',
-      width: 70,
-      align: 'center',
+      title: '处理进度',
+      key: 'progress',
+      width: 220,
+      render: (_, record) => (
+        <div className={styles.tableProgressCell}>
+          <Progress
+            percent={getProgressPercent(record)}
+            size="small"
+            status={record.failed_count > 0 ? 'exception' : undefined}
+          />
+          <div className={styles.tableProgressMeta}>
+            <span>总 {record.total_count}</span>
+            <span>成功 {record.success_count}</span>
+            <span>失败 {record.failed_count}</span>
+            <span>跳过 {record.skipped_count}</span>
+          </div>
+        </div>
+      ),
     },
     {
       title: '创建时间',
@@ -152,7 +154,7 @@ export function StorageMainTaskTable({
 
   return (
     <Card
-      title="存储任务"
+      title="任务列表"
       extra={(
         <Button
           icon={<ReloadOutlined />}
@@ -167,6 +169,7 @@ export function StorageMainTaskTable({
         columns={columns}
         dataSource={tasks}
         loading={loading}
+        scroll={{ x: 980 }}
         pagination={{
           current,
           total,

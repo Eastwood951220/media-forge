@@ -2,6 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { Button, Card, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { StorageSubTask } from '@/api/storage/storageTasks/types'
+import styles from '../StorageTasks.module.less'
 import { subTaskStatusLabels } from '../utils/status'
 
 interface StorageSubTaskTableProps {
@@ -51,12 +52,14 @@ export function StorageSubTaskTable({ subtasks, loading }: StorageSubTaskTablePr
   ]
 
   return (
-    <Card title="子任务列表">
+    <Card title="子任务明细" className={styles.subtaskTableCard}>
       <Table
         rowKey="id"
         columns={columns}
         dataSource={subtasks}
         loading={loading}
+        size="middle"
+        scroll={{ x: 520 }}
         pagination={{
           pageSize: 50,
           showSizeChanger: true,
