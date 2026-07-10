@@ -1,12 +1,10 @@
-import {useCallback, useEffect, useRef, useState} from "react";
+import {useCallback, useEffect, useState} from "react";
 import type React from "react";
 import {App} from "antd";
 import {fetchMovies, syncMovieStorageStatus} from "@/api/movie";
 import {DEFAULT_MOVIE_PAGE, DEFAULT_MOVIE_PAGE_SIZE, INITIAL_MOVIE_LIST_RESPONSE, DEFAULT_MOVIE_SORT_FIELD, DEFAULT_MOVIE_SORT_ORDER} from "../constants";
 import type {Movie, MovieListResponse} from "@/api/movie/types";
 import type {MovieFilterParams} from "../utils/movieFilter";
-
-const POLL_INTERVAL_MS = 10_000;
 
 function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : "请求失败";
@@ -45,19 +43,9 @@ export function useMovieList(
         }
     }, [filterParams, page, pageSize, sortBy, sortOrder]);
 
-    const loadMoviesRef = useRef(loadMovies);
-    loadMoviesRef.current = loadMovies;
-
     useEffect(() => {
         void loadMovies();
     }, [loadMovies]);
-
-    useEffect(() => {
-        const id = setInterval(() => {
-            void loadMoviesRef.current();
-        }, POLL_INTERVAL_MS);
-        return () => clearInterval(id);
-    }, []);
 
     const search = useCallback(() => {
         setSelectedRowKeys([]);

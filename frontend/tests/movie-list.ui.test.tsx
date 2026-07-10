@@ -1,7 +1,7 @@
 import { App as AntApp } from 'antd'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MovieListPage from '../src/pages/content/movies/MovieListPage'
 import {
   fetchFilters,
@@ -82,6 +82,11 @@ function deferred<T>() {
 }
 
 describe('MovieListPage', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(fetchMovies).mockResolvedValue({
@@ -155,6 +160,20 @@ describe('MovieListPage', () => {
       sort_by: 'rating',
       sort_order: -1,
     }))
+  })
+
+  it('does not register a timed movie list refresh interval', async () => {
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(fetchMovies).toHaveBeenCalledTimes(1)
+    })
+
+    // Should not have any setInterval calls with our polling interval (10000ms)
+    const pollingCalls = setIntervalSpy.mock.calls.filter(([, ms]) => ms === 10_000)
+    expect(pollingCalls).toHaveLength(0)
   })
 
   it('renders filters with settings button and opens read-only detail', async () => {
