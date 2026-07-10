@@ -1,6 +1,7 @@
 import { ReloadOutlined, StopOutlined } from '@ant-design/icons'
-import { Button, Card, Descriptions, Space, Tag } from 'antd'
+import { Alert, Button, Card, Descriptions, Progress, Space, Statistic, Tag, Typography } from 'antd'
 import type { StorageMainTask } from '@/api/storage/storageTasks/types'
+import styles from '../StorageTasks.module.less'
 import { modeLabels, statusLabels } from '../utils/status'
 
 interface StorageMainSummaryCardProps {
@@ -9,6 +10,16 @@ interface StorageMainSummaryCardProps {
   actionLoading: 'stop' | 'restart' | null
   onStop: () => void
   onRestart: () => void
+}
+
+function formatDateTime(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString() : '-'
+}
+
+function getProgressPercent(task: StorageMainTask) {
+  if (!task.total_count) return 0
+  const finished = task.success_count + task.failed_count + task.skipped_count
+  return Math.min(100, Math.round((finished / task.total_count) * 100))
 }
 
 export function StorageMainSummaryCard({
@@ -20,66 +31,77 @@ export function StorageMainSummaryCard({
 }: StorageMainSummaryCardProps) {
   if (!task) return null
 
+  const status = statusLabels[task.status] || { text: task.status, color: 'default' }
+  const progressPercent = getProgressPercent(task)
+
   return (
     <Card
-      title={`存储任务详情 - ${task.alias || task.id}`}
-      extra={(
-        <Space>
-          {(task.status === 'queued' || task.status === 'running') && (
-            <Button
-              danger
-              icon={<StopOutlined />}
-              loading={actionLoading === 'stop'}
-              onClick={() => void onStop()}
-            >
-              停止
-            </Button>
-          )}
-          {(task.status === 'stopped' || task.status === 'failed') && (
-            <Button
-              type="primary"
-              icon={<ReloadOutlined />}
-              loading={actionLoading === 'restart'}
-              onClick={() => void onRestart()}
-            >
-              重启
-            </Button>
-          )}
-        </Space>
-      )}
-      style={{ marginBottom: 16 }}
+      className={styles.summaryCard}
       loading={loading}
+      title={(
+        <div className={styles.summaryTitle}>
+          <div className={styles.summaryHeading}>
+            <Typography.Title level={4}>{task.alias || task.id}</Typography.Title>
+            <Space size={8} wrap>
+              <Tag color={status.color}>{status.text}</Tag>
+              <Tag>{modeLabels[task.storage_mode] || task.storage_mode}</Tag>
+            </Space>
+          </div>
+          <Space>
+            {(task.status === 'queued' || task.status === 'running') && (
+              <Button
+                danger
+                icon={<StopOutlined />}
+                loading={actionLoading === 'stop'}
+                onClick={() => void onStop()}
+              >
+                停止
+              </Button>
+            )}
+            {(task.status === 'stopped' || task.status === 'failed') && (
+              <Button
+                type="primary"
+                icon={<ReloadOutlined />}
+                loading={actionLoading === 'restart'}
+                onClick={() => void onRestart()}
+              >
+                重启
+              </Button>
+            )}
+          </Space>
+        </div>
+      )}
     >
-      <Descriptions column={3}>
-        <Descriptions.Item label="别名">{task.alias || '-'}</Descriptions.Item>
-        <Descriptions.Item label="状态">
-          <Tag color={statusLabels[task.status]?.color}>{statusLabels[task.status]?.text || task.status}</Tag>
-        </Descriptions.Item>
-        <Descriptions.Item label="模式">{modeLabels[task.storage_mode] || task.storage_mode}</Descriptions.Item>
-        <Descriptions.Item label="总数">{task.total_count}</Descriptions.Item>
-        <Descriptions.Item label="成功">
-          <span style={{ color: '#52c41a' }}>{task.success_count}</span>
-        </Descriptions.Item>
-        <Descriptions.Item label="失败">
-          {task.failed_count > 0 ? (
-            <span style={{ color: '#ff4d4f' }}>{task.failed_count}</span>
-          ) : (
-            task.failed_count
-          )}
-        </Descriptions.Item>
-        <Descriptions.Item label="跳过">{task.skipped_count}</Descriptions.Item>
-        <Descriptions.Item label="创建时间">
-          {task.created_at ? new Date(task.created_at).toLocaleString() : '-'}
-        </Descriptions.Item>
-        <Descriptions.Item label="完成时间">
-          {task.finished_at ? new Date(task.finished_at).toLocaleString() : '-'}
-        </Descriptions.Item>
-        {task.error_message && (
-          <Descriptions.Item label="错误信息" span={3}>
-            {task.error_message}
-          </Descriptions.Item>
-        )}
+      <div className={styles.summaryGrid}>
+        <section className={styles.progressPanel}>
+          <div className={styles.panelLabel}>任务进度</div>
+          <Progress
+            percent={progressPercent}
+            status={task.failed_count > 0 ? 'exception' : undefined}
+            strokeColor={task.failed_count > 0 ? undefined : '#1677ff'}
+          />
+          <div className={styles.progressMeta}>
+            <span>总数 {task.total_count}</span>
+            <span>已处理 {task.success_count + task.failed_count + task.skipped_count}</span>
+          </div>
+        </section>
+
+        <div className={styles.metricGrid}>
+          <Statistic title="成功" value={task.success_count} valueStyle={{ color: '#389e0d' }} />
+          <Statistic title="失败" value={task.failed_count} valueStyle={{ color: task.failed_count > 0 ? '#cf1322' : undefined }} />
+          <Statistic title="跳过" value={task.skipped_count} />
+        </div>
+      </div>
+
+      <Descriptions className={styles.summaryDescriptions} column={{ xs: 1, sm: 2, lg: 3 }} size="small">
+        <Descriptions.Item label="任务编号">{task.id}</Descriptions.Item>
+        <Descriptions.Item label="创建时间">{formatDateTime(task.created_at)}</Descriptions.Item>
+        <Descriptions.Item label="完成时间">{formatDateTime(task.finished_at)}</Descriptions.Item>
       </Descriptions>
+
+      {task.error_message && (
+        <Alert className={styles.summaryError} type="error" showIcon message="错误信息" description={task.error_message} />
+      )}
     </Card>
   )
 }

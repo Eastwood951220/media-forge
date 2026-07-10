@@ -20,3 +20,88 @@
   display: block;
   word-break: break-word;
 }
+
+.summaryCard {
+  margin-bottom: 16px;
+}
+
+.summaryTitle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.summaryHeading {
+  min-width: 0;
+
+  :global(.ant-typography) {
+    margin: 0 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.4fr) minmax(280px, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.progressPanel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.panelLabel {
+  margin-bottom: 12px;
+  color: rgba(0, 0, 0, 0.65);
+  font-size: 13px;
+}
+
+.progressMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  color: rgba(0, 0, 0, 0.65);
+  font-size: 12px;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metricGrid :global(.ant-statistic) {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.summaryDescriptions {
+  margin-top: 16px;
+}
+
+.summaryError {
+  margin-top: 16px;
+}
+
+@media (max-width: 960px) {
+  .summaryTitle,
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryTitle {
+    flex-direction: column;
+  }
+}

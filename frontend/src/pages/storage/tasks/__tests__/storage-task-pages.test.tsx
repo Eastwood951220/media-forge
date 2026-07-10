@@ -1,10 +1,26 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import StorageTaskListPage from '../StorageTaskListPage'
-import { deleteStorageMainTask, listStorageMainTasks } from '@/api/storage/storageTasks'
+import StorageTaskDetailPage from '../StorageTaskDetailPage'
+import { deleteStorageMainTask, listStorageMainTasks, getStorageMainTask, listStorageSubTasks } from '@/api/storage/storageTasks'
 
 vi.mock('@/api/storage/storageTasks', () => ({
   listStorageMainTasks: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+  getStorageMainTask: vi.fn().mockResolvedValue({
+    id: 'task-detail-1',
+    alias: '云存储_详情测试',
+    display_name: '云存储_详情测试',
+    source: 'batch',
+    storage_mode: 'batch',
+    status: 'running',
+    total_count: 10,
+    success_count: 6,
+    failed_count: 1,
+    skipped_count: 2,
+    created_at: '2026-07-10T01:00:00Z',
+    finished_at: null,
+  }),
+  listStorageSubTasks: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
   stopStorageMainTask: vi.fn(),
   restartStorageMainTask: vi.fn(),
   deleteStorageMainTask: vi.fn().mockResolvedValue(undefined),
@@ -17,6 +33,7 @@ vi.mock('@/realtime/eventSourceClient', () => ({
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: vi.fn().mockReturnValue(vi.fn()),
+  useParams: vi.fn().mockReturnValue({ id: 'task-detail-1' }),
 }))
 
 describe('StorageTaskListPage', () => {
@@ -71,5 +88,17 @@ describe('StorageTaskListPage', () => {
     await waitFor(() => {
       expect(listStorageMainTasks).toHaveBeenCalledTimes(2)
     })
+  })
+
+  it('renders redesigned storage task detail summary metrics', async () => {
+    render(<StorageTaskDetailPage />)
+
+    expect(await screen.findByText('云存储_详情测试')).toBeInTheDocument()
+    expect(screen.getByText('任务进度')).toBeInTheDocument()
+    expect(screen.getByText('任务编号')).toBeInTheDocument()
+    expect(screen.getByText('task-detail-1')).toBeInTheDocument()
+    expect(screen.getByText('成功')).toBeInTheDocument()
+    expect(screen.getByText('失败')).toBeInTheDocument()
+    expect(screen.getByText('跳过')).toBeInTheDocument()
   })
 })
