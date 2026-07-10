@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import StorageTaskListPage from '../StorageTaskListPage'
 import StorageTaskDetailPage from '../StorageTaskDetailPage'
-import { deleteStorageMainTask, listStorageMainTasks, getStorageMainTask, listStorageSubTasks } from '@/api/storage/storageTasks'
+import { deleteStorageMainTask, listStorageMainTasks } from '@/api/storage/storageTasks'
 
 vi.mock('@/api/storage/storageTasks', () => ({
   listStorageMainTasks: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
@@ -11,7 +11,7 @@ vi.mock('@/api/storage/storageTasks', () => ({
     alias: '云存储_详情测试',
     display_name: '云存储_详情测试',
     source: 'batch',
-    storage_mode: 'batch',
+    storage_mode: 'multiple',
     status: 'running',
     total_count: 10,
     success_count: 6,
@@ -110,7 +110,7 @@ describe('StorageTaskListPage', () => {
           alias: '云存储_列表测试',
           display_name: '云存储_列表测试',
           source: 'batch',
-          storage_mode: 'batch',
+          storage_mode: 'multiple',
           status: 'running',
           total_count: 4,
           success_count: 2,
