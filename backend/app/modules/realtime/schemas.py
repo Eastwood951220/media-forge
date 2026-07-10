@@ -35,3 +35,13 @@ def make_realtime_event(
         payload=payload or {},
         created_at=created_at,
     )
+
+
+def realtime_event_to_json(event: RealtimeEvent) -> str:
+    return event.model_dump_json()
+
+
+def realtime_event_from_json(data: str | bytes) -> RealtimeEvent:
+    if isinstance(data, bytes):
+        data = data.decode("utf-8")
+    return RealtimeEvent.model_validate_json(data)
