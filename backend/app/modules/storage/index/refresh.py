@@ -13,15 +13,27 @@ class StorageIndexRefreshService:
     def __init__(self, store: StorageIndexStore | None = None) -> None:
         self.store = store or StorageIndexStore()
 
-    def refresh(self, config: dict, provider, *, force_refresh_mode: str = "none") -> StorageIndexMetadata:
+    def refresh(self, config: dict, provider, *, mode: str = "full", force_refresh_mode: str | None = None) -> StorageIndexMetadata:
+        if mode not in {"full", "incremental"}:
+            raise ValueError("mode must be full or incremental")
+        force_refresh_mode = force_refresh_mode or mode
         target_root = str(config.get("target_folder") or "/Movies").rstrip("/")
         started_at = datetime.now(timezone.utc).isoformat()
-        self.store.write_running_metadata(StorageIndexMetadata(target_folder=target_root, status="running", started_at=started_at))
         errors: list[dict] = []
         category_count = 0
         code_folder_count = 0
-        video_count = 0
-        self.store.begin_temp_index()
+        records: list[StorageIndexRecord] = []
+        known_code_folders = self.store.known_code_folder_paths() if mode == "incremental" else set()
+        existing_records = []
+        if mode == "incremental" and known_code_folders:
+            for rows in self.store.load_index_by_code().values():
+                existing_records.extend(rows)
+        self.store.write_running_metadata(StorageIndexMetadata(target_folder=target_root, status="running", started_at=started_at, force_refresh_mode=force_refresh_mode))
+        if mode == "incremental" and existing_records:
+            self.store.begin_temp_index(target_root)
+            self.store.write_temp_tree(self.store.tree_from_records(target_root, existing_records, indexed_at=started_at))
+        else:
+            self.store.begin_temp_index(target_root)
 
         try:
             categories = self._safe_list(provider, target_root, force_refresh=False, errors=errors)
@@ -44,20 +56,22 @@ class StorageIndexRefreshService:
                         started_at=started_at,
                         category_count=category_count,
                         code_folder_count=code_folder_count,
-                        video_count=video_count,
+                        video_count=len(existing_records) + len(records),
                         force_refresh_mode=force_refresh_mode,
                         current_path=code_folder,
                         errors=errors,
                     ))
+                    if mode == "incremental" and code_folder in known_code_folders:
+                        continue
                     files = self._safe_list(provider, code_folder, force_refresh=False, errors=errors)
-                    for record in self._records_from_files(files, code_folder, category["name"], config, started_at):
-                        self.store.append_temp_record(record)
-                        video_count += 1
+                    records.extend(self._records_from_files(files, code_folder, category["name"], config, started_at))
         except Exception as exc:
-            failed = StorageIndexMetadata(target_folder=target_root, status="failed", started_at=started_at, errors=[{"path": target_root, "error": str(exc)}])
+            failed = StorageIndexMetadata(target_folder=target_root, status="failed", started_at=started_at, force_refresh_mode=force_refresh_mode, errors=[{"path": target_root, "error": str(exc)}])
             self.store.write_running_metadata(failed)
             raise
 
+        all_records = [*existing_records, *records] if mode == "incremental" else records
+        self.store.write_temp_tree(self.store.tree_from_records(target_root, all_records, indexed_at=started_at))
         completed = StorageIndexMetadata(
             target_folder=target_root,
             status="completed",
@@ -65,7 +79,7 @@ class StorageIndexRefreshService:
             completed_at=datetime.now(timezone.utc).isoformat(),
             category_count=category_count,
             code_folder_count=code_folder_count,
-            video_count=video_count,
+            video_count=len(all_records),
             force_refresh_mode=force_refresh_mode,
             errors=errors,
         )
