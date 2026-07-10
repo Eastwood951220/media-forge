@@ -214,3 +214,26 @@ def test_realtime_bus_redis_transport_keeps_owner_scope() -> None:
     api_bus.unsubscribe("user-b", user_b_queue)
     api_bus.close()
     worker_bus.close()
+
+
+def test_event_bus_can_be_configured_with_redis_factory() -> None:
+    bus = RealtimeEventBus(queue_size=10)
+    broker = FakeRedisBroker()
+
+    bus.configure_redis(lambda: broker)
+    queue_for_owner = bus.subscribe("user-configured")
+
+    worker_bus = RealtimeEventBus(queue_size=10, redis_client_factory=lambda: broker)
+    worker_bus.publish(make_realtime_event(
+        event="crawler.run.updated",
+        scope="crawler.run",
+        owner_id="user-configured",
+        resource_id="run-1",
+        payload={"status": "running"},
+    ))
+
+    assert wait_for_queue_item(queue_for_owner).payload == {"status": "running"}
+
+    bus.unsubscribe("user-configured", queue_for_owner)
+    bus.close()
+    worker_bus.close()

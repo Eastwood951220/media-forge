@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 
 from backend.app.core.config import get_settings
-from backend.app.core.dependencies import close_redis
+from backend.app.core.dependencies import close_redis, get_redis
 from backend.app.core.exception_handlers import register_exception_handlers
 from backend.app.modules.auth.router import router as auth_router
 from backend.app.modules.content.movies.router import router as content_movies_router
@@ -21,6 +21,7 @@ from backend.app.modules.crawler.runtime.service import cleanup_interrupted_runs
 from backend.app.modules.storage.worker.runner import cleanup_interrupted_storage_tasks
 from backend.app.startup_database import connect_or_repair_postgres
 from backend.app.modules.crawler.tasks.router import router as crawler_tasks_router
+from backend.app.modules.realtime.bus import event_bus
 from backend.app.modules.realtime.router import router as realtime_router
 from backend.app.modules.health.router import router as health_router
 from backend.app.modules.init.router import router as init_router
@@ -69,6 +70,8 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Load runtime config (database.conf / redis.conf) into env
     load_runtime_config()
 
+    event_bus.configure_redis(get_redis)
+
     if connect_or_repair_postgres():
         logger.info("PostgreSQL connected.")
 
@@ -80,7 +83,6 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.info("Stopped %d interrupted crawler runs.", stopped)
 
             # Cleanup interrupted storage tasks on startup
-            from backend.app.core.dependencies import get_redis
             from backend.app.modules.storage.runtime.redis_state import StorageRuntimeState
             storage_stopped = cleanup_interrupted_storage_tasks(session, StorageRuntimeState(get_redis()))
             if storage_stopped:
@@ -91,6 +93,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     # Shutdown
+    event_bus.close()
     close_redis()
     if runtime_config_exists():
         close_postgres()

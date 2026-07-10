@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from backend.app.core.dependencies import get_db
+from backend.app.core.dependencies import get_db, get_redis
 from backend.app.core.security import decode_access_token
 from backend.app.modules.realtime.bus import event_bus
 from backend.app.modules.realtime.schemas import make_realtime_event
@@ -46,6 +46,8 @@ def event_stream(
 ) -> StreamingResponse:
     user = authenticate_stream_user(token, db)
     owner_id = str(user.id)
+
+    event_bus.configure_redis(get_redis)
 
     async def stream():
         queue = event_bus.subscribe(owner_id)
