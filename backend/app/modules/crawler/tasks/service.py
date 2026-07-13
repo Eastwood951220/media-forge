@@ -18,12 +18,17 @@ from backend.app.modules.crawler.tasks.runtime_status import (
     get_task_runtime_status,
 )
 from backend.app.modules.crawler.tasks.serializers import serialize_task
-from backend.app.modules.crawler.tasks.validation import check_urls_unique, ensure_delete_mode_supported
+from backend.app.modules.crawler.tasks.validation import (
+    check_urls_unique,
+    ensure_delete_mode_supported,
+    normalize_temporary_detail_urls,
+)
 from backend.app.repositories.crawl_task import CrawlTaskRepository
 from backend.app.schemas.crawl_task import (
     CrawlTaskCreate,
     CrawlTaskStats,
     CrawlTaskUpdate,
+    TemporaryCrawlRunCreate,
 )
 
 logger = logging.getLogger(__name__)
@@ -83,6 +88,28 @@ class CrawlerTaskService:
         except Exception as exc:
             self.db.rollback()
             logger.exception("Create crawler run failed")
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
+        return CrawlRunRead.model_validate(run).model_dump(mode="json")
+
+    def create_temporary_run(
+        self,
+        data: TemporaryCrawlRunCreate,
+        owner_id: uuid.UUID,
+    ) -> dict:
+        task = self.repo.get_owned(data.task_id, owner_id)
+        if task is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        if task.is_skip:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="禁用任务不能执行")
+        try:
+            detail_urls = normalize_temporary_detail_urls(data.detail_urls)
+            run = CrawlerRunService(self.db, get_runtime_state()).create_temporary_detail_run(task, detail_urls)
+        except ValueError as exc:
+            self.db.rollback()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        except Exception as exc:
+            self.db.rollback()
+            logger.exception("Create temporary crawler run failed")
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
         return CrawlRunRead.model_validate(run).model_dump(mode="json")
 

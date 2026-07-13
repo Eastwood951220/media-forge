@@ -299,3 +299,107 @@ class TestCrawlTasksApi:
         assert row["name"] == "有码任务"
         assert row["last_run_status"] == "completed"
         assert row["last_run_at"].startswith("2026-07-03T08:00:00")
+
+
+def test_create_temporary_run_seeds_detail_rows_and_enqueues(client: TestClient, admin_user, monkeypatch) -> None:
+    import uuid as uuid_module
+
+    from backend.app.models.crawl_run import CrawlRunDetailTask
+    from backend.app.modules.crawler.runs.schemas import CrawlRunRead
+
+    headers = auth_headers(client, admin_user)
+    task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
+    task_id = task_response.json()["data"]["id"]
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.enqueued: list[str] = []
+            self.cleared: list[str] = []
+
+        def enqueue_run(self, run_id: str) -> None:
+            self.enqueued.append(run_id)
+
+        def clear_stop(self, run_id: str) -> None:
+            self.cleared.append(run_id)
+
+    runtime = Runtime()
+    monkeypatch.setattr("backend.app.modules.crawler.tasks.service.get_runtime_state", lambda: runtime)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.ensure_crawler_worker_started", lambda runtime: None)
+
+    response = client.post(
+        "/api/crawler/tasks/temp-run",
+        json={
+            "task_id": task_id,
+            "detail_urls": [
+                " https://javdb.com/v/abc123 ",
+                "https://javdb.com/v/def456",
+            ],
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    body = response.json()["data"]
+    assert body["task_id"] == task_id
+    assert body["status"] == "queued"
+    assert body["crawl_mode"] == "temporary"
+    assert body["result"] == {"temporary": True, "detail_url_count": 2}
+    assert runtime.enqueued == [body["id"]]
+
+    session = TestingSessionLocal()
+    try:
+        run_uuid = uuid_module.UUID(body["id"])
+        rows = (
+            session.query(CrawlRunDetailTask)
+            .filter(CrawlRunDetailTask.run_id == run_uuid)
+            .order_by(CrawlRunDetailTask.created_at.asc())
+            .all()
+        )
+        assert [row.source_url for row in rows] == [
+            "https://javdb.com/v/abc123",
+            "https://javdb.com/v/def456",
+        ]
+        assert [row.status for row in rows] == ["pending_crawl", "pending_crawl"]
+        assert [row.task_url_type for row in rows] == ["temporary_detail", "temporary_detail"]
+        assert [row.source_url_name for row in rows] == ["临时任务", "临时任务"]
+    finally:
+        session.close()
+
+
+def test_create_temporary_run_rejects_invalid_inputs(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
+    task_id = task_response.json()["data"]["id"]
+
+    cases = [
+        ([], "至少需要 1 条详情页 URL"),
+        (["https://javdb.com/actors/abc"], "第 1 条不是有效的 JavDB 详情页 URL"),
+        (["https://javdb.com/v/abc", " https://javdb.com/v/abc "], "第 2 条详情页 URL 重复"),
+        ([f"https://javdb.com/v/{index:03d}" for index in range(51)], "临时任务最多支持 50 条详情页 URL"),
+    ]
+
+    for detail_urls, expected_message in cases:
+        response = client.post(
+            "/api/crawler/tasks/temp-run",
+            json={"task_id": task_id, "detail_urls": detail_urls},
+            headers=headers,
+        )
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert expected_message in response.json()["msg"]
+
+
+def test_create_temporary_run_rejects_disabled_task(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    payload = task_payload()
+    payload["is_skip"] = True
+    task_response = client.post("/api/crawler/tasks", json=payload, headers=headers)
+    task_id = task_response.json()["data"]["id"]
+
+    response = client.post(
+        "/api/crawler/tasks/temp-run",
+        json={"task_id": task_id, "detail_urls": ["https://javdb.com/v/abc123"]},
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert response.json()["msg"] == "禁用任务不能执行"

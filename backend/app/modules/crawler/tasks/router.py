@@ -12,6 +12,7 @@ from backend.app.schemas.crawl_task import (
     CrawlTaskCreate,
     CrawlTaskUpdate,
     ExtractNameRequest,
+    TemporaryCrawlRunCreate,
 )
 from shared.schemas.common import paginated, success
 
@@ -52,6 +53,16 @@ def list_task_runtime_statuses(current_user: CurrentUser, db: Session = Depends(
     """
     payload = build_task_runtime_status_response(db, current_user.id)
     return success(data=payload.model_dump(mode="json"))
+
+
+@router.post("/temp-run", status_code=status.HTTP_201_CREATED)
+def create_temporary_run(
+    data: TemporaryCrawlRunCreate,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    service = CrawlerTaskService(db)
+    return success(data=service.create_temporary_run(data, current_user.id))
 
 
 @router.post("/extract-name")

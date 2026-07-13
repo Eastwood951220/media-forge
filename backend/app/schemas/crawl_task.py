@@ -44,6 +44,11 @@ class CrawlTaskUpdate(BaseModel):
     is_skip: bool | None = None
 
 
+class TemporaryCrawlRunCreate(BaseModel):
+    task_id: uuid.UUID
+    detail_urls: list[str]
+
+
 class CrawlTaskRead(BaseModel):
     id: uuid.UUID
     _id: uuid.UUID

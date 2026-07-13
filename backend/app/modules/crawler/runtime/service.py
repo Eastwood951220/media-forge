@@ -11,6 +11,7 @@ from backend.app.core.dependencies import get_redis
 from shared.database.session import get_session_factory
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
+from backend.app.modules.crawler.runtime.detail_queue import upsert_detail_task
 from backend.app.modules.crawler.runtime.details import (
     ENDED_RUN_STATUSES,
     RESTARTABLE_DETAIL_STATUSES,
@@ -70,6 +71,39 @@ class CrawlerRunService:
             queued_at=datetime.now(),
         )
         self.db.add(run)
+        self.db.commit()
+        self.db.refresh(run)
+        self.runtime.enqueue_run(str(run.id))
+        self._ensure_worker_started()
+        return run
+
+    def create_temporary_detail_run(self, task: CrawlTask, detail_urls: list[str]) -> CrawlRun:
+        run = CrawlRun(
+            task_id=task.id,
+            task_name=task.name,
+            status="queued",
+            crawl_mode="temporary",
+            queued_at=datetime.now(),
+            result={"temporary": True, "detail_url_count": len(detail_urls)},
+        )
+        self.db.add(run)
+        self.db.flush()
+        for detail_url in detail_urls:
+            upsert_detail_task(
+                self.db,
+                run=run,
+                task_name=task.name,
+                item={
+                    "url": detail_url,
+                    "source_url": detail_url,
+                    "name": "临时详情页",
+                    "source_name": "临时详情页",
+                    "_task_url_name": "临时任务",
+                    "_task_url": detail_url,
+                    "_task_final_url": detail_url,
+                    "_task_url_type": "temporary_detail",
+                },
+            )
         self.db.commit()
         self.db.refresh(run)
         self.runtime.enqueue_run(str(run.id))
