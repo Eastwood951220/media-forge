@@ -100,3 +100,8 @@ export interface CrawlTaskRuntimeStatusResponse {
   tasks: CrawlTaskRuntimeSnapshot[]
   stats: CrawlTaskRuntimeStats
 }
+
+export interface TemporaryCrawlRunCreateParams {
+  task_id: string
+  detail_urls: string[]
+}

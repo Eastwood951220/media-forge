@@ -1,4 +1,5 @@
 import { request } from '@/request'
+import type { CrawlRun } from '@/api/crawlerRun/types'
 import type {
   CrawlTask,
   CrawlTaskCreateParams,
@@ -9,6 +10,7 @@ import type {
   DeleteTaskResult,
   PaginatedResponse,
   TaskDictItem,
+  TemporaryCrawlRunCreateParams,
 } from './types'
 
 const BASE_URL = '/api/crawler/tasks'
@@ -57,4 +59,8 @@ export function extractTaskName(url: string, urlType: string): Promise<{ name: s
 
 export function getCrawlTaskRuntimeStatuses(): Promise<CrawlTaskRuntimeStatusResponse> {
   return request.get<CrawlTaskRuntimeStatusResponse>(`${BASE_URL}/statuses`)
+}
+
+export function createTemporaryCrawlRun(data: TemporaryCrawlRunCreateParams): Promise<CrawlRun> {
+  return request.post<CrawlRun>(`${BASE_URL}/temp-run`, data)
 }
