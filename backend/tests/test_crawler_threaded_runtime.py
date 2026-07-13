@@ -276,3 +276,93 @@ def test_list_phase_snapshots_worker_inputs_before_main_commit(db_session, monke
     assert result["saved"] == 1
     rows = db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
     assert [row.code for row in rows] == [f"A-{suffix}"]
+
+
+def test_temporary_run_skips_list_phase_and_processes_seeded_detail(db_session, monkeypatch) -> None:
+    task, run = make_task_and_run(db_session)
+    run.crawl_mode = "temporary"
+    run.result = {"temporary": True, "detail_url_count": 1}
+    db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).delete()
+    db_session.add(CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=None,
+        source_url="https://javdb.com/v/temp001",
+        source_name="临时详情页",
+        source_url_name="临时任务",
+        task_url="https://javdb.com/v/temp001",
+        task_final_url="https://javdb.com/v/temp001",
+        task_url_type="temporary_detail",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    ))
+    db_session.commit()
+
+    class TempSpider(FakeSpider):
+        def collect_detail_tasks_for_url(self, **kwargs):
+            raise AssertionError("temporary run must not collect list URLs")
+
+        def run_single_detail_task(self, task, **kwargs):
+            self.detail_started = True
+            completed = {
+                **task,
+                "status": "completed",
+                "detail": {"code": "TEMP-001", "source_name": "Temp Movie"},
+            }
+            kwargs["on_detail_completed"](completed)
+            return completed
+
+    spider = TempSpider()
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: spider)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
+
+    result = execute_threaded_crawl(db_session, run, task, Runtime(), detail_only=True)
+
+    row = db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).one()
+    assert result["total_tasks"] == 1
+    assert result["saved"] == 1
+    assert row.status == "saved"
+    assert row.item_data["code"] == "TEMP-001"
+    movie = db_session.scalar(select(Movie).where(Movie.code == "TEMP-001"))
+    assert movie is not None
+    assert str(task.id) in [str(value) for value in movie.source_task_ids]
+
+
+def test_detail_skip_existing_appends_source_task_id(db_session, monkeypatch) -> None:
+    task, run = make_task_and_run(db_session)
+    run.crawl_mode = "temporary"
+    db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).delete()
+    db_session.add(Movie(code="TEMP-EXIST", source_name="Existing", source_task_ids=[]))
+    db_session.add(CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=None,
+        source_url="https://javdb.com/v/exist",
+        source_name="临时详情页",
+        source_url_name="临时任务",
+        task_url_type="temporary_detail",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    ))
+    db_session.commit()
+
+    class ExistingSpider(FakeSpider):
+        def collect_detail_tasks_for_url(self, **kwargs):
+            raise AssertionError("temporary run must not collect list URLs")
+
+        def run_single_detail_task(self, task, **kwargs):
+            payload = {**task, "code": "TEMP-EXIST", "status": "skipped", "reason": "already_exists"}
+            kwargs["on_item_already_exists"](payload)
+            return payload
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: ExistingSpider())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
+
+    result = execute_threaded_crawl(db_session, run, task, Runtime(), detail_only=True)
+    movie = db_session.scalar(select(Movie).where(Movie.code == "TEMP-EXIST"))
+    row = db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).one()
+
+    assert result["skipped"] == 1
+    assert row.status == "skipped"
+    assert row.error == "already_exists"
+    assert str(task.id) in [str(value) for value in movie.source_task_ids]

@@ -33,8 +33,11 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
             .order_by(CrawlRunDetailTask.created_at.asc())
             .all()
         )
-        detail_only = bool(pending_detail_retry_rows and (detail_phase_restart or detail_retry_requested))
-        if detail_only:
+        temporary_run = run.crawl_mode == "temporary" or bool((run.result or {}).get("temporary"))
+        detail_only = temporary_run or bool(pending_detail_retry_rows and (detail_phase_restart or detail_retry_requested))
+        if temporary_run:
+            append_run_log_for_run(db, run, f"临时任务详情子任务 {len(pending_detail_retry_rows)} 条，跳过列表收集直接处理详情", "INFO")
+        elif detail_only:
             append_run_log_for_run(
                 db,
                 run,

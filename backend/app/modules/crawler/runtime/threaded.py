@@ -137,6 +137,12 @@ def execute_threaded_crawl(db: Session, run: CrawlRun, task: CrawlTask, runtime:
     return _build_threaded_result(db, run, task, runtime, progress)
 
 
+def _should_persist_list_item(run: CrawlRun, item: dict[str, Any]) -> bool:
+    if run.crawl_mode != "incremental":
+        return True
+    return not (item.get("status") == "skipped" and item.get("reason") == "already_exists")
+
+
 def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, config: Any) -> None:
     spider = build_spider()
     worker_session_factory = _worker_session_factory(db)
@@ -198,6 +204,8 @@ def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, c
         for future in as_completed(futures):
             with list_db_lock:
                 for item in future.result():
+                    if not _should_persist_list_item(run, item):
+                        continue
                     upsert_detail_task(db, run=run, task_name=task_name, item=item)
                 db.commit()
                 publish_run_detail_updated(
@@ -272,6 +280,11 @@ def _process_single_detail(db: Session, run: CrawlRun, task: CrawlTask, detail: 
     spider = build_spider()
     pipeline = build_pipeline()
 
+    def handle_already_exists(task_info: dict) -> None:
+        code = task_info.get("code") or detail.code
+        if code:
+            append_source_task_id(db, code, task.id)
+
     result = spider.run_single_detail_task(
         detail_info,
         task_name=task.name,
@@ -280,7 +293,7 @@ def _process_single_detail(db: Session, run: CrawlRun, task: CrawlTask, detail: 
         stop_check=lambda: runtime.is_stop_requested(str(run.id)),
         log_callback=lambda msg, level="INFO": None,
         on_detail_check_callback=lambda code: movie_code_exists(db, code),
-        on_item_already_exists=lambda t: None,
+        on_item_already_exists=handle_already_exists,
     )
 
     if result.get("status") == "completed":
@@ -289,10 +302,11 @@ def _process_single_detail(db: Session, run: CrawlRun, task: CrawlTask, detail: 
             **detail_data,
             "source_url": result.get("url") or detail.source_url,
             "source_name": result.get("name") or detail.source_name,
-            "code": detail.code,
+            "code": detail.code or detail_data.get("code") or result.get("code"),
         }
         cleaned = pipeline.process_item(item, task_name=task.name, task_id=str(task.id))
         if cleaned:
+            detail.code = detail.code or cleaned.get("code")
             upsert_movie_with_magnets(db, {**cleaned, "source_task_ids": [task.id]})
             detail.status = "saved"
             detail.item_data = cleaned
@@ -302,6 +316,9 @@ def _process_single_detail(db: Session, run: CrawlRun, task: CrawlTask, detail: 
             detail.status = "save_failed"
             detail.error = "pipeline returned None"
     elif result.get("status") == "skipped":
+        detail.code = detail.code or result.get("code")
+        if detail.code:
+            append_source_task_id(db, detail.code, task.id)
         detail.status = "skipped"
         detail.error = result.get("reason", "already_exists")
     else:
