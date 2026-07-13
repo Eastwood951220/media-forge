@@ -10,6 +10,12 @@ interface RunSummaryCardProps {
   onRestart: () => void
 }
 
+const crawlModeLabels: Record<string, string> = {
+  incremental: '增量',
+  full: '全量',
+  temporary: '临时',
+}
+
 function RunSummaryCard({ run, actionLoading, onStop, onRestart }: RunSummaryCardProps) {
   if (!run) return null
 
@@ -46,7 +52,7 @@ function RunSummaryCard({ run, actionLoading, onStop, onRestart }: RunSummaryCar
         <Descriptions.Item label="状态">
           <Tag color={runDetailStatusLabels[run.status]?.color}>{runDetailStatusLabels[run.status]?.text}</Tag>
         </Descriptions.Item>
-        <Descriptions.Item label="模式">{run.crawl_mode === 'incremental' ? '增量' : '全量'}</Descriptions.Item>
+        <Descriptions.Item label="模式">{crawlModeLabels[run.crawl_mode] ?? run.crawl_mode}</Descriptions.Item>
         <Descriptions.Item label="创建时间">{new Date(run.created_at).toLocaleString()}</Descriptions.Item>
         {run.error && <Descriptions.Item label="错误" span={3}>{run.error}</Descriptions.Item>}
       </Descriptions>

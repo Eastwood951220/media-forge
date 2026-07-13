@@ -23,6 +23,7 @@ type TaskListCardsProps = {
   onRun: (task: CrawlTask, mode: CrawlMode) => void
   onStop: (task: CrawlTask) => void
   onRestart: (task: CrawlTask) => void
+  onTemporaryTaskClick: () => void
 }
 
 const runtimeStatusLabels: Record<TaskRuntimeStatus, { text: string; color: string }> = {
@@ -188,18 +189,25 @@ function TaskListCards({
   onRun,
   onStop,
   onRestart,
+  onTemporaryTaskClick,
 }: TaskListCardsProps) {
   const navigate = useNavigate()
   return (
     <div className={styles.taskListShell}>
       <div className={styles.taskListToolbar}>
         <Typography.Text type="secondary">共 {total} 条</Typography.Text>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate({ to: '/crawler/tasks/new' })}>
-          新建任务
-        </Button>
+        <Space>
+          <Button onClick={onTemporaryTaskClick}>
+            临时任务
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => navigate({ to: '/crawler/tasks/new' })}
+          >
+            新建任务
+          </Button>
+        </Space>
       </div>
 
       <Spin spinning={loading}>

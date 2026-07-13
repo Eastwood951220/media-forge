@@ -1,4 +1,4 @@
-export type CrawlMode = 'incremental' | 'full'
+export type CrawlMode = 'incremental' | 'full' | 'temporary'
 export type CrawlRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'stopped'
 export type DetailTaskStatus = 'pending_crawl' | 'crawled' | 'crawl_failed' | 'saved' | 'save_failed' | 'skipped'
 
