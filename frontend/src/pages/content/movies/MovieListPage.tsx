@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Dropdown, Space } from 'antd'
+import { useMemo } from 'react'
+import { Button, Dropdown, Space } from 'antd'
 import { DatabaseOutlined, DownOutlined, SyncOutlined } from '@ant-design/icons'
-import { refreshStorageIndex, type StorageIndexRefreshMode } from '@/api/storage/storageIndex'
-import { syncMovieStorageStatusFromCd2 } from '@/api/movie'
+import type { StorageIndexRefreshMode } from '@/api/storage/storageIndex'
 import BaseListPage from '@/components/BaseListPage'
 import type { FilterItemConfig } from '@/api/movie'
 import type { Movie } from '@/api/movie/types'
@@ -17,13 +16,13 @@ import { useMovieFilters } from './hooks/useMovieFilters'
 import { useMovieList } from './hooks/useMovieList'
 import { useMovieListActions } from './hooks/useMovieListActions'
 import { useMovieListRealtime } from './hooks/useMovieListRealtime'
+import { useMoviePageSortDefault } from './hooks/useMoviePageSortDefault'
+import { useMovieStorageIndexActions } from './hooks/useMovieStorageIndexActions'
 import { useMovieUrlDetail } from './hooks/useMovieUrlDetail'
 import { useStoragePush } from './hooks/useStoragePush'
-import { parseSortDefault } from './utils/sort'
 import styles from './MovieListPage.module.less'
 
 function MovieListPage() {
-  const { message } = App.useApp()
   const configHook = useMovieFilterConfig()
   const filterConfig = useMemo(
     () => configHook.config as Record<string, FilterItemConfig>,
@@ -41,38 +40,7 @@ function MovieListPage() {
   const list = useMovieList(effectiveParams)
   const detail = useMovieDetail()
   const push = useStoragePush(list.reload)
-  const [indexRefreshing, setIndexRefreshing] = useState<StorageIndexRefreshMode | null>(null)
-  const [cd2SyncingId, setCd2SyncingId] = useState<string | null>(null)
-
-  const handleRefreshStorageIndex = useCallback(async (mode: StorageIndexRefreshMode) => {
-    setIndexRefreshing(mode)
-    try {
-      await refreshStorageIndex(mode)
-      message.success(`${mode === 'full' ? '全量' : '增量'}索引任务启动成功`)
-    } catch (error) {
-      const text = error instanceof Error ? error.message : '存储索引任务启动失败'
-      if (text.includes('正在进行中')) {
-        message.warning('存储索引任务正在进行中')
-      } else {
-        message.error(text.includes('启动失败') ? text : `存储索引任务启动失败：${text}`)
-      }
-    } finally {
-      setIndexRefreshing(null)
-    }
-  }, [message])
-
-  const handleCd2Sync = useCallback(async (movie: Movie) => {
-    setCd2SyncingId(movie._id)
-    try {
-      const result = await syncMovieStorageStatusFromCd2(movie._id)
-      message.success(`CD2同步完成：${result.status === 'stored' ? '已存储' : '未存储'}`)
-      list.reload()
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : 'CD2同步失败')
-    } finally {
-      setCd2SyncingId(null)
-    }
-  }, [list.reload, message])
+  const storageIndex = useMovieStorageIndexActions({ reload: list.reload })
 
   const actions = useMovieListActions({
     config: configHook.config,
@@ -82,16 +50,11 @@ function MovieListPage() {
     push,
   })
 
-  // Apply sort default from config on first load
-  const configSortParsed = useRef(false)
-  useEffect(() => {
-    if (!configHook.loaded || configSortParsed.current) return
-    const sortDefault = parseSortDefault(configHook.config)
-    if (sortDefault) {
-      list.resetSort(sortDefault)
-      configSortParsed.current = true
-    }
-  }, [configHook.loaded, configHook.config, list.resetSort])
+  useMoviePageSortDefault({
+    loaded: configHook.loaded,
+    config: configHook.config,
+    resetSort: list.resetSort,
+  })
 
   useMovieUrlDetail(detail.showDetail)
   useMovieListRealtime(list.updateMovie)
@@ -101,10 +64,10 @@ function MovieListPage() {
       onViewDetail: detail.showDetail,
       onPush: push.openSinglePush,
       onDelete: (movie) => actions.confirmDeleteMovies([movie]),
-      onCd2Sync: handleCd2Sync,
-      cd2SyncingId,
+      onCd2Sync: storageIndex.handleCd2Sync,
+      cd2SyncingId: storageIndex.cd2SyncingId,
     }),
-    [detail.showDetail, push.openSinglePush, actions.confirmDeleteMovies, handleCd2Sync, cd2SyncingId],
+    [detail.showDetail, push.openSinglePush, actions.confirmDeleteMovies, storageIndex.handleCd2Sync, storageIndex.cd2SyncingId],
   )
 
   const queryNode = configHook.loaded ? (
@@ -156,10 +119,10 @@ function MovieListPage() {
                   { key: 'full', label: '全量索引', icon: <DatabaseOutlined /> },
                   { key: 'incremental', label: '增量索引', icon: <SyncOutlined /> },
                 ],
-                onClick: ({ key }) => void handleRefreshStorageIndex(key as StorageIndexRefreshMode),
+                onClick: ({ key }) => void storageIndex.handleRefreshStorageIndex(key as StorageIndexRefreshMode),
               }}
             >
-              <Button size="small" loading={indexRefreshing !== null}>
+              <Button size="small" loading={storageIndex.indexRefreshing !== null}>
                 存储索引 <DownOutlined />
               </Button>
             </Dropdown>
