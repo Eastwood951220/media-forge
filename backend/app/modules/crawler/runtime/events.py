@@ -57,6 +57,7 @@ def publish_run_detail_updated(
     refresh_tasks: bool = False,
     reason: str | None = None,
 ) -> None:
+    from backend.app.modules.crawler.runs.router import _run_task_summary
     from backend.app.modules.realtime.bus import event_bus as realtime_bus
     from backend.app.modules.realtime.schemas import make_realtime_event
 
@@ -88,6 +89,7 @@ def publish_run_detail_updated(
     payload: dict[str, Any] = {
         "run_id": str(run.id),
         "tasks": detail_payloads,
+        "summary": _run_task_summary(db, run),
     }
     if refresh_tasks:
         payload["refresh_tasks"] = True

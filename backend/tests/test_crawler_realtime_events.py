@@ -85,6 +85,18 @@ def test_publish_detail_updated_event_for_owner(admin_user) -> None:
     assert events[0].resource_id == str(run.id)
     assert events[0].payload["run_id"] == str(run.id)
     assert events[0].payload["tasks"][0]["status"] == "saved"
+    assert events[0].payload["summary"] == {
+        "total": 1,
+        "pending_crawl": 0,
+        "crawling": 0,
+        "saved": 1,
+        "skipped": 0,
+        "crawl_failed": 0,
+        "save_failed": 0,
+        "completed": 1,
+        "waiting": 0,
+        "failed": 0,
+    }
 
 
 def test_publish_detail_updated_skips_deleted_detail_instances(admin_user) -> None:
@@ -187,6 +199,9 @@ def test_publish_detail_updated_can_request_task_refresh(admin_user) -> None:
     assert events[0].payload["tasks"] == []
     assert events[0].payload["refresh_tasks"] is True
     assert events[0].payload["reason"] == "url_completed"
+    assert events[0].payload["summary"]["total"] == 0
+    assert events[0].payload["summary"]["completed"] == 0
+    assert events[0].payload["summary"]["failed"] == 0
 
 
 def test_crawler_realtime_events_keep_frontend_contract(admin_user) -> None:
@@ -256,6 +271,18 @@ def test_crawler_realtime_events_keep_frontend_contract(admin_user) -> None:
         "status": "saved",
         "error": None,
         "created_at": detail.created_at.isoformat(),
+    }
+    assert detail_event.payload["summary"] == {
+        "total": 1,
+        "pending_crawl": 0,
+        "crawling": 0,
+        "saved": 1,
+        "skipped": 0,
+        "crawl_failed": 0,
+        "save_failed": 0,
+        "completed": 1,
+        "waiting": 0,
+        "failed": 0,
     }
 
     assert log_event.payload["run_id"] == str(run.id)
