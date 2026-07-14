@@ -6,11 +6,7 @@ from sqlalchemy import func, not_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.dependencies import CurrentUser, get_db
-from backend.app.modules.content.movies.delete_service import (
-    CloudMovieDeleteError,
-    UnsupportedMovieDeleteMode,
-    delete_movies,
-)
+from backend.app.modules.content.movies.delete_api import delete_movies_from_request
 from backend.app.modules.content.movies.queries import (
     VALID_FILTER_TYPES,
     MovieListFilters,
@@ -21,6 +17,10 @@ from backend.app.modules.content.movies.queries import (
 from backend.app.modules.content.movies.schemas import MovieDeleteRequest, MovieStorageSyncRequest
 from backend.app.modules.content.movies.serializers import serialize_movie
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
+from backend.app.modules.content.movies.storage_sync_api import (
+    sync_movies_from_request,
+    sync_single_movie_from_cd2,
+)
 from backend.app.modules.storage.index.store import StorageIndexMissingError
 from shared.database.models.content import Movie, MovieFilter
 from backend.app.modules.content.movies.filter_config import (
@@ -129,22 +129,7 @@ def sync_movie_storage_statuses(
     current_user: CurrentUser,
     db: Session = Depends(get_db),
 ) -> dict:
-    from backend.app.modules.content.movies.storage_sync_service import (
-        select_movies_for_storage_sync,
-        sync_movies_storage_statuses as sync_movies_storage_statuses_service,
-    )
-
-    filters = body.filters.model_dump() if body.filters else {}
-    movies = select_movies_for_storage_sync(db, movie_ids=body.movie_ids, filters=filters)
-    try:
-        payload = sync_movies_storage_statuses_service(
-            db,
-            user_id=str(current_user.id),
-            movies=movies,
-        )
-    except StorageIndexMissingError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    return success(data=payload.to_dict())
+    return success(data=sync_movies_from_request(db, str(current_user.id), body))
 
 
 @router.post("/{movie_id}/storage-sync/cd2")
@@ -153,19 +138,7 @@ def sync_single_movie_storage_status_from_cd2(
     current_user: CurrentUser,
     db: Session = Depends(get_db),
 ) -> dict:
-    from backend.app.modules.content.movies.storage_sync_service import (
-        sync_single_movie_storage_status_from_cd2 as sync_single_movie_storage_status_from_cd2_service,
-    )
-
-    movie = db.query(Movie).options(selectinload(Movie.magnets)).filter(Movie.id == movie_id).first()
-    if movie is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="影片不存在")
-    payload = sync_single_movie_storage_status_from_cd2_service(
-        db,
-        user_id=str(current_user.id),
-        movie=movie,
-    )
-    return success(data=payload)
+    return success(data=sync_single_movie_from_cd2(db, str(current_user.id), movie_id))
 
 
 @router.post("/delete")
@@ -174,40 +147,8 @@ def delete_content_movies(
     current_user: CurrentUser,
     db: Session = Depends(get_db),
 ) -> dict:
-    if not body.movie_ids:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请选择要删除的影片")
-
-    movies = db.query(Movie).options(selectinload(Movie.magnets)).filter(Movie.id.in_(body.movie_ids)).all()
-    if not movies:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="影片不存在")
-
-    from backend.app.modules.storage.config.service import StorageConfigService
-
-    config_service = StorageConfigService()
-
-    try:
-        if body.mode in {"cloud_only", "database_and_cloud"}:
-            with config_service.open_provider() as (_config, provider):
-                result = delete_movies(db=db, movies=movies, mode=body.mode, provider=provider)
-        else:
-            result = delete_movies(db=db, movies=movies, mode=body.mode, provider=None)
-        db.commit()
-    except UnsupportedMovieDeleteMode as exc:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except CloudMovieDeleteError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={"message": "删除云存储文件夹失败", "failed_folders": exc.failed_folders},
-        ) from exc
-
-    if body.mode == "cloud_only":
-        from backend.app.modules.storage.tasks.events import publish_movie_storage_updated
-        for movie in movies:
-            publish_movie_storage_updated(db, str(current_user.id), movie.id)
-
-    return success(msg="删除成功", data=result.to_dict())
+    msg, payload = delete_movies_from_request(db, str(current_user.id), body)
+    return success(msg=msg, data=payload)
 
 
 @router.get("/{movie_id}")
