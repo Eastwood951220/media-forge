@@ -264,6 +264,7 @@ describe('RunDetailPage realtime events', () => {
 
     const initialCallCount = vi.mocked(getCrawlerRunLogs).mock.calls.length as number
     const initialTasksCalls = vi.mocked(getCrawlerRunTasks).mock.calls.length as number
+    const initialSummaryCalls = vi.mocked(getCrawlerRunTaskSummary).mock.calls.length as number
 
     emit('crawler.run.updated', {
       id: 'run-1',
@@ -285,6 +286,7 @@ describe('RunDetailPage realtime events', () => {
     await waitFor(() => {
       expect(vi.mocked(getCrawlerRunLogs).mock.calls.length).toBeGreaterThan(initialCallCount)
       expect(vi.mocked(getCrawlerRunTasks).mock.calls.length).toBeGreaterThan(initialTasksCalls)
+      expect(vi.mocked(getCrawlerRunTaskSummary).mock.calls.length).toBeGreaterThan(initialSummaryCalls)
     })
     expect(await screen.findByText('详情处理完成: 总计=54 已完成=0 失败=0 跳过=54')).toBeInTheDocument()
   })
@@ -297,6 +299,7 @@ describe('RunDetailPage realtime events', () => {
     const initialRunCalls = vi.mocked(getCrawlerRun).mock.calls.length
     const initialLogsCalls = vi.mocked(getCrawlerRunLogs).mock.calls.length
     const initialTasksCalls = vi.mocked(getCrawlerRunTasks).mock.calls.length
+    const initialSummaryCalls = vi.mocked(getCrawlerRunTaskSummary).mock.calls.length
 
     emit('system.resync_required', { reason: 'connection_error' }, null)
 
@@ -304,6 +307,7 @@ describe('RunDetailPage realtime events', () => {
       expect(vi.mocked(getCrawlerRun).mock.calls.length).toBeGreaterThan(initialRunCalls)
       expect(vi.mocked(getCrawlerRunLogs).mock.calls.length).toBeGreaterThan(initialLogsCalls)
       expect(vi.mocked(getCrawlerRunTasks).mock.calls.length).toBeGreaterThan(initialTasksCalls)
+      expect(vi.mocked(getCrawlerRunTaskSummary).mock.calls.length).toBeGreaterThan(initialSummaryCalls)
     })
   })
 
@@ -414,6 +418,49 @@ describe('RunDetailPage realtime events', () => {
     await waitFor(() => {
       expect(screen.getByText('完成').parentElement?.textContent).toContain('1')
       expect(screen.getByText('等待').parentElement?.textContent).toContain('0')
+    })
+  })
+
+  it('refetches summary for old detail events without summary payload', async () => {
+    vi.mocked(getCrawlerRunTaskSummary)
+      .mockResolvedValueOnce({
+        total: 1,
+        pending_crawl: 1,
+        crawling: 0,
+        saved: 0,
+        skipped: 0,
+        crawl_failed: 0,
+        save_failed: 0,
+        completed: 0,
+        waiting: 1,
+        failed: 0,
+      })
+      .mockResolvedValueOnce({
+        total: 1,
+        pending_crawl: 0,
+        crawling: 0,
+        saved: 1,
+        skipped: 0,
+        crawl_failed: 0,
+        save_failed: 0,
+        completed: 1,
+        waiting: 0,
+        failed: 0,
+      })
+
+    renderPage()
+    await screen.findByText('运行详情 - 任务A')
+
+    const initialSummaryCalls = vi.mocked(getCrawlerRunTaskSummary).mock.calls.length
+
+    emit('crawler.run.detail.updated', {
+      run_id: 'run-1',
+      tasks: [],
+    })
+
+    await waitFor(() => {
+      expect(vi.mocked(getCrawlerRunTaskSummary).mock.calls.length).toBeGreaterThan(initialSummaryCalls)
+      expect(screen.getByText('完成').parentElement?.textContent).toContain('1')
     })
   })
 })

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
-import type { CrawlRun, CrawlRunDetailTask, RunLogEntry } from '@/api/crawlerRun/types'
+import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawlerRun/types'
 import type {
   CrawlerRunDetailUpdatedPayload,
   CrawlerRunLogAppendedPayload,
@@ -12,14 +12,31 @@ export function useRunDetailRealtime(args: {
   fetchLogs: () => Promise<void>
   fetchRun: () => Promise<void>
   fetchTasks: () => Promise<void>
+  fetchTaskSummary: () => Promise<void>
   keyword: string
   resyncSnapshot: () => void
   setLogs: React.Dispatch<React.SetStateAction<RunLogEntry[]>>
   setRun: React.Dispatch<React.SetStateAction<CrawlRun | null>>
+  setTaskSummary: React.Dispatch<React.SetStateAction<RunTaskSummary>>
+  setTaskTotal: React.Dispatch<React.SetStateAction<number>>
   setTasks: React.Dispatch<React.SetStateAction<CrawlRunDetailTask[]>>
   statusFilter: string | undefined
 }): void {
-  const { id, fetchLogs, fetchRun, fetchTasks, keyword, resyncSnapshot, setLogs, setRun, setTasks, statusFilter } = args
+  const {
+    id,
+    fetchLogs,
+    fetchRun,
+    fetchTasks,
+    fetchTaskSummary,
+    keyword,
+    resyncSnapshot,
+    setLogs,
+    setRun,
+    setTaskSummary,
+    setTaskTotal,
+    setTasks,
+    statusFilter,
+  } = args
 
   useEffect(() => {
     if (!id) return
@@ -37,6 +54,7 @@ export function useRunDetailRealtime(args: {
           void fetchRun()
           void fetchLogs()
           void fetchTasks()
+          void fetchTaskSummary()
         }
       },
     )
@@ -45,6 +63,11 @@ export function useRunDetailRealtime(args: {
       'crawler.run.detail.updated',
       (event) => {
         if (event.resource_id !== id || event.payload.run_id !== id) return
+        if (event.payload.summary) {
+          setTaskSummary(event.payload.summary)
+        } else {
+          void fetchTaskSummary()
+        }
         if (event.payload.refresh_tasks) {
           void fetchTasks()
           return
@@ -69,9 +92,11 @@ export function useRunDetailRealtime(args: {
               needsRefresh = true
             }
           }
-          return Array.from(byId.values()).sort((a, b) => (
+          const nextTasks = Array.from(byId.values()).sort((a, b) => (
             new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
           ))
+          setTaskTotal((currentTotal) => Math.max(currentTotal, nextTasks.length))
+          return nextTasks
         })
         if (needsRefresh) {
           void fetchTasks()
@@ -100,5 +125,5 @@ export function useRunDetailRealtime(args: {
       unsubscribeLogs()
       unsubscribeResync()
     }
-  }, [id, fetchLogs, fetchRun, fetchTasks, keyword, resyncSnapshot, setLogs, setRun, setTasks, statusFilter])
+  }, [id, fetchLogs, fetchRun, fetchTasks, fetchTaskSummary, keyword, resyncSnapshot, setLogs, setRun, setTaskSummary, setTaskTotal, setTasks, statusFilter])
 }

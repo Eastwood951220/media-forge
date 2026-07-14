@@ -16,10 +16,13 @@ function RunDetailPage() {
     fetchLogs: detail.fetchLogs,
     fetchRun: detail.fetchRun,
     fetchTasks: detail.fetchTasks,
+    fetchTaskSummary: detail.fetchTaskSummary,
     keyword: detail.keyword,
     resyncSnapshot: detail.resyncSnapshot,
     setLogs: detail.setLogs,
     setRun: detail.setRun,
+    setTaskSummary: detail.setTaskSummary,
+    setTaskTotal: detail.setTaskTotal,
     setTasks: detail.setTasks,
     statusFilter: detail.statusFilter,
   })
