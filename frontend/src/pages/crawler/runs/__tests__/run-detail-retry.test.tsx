@@ -4,6 +4,7 @@ import RunDetailPage from '../RunDetailPage'
 import {
   getCrawlerRun,
   getCrawlerRunLogs,
+  getCrawlerRunTaskSummary,
   getCrawlerRunTasks,
   retryCrawlerRunTasks,
 } from '@/api/crawlerRun'
@@ -15,6 +16,7 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/api/crawlerRun', () => ({
   getCrawlerRun: vi.fn(),
   getCrawlerRunLogs: vi.fn().mockResolvedValue([]),
+  getCrawlerRunTaskSummary: vi.fn(),
   getCrawlerRunTasks: vi.fn(),
   restartCrawlerRun: vi.fn(),
   stopCrawlerRun: vi.fn(),
@@ -81,8 +83,8 @@ describe('RunDetail retry controls', () => {
     vi.mocked(getCrawlerRunTasks).mockResolvedValue({
       rows: [failedTask, savedTask],
       total: 2,
-      summary: { total: 2, pending_crawl: 0, crawling: 0, saved: 1, skipped: 0, crawl_failed: 1, save_failed: 0, completed: 1, waiting: 0, failed: 1 },
     })
+    vi.mocked(getCrawlerRunTaskSummary).mockResolvedValue({ total: 2, pending_crawl: 0, crawling: 0, saved: 1, skipped: 0, crawl_failed: 1, save_failed: 0, completed: 1, waiting: 0, failed: 1 })
     vi.mocked(retryCrawlerRunTasks).mockResolvedValue({ ...endedRun, status: 'queued' })
   })
 
