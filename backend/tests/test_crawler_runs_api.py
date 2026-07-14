@@ -325,7 +325,6 @@ def test_restart_after_detail_phase_requeues_same_run_and_keeps_terminal_details
     assert [(row["code"], row["status"], row["error"]) for row in rows] == [
         ("A", "saved", None),
         ("B", "pending_crawl", None),
-        ("C", "skipped", "already_exists"),
     ]
 
 
@@ -798,7 +797,81 @@ def test_run_task_rows_created_from_spider_payload_keep_url_context(client: Test
     assert row["task_url_type"] == "actors"
 
 
-def test_run_tasks_endpoint_returns_full_run_summary(client: TestClient, admin_user) -> None:
+def test_incremental_run_tasks_hide_legacy_already_exists_skips(client: TestClient, admin_user, db_session, monkeypatch) -> None:
+    from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+
+    task = CrawlTask(name="任务-hide-legacy", owner_id=admin_user.id)
+    db_session.add(task)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="incremental")
+    db_session.add(run)
+    db_session.flush()
+    db_session.add_all([
+        CrawlRunDetailTask(
+            run_id=run.id,
+            task_name=task.name,
+            code="OLD-001",
+            source_url="https://javdb.com/v/old001",
+            source_name="Old Movie",
+            status="skipped",
+            error="already_exists",
+            created_at=datetime.now(),
+        ),
+        CrawlRunDetailTask(
+            run_id=run.id,
+            task_name=task.name,
+            code="NEW-001",
+            source_url="https://javdb.com/v/new001",
+            source_name="New Movie",
+            status="pending_crawl",
+            error=None,
+            created_at=datetime.now(),
+        ),
+    ])
+    db_session.commit()
+
+    response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=auth_headers(client, admin_user))
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [row["code"] for row in payload["rows"]] == ["NEW-001"]
+    assert payload["total"] == 1
+    assert "summary" not in payload
+
+    summary_response = client.get(f"/api/crawler/runs/{run.id}/tasks/summary", headers=auth_headers(client, admin_user))
+    assert summary_response.status_code == 200
+    assert summary_response.json()["data"]["total"] == 1
+    assert summary_response.json()["data"]["skipped"] == 0
+    assert summary_response.json()["data"]["waiting"] == 1
+
+
+def test_run_tasks_endpoint_returns_paginated_rows_without_summary(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="running", crawl_mode="incremental", queued_at=datetime.now())
+    session.add(run)
+    session.flush()
+    session.add_all([
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="P", source_url="https://p", source_name="P", status="pending_crawl", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name="任务", code="S", source_url="https://s", source_name="S", status="saved", created_at=datetime.now()),
+    ])
+    session.commit()
+
+    response = client.get(
+        f"/api/crawler/runs/{run.id}/tasks",
+        params={"status": "saved", "page": 1, "size": 1},
+        headers=headers,
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert body["total"] == 1
+    assert [row["code"] for row in body["rows"]] == ["S"]
+    assert "summary" not in body
+
+
+def test_run_task_summary_endpoint_returns_full_run_summary(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
     session = TestingSessionLocal()
     run = CrawlRun(task_name="任务", status="running", crawl_mode="incremental", queued_at=datetime.now())
@@ -814,16 +887,10 @@ def test_run_tasks_endpoint_returns_full_run_summary(client: TestClient, admin_u
     ])
     session.commit()
 
-    response = client.get(
-        f"/api/crawler/runs/{run.id}/tasks",
-        params={"status": "saved", "page": 1, "size": 1},
-        headers=headers,
-    )
+    response = client.get(f"/api/crawler/runs/{run.id}/tasks/summary", headers=headers)
 
     assert response.status_code == HTTPStatus.OK
-    body = response.json()
-    assert body["total"] == 1
-    assert body["summary"] == {
+    assert response.json()["data"] == {
         "total": 6,
         "pending_crawl": 1,
         "crawling": 1,
@@ -835,3 +902,11 @@ def test_run_tasks_endpoint_returns_full_run_summary(client: TestClient, admin_u
         "waiting": 2,
         "failed": 2,
     }
+
+
+def test_run_task_summary_endpoint_returns_404_for_missing_run(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+
+    response = client.get("/api/crawler/runs/00000000-0000-0000-0000-000000000001/tasks/summary", headers=headers)
+
+    assert response.status_code == HTTPStatus.NOT_FOUND

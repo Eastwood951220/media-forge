@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from backend.app.core.dependencies import CurrentUser, get_db
@@ -14,10 +14,28 @@ from shared.schemas.common import paginated, success
 router = APIRouter(prefix="/api/crawler/runs", tags=["crawler-runs"])
 
 
-def _run_task_summary(db: Session, run_id: uuid.UUID) -> dict:
+def _hidden_incremental_existing_skip_filter(run: CrawlRun):
+    if run.crawl_mode != "incremental":
+        return None
+    return or_(
+        CrawlRunDetailTask.status != "skipped",
+        CrawlRunDetailTask.error != "already_exists",
+        CrawlRunDetailTask.error.is_(None),
+    )
+
+
+def _visible_run_detail_task_query(db: Session, run: CrawlRun):
+    query = db.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id)
+    hidden_filter = _hidden_incremental_existing_skip_filter(run)
+    if hidden_filter is not None:
+        query = query.filter(hidden_filter)
+    return query
+
+
+def _run_task_summary(db: Session, run: CrawlRun) -> dict:
     rows = (
-        db.query(CrawlRunDetailTask.status, func.count(CrawlRunDetailTask.id))
-        .filter(CrawlRunDetailTask.run_id == run_id)
+        _visible_run_detail_task_query(db, run)
+        .with_entities(CrawlRunDetailTask.status, func.count(CrawlRunDetailTask.id))
         .group_by(CrawlRunDetailTask.status)
         .all()
     )
@@ -97,7 +115,7 @@ def list_run_tasks(
     run = db.get(CrawlRun, run_id)
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
-    query = db.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run_id)
+    query = _visible_run_detail_task_query(db, run)
     if status_filter is not None:
         query = query.filter(CrawlRunDetailTask.status == status_filter)
     if keyword:
@@ -109,12 +127,18 @@ def list_run_tasks(
     total = query.count()
     offset = (page - 1) * size
     rows = query.order_by(CrawlRunDetailTask.created_at.asc()).offset(offset).limit(size).all()
-    payload = paginated(
+    return paginated(
         rows=[CrawlRunDetailTaskRead.model_validate(r).model_dump(mode="json") for r in rows],
         total=total,
     )
-    payload["summary"] = _run_task_summary(db, run_id)
-    return payload
+
+
+@router.get("/{run_id}/tasks/summary")
+def get_run_task_summary(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+    run = db.get(CrawlRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    return success(data=_run_task_summary(db, run))
 
 
 @router.post("/{run_id}/tasks/retry", status_code=status.HTTP_201_CREATED)
