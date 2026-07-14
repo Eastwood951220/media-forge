@@ -1,7 +1,8 @@
 import { useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Empty, Tag, Typography } from 'antd'
+import { Empty, Spin, Tag, Typography } from 'antd'
 import type { RunLogEntry } from '@/api/crawlerRun/types'
+import styles from '../RunDetailPage.module.less'
 
 const levelColors: Record<string, string> = {
   DEBUG: 'default',
@@ -13,6 +14,7 @@ const levelColors: Record<string, string> = {
 interface RunLogsTimelineProps {
   logs: RunLogEntry[]
   isActive: boolean
+  loading?: boolean
 }
 
 function formatTime(value: string) {
@@ -21,7 +23,7 @@ function formatTime(value: string) {
   return date.toLocaleTimeString()
 }
 
-function RunLogsTimeline({ logs, isActive }: RunLogsTimelineProps) {
+function RunLogsTimeline({ logs, isActive, loading = false }: RunLogsTimelineProps) {
   const parentRef = useRef<HTMLDivElement | null>(null)
   const orderedLogs = useMemo(() => logs.slice().reverse(), [logs])
   const virtualizer = useVirtualizer({
@@ -30,6 +32,15 @@ function RunLogsTimeline({ logs, isActive }: RunLogsTimelineProps) {
     estimateSize: () => 48,
     overscan: 10,
   })
+
+  if (loading && orderedLogs.length === 0) {
+    return (
+      <div className={styles.loadingPlaceholder}>
+        <Spin size="large" />
+        <div className={styles.loadingText}>加载日志中...</div>
+      </div>
+    )
+  }
 
   if (orderedLogs.length === 0) {
     return (
@@ -45,7 +56,7 @@ function RunLogsTimeline({ logs, isActive }: RunLogsTimelineProps) {
       ref={parentRef}
       role="list"
       aria-label="运行日志"
-      style={{ height: 500, overflow: 'auto', paddingRight: 8 }}
+      className={styles.logContainer}
     >
       <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
@@ -56,30 +67,24 @@ function RunLogsTimeline({ logs, isActive }: RunLogsTimelineProps) {
               ref={virtualizer.measureElement}
               data-index={virtualRow.index}
               role="listitem"
+              className={styles.logItem}
               style={{
                 position: 'absolute',
                 left: 0,
                 top: 0,
                 width: '100%',
                 transform: `translateY(${virtualRow.start}px)`,
-                display: 'grid',
-                gridTemplateColumns: '88px 88px minmax(0, 1fr)',
-                gap: 8,
-                alignItems: 'start',
-                minHeight: 40,
-                padding: '6px 0',
-                borderBottom: '1px solid rgba(5, 5, 5, 0.06)',
               }}
             >
-              <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: '24px' }}>
+              <Typography.Text className={styles.logTime}>
                 {formatTime(entry.timestamp)}
               </Typography.Text>
-              <Tag color={levelColors[entry.level] || 'default'} style={{ width: 78, textAlign: 'center', marginInlineEnd: 0 }}>
+              <Tag color={levelColors[entry.level] || 'default'} className={styles.logTag}>
                 {entry.level}
               </Tag>
               <Typography.Text
                 type={entry.level === 'ERROR' ? 'danger' : undefined}
-                style={{ wordBreak: 'break-word' }}
+                className={styles.logMessage}
               >
                 {entry.message}
               </Typography.Text>

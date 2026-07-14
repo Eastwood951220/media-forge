@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { Button, Card, Input, Modal, Select, Space, Table, Tag } from 'antd'
+import { Button, Card, Input, Modal, Select, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import AnimatedNumber from '@/components/AnimatedNumber'
 import type { CrawlRunDetailTask, RunTaskSummary } from '@/api/crawlerRun/types'
+import styles from '../RunDetailPage.module.less'
 import { runDetailStatusLabels } from '../utils/status'
 
 interface RunTaskTableProps {
@@ -91,6 +93,9 @@ function RunTaskTable({
       dataIndex: 'code',
       key: 'code',
       width: 120,
+      render: (code: string) => (
+        <span style={{ fontWeight: 500, fontFamily: 'var(--font-mono, monospace)' }}>{code}</span>
+      ),
     },
     {
       title: '来源',
@@ -121,6 +126,9 @@ function RunTaskTable({
       dataIndex: 'error',
       key: 'error',
       ellipsis: true,
+      render: (error: string | null) => error ? (
+        <span style={{ color: '#dc2626', fontSize: 13 }}>{error}</span>
+      ) : null,
     },
     {
       title: '操作',
@@ -141,59 +149,86 @@ function RunTaskTable({
   ]
 
   return (
-    <Card title="子任务列表">
-      <Space size={12} wrap style={{ marginBottom: 16 }}>
-        {[
-          ['总数', summary.total],
-          ['完成', summary.completed],
-          ['等待', summary.waiting],
-          ['跳过', summary.skipped],
-          ['失败', summary.failed],
-        ].map(([label, value]) => (
-          <div
-            key={label}
-            style={{
-              minWidth: 88,
-              padding: '8px 12px',
-              border: '1px solid rgba(5, 5, 5, 0.08)',
-              borderRadius: 6,
-            }}
-          >
-            <div style={{ fontSize: 12, color: 'rgba(0, 0, 0, 0.45)' }}>{label}</div>
-            <div style={{ fontSize: 18, fontWeight: 600 }}>{value}</div>
+    <Card
+      title="子任务列表"
+      style={{
+        borderRadius: 12,
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+      }}
+    >
+      <div className={styles.taskTableHeader}>
+        <div className={styles.summaryMetrics}>
+          <div className={`${styles.metricTile} ${styles.metricTotal}`}>
+            <div className={styles.metricLabel}>总数</div>
+            <div className={styles.metricValue}>
+              <AnimatedNumber value={summary.total} duration={1.5} separator="," />
+            </div>
           </div>
-        ))}
-      </Space>
-      <Space style={{ marginBottom: 16 }}>
-        <Select
-          placeholder="状态筛选"
-          allowClear
-          style={{ width: 120 }}
-          value={statusFilter}
-          onChange={(value) => onStatusChange(value)}
-          options={Object.entries(runDetailStatusLabels).map(([key, { text }]) => ({
-            value: key,
-            label: text,
-          }))}
-        />
-        <Input.Search
-          placeholder="搜索番号或名称"
-          allowClear
-          value={keyword}
-          onSearch={(value) => onKeywordSearch(value)}
-          style={{ width: 200 }}
-        />
-        {retryEnabled && selectedFailedIds.length > 0 && (
-          <Button loading={actionLoading === 'retry'} onClick={confirmRetrySelected}>
-            重新爬取选中项
-          </Button>
-        )}
-        {retryEnabled && failedTasks.length > 0 && (
-          <Button loading={actionLoading === 'retry'} onClick={confirmRetryAllFailed}>
-            重新爬取全部失败
-          </Button>
-        )}
-      </Space>
+          <div className={`${styles.metricTile} ${styles.metricCompleted}`}>
+            <div className={styles.metricLabel}>完成</div>
+            <div className={styles.metricValue}>
+              <AnimatedNumber value={summary.completed} duration={1.5} separator="," />
+            </div>
+          </div>
+          <div className={`${styles.metricTile} ${styles.metricWaiting}`}>
+            <div className={styles.metricLabel}>等待</div>
+            <div className={styles.metricValue}>
+              <AnimatedNumber value={summary.waiting} duration={1.5} separator="," />
+            </div>
+          </div>
+          <div className={`${styles.metricTile} ${styles.metricSkipped}`}>
+            <div className={styles.metricLabel}>跳过</div>
+            <div className={styles.metricValue}>
+              <AnimatedNumber value={summary.skipped} duration={1.5} separator="," />
+            </div>
+          </div>
+          <div className={`${styles.metricTile} ${styles.metricFailed}`}>
+            <div className={styles.metricLabel}>失败</div>
+            <div className={styles.metricValue}>
+              <AnimatedNumber value={summary.failed} duration={1.5} separator="," />
+            </div>
+          </div>
+        </div>
+        <div className={styles.filterSection}>
+          <div className={styles.filterControls}>
+            <Select
+              placeholder="状态筛选"
+              allowClear
+              style={{ width: 120 }}
+              value={statusFilter}
+              onChange={(value) => onStatusChange(value)}
+              options={Object.entries(runDetailStatusLabels).map(([key, { text }]) => ({
+                value: key,
+                label: text,
+              }))}
+            />
+            <Input.Search
+              placeholder="搜索番号或名称"
+              allowClear
+              value={keyword}
+              onSearch={(value) => onKeywordSearch(value)}
+              style={{ width: 200 }}
+            />
+          </div>
+          <div className={styles.filterActions}>
+            {retryEnabled && selectedFailedIds.length > 0 && (
+              <Button loading={actionLoading === 'retry'} onClick={confirmRetrySelected}>
+                重新爬取选中项 ({selectedFailedIds.length})
+              </Button>
+            )}
+            {retryEnabled && failedTasks.length > 0 && (
+              <Button
+                type="primary"
+                danger
+                loading={actionLoading === 'retry'}
+                onClick={confirmRetryAllFailed}
+              >
+                重新爬取全部失败 ({failedTasks.length})
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
       <Table
         rowKey="id"
         columns={columns}

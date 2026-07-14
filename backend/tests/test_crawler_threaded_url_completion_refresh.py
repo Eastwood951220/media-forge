@@ -44,6 +44,74 @@ def drain(queue):
     return rows
 
 
+def test_threaded_incremental_list_phase_does_not_persist_already_exists_skips(admin_user, monkeypatch) -> None:
+    from backend.app.models.crawl_run import CrawlRunDetailTask
+
+    session = TestingSessionLocal()
+    task = CrawlTask(name="任务-skip-hide", storage_location="A", owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    session.add(CrawlTaskUrl(
+        task_id=task.id,
+        position=1,
+        url="https://example.test/list-1",
+        url_type="list",
+        has_magnet=True,
+        has_chinese_sub=False,
+        sort_type=0,
+        source="javdb",
+        final_url="https://example.test/list-1?page=1",
+        url_name="入口1",
+    ))
+    run = CrawlRun(
+        task_id=task.id,
+        task_name=task.name,
+        status="running",
+        crawl_mode="incremental",
+        created_at=datetime.now(),
+    )
+    session.add(run)
+    session.commit()
+    session.refresh(task)
+    session.refresh(run)
+
+    class SkipSpider:
+        def collect_detail_tasks_for_url(self, **kwargs):
+            return [
+                {
+                    "code": "OLD-001",
+                    "url": "https://javdb.com/v/old001",
+                    "name": "Old Movie",
+                    "status": "skipped",
+                    "reason": "already_exists",
+                    "_task_url_name": "入口1",
+                    "_task_url": "https://example.test/list-1",
+                    "_task_final_url": "https://example.test/list-1?page=1",
+                    "_task_url_type": "list",
+                },
+                {
+                    "code": "NEW-001",
+                    "url": "https://javdb.com/v/new001",
+                    "name": "New Movie",
+                    "_task_url_name": "入口1",
+                    "_task_url": "https://example.test/list-1",
+                    "_task_final_url": "https://example.test/list-1?page=1",
+                    "_task_url_type": "list",
+                },
+            ]
+
+    monkeypatch.setattr(threaded, "build_spider", lambda: SkipSpider())
+    monkeypatch.setattr(threaded, "_find_existing_movie_codes_in_worker_session", lambda *args, **kwargs: {"OLD-001"})
+
+    try:
+        threaded._run_list_phase(session, run, task, FakeRuntime(), FakeConfig())
+        rows = session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run.id).all()
+    finally:
+        session.close()
+
+    assert [row.code for row in rows] == ["NEW-001"]
+
+
 def test_threaded_list_phase_publishes_refresh_after_each_url_completion(admin_user, monkeypatch) -> None:
     session = TestingSessionLocal()
     task = CrawlTask(name="任务A", storage_location="A", owner_id=admin_user.id)

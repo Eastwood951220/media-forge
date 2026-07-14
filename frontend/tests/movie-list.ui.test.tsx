@@ -11,6 +11,7 @@ import {
   updateMovieFilterConfig,
 } from '../src/api/movie'
 import { getTaskDict } from '../src/api/crawlTask'
+import { refreshStorageIndex } from '../src/api/storage/storageIndex'
 
 vi.mock('../src/api/movie', () => ({
   fetchMovies: vi.fn(),
@@ -22,6 +23,10 @@ vi.mock('../src/api/movie', () => ({
 
 vi.mock('../src/api/crawlTask', () => ({
   getTaskDict: vi.fn(),
+}))
+
+vi.mock('../src/api/storage/storageIndex', () => ({
+  refreshStorageIndex: vi.fn(),
 }))
 
 function renderPage() {
@@ -108,6 +113,12 @@ describe('MovieListPage', () => {
     })
     vi.mocked(fetchMovieFilterConfig).mockResolvedValue({ _key: 'default', filters: {} })
     vi.mocked(updateMovieFilterConfig).mockResolvedValue({ success: true })
+    vi.mocked(refreshStorageIndex).mockResolvedValue({
+      started: true,
+      mode: 'incremental',
+      status: 'running',
+      message: '存储索引任务启动成功',
+    })
   })
 
   it('hides configured filters and does not call option or list APIs before filter config completes', () => {
@@ -269,5 +280,32 @@ describe('MovieListPage', () => {
     expect(await screen.findByText('筛选演员')).toBeInTheDocument()
     expect(screen.queryByText('筛选标签')).not.toBeInTheDocument()
     expect(screen.queryByText('排除标签')).not.toBeInTheDocument()
+  })
+
+  it('shows storage index task start success instead of completion', async () => {
+    vi.mocked(refreshStorageIndex).mockResolvedValue({
+      started: true,
+      mode: 'incremental',
+      status: 'running',
+      message: '存储索引任务启动成功',
+    })
+
+    renderPage()
+    await screen.findByText('AAA-001')
+    await userEvent.click(screen.getByRole('button', { name: /存储索引/ }))
+    await userEvent.click(await screen.findByText('增量索引'))
+
+    expect(await screen.findByText('增量索引任务启动成功')).toBeInTheDocument()
+  })
+
+  it('shows storage index running warning for concurrent refresh', async () => {
+    vi.mocked(refreshStorageIndex).mockRejectedValue(new Error('存储索引任务正在进行中'))
+
+    renderPage()
+    await screen.findByText('AAA-001')
+    await userEvent.click(screen.getByRole('button', { name: /存储索引/ }))
+    await userEvent.click(await screen.findByText('全量索引'))
+
+    expect(await screen.findByText('存储索引任务正在进行中')).toBeInTheDocument()
   })
 })

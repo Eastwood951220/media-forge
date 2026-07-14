@@ -48,6 +48,10 @@ htmlcov/
 .superpowers/
 !docs/superpowers
 
+.mimocode
+/frontend/package-lock.json
+
+
 # Graphify knowledge graph output
 graphify-out/
 

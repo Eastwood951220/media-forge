@@ -61,7 +61,10 @@ class StorageIndexStore:
         metadata = self.read_metadata()
         if metadata.status != "completed" or not self.paths.storage_index_file.exists():
             raise StorageIndexMissingError("存储索引不存在或尚未完成，请先刷新存储索引")
-        return self._read_tree_file(self.paths.storage_index_file)
+        try:
+            return self._read_tree_file(self.paths.storage_index_file)
+        except json.JSONDecodeError:
+            raise StorageIndexMissingError("存储索引文件格式已过期或损坏，请重新刷新存储索引")
 
     def load_index_by_code(self) -> dict[str, list[StorageIndexRecord]]:
         tree = self.read_index_tree()

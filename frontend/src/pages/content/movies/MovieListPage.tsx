@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button, Dropdown, Space } from 'antd'
 import { DatabaseOutlined, DownOutlined, SyncOutlined } from '@ant-design/icons'
 import { refreshStorageIndex, type StorageIndexRefreshMode } from '@/api/storage/storageIndex'
@@ -47,10 +47,15 @@ function MovieListPage() {
   const handleRefreshStorageIndex = useCallback(async (mode: StorageIndexRefreshMode) => {
     setIndexRefreshing(mode)
     try {
-      const metadata = await refreshStorageIndex(mode)
-      message.success(`${mode === 'full' ? '全量' : '增量'}索引完成：${metadata.video_count} 个视频`)
+      await refreshStorageIndex(mode)
+      message.success(`${mode === 'full' ? '全量' : '增量'}索引任务启动成功`)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '刷新索引失败')
+      const text = error instanceof Error ? error.message : '存储索引任务启动失败'
+      if (text.includes('正在进行中')) {
+        message.warning('存储索引任务正在进行中')
+      } else {
+        message.error(text.includes('启动失败') ? text : `存储索引任务启动失败：${text}`)
+      }
     } finally {
       setIndexRefreshing(null)
     }

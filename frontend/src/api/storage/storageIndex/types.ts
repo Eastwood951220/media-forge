@@ -10,3 +10,10 @@ export interface StorageIndexMetadata {
   current_path: string | null
   errors: Array<{ path: string; error: string }>
 }
+
+export interface StorageIndexRefreshStartResult {
+  started: boolean
+  mode: 'full' | 'incremental'
+  status: 'running'
+  message: string
+}

@@ -419,35 +419,48 @@ def test_movie_payload_and_filter_use_three_storage_statuses(client: TestClient,
     assert stored.json()["rows"][0]["storage_status"] == "stored"
 
 
-def test_sync_movie_storage_status_api_syncs_selected_movies(client: TestClient, admin_user, monkeypatch):
-    from dataclasses import dataclass
-
+def test_sync_movie_storage_status_api_syncs_selected_movies(client: TestClient, admin_user, monkeypatch, tmp_path):
     from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.storage.index.models import StorageIndexMetadata, StorageIndexRecord
+    from backend.app.modules.storage.index.store import StorageIndexStore
     from shared.database.models.content import Movie
+    from shared.runtime_config import RuntimeConfigPaths
 
-    @dataclass
-    class RemoteFile:
-        name: str
-        full_path: str
-        size: int
-        is_directory: bool = False
-
-    class Provider:
-        def list_files(self, path, force_refresh=False):
-            if path == "/Movies/A/SYNC-API-001":
-                return [RemoteFile("SYNC-API-001.mp4", "/Movies/A/SYNC-API-001/SYNC-API-001.mp4", 500 * 1024 * 1024)]
-            return []
-
-    class Factory:
-        def create(self, config):
-            return object()
-
-    class Gateway:
-        def __init__(self, client):
-            self.provider = Provider()
-
-        def list_files(self, path, force_refresh=False):
-            return self.provider.list_files(path, force_refresh)
+    # Set up storage index with the movie's data
+    paths = RuntimeConfigPaths(
+        config_dir=tmp_path,
+        database_file=tmp_path / "database.conf",
+        redis_file=tmp_path / "redis.conf",
+        storage_file=tmp_path / "storage.conf",
+        storage_index_file=tmp_path / "storage_index.jsonl",
+        storage_index_meta_file=tmp_path / "storage_index.meta.json",
+    )
+    store = StorageIndexStore(paths)
+    store.begin_temp_index("/Movies")
+    store.write_temp_tree(store.tree_from_records("/Movies", [StorageIndexRecord(
+        code="SYNC-API-001",
+        path="/Movies/A/SYNC-API-001/SYNC-API-001.mp4",
+        target_folder="/Movies/A/SYNC-API-001",
+        storage_location="A",
+        file_name="SYNC-API-001.mp4",
+        size=500 * 1024 * 1024,
+        indexed_at="2026-07-09T00:00:00+00:00",
+    )], indexed_at="2026-07-09T00:00:00+00:00"))
+    store.finalize_temp_index(StorageIndexMetadata(
+        target_folder="/Movies",
+        status="completed",
+        started_at="2026-07-09T00:00:00+00:00",
+        completed_at="2026-07-09T00:01:00+00:00",
+        video_count=1,
+    ))
+    monkeypatch.setattr(
+        "backend.app.modules.content.movies.storage_sync_service.StorageIndexStore",
+        lambda: store,
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.storage.tasks.events.publish_movie_storage_updated",
+        lambda *args, **kwargs: None,
+    )
 
     headers = auth_headers(client, admin_user)
     session = TestingSessionLocal()
@@ -459,36 +472,6 @@ def test_sync_movie_storage_status_api_syncs_selected_movies(client: TestClient,
     movie_id = str(movie.id)
     session.commit()
     session.close()
-
-    from contextlib import contextmanager
-
-    class ConfigService:
-        def __init__(self):
-            self.provider_factory = Factory()
-            self.gateway_class = Gateway
-
-        def get_raw_config(self):
-            return {
-                "target_folder": "/Movies",
-                "video_extensions": [".mp4"],
-                "minimum_video_size_mb": 100,
-            }
-
-        @contextmanager
-        def open_provider(self):
-            config = self.get_raw_config()
-            client = self.provider_factory.create(config)
-            try:
-                yield config, self.gateway_class(client)
-            finally:
-                close = getattr(client, "close", None)
-                if callable(close):
-                    close()
-
-    monkeypatch.setattr(
-        "backend.app.modules.storage.config.service.StorageConfigService",
-        ConfigService,
-    )
 
     response = client.post(
         "/api/content/movies/storage-sync",

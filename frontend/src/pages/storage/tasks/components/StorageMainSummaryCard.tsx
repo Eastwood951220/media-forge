@@ -43,8 +43,8 @@ export function StorageMainSummaryCard({
           <div className={styles.summaryHeading}>
             <Typography.Title level={4}>{task.alias || task.id}</Typography.Title>
             <Space size={8} wrap>
-              <Tag color={status.color}>{status.text}</Tag>
               <Tag>{modeLabels[task.storage_mode] || task.storage_mode}</Tag>
+              <Tag color={status.color}>{status.text}</Tag>
             </Space>
           </div>
           <Space>

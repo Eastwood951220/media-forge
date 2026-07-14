@@ -1,5 +1,5 @@
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RunDetailPage from '../src/pages/crawler/runs/RunDetailPage'
 import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTaskSummary, getCrawlerRunTasks } from '../src/api/crawlerRun'
@@ -106,7 +106,9 @@ describe('RunDetailPage logs', () => {
     renderDetailPage()
 
     expect(await screen.findByText('总数')).toBeInTheDocument()
-    expect(screen.getByText('6')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('6')).toBeInTheDocument()
+    })
     expect(screen.getByText('完成')).toBeInTheDocument()
     expect(screen.getByText('等待')).toBeInTheDocument()
     expect(screen.getByText('失败')).toBeInTheDocument()

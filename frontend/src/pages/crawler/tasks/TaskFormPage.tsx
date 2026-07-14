@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined, UnorderedListOutlined, AppstoreOutlined } from '@ant-design/icons'
 import { useNavigate, useParams, useRouterState } from '@tanstack/react-router'
-import { App, Button, Col, Form, Input, Row, Switch } from 'antd'
+import { App, Button, Col, Form, Input, Row, Switch, Table, Space, Tooltip, Tag } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
 import {
   createCrawlTask,
   extractTaskName,
@@ -12,12 +13,16 @@ import type { CrawlTaskCreateParams, TaskUrlEntry } from '@/api/crawlTask/types'
 import { useRouteCacheControl } from '@/layout/routeCache'
 import { useTagsViewStore } from '@/stores/useTagsViewStore'
 import {
+  buildFinalUrlPreview,
   detectUrlType,
   type UrlType,
+  URL_TYPE_LABELS,
 } from './taskUrlUtils'
 import { getRouteViewKey } from '@/routes/tags'
 import UrlEntryCard from './components/UrlEntryCard'
 import styles from './TaskPages.module.less'
+
+const COMPACT_PAGE_SIZE = 10
 
 export default function TaskFormPage() {
   const params = useParams({ strict: false }) as { id?: string }
@@ -29,6 +34,8 @@ export default function TaskFormPage() {
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [storageLocationManuallyEdited, setStorageLocationManuallyEdited] = useState(false)
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+  const [currentPage, setCurrentPage] = useState(1)
   const title = useMemo(() => (isEdit ? '编辑任务' : '新建任务'), [isEdit])
 
   const pathname = useRouterState({ select: (state) => state.location.pathname })
@@ -65,6 +72,10 @@ export default function TaskFormPage() {
             url_name: entry.url_name ?? '',
           })),
         })
+        // Auto-switch to table view when many URLs
+        if (task.urls.length > 6) {
+          setViewMode('table')
+        }
       })
       .catch(() => message.error('任务详情加载失败'))
       .finally(() => setLoading(false))
@@ -168,6 +179,15 @@ export default function TaskFormPage() {
     void navigate({ to: '/crawler/tasks' })
   }, [form, navigate, closeCurrentTag])
 
+  const handleEditFromTable = useCallback((index: number) => {
+    setViewMode('card')
+    // Scroll to the card after a short delay
+    setTimeout(() => {
+      const cardElement = document.querySelector(`[data-url-index="${index}"]`)
+      cardElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 100)
+  }, [])
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -228,36 +248,181 @@ export default function TaskFormPage() {
             </Col>
           </Row>
 
-          <Form.Item label="URL 列表" required className={styles.urlListLabel} />
+          <div className={styles.urlListHeader}>
+            <Form.Item label="URL 列表" required className={styles.urlListLabel} />
+            <Space>
+              <Button
+                type={viewMode === 'card' ? 'primary' : 'default'}
+                icon={<AppstoreOutlined />}
+                onClick={() => setViewMode('card')}
+                size="small"
+              >
+                卡片
+              </Button>
+              <Button
+                type={viewMode === 'table' ? 'primary' : 'default'}
+                icon={<UnorderedListOutlined />}
+                onClick={() => setViewMode('table')}
+                size="small"
+              >
+                列表
+              </Button>
+            </Space>
+          </div>
 
           <Form.List name="urls">
-            {(fields, { add, remove }) => (
-              <Row gutter={[16, 16]}>
-                {fields.map((field) => (
-                  <Col key={field.key} xs={24} lg={12} xl={8}>
-                    <UrlEntryCard
-                      index={field.name}
-                      remove={fields.length > 1 ? () => remove(field.name) : undefined}
-                      onNameExtracted={(index, name) => {
-                        setUrlEntryValue(index, { url_name: name })
-                        if (!form.getFieldValue('name')) form.setFieldsValue({ name })
+            {(fields, { add, remove }) => {
+              const urlCount = fields.length
+
+              if (viewMode === 'table') {
+                const tableData = fields.map((field) => ({
+                  key: field.key,
+                  index: field.name,
+                  form,
+                }))
+
+                const columns: ColumnsType<typeof tableData[0]> = [
+                  {
+                    title: '#',
+                    width: 50,
+                    render: (_, __, i) => (currentPage - 1) * COMPACT_PAGE_SIZE + i + 1,
+                  },
+                  {
+                    title: 'URL',
+                    dataIndex: 'index',
+                    ellipsis: true,
+                    render: (index: number) => {
+                      const url = form.getFieldValue(['urls', index, 'url']) as string ?? '-'
+                      return (
+                        <Tooltip title={url}>
+                          <span className={styles.tableUrlCell}>{url}</span>
+                        </Tooltip>
+                      )
+                    },
+                  },
+                  {
+                    title: '类型',
+                    width: 100,
+                    render: (_, record) => {
+                      const urlType = form.getFieldValue(['urls', record.index, 'url_type']) as UrlType
+                      return urlType ? <Tag>{URL_TYPE_LABELS[urlType] ?? urlType}</Tag> : '-'
+                    },
+                  },
+                  {
+                    title: '名称',
+                    width: 150,
+                    ellipsis: true,
+                    render: (_, record) => {
+                      const urlName = form.getFieldValue(['urls', record.index, 'url_name']) as string ?? ''
+                      return urlName || '-'
+                    },
+                  },
+                  {
+                    title: '最终 URL',
+                    ellipsis: true,
+                    render: (_, record) => {
+                      const baseUrl = form.getFieldValue(['urls', record.index, 'url']) as string ?? ''
+                      const urlType = form.getFieldValue(['urls', record.index, 'url_type']) as UrlType
+                      const hasMagnet = form.getFieldValue(['urls', record.index, 'has_magnet']) as boolean ?? false
+                      const hasSub = form.getFieldValue(['urls', record.index, 'has_chinese_sub']) as boolean ?? false
+                      const sortType = form.getFieldValue(['urls', record.index, 'sort_type']) as number ?? 0
+                      const finalUrl = urlType ? buildFinalUrlPreview(baseUrl, urlType, hasMagnet, hasSub, sortType) : baseUrl
+                      return (
+                        <Tooltip title={finalUrl}>
+                          <span className={styles.tableUrlCell}>{finalUrl}</span>
+                        </Tooltip>
+                      )
+                    },
+                  },
+                  {
+                    title: '操作',
+                    width: 100,
+                    render: (_, record) => (
+                      <Space size={4}>
+                        <Tooltip title="编辑">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={() => handleEditFromTable(record.index)}
+                          />
+                        </Tooltip>
+                        {fields.length > 1 && (
+                          <Tooltip title="删除">
+                            <Button
+                              type="text"
+                              size="small"
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => remove(record.index)}
+                            />
+                          </Tooltip>
+                        )}
+                      </Space>
+                    ),
+                  },
+                ]
+
+                return (
+                  <div className={styles.urlTableContainer}>
+                    <div className={styles.urlTableToolbar}>
+                      <span className={styles.urlCount}>共 {urlCount} 个 URL</span>
+                      <Button
+                        type="dashed"
+                        onClick={() => add({ has_magnet: true, has_chinese_sub: false, sort_type: 0 })}
+                        icon={<PlusOutlined />}
+                        size="small"
+                      >
+                        添加 URL
+                      </Button>
+                    </div>
+                    <Table
+                      columns={columns}
+                      dataSource={tableData}
+                      pagination={{
+                        current: currentPage,
+                        pageSize: COMPACT_PAGE_SIZE,
+                        total: urlCount,
+                        onChange: setCurrentPage,
+                        showTotal: (total) => `共 ${total} 条`,
+                        size: 'small',
                       }}
-                      onUrlTypeDetected={(index, urlType) => setUrlEntryValue(index, { url_type: urlType })}
+                      size="small"
+                      scroll={{ x: 800 }}
                     />
+                  </div>
+                )
+              }
+
+              // Card view
+              return (
+                <Row gutter={[16, 16]}>
+                  {fields.map((field) => (
+                    <Col key={field.key} xs={24} lg={12} xl={8} data-url-index={field.name}>
+                      <UrlEntryCard
+                        index={field.name}
+                        remove={fields.length > 1 ? () => remove(field.name) : undefined}
+                        onNameExtracted={(index, name) => {
+                          setUrlEntryValue(index, { url_name: name })
+                          if (!form.getFieldValue('name')) form.setFieldsValue({ name })
+                        }}
+                        onUrlTypeDetected={(index, urlType) => setUrlEntryValue(index, { url_type: urlType })}
+                      />
+                    </Col>
+                  ))}
+                  <Col xs={24} lg={12} xl={8}>
+                    <Button
+                      type="dashed"
+                      onClick={() => add({ has_magnet: true, has_chinese_sub: false, sort_type: 0 })}
+                      icon={<PlusOutlined />}
+                      className={styles.addUrlButton}
+                    >
+                      添加 URL
+                    </Button>
                   </Col>
-                ))}
-                <Col xs={24} lg={12} xl={8}>
-                  <Button
-                    type="dashed"
-                    onClick={() => add({ has_magnet: true, has_chinese_sub: false, sort_type: 0 })}
-                    icon={<PlusOutlined />}
-                    className={styles.addUrlButton}
-                  >
-                    添加 URL
-                  </Button>
-                </Col>
-              </Row>
-            )}
+                </Row>
+              )
+            }}
           </Form.List>
 
           <div className={styles.actions}>

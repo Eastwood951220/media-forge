@@ -1,38 +1,146 @@
 .configLayout {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) 800px;
+  grid-template-columns: minmax(320px, 1fr) 800px;
   gap: 24px;
   align-items: start;
+  padding: 24px;
 }
 
 .configLeft,
-.configRight{
+.configRight {
   min-width: 0;
 }
 
-
-
 .formCard {
   width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+// Form Sections
+.formSection {
+  margin-bottom: 24px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  &:not(:first-child) {
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color, #f0f0f0);
+  }
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #1f2937);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 14px;
+    background: var(--primary-color, #1890ff);
+    border-radius: 2px;
+  }
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0 16px;
+}
+
+// Cookie Actions
 .cookieActions {
   display: flex;
   gap: 8px;
 }
 
+// Editor
 .editorFrame {
-  border: 1px solid #d9d9d9;
-  border-radius: 6px;
+  border: 1px solid var(--border-color, #d9d9d9);
+  border-radius: 8px;
   overflow: hidden;
+  transition: border-color 0.2s ease;
 
-  :global(.dark) & {
-    border-color: #424242;
+  &:focus-within {
+    border-color: var(--primary-color, #1890ff);
+    box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
   }
 }
 
+.editorLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+}
+
+.jsonError {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+// Loading State
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  gap: 16px;
+}
+
+.loadingText {
+  font-size: 14px;
+  color: var(--text-secondary, #6b7280);
+}
+
+// Dark Mode Support
+:global([data-theme='dark']) {
+  .formCard {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  .formSection:not(:first-child) {
+    border-top-color: var(--border-color, #374151);
+  }
+
+  .sectionTitle {
+    color: var(--text-primary, #f3f4f6);
+  }
+
+  .editorFrame {
+    border-color: var(--border-color, #424242);
+
+    &:focus-within {
+      border-color: var(--primary-color, #1890ff);
+      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+    }
+  }
+
+  .loadingText {
+    color: var(--text-secondary, #9ca3af);
+  }
+}
+
+// Responsive
 @media (max-width: 960px) {
   .configLayout {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .formGrid {
     grid-template-columns: 1fr;
   }
 }

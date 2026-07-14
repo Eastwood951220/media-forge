@@ -109,7 +109,8 @@ describe('RunDetailPage realtime events', () => {
   it('renders run details and loads logs from API', async () => {
     renderPage()
 
-    expect(await screen.findByText('运行详情 - 任务A')).toBeInTheDocument()
+    expect(await screen.findByText('运行详情')).toBeInTheDocument()
+    expect(screen.getByText('任务A')).toBeInTheDocument()
     expect(getCrawlerRun).toHaveBeenCalledWith('run-1')
     expect(getCrawlerRunLogs).toHaveBeenCalledWith('run-1')
     expect(getCrawlerRunTasks).toHaveBeenCalledWith('run-1', {
@@ -141,7 +142,7 @@ describe('RunDetailPage realtime events', () => {
 
     renderPage()
 
-    expect(await screen.findByText('运行详情 - 任务A')).toBeInTheDocument()
+    expect(await screen.findByText('运行详情')).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.getByText('总数').parentElement?.textContent).toContain('2')
       expect(screen.getByText('完成').parentElement?.textContent).toContain('1')
@@ -223,7 +224,7 @@ describe('RunDetailPage realtime events', () => {
 
   it('refetches tasks for each url completion refresh event', async () => {
     renderPage()
-    await screen.findByText('运行详情 - 任务A')
+    await screen.findByText('运行详情')
 
     const initialTasksCalls = vi.mocked(getCrawlerRunTasks).mock.calls.length
 
@@ -260,7 +261,7 @@ describe('RunDetailPage realtime events', () => {
       ])
 
     renderPage()
-    await screen.findByText('运行详情 - 任务A')
+    await screen.findByText('运行详情')
 
     const initialCallCount = vi.mocked(getCrawlerRunLogs).mock.calls.length as number
     const initialTasksCalls = vi.mocked(getCrawlerRunTasks).mock.calls.length as number
@@ -294,7 +295,7 @@ describe('RunDetailPage realtime events', () => {
   it('resyncs snapshots when system resync is required', async () => {
     renderPage()
 
-    await screen.findByText('运行详情 - 任务A')
+    await screen.findByText('运行详情')
 
     const initialRunCalls = vi.mocked(getCrawlerRun).mock.calls.length
     const initialLogsCalls = vi.mocked(getCrawlerRunLogs).mock.calls.length
@@ -347,7 +348,7 @@ describe('RunDetailPage realtime events', () => {
       })
 
     renderPage()
-    await screen.findByText('运行详情 - 任务A')
+    await screen.findByText('运行详情')
 
     const initialRunCalls = vi.mocked(getCrawlerRun).mock.calls.length
 
@@ -449,7 +450,7 @@ describe('RunDetailPage realtime events', () => {
       })
 
     renderPage()
-    await screen.findByText('运行详情 - 任务A')
+    await screen.findByText('运行详情')
 
     const initialSummaryCalls = vi.mocked(getCrawlerRunTaskSummary).mock.calls.length
 

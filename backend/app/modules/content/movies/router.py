@@ -21,6 +21,7 @@ from backend.app.modules.content.movies.queries import (
 from backend.app.modules.content.movies.schemas import MovieDeleteRequest, MovieStorageSyncRequest
 from backend.app.modules.content.movies.serializers import serialize_movie
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
+from backend.app.modules.storage.index.store import StorageIndexMissingError
 from shared.database.models.content import Movie, MovieFilter
 from backend.app.modules.content.movies.filter_config import (
     MovieFilterConfigPayload,
@@ -135,11 +136,14 @@ def sync_movie_storage_statuses(
 
     filters = body.filters.model_dump() if body.filters else {}
     movies = select_movies_for_storage_sync(db, movie_ids=body.movie_ids, filters=filters)
-    payload = sync_movies_storage_statuses_service(
-        db,
-        user_id=str(current_user.id),
-        movies=movies,
-    )
+    try:
+        payload = sync_movies_storage_statuses_service(
+            db,
+            user_id=str(current_user.id),
+            movies=movies,
+        )
+    except StorageIndexMissingError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return success(data=payload.to_dict())
 
 

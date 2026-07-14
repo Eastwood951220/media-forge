@@ -5,7 +5,7 @@ import {
   ReloadOutlined,
   StopOutlined,
 } from '@ant-design/icons'
-import { Button, Dropdown, Empty, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
+import { Button, Dropdown, Empty, Popover, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import type { CrawlTask, CrawlTaskRuntimeSnapshot, TaskRuntimeStatus } from '@/api/crawlTask/types'
 import type { CrawlMode } from '@/api/crawlerRun/types'
@@ -48,6 +48,49 @@ function getUrlNames(task: CrawlTask) {
   return task.urls
     .map((url) => url.url_name?.trim())
     .filter((name): name is string => Boolean(name))
+}
+
+const MAX_VISIBLE_URL_NAMES = 3
+
+function UrlNameTags({ urlNames }: { urlNames: string[] }) {
+  if (urlNames.length === 0) {
+    return <Typography.Text type="secondary">-</Typography.Text>
+  }
+
+  if (urlNames.length <= MAX_VISIBLE_URL_NAMES) {
+    return (
+      <div className={styles.urlNameList}>
+        {urlNames.map((name, index) => (
+          <Tag key={`${name}-${index}`}>{name}</Tag>
+        ))}
+      </div>
+    )
+  }
+
+  const visibleNames = urlNames.slice(0, MAX_VISIBLE_URL_NAMES)
+  const hiddenCount = urlNames.length - MAX_VISIBLE_URL_NAMES
+
+  return (
+    <div className={styles.urlNameList}>
+      {visibleNames.map((name, index) => (
+        <Tag key={`${name}-${index}`}>{name}</Tag>
+      ))}
+      <Popover
+        content={
+          <div className={styles.urlNamePopover}>
+            {urlNames.map((name, index) => (
+              <Tag key={`${name}-${index}`} className={styles.urlNamePopoverTag}>{name}</Tag>
+            ))}
+          </div>
+        }
+        title="全部 URL 名称"
+        trigger="hover"
+        placement="bottomLeft"
+      >
+        <Tag className={styles.urlNameMore}>+{hiddenCount}</Tag>
+      </Popover>
+    </div>
+  )
 }
 
 function TaskCard({
@@ -101,11 +144,7 @@ function TaskCard({
         </div>
         <div className={styles.taskMetaRow}>
           <span className={styles.taskMetaLabel}>URL 名称</span>
-          <div className={styles.urlNameList}>
-            {urlNames.length > 0
-              ? urlNames.map((name, index) => <Tag key={`${name}-${index}`}>{name}</Tag>)
-              : <Typography.Text type="secondary">-</Typography.Text>}
-          </div>
+          <UrlNameTags urlNames={urlNames} />
         </div>
         <div className={styles.taskMetaRow}>
           <span className={styles.taskMetaLabel}>最后爬取时间</span>

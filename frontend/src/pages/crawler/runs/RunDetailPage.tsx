@@ -54,7 +54,13 @@ function RunDetailPage() {
         total={detail.taskTotal}
       />
       {detail.run && (
-        <Card title="运行日志" style={{ marginTop: 16 }}>
+        <Card
+          title="运行日志"
+          style={{
+            borderRadius: 12,
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+          }}
+        >
           <RunLogsTimeline
             logs={detail.logs}
             isActive={detail.run.status === 'queued' || detail.run.status === 'running'}

@@ -45,3 +45,17 @@ textarea,
 select {
   font: inherit;
 }
+
+/* Status pulse animation for running state */
+@keyframes statusPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.status-pulse {
+  animation: statusPulse 2s ease-in-out infinite;
+}

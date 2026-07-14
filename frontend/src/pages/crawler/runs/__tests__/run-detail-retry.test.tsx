@@ -108,7 +108,7 @@ describe('RunDetail retry controls', () => {
     render(<RunDetailPage />)
 
     expect(await screen.findByText('FAIL-001')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '重新爬取全部失败' }))
+    fireEvent.click(screen.getByRole('button', { name: '重新爬取全部失败 (1)' }))
     const okButton = await screen.findByRole('button', { name: '确 定' })
     fireEvent.click(okButton)
 

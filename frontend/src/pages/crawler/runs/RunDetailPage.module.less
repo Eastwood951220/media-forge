@@ -1,0 +1,331 @@
+.page {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+// Summary Metrics Section
+.taskTableHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.summaryMetrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.metricTile {
+  min-width: 100px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: var(--metric-bg, #fff);
+  border: 1px solid var(--metric-border, #e5e7eb);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--metric-accent, #d1d5db);
+    border-radius: 12px 12px 0 0;
+  }
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+  }
+}
+
+.metricTotal {
+  --metric-bg: #fafafa;
+  --metric-border: #e5e7eb;
+  --metric-accent: #6b7280;
+}
+
+.metricCompleted {
+  --metric-bg: #f0fdf4;
+  --metric-border: #bbf7d0;
+  --metric-accent: #22c55e;
+}
+
+.metricWaiting {
+  --metric-bg: #eff6ff;
+  --metric-border: #bfdbfe;
+  --metric-accent: #3b82f6;
+}
+
+.metricSkipped {
+  --metric-bg: #fffbeb;
+  --metric-border: #fde68a;
+  --metric-accent: #f59e0b;
+}
+
+.metricFailed {
+  --metric-bg: #fef2f2;
+  --metric-border: #fecaca;
+  --metric-accent: #ef4444;
+}
+
+.metricLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--metric-label-color, #6b7280);
+  line-height: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metricValue {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 32px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricTotal .metricValue {
+  color: var(--metric-value-color, #374151);
+}
+
+.metricCompleted .metricValue {
+  color: var(--metric-value-color, #16a34a);
+}
+
+.metricWaiting .metricValue {
+  color: var(--metric-value-color, #2563eb);
+}
+
+.metricSkipped .metricValue {
+  color: var(--metric-value-color, #d97706);
+}
+
+.metricFailed .metricValue {
+  color: var(--metric-value-color, #dc2626);
+}
+
+// Filter Section
+.filterSection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filterControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filterActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// Log Container
+.logContainer {
+  height: 500px;
+  overflow: auto;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: #d1d5db;
+    border-radius: 3px;
+  }
+}
+
+.logItem {
+  display: grid;
+  grid-template-columns: 88px 88px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-height: 40px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color, rgba(5, 5, 5, 0.06));
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: var(--hover-bg, rgba(0, 0, 0, 0.02));
+  }
+}
+
+.logTime {
+  font-size: 12px;
+  line-height: 24px;
+  color: var(--text-secondary, #6b7280);
+  font-variant-numeric: tabular-nums;
+}
+
+.logTag {
+  width: 78px;
+  text-align: center;
+  margin-inline-end: 0;
+}
+
+.logMessage {
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.loadingPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  gap: 12px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.loadingText {
+  font-size: 14px;
+}
+
+// Status Pulse Animation
+@keyframes statusPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.statusProcessing {
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+// Dark Mode Support
+:global([data-theme='dark']) {
+  .metricTotal {
+    --metric-bg: #1f2937;
+    --metric-border: #374151;
+    --metric-accent: #9ca3af;
+    --metric-label-color: #9ca3af;
+    --metric-value-color: #f3f4f6;
+  }
+
+  .metricCompleted {
+    --metric-bg: #052e16;
+    --metric-border: #166534;
+    --metric-accent: #22c55e;
+    --metric-label-color: #86efac;
+    --metric-value-color: #4ade80;
+  }
+
+  .metricWaiting {
+    --metric-bg: #172554;
+    --metric-border: #1e40af;
+    --metric-accent: #3b82f6;
+    --metric-label-color: #93c5fd;
+    --metric-value-color: #60a5fa;
+  }
+
+  .metricSkipped {
+    --metric-bg: #451a03;
+    --metric-border: #92400e;
+    --metric-accent: #f59e0b;
+    --metric-label-color: #fcd34d;
+    --metric-value-color: #fbbf24;
+  }
+
+  .metricFailed {
+    --metric-bg: #450a0a;
+    --metric-border: #991b1b;
+    --metric-accent: #ef4444;
+    --metric-label-color: #fca5a5;
+    --metric-value-color: #f87171;
+  }
+
+  .logContainer {
+    scrollbar-color: #4b5563 transparent;
+
+    &::-webkit-scrollbar-thumb {
+      background-color: #4b5563;
+    }
+  }
+
+  .logItem {
+    --border-color: rgba(255, 255, 255, 0.06);
+    --hover-bg: rgba(255, 255, 255, 0.02);
+  }
+
+  .logTime {
+    --text-secondary: #9ca3af;
+  }
+
+  .loadingPlaceholder {
+    --text-secondary: #9ca3af;
+  }
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .page {
+    padding: 16px;
+  }
+
+  .taskTableHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .summaryMetrics {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .metricTile {
+    min-width: 80px;
+    padding: 12px 16px;
+  }
+
+  .metricValue {
+    font-size: 20px;
+  }
+
+  .filterSection {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .filterControls {
+    width: 100%;
+  }
+
+  .filterActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
