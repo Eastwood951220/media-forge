@@ -1051,3 +1051,30 @@ def test_callbacks_write_detail_logs_with_context(db_session, admin_user, monkey
     assert saved_entry["context"]["source_url"] == "https://javdb.com/v/log001"
     assert saved_entry["context"]["source_url_name"] == "演员A"
     assert saved_entry["context"]["detail_status"] == "saved"
+
+import pytest
+
+
+def test_select_retry_details_rejects_non_failed_detail():
+    from backend.app.modules.crawler.runtime.retry import select_retry_details
+
+    session = TestingSessionLocal()
+    run = CrawlRun(task_name="任务", status="completed", crawl_mode="incremental")
+    session.add(run)
+    session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name="任务",
+        code="SAVED-001",
+        source_url="https://example.test/saved",
+        source_name="saved",
+        status="saved",
+        created_at=datetime.now(),
+    )
+    session.add(detail)
+    session.commit()
+
+    with pytest.raises(ValueError, match="只能重试 crawl_failed 状态的子任务"):
+        select_retry_details(session, run, detail_ids=[detail.id], retry_all=False)
+
+    session.close()

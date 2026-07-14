@@ -25,6 +25,12 @@ from backend.app.modules.crawler.runtime.events import (
     publish_run_updated,
 )
 from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
+from backend.app.modules.crawler.runtime.retry import (
+    ensure_run_can_restart,
+    mark_details_for_retry,
+    prepare_run_for_restart,
+    select_retry_details,
+)
 from backend.app.modules.crawler.runtime.worker import (
     cleanup_interrupted_runs,
     ensure_crawler_worker_started,
@@ -132,30 +138,8 @@ class CrawlerRunService:
         run = self.db.get(CrawlRun, run_id)
         if run is None:
             raise ValueError("运行记录不存在")
-        if run.status not in {"stopped", "failed"}:
-            raise ValueError("只能重启已停止或失败的运行")
-        if run.task_id is None:
-            restartable_count = (
-                self.db.query(CrawlRunDetailTask)
-                .filter(
-                    CrawlRunDetailTask.run_id == run.id,
-                    CrawlRunDetailTask.status.in_(RESTARTABLE_DETAIL_STATUSES),
-                )
-                .count()
-            )
-            if restartable_count == 0:
-                raise ValueError("没有关联任务或未完成子任务，无法重启")
-
-        if has_detail_phase_started(self.db, run):
-            reset_unfinished_detail_tasks_to_pending(self.db, run)
-        else:
-            clear_run_detail_tasks(self.db, run)
-        run.status = "queued"
-        run.queued_at = datetime.now()
-        run.started_at = None
-        run.finished_at = None
-        run.result = None
-        run.error = None
+        ensure_run_can_restart(self.db, run)
+        prepare_run_for_restart(self.db, run)
         self.db.commit()
         self.db.refresh(run)
         self.runtime.clear_stop(str(run.id))
@@ -174,49 +158,13 @@ class CrawlerRunService:
         run = self.db.get(CrawlRun, run_id)
         if run is None:
             raise ValueError("运行记录不存在")
-        if run.status not in ENDED_RUN_STATUSES:
-            raise ValueError("运行中不能重试失败子任务")
-
-        if retry_all:
-            details = (
-                self.db.query(CrawlRunDetailTask)
-                .filter(
-                    CrawlRunDetailTask.run_id == run.id,
-                    CrawlRunDetailTask.status == "crawl_failed",
-                )
-                .order_by(CrawlRunDetailTask.created_at.asc())
-                .all()
-            )
-            retry_label = "全部失败"
-        else:
-            if not detail_ids:
-                raise ValueError("请选择要重新爬取的失败子任务")
-            details = (
-                self.db.query(CrawlRunDetailTask)
-                .filter(CrawlRunDetailTask.id.in_(detail_ids))
-                .order_by(CrawlRunDetailTask.created_at.asc())
-                .all()
-            )
-            found_ids = {detail.id for detail in details}
-            missing_ids = [detail_id for detail_id in detail_ids if detail_id not in found_ids]
-            if missing_ids:
-                raise ValueError("包含无效的子任务选择")
-            retry_label = "选中项" if len(details) > 1 else "单条"
-
-        if not details:
-            raise ValueError("没有爬取失败的子任务可重试")
-        for detail in details:
-            if detail.run_id != run.id:
-                raise ValueError("包含不属于当前运行的子任务")
-            if detail.status != "crawl_failed":
-                raise ValueError("只能重试 crawl_failed 状态的子任务")
-
-        for detail in details:
-            detail.status = "pending_crawl"
-            detail.error = None
-            detail.item_data = None
-            detail.crawled_at = None
-            detail.saved_at = None
+        details, retry_label = select_retry_details(
+            self.db,
+            run,
+            detail_ids=detail_ids,
+            retry_all=retry_all,
+        )
+        mark_details_for_retry(details)
 
         run.status = "queued"
         run.queued_at = datetime.now()
