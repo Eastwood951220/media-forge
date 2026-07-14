@@ -2,7 +2,7 @@ import { createMemoryHistory, createRootRoute, createRoute, createRouter, Router
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RunDetailPage from '../src/pages/crawler/runs/RunDetailPage'
-import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks } from '../src/api/crawlerRun'
+import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTaskSummary, getCrawlerRunTasks } from '../src/api/crawlerRun'
 import type { RealtimeEventName, RealtimeHandler } from '../src/realtime/types'
 
 const realtimeHandlers = new Map<string, Set<RealtimeHandler>>()
@@ -10,6 +10,7 @@ const realtimeHandlers = new Map<string, Set<RealtimeHandler>>()
 vi.mock('../src/api/crawlerRun', () => ({
   getCrawlerRun: vi.fn(),
   getCrawlerRunLogs: vi.fn(),
+  getCrawlerRunTaskSummary: vi.fn(),
   getCrawlerRunTasks: vi.fn(),
 }))
 
@@ -90,18 +91,18 @@ describe('RunDetailPage realtime events', () => {
     vi.mocked(getCrawlerRunTasks).mockResolvedValue({
       rows: [],
       total: 0,
-      summary: {
-        total: 0,
-        pending_crawl: 0,
-        crawling: 0,
-        saved: 0,
-        skipped: 0,
-        crawl_failed: 0,
-        save_failed: 0,
-        completed: 0,
-        waiting: 0,
-        failed: 0,
-      },
+    })
+    vi.mocked(getCrawlerRunTaskSummary).mockResolvedValue({
+      total: 0,
+      pending_crawl: 0,
+      crawling: 0,
+      saved: 0,
+      skipped: 0,
+      crawl_failed: 0,
+      save_failed: 0,
+      completed: 0,
+      waiting: 0,
+      failed: 0,
     })
   })
 
@@ -116,6 +117,35 @@ describe('RunDetailPage realtime events', () => {
       size: 50,
       status: undefined,
       keyword: undefined,
+    })
+    expect(getCrawlerRunTaskSummary).toHaveBeenCalledWith('run-1')
+  })
+
+  it('does not expect summary from the paginated tasks response', async () => {
+    vi.mocked(getCrawlerRunTaskSummary).mockResolvedValue({
+      total: 2,
+      pending_crawl: 1,
+      crawling: 0,
+      saved: 1,
+      skipped: 0,
+      crawl_failed: 0,
+      save_failed: 0,
+      completed: 1,
+      waiting: 1,
+      failed: 0,
+    })
+    vi.mocked(getCrawlerRunTasks).mockResolvedValue({
+      rows: [],
+      total: 2,
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('运行详情 - 任务A')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('总数').parentElement?.textContent).toContain('2')
+      expect(screen.getByText('完成').parentElement?.textContent).toContain('1')
+      expect(screen.getByText('等待').parentElement?.textContent).toContain('1')
     })
   })
 
@@ -338,5 +368,52 @@ describe('RunDetailPage realtime events', () => {
       expect(vi.mocked(getCrawlerRun).mock.calls.length).toBeGreaterThan(initialRunCalls)
     })
     expect(await screen.findByText('已完成')).toBeInTheDocument()
+  })
+
+  it('updates summary metrics from realtime detail event summary payload', async () => {
+    vi.mocked(getCrawlerRunTaskSummary).mockResolvedValue({
+      total: 1,
+      pending_crawl: 1,
+      crawling: 0,
+      saved: 0,
+      skipped: 0,
+      crawl_failed: 0,
+      save_failed: 0,
+      completed: 0,
+      waiting: 1,
+      failed: 0,
+    })
+    vi.mocked(getCrawlerRunTasks).mockResolvedValue({
+      rows: [],
+      total: 1,
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('等待').parentElement?.textContent).toContain('1')
+    })
+
+    emit('crawler.run.detail.updated', {
+      run_id: 'run-1',
+      tasks: [],
+      summary: {
+        total: 1,
+        pending_crawl: 0,
+        crawling: 0,
+        saved: 1,
+        skipped: 0,
+        crawl_failed: 0,
+        save_failed: 0,
+        completed: 1,
+        waiting: 0,
+        failed: 0,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('完成').parentElement?.textContent).toContain('1')
+      expect(screen.getByText('等待').parentElement?.textContent).toContain('0')
+    })
   })
 })

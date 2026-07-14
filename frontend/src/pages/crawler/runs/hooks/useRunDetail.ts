@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { message } from 'antd'
-import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks, restartCrawlerRun, retryCrawlerRunTasks, stopCrawlerRun } from '@/api/crawlerRun'
+import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTaskSummary, getCrawlerRunTasks, restartCrawlerRun, retryCrawlerRunTasks, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawlerRun/types'
 
 const emptyTaskSummary: RunTaskSummary = {
@@ -66,17 +66,23 @@ export function useRunDetail(id: string | undefined) {
       })
       setTasks(data.rows)
       setTaskTotal(data.total)
-      setTaskSummary(data.summary)
     } finally {
       setLoading(false)
     }
   }, [id, keyword, pageSize, statusFilter, taskPage])
 
+  const fetchTaskSummary = useCallback(async () => {
+    if (!id) return
+    const data = await getCrawlerRunTaskSummary(id)
+    setTaskSummary(data)
+  }, [id])
+
   const resyncSnapshot = useCallback(() => {
     void fetchRun()
     void fetchLogs()
     void fetchTasks()
-  }, [fetchLogs, fetchRun, fetchTasks])
+    void fetchTaskSummary()
+  }, [fetchLogs, fetchRun, fetchTaskSummary, fetchTasks])
 
   const handleStop = useCallback(async () => {
     if (!id) return
@@ -176,11 +182,16 @@ export function useRunDetail(id: string | undefined) {
     void fetchTasks()
   }, [fetchTasks])
 
+  useEffect(() => {
+    void fetchTaskSummary()
+  }, [fetchTaskSummary])
+
   return {
     actionLoading,
     fetchLogs,
     fetchRun,
     fetchTasks,
+    fetchTaskSummary,
     handleKeywordSearch,
     handleRestart,
     handleRetryAllFailedTasks,
@@ -197,6 +208,8 @@ export function useRunDetail(id: string | undefined) {
     run,
     setLogs,
     setRun,
+    setTaskSummary,
+    setTaskTotal,
     setTasks,
     statusFilter,
     taskPage,

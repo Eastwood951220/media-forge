@@ -10,10 +10,6 @@ import type {
 } from './types'
 import type { PaginatedResponse } from '../crawlTask/types'
 
-export type CrawlerRunTasksResponse = PaginatedResponse<CrawlRunDetailTask> & {
-  summary: RunTaskSummary
-}
-
 const BASE_URL = '/api/crawler/runs'
 
 export function getCrawlerRuns(params?: {
@@ -41,8 +37,12 @@ export function getCrawlerRunTasks(
     status?: string
     keyword?: string
   },
-): Promise<CrawlerRunTasksResponse> {
-  return request.get<CrawlerRunTasksResponse>(`${BASE_URL}/${runId}/tasks`, params)
+): Promise<PaginatedResponse<CrawlRunDetailTask>> {
+  return request.get<PaginatedResponse<CrawlRunDetailTask>>(`${BASE_URL}/${runId}/tasks`, params)
+}
+
+export function getCrawlerRunTaskSummary(runId: string): Promise<RunTaskSummary> {
+  return request.get<RunTaskSummary>(`${BASE_URL}/${runId}/tasks/summary`)
 }
 
 export function stopCrawlerRun(runId: string): Promise<CrawlRun> {
