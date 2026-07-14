@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { Button, Card, Input, Modal, Select, Table, Tag } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
-import AnimatedNumber from '@/components/AnimatedNumber'
+import { useMemo, useState } from 'react'
+import { Card, Table } from 'antd'
 import type { CrawlRunDetailTask, RunTaskSummary } from '@/api/crawlerRun/types'
 import styles from '../RunDetailPage.module.less'
-import { runDetailStatusLabels } from '../utils/status'
+import RunTaskSummaryMetrics from './RunTaskSummaryMetrics'
+import RunTaskToolbar from './RunTaskToolbar'
+import { createRunTaskColumns } from './runTaskColumns'
+import { confirmRetryAllFailed, confirmRetrySelected, confirmRetryTask } from '../utils/retryConfirm'
 
 interface RunTaskTableProps {
   tasks: CrawlRunDetailTask[]
@@ -45,108 +46,17 @@ function RunTaskTable({
 }: RunTaskTableProps) {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const retryEnabled = runStatus === 'completed' || runStatus === 'failed' || runStatus === 'stopped'
-  const failedTasks = tasks.filter((task) => task.status === 'crawl_failed')
+  const failedTasks = useMemo(() => tasks.filter((task) => task.status === 'crawl_failed'), [tasks])
   const selectedFailedIds = selectedRowKeys.map(String)
-
-  const confirmRetryTask = (detailId: string) => {
-    Modal.confirm({
-      title: '重新爬取失败子任务',
-      content: '确认重新爬取该失败子任务？',
-      okText: '确定',
-      cancelText: '取消',
-      onOk: async () => {
-        await onRetryTask(detailId)
-        setSelectedRowKeys([])
-      },
-    })
-  }
-
-  const confirmRetrySelected = () => {
-    Modal.confirm({
-      title: '重新爬取选中项',
-      content: `确认重新爬取选中的 ${selectedFailedIds.length} 个失败子任务？`,
-      okText: '确定',
-      cancelText: '取消',
-      onOk: async () => {
-        await onRetrySelected(selectedFailedIds)
-        setSelectedRowKeys([])
-      },
-    })
-  }
-
-  const confirmRetryAllFailed = () => {
-    Modal.confirm({
-      title: '重新爬取全部失败',
-      content: `确认重新爬取全部 ${failedTasks.length} 个失败子任务？`,
-      okText: '确定',
-      cancelText: '取消',
-      onOk: async () => {
-        await onRetryAllFailed()
-        setSelectedRowKeys([])
-      },
-    })
-  }
-
-  const columns: ColumnsType<CrawlRunDetailTask> = [
-    {
-      title: '番号',
-      dataIndex: 'code',
-      key: 'code',
-      width: 120,
-      render: (code: string) => (
-        <span style={{ fontWeight: 500, fontFamily: 'var(--font-mono, monospace)' }}>{code}</span>
-      ),
-    },
-    {
-      title: '来源',
-      dataIndex: 'source_name',
-      key: 'source_name',
-      ellipsis: true,
-    },
-    {
-      title: 'URL来源',
-      dataIndex: 'source_url_name',
-      key: 'source_url_name',
-      width: 140,
-      ellipsis: true,
-      render: (_, record) => record.source_url_name || record.task_url_type || '-',
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: (status: string) => {
-        const { text, color } = runDetailStatusLabels[status] || { text: status, color: 'default' }
-        return <Tag color={color}>{text}</Tag>
-      },
-    },
-    {
-      title: '错误',
-      dataIndex: 'error',
-      key: 'error',
-      ellipsis: true,
-      render: (error: string | null) => error ? (
-        <span style={{ color: '#dc2626', fontSize: 13 }}>{error}</span>
-      ) : null,
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 120,
-      render: (_, record) =>
-        retryEnabled && record.status === 'crawl_failed' ? (
-          <Button
-            type="link"
-            size="small"
-            loading={actionLoading === 'retry'}
-            onClick={() => confirmRetryTask(record.id)}
-          >
-            重新爬取
-          </Button>
-        ) : null,
-    },
-  ]
+  const clearSelection = () => setSelectedRowKeys([])
+  const columns = useMemo(
+    () => createRunTaskColumns({
+      retryEnabled,
+      actionLoading,
+      onRetryTask: (detailId) => confirmRetryTask(detailId, onRetryTask, clearSelection),
+    }),
+    [retryEnabled, actionLoading, onRetryTask],
+  )
 
   return (
     <Card
@@ -157,77 +67,19 @@ function RunTaskTable({
       }}
     >
       <div className={styles.taskTableHeader}>
-        <div className={styles.summaryMetrics}>
-          <div className={`${styles.metricTile} ${styles.metricTotal}`}>
-            <div className={styles.metricLabel}>总数</div>
-            <div className={styles.metricValue}>
-              <AnimatedNumber value={summary.total} duration={1.5} separator="," />
-            </div>
-          </div>
-          <div className={`${styles.metricTile} ${styles.metricCompleted}`}>
-            <div className={styles.metricLabel}>完成</div>
-            <div className={styles.metricValue}>
-              <AnimatedNumber value={summary.completed} duration={1.5} separator="," />
-            </div>
-          </div>
-          <div className={`${styles.metricTile} ${styles.metricWaiting}`}>
-            <div className={styles.metricLabel}>等待</div>
-            <div className={styles.metricValue}>
-              <AnimatedNumber value={summary.waiting} duration={1.5} separator="," />
-            </div>
-          </div>
-          <div className={`${styles.metricTile} ${styles.metricSkipped}`}>
-            <div className={styles.metricLabel}>跳过</div>
-            <div className={styles.metricValue}>
-              <AnimatedNumber value={summary.skipped} duration={1.5} separator="," />
-            </div>
-          </div>
-          <div className={`${styles.metricTile} ${styles.metricFailed}`}>
-            <div className={styles.metricLabel}>失败</div>
-            <div className={styles.metricValue}>
-              <AnimatedNumber value={summary.failed} duration={1.5} separator="," />
-            </div>
-          </div>
-        </div>
-        <div className={styles.filterSection}>
-          <div className={styles.filterControls}>
-            <Select
-              placeholder="状态筛选"
-              allowClear
-              style={{ width: 120 }}
-              value={statusFilter}
-              onChange={(value) => onStatusChange(value)}
-              options={Object.entries(runDetailStatusLabels).map(([key, { text }]) => ({
-                value: key,
-                label: text,
-              }))}
-            />
-            <Input.Search
-              placeholder="搜索番号或名称"
-              allowClear
-              value={keyword}
-              onSearch={(value) => onKeywordSearch(value)}
-              style={{ width: 200 }}
-            />
-          </div>
-          <div className={styles.filterActions}>
-            {retryEnabled && selectedFailedIds.length > 0 && (
-              <Button loading={actionLoading === 'retry'} onClick={confirmRetrySelected}>
-                重新爬取选中项 ({selectedFailedIds.length})
-              </Button>
-            )}
-            {retryEnabled && failedTasks.length > 0 && (
-              <Button
-                type="primary"
-                danger
-                loading={actionLoading === 'retry'}
-                onClick={confirmRetryAllFailed}
-              >
-                重新爬取全部失败 ({failedTasks.length})
-              </Button>
-            )}
-          </div>
-        </div>
+        <RunTaskSummaryMetrics summary={summary} />
+        <RunTaskToolbar
+          statusFilter={statusFilter}
+          keyword={keyword}
+          retryEnabled={retryEnabled}
+          selectedFailedCount={selectedFailedIds.length}
+          failedCount={failedTasks.length}
+          actionLoading={actionLoading}
+          onStatusChange={onStatusChange}
+          onKeywordSearch={onKeywordSearch}
+          onRetrySelected={() => confirmRetrySelected(selectedFailedIds, onRetrySelected, clearSelection)}
+          onRetryAllFailed={() => confirmRetryAllFailed(failedTasks.length, onRetryAllFailed, clearSelection)}
+        />
       </div>
       <Table
         rowKey="id"
