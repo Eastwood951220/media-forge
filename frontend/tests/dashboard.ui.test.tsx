@@ -39,10 +39,17 @@ const overview: DashboardOverview = {
   partial_errors: [],
 }
 
-let hookState = {
+let hookState: {
+  data: DashboardOverview | null
+  loading: boolean
+  error: Error | null
+  refreshing: boolean
+  fetchOverview: ReturnType<typeof vi.fn>
+  refresh: ReturnType<typeof vi.fn>
+} = {
   data: overview,
   loading: false,
-  error: null as Error | null,
+  error: null,
   refreshing: false,
   fetchOverview: vi.fn(),
   refresh: refreshMock,
