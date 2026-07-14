@@ -23,6 +23,7 @@ from backend.app.startup_database import connect_or_repair_postgres
 from backend.app.modules.crawler.tasks.router import router as crawler_tasks_router
 from backend.app.modules.realtime.bus import event_bus
 from backend.app.modules.realtime.router import router as realtime_router
+from backend.app.modules.dashboard.router import router as dashboard_router
 from backend.app.modules.health.router import router as health_router
 from backend.app.modules.init.router import router as init_router
 from backend.app.modules.storage.config.router import router as storage_config_router
@@ -126,6 +127,7 @@ app.include_router(init_router)
 app.include_router(auth_router)
 app.include_router(health_router)
 app.include_router(realtime_router)
+app.include_router(dashboard_router)
 app.include_router(crawler_tasks_router)
 app.include_router(crawler_config_router)
 app.include_router(crawler_runs_router)
