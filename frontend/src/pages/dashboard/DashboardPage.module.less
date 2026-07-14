@@ -1,106 +1,75 @@
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
 
-.hero {
+.statusHeader,
+.metricCard,
+.panel {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.statusHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
-  padding: 22px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+  gap: 16px;
+  padding: 18px;
+}
+
+.statusHeader h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 32px;
 }
 
 .eyebrow,
-.panelKicker,
+.headerSummary,
+.refreshedAt,
 .metricLabel,
 .metricDetail,
-.statusLabel {
+.recentRow span,
+.alertRow span {
   color: #64748b;
   font-size: 12px;
 }
 
 .eyebrow {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-weight: 700;
   text-transform: uppercase;
 }
 
-.title {
-  margin: 0;
-  color: #0f172a;
-  font-size: 28px;
-  font-weight: 800;
-  line-height: 36px;
+.headerSummary {
+  margin: 6px 0 0;
+  font-size: 13px;
 }
 
-.summary {
-  max-width: 560px;
-  margin: 8px 0 0;
-  color: #475569;
-  font-size: 14px;
-  line-height: 22px;
-}
-
-.heroStatus {
-  min-width: 176px;
+.headerActions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
-  padding: 12px;
-  border: 1px solid rgba(187, 247, 208, 0.9);
-  border-radius: 8px;
-  background: rgba(240, 253, 244, 0.9);
-  color: #166534;
-}
-
-.heroStatus strong {
-  display: block;
-  color: #14532d;
-  font-size: 14px;
-}
-
-.statusIcon {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: 8px;
-  background: #dcfce7;
-  color: #15803d;
-  font-size: 18px;
 }
 
 .metricsGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.metricCard,
-.panel {
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .metricCard {
   display: flex;
   gap: 12px;
-  padding: 16px;
-}
-
-.metricIcon,
-.panelIcon {
-  color: var(--app-primary-color, #006aff);
+  min-width: 0;
+  padding: 14px;
 }
 
 .metricIcon {
@@ -111,10 +80,15 @@
   flex: 0 0 auto;
   border-radius: 8px;
   background: rgba(0, 106, 255, 0.1);
+  color: var(--app-primary-color, #006aff);
   font-size: 18px;
 }
 
-.metricValue {
+.metricBody {
+  min-width: 0;
+}
+
+.metricBody strong {
   display: block;
   margin-top: 4px;
   color: #0f172a;
@@ -127,10 +101,20 @@
   margin-top: 2px;
 }
 
+.partialError {
+  margin-top: 8px;
+}
+
+.chartGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .workGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.6fr);
+  gap: 12px;
 }
 
 .panel {
@@ -140,115 +124,112 @@
 
 .panelHeader {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .panelHeader h2 {
-  margin: 2px 0 0;
+  margin: 0;
   color: #0f172a;
   font-size: 16px;
   line-height: 22px;
 }
 
-.panelIcon {
-  font-size: 20px;
+.chartCanvas {
+  width: 100%;
+  min-height: 220px;
 }
 
-.laneList,
-.activityList {
+.recentList,
+.alertList {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.laneRow {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 12px;
-  align-items: center;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: #334155;
-  font-size: 13px;
-}
-
-.laneRow strong {
-  color: #0f172a;
-}
-
-.laneRow em {
-  color: #64748b;
-  font-style: normal;
-}
-
-.activityRow {
+.recentRow,
+.alertRow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 38px;
-  color: #334155;
-  font-size: 13px;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f8fafc;
 }
 
-.activityDot {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--app-primary-color, #006aff);
+.recentRow > div,
+.alertRow > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recentRow a,
+.alertRow a,
+.alertRow strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .metricsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chartGrid,
+  .workGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .statusHeader,
+  .headerActions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .metricsGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 :global(:root[data-theme="dark"]) {
-  .hero,
+  .statusHeader,
   .metricCard,
   .panel {
     border-color: rgba(51, 65, 85, 0.9);
-    background: rgba(15, 23, 42, 0.88);
+    background: rgba(15, 23, 42, 0.9);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
   }
 
-  .title,
-  .metricValue,
+  .statusHeader h1,
+  .metricBody strong,
   .panelHeader h2,
-  .laneRow strong {
+  .recentRow a,
+  .alertRow a,
+  .alertRow strong {
     color: #f8fafc;
   }
 
-  .summary,
-  .activityRow,
-  .laneRow {
-    color: #cbd5e1;
-  }
-
   .eyebrow,
-  .panelKicker,
+  .headerSummary,
+  .refreshedAt,
   .metricLabel,
   .metricDetail,
-  .statusLabel,
-  .laneRow em {
+  .recentRow span,
+  .alertRow span {
     color: #94a3b8;
   }
 
-  .heroStatus {
-    border-color: rgba(20, 83, 45, 0.9);
-    background: rgba(20, 83, 45, 0.28);
-    color: #bbf7d0;
-  }
-
-  .heroStatus strong {
-    color: #dcfce7;
-  }
-
-  .statusIcon {
-    background: rgba(22, 101, 52, 0.52);
-    color: #bbf7d0;
-  }
-
-  .laneRow {
+  .recentRow,
+  .alertRow {
     background: rgba(30, 41, 59, 0.78);
   }
 }

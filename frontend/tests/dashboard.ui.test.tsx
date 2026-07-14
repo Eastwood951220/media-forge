@@ -91,7 +91,8 @@ describe('DashboardPage runtime overview', () => {
     render(<DashboardPage />)
 
     expect(screen.getByText('首页数据加载失败')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    const retryButton = screen.getByRole('button', { name: /重.*试/ })
+    fireEvent.click(retryButton)
     expect(refreshMock).toHaveBeenCalledTimes(1)
   })
 })
