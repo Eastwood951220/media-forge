@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
-from pathlib import PurePosixPath
 from typing import Any
 
-from shared.runtime_config import RuntimeConfigPaths
 from backend.app.modules.storage.index.models import StorageIndexMetadata, StorageIndexRecord
+from backend.app.modules.storage.index.tree import (
+    empty_tree,
+    group_records_by_code,
+    insert_record,
+    known_code_folder_paths,
+    tree_from_records,
+)
+from shared.runtime_config import RuntimeConfigPaths
 
 
 class StorageIndexMissingError(RuntimeError):
@@ -67,24 +72,7 @@ class StorageIndexStore:
             raise StorageIndexMissingError("存储索引文件格式已过期或损坏，请重新刷新存储索引")
 
     def load_index_by_code(self) -> dict[str, list[StorageIndexRecord]]:
-        tree = self.read_index_tree()
-        grouped: dict[str, list[StorageIndexRecord]] = defaultdict(list)
-        for category_name, category in (tree.get("categories") or {}).items():
-            for _folder_name, code_folder in (category.get("code_folders") or {}).items():
-                code = str(code_folder.get("code") or "").upper()
-                target_folder = str(code_folder.get("path") or "")
-                for video in code_folder.get("videos") or []:
-                    record = StorageIndexRecord(
-                        code=code,
-                        path=str(video["path"]),
-                        target_folder=target_folder,
-                        storage_location=str(category_name),
-                        file_name=str(video["file_name"]),
-                        size=int(video.get("size") or 0),
-                        indexed_at=str(video["indexed_at"]),
-                    )
-                    grouped[record.code].append(record)
-        return dict(grouped)
+        return group_records_by_code(self.read_index_tree())
 
     def upsert_records(self, records: list[StorageIndexRecord], target_folder: str) -> None:
         try:
@@ -96,51 +84,20 @@ class StorageIndexStore:
         self._write_json_atomic(self.paths.storage_index_file, tree)
 
     def tree_from_records(self, target_folder: str, records: list[StorageIndexRecord], *, indexed_at: str | None) -> dict[str, Any]:
-        tree = self.empty_tree(target_folder, indexed_at=indexed_at)
-        for record in records:
-            self._insert_record(tree, record)
-        return tree
+        return tree_from_records(target_folder, records, indexed_at=indexed_at, version=self.TREE_VERSION)
 
     def empty_tree(self, target_folder: str, indexed_at: str | None) -> dict[str, Any]:
-        return {
-            "version": self.TREE_VERSION,
-            "target_folder": target_folder,
-            "indexed_at": indexed_at,
-            "categories": {},
-        }
+        return empty_tree(target_folder, indexed_at=indexed_at, version=self.TREE_VERSION)
 
     def known_code_folder_paths(self) -> set[str]:
         try:
             tree = self.read_index_tree()
         except StorageIndexMissingError:
             return set()
-        paths: set[str] = set()
-        for category in (tree.get("categories") or {}).values():
-            for code_folder in (category.get("code_folders") or {}).values():
-                path = str(code_folder.get("path") or "")
-                if path:
-                    paths.add(path)
-        return paths
+        return known_code_folder_paths(tree)
 
     def _insert_record(self, tree: dict[str, Any], record: StorageIndexRecord) -> None:
-        category = tree.setdefault("categories", {}).setdefault(record.storage_location, {
-            "path": str(PurePosixPath(record.target_folder).parent),
-            "code_folders": {},
-        })
-        folder_name = PurePosixPath(record.target_folder).name
-        code_folder = category.setdefault("code_folders", {}).setdefault(folder_name, {
-            "path": record.target_folder,
-            "code": record.code,
-            "videos": [],
-        })
-        videos = code_folder.setdefault("videos", [])
-        videos[:] = [video for video in videos if video.get("path") != record.path]
-        videos.append({
-            "path": record.path,
-            "file_name": record.file_name,
-            "size": record.size,
-            "indexed_at": record.indexed_at,
-        })
+        insert_record(tree, record)
 
     def _read_tree_file(self, path) -> dict[str, Any]:
         return json.loads(path.read_text(encoding="utf-8"))

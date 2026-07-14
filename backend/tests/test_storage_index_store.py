@@ -97,3 +97,32 @@ def test_storage_index_store_does_not_load_running_temp_index(tmp_path):
 
     with pytest.raises(StorageIndexMissingError, match="存储索引不存在或尚未完成"):
         store.load_index_by_code()
+
+
+from backend.app.modules.storage.index.tree import (
+    group_records_by_code,
+    insert_record,
+    known_code_folder_paths,
+    tree_from_records,
+)
+
+
+def test_storage_index_tree_helpers_replace_duplicate_video_path():
+    first = record()
+    updated = StorageIndexRecord(
+        code=first.code,
+        path=first.path,
+        target_folder=first.target_folder,
+        storage_location=first.storage_location,
+        file_name=first.file_name,
+        size=first.size + 1,
+        indexed_at="2026-07-14T00:00:00+00:00",
+    )
+    tree = tree_from_records("/嘿嘿/日本", [first], indexed_at=first.indexed_at)
+
+    insert_record(tree, updated)
+
+    grouped = group_records_by_code(tree)
+    assert len(grouped["ALDN-206"]) == 1
+    assert grouped["ALDN-206"][0].size == first.size + 1
+    assert known_code_folder_paths(tree) == {first.target_folder}
