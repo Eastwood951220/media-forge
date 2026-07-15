@@ -8,7 +8,47 @@ from backend.app.modules.content.movies.storage_status import normalized_movie_s
 from shared.database.models.content import Movie
 
 
-def movie_storage_locations(movie: Movie, db: Session | None) -> list[str]:
+def build_movie_storage_location_map(db: Session, movies: list[Movie]) -> dict[str, list[str]]:
+    from backend.app.models.crawl_task import CrawlTask
+
+    task_ids: set[uuid.UUID] = set()
+    movie_task_ids: dict[str, list[str]] = {}
+    for movie in movies:
+        ids = [str(tid) for tid in (movie.source_task_ids or [])]
+        movie_task_ids[str(movie.id)] = ids
+        for task_id_text in ids:
+            try:
+                task_ids.add(uuid.UUID(task_id_text))
+            except (TypeError, ValueError):
+                continue
+
+    if not task_ids:
+        return {movie_id: [] for movie_id in movie_task_ids}
+
+    task_rows = (
+        db.query(CrawlTask.id, CrawlTask.storage_location)
+        .filter(CrawlTask.id.in_(task_ids))
+        .all()
+    )
+    location_by_task = {str(task_id): location for task_id, location in task_rows if location}
+    result: dict[str, list[str]] = {}
+    for movie_id, ids in movie_task_ids.items():
+        locations: list[str] = []
+        for task_id_text in ids:
+            location = location_by_task.get(task_id_text)
+            if location and location not in locations:
+                locations.append(location)
+        result[movie_id] = locations
+    return result
+
+
+def movie_storage_locations(
+    movie: Movie,
+    db: Session | None,
+    storage_location_map: dict[str, list[str]] | None = None,
+) -> list[str]:
+    if storage_location_map is not None:
+        return list(storage_location_map.get(str(movie.id), []))
     source_task_ids = [str(tid) for tid in (movie.source_task_ids or [])]
     if db is None or not source_task_ids:
         return []
@@ -27,7 +67,13 @@ def movie_storage_locations(movie: Movie, db: Session | None) -> list[str]:
     return locations
 
 
-def serialize_movie(movie: Movie, *, include_magnets: bool = False, db: Session | None = None) -> dict:
+def serialize_movie(
+    movie: Movie,
+    *,
+    include_magnets: bool = False,
+    db: Session | None = None,
+    storage_location_map: dict[str, list[str]] | None = None,
+) -> dict:
     source_task_ids = [str(tid) for tid in (movie.source_task_ids or [])]
     payload = {
         "_id": str(movie.id),
@@ -45,7 +91,7 @@ def serialize_movie(movie: Movie, *, include_magnets: bool = False, db: Session 
         "actors": list(movie.actors or []),
         "tags": list(movie.tags or []),
         "source_task_ids": source_task_ids,
-        "storage_locations": movie_storage_locations(movie, db),
+        "storage_locations": movie_storage_locations(movie, db, storage_location_map),
         "marked": bool(movie.marked),
         "storage_status": normalized_movie_storage_status(movie),
         "storage_summary": movie.storage_summary or {},

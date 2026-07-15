@@ -15,7 +15,7 @@ from backend.app.modules.content.movies.queries import (
     movie_matches,
 )
 from backend.app.modules.content.movies.schemas import MovieDeleteRequest, MovieStorageSyncRequest
-from backend.app.modules.content.movies.serializers import serialize_movie
+from backend.app.modules.content.movies.serializers import build_movie_storage_location_map, serialize_movie
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
 from backend.app.modules.content.movies.storage_sync_api import (
     sync_movies_from_request,
@@ -109,7 +109,14 @@ def list_movies(
         limit=limit,
         skip=skip,
     )
-    return paginated(rows=[serialize_movie(movie, include_magnets=True, db=db) for movie in rows], total=total)
+    storage_location_map = build_movie_storage_location_map(db, rows)
+    return paginated(
+        rows=[
+            serialize_movie(movie, include_magnets=True, db=db, storage_location_map=storage_location_map)
+            for movie in rows
+        ],
+        total=total,
+    )
 
 
 @router.get("/filter-config")

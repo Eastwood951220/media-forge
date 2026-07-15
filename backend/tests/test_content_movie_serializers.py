@@ -50,3 +50,27 @@ def test_serialize_movie_includes_magnets_and_storage_locations(admin_user) -> N
     assert payload["selected_magnet_dedupe_key"] == "abc"
 
     session.close()
+
+
+def test_serialize_movie_uses_batched_storage_location_map(admin_user) -> None:
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies.serializers import build_movie_storage_location_map, serialize_movie
+
+    session = TestingSessionLocal()
+    task = CrawlTask(name="location-source", storage_location="JP", is_skip=False, owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    movie = Movie(
+        code="MAP-001",
+        source_url="https://example.test/map-1",
+        source_task_ids=[task.id],
+        storage_summary={},
+    )
+    session.add(movie)
+    session.commit()
+
+    location_map = build_movie_storage_location_map(session, [movie])
+    payload = serialize_movie(movie, include_magnets=False, db=session, storage_location_map=location_map)
+
+    assert payload["storage_locations"] == ["JP"]
+    session.close()
