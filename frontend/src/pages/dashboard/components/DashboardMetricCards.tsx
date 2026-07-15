@@ -12,6 +12,13 @@ function sectionError(partialErrors: PartialError[], section: string) {
   return partialErrors.find((item) => item.section === section || item.section.startsWith(`${section}.`))
 }
 
+const cardStyles: Record<string, { background: string; color: string }> = {
+  crawlerQueue: { background: 'rgba(59, 130, 246, 0.08)', color: '#3b82f6' },
+  crawlerTask: { background: 'rgba(139, 92, 246, 0.08)', color: '#8b5cf6' },
+  content: { background: 'rgba(236, 72, 153, 0.08)', color: '#ec4899' },
+  storage: { background: 'rgba(245, 158, 11, 0.08)', color: '#f59e0b' },
+}
+
 export function DashboardMetricCards({ overview }: { overview: DashboardOverview }) {
   const stored = overview.content.storage_status.stored
   const movieTotal = overview.content.movie_total
@@ -23,6 +30,7 @@ export function DashboardMetricCards({ overview }: { overview: DashboardOverview
       value: `${overview.crawler.runtime_stats.running} / ${overview.crawler.queue.queue_size}`,
       detail: '运行中 / 排队',
       icon: <CloudSyncOutlined />,
+      styleKey: 'crawlerQueue',
     },
     {
       key: 'crawler',
@@ -30,6 +38,7 @@ export function DashboardMetricCards({ overview }: { overview: DashboardOverview
       value: `${overview.crawler.task_stats.enabled} / ${overview.crawler.task_stats.total}`,
       detail: '启用 / 总任务',
       icon: <UnorderedListOutlined />,
+      styleKey: 'crawlerTask',
     },
     {
       key: 'content',
@@ -37,6 +46,7 @@ export function DashboardMetricCards({ overview }: { overview: DashboardOverview
       value: `${movieTotal}`,
       detail: `已入库 ${storedRatio}%`,
       icon: <VideoCameraOutlined />,
+      styleKey: 'content',
     },
     {
       key: 'storage',
@@ -44,6 +54,7 @@ export function DashboardMetricCards({ overview }: { overview: DashboardOverview
       value: `${overview.storage.index.video_count}`,
       detail: `${overview.storage.index.status} · ${overview.storage.index.category_count} 分类`,
       icon: <DatabaseOutlined />,
+      styleKey: 'storage',
     },
   ]
 
@@ -51,9 +62,15 @@ export function DashboardMetricCards({ overview }: { overview: DashboardOverview
     <section className={styles.metricsGrid}>
       {cards.map((card) => {
         const error = sectionError(overview.partial_errors, card.key)
+        const iconStyle = cardStyles[card.styleKey]
         return (
           <article className={styles.metricCard} key={`${card.key}-${card.title}`}>
-            <span className={styles.metricIcon}>{card.icon}</span>
+            <span
+              className={styles.metricIcon}
+              style={{ background: iconStyle.background, color: iconStyle.color }}
+            >
+              {card.icon}
+            </span>
             <div className={styles.metricBody}>
               <span className={styles.metricLabel}>{card.title}</span>
               <strong>{card.value}</strong>

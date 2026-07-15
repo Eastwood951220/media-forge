@@ -1,4 +1,7 @@
-import { Form, Button, Divider } from 'antd'
+import { useEffect, useState } from 'react'
+import { Form, Button, Divider, Spin } from 'antd'
+import { useNavigate } from '@tanstack/react-router'
+import { getInitConfig } from '@/api/init'
 import type { ConnectionTestResult, InitConfigRequest } from '@/api/init/types'
 import { useInitConnectionTests } from './hooks/useInitConnectionTests'
 import { useInitSubmit } from './hooks/useInitSubmit'
@@ -7,13 +10,38 @@ import { RedisConfigSection } from './components/RedisConfigSection'
 import styles from './InitPage.module.less'
 
 function InitPage() {
+  const navigate = useNavigate()
+  const [checking, setChecking] = useState(true)
   const [form] = Form.useForm<InitConfigRequest>()
+
+  useEffect(() => {
+    getInitConfig()
+      .then((res) => {
+        if (res.databaseConfigured && res.redisConfigured) {
+          void navigate({ to: '/login', search: { redirect: undefined } })
+        }
+      })
+      .catch(() => {
+        // Config not available, stay on init page
+      })
+      .finally(() => setChecking(false))
+  }, [navigate])
   const { pgTesting, redisTesting, pgResult, redisResult, handleTestPg, handleTestRedis } =
     useInitConnectionTests(form)
   const { loading, handleFinish } = useInitSubmit()
 
   const testResultClass = (res: ConnectionTestResult | null): string =>
     res ? (res.success ? styles.success : styles.fail) : ''
+
+  if (checking) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.card}>
+          <Spin size="large" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={styles.page}>

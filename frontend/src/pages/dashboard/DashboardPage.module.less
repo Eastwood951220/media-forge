@@ -1,7 +1,7 @@
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   min-width: 0;
 }
 
@@ -9,24 +9,27 @@
 .metricCard,
 .panel {
   border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 8px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.2s ease;
 }
 
 .statusHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px;
+  gap: 20px;
+  padding: 24px;
 }
 
 .statusHeader h1 {
   margin: 0;
   color: #0f172a;
-  font-size: 24px;
-  line-height: 32px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 36px;
+  letter-spacing: -0.02em;
 }
 
 .eyebrow,
@@ -37,18 +40,22 @@
 .recentRow span,
 .alertRow span {
   color: #64748b;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .eyebrow {
-  margin: 0 0 4px;
-  font-weight: 700;
+  margin: 0 0 8px;
+  font-weight: 600;
+  font-size: 11px;
   text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--app-primary-color, #006aff);
 }
 
 .headerSummary {
-  margin: 6px 0 0;
-  font-size: 13px;
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .headerActions {
@@ -56,32 +63,37 @@
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
 }
 
 .metricsGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .metricCard {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
-  padding: 14px;
+  padding: 20px;
+  cursor: default;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  }
 }
 
 .metricIcon {
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  border-radius: 8px;
-  background: rgba(0, 106, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(0, 106, 255, 0.08);
   color: var(--app-primary-color, #006aff);
-  font-size: 18px;
+  font-size: 22px;
 }
 
 .metricBody {
@@ -92,13 +104,16 @@
   display: block;
   margin-top: 4px;
   color: #0f172a;
-  font-size: 24px;
-  line-height: 30px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 36px;
+  font-variant-numeric: tabular-nums;
 }
 
 .metricDetail {
   display: block;
-  margin-top: 2px;
+  margin-top: 4px;
+  font-size: 12px;
 }
 
 .partialError {
@@ -108,18 +123,22 @@
 .chartGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .workGrid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.6fr);
-  gap: 12px;
+  gap: 16px;
 }
 
 .panel {
   min-width: 0;
-  padding: 16px;
+  padding: 20px;
+}
+
+.panel:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
 }
 
 .panelHeader {
@@ -127,26 +146,27 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .panelHeader h2 {
   margin: 0;
   color: #0f172a;
   font-size: 16px;
-  line-height: 22px;
+  font-weight: 600;
+  line-height: 24px;
 }
 
 .chartCanvas {
   width: 100%;
-  min-height: 220px;
+  min-height: 240px;
 }
 
 .recentList,
 .alertList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .recentRow,
@@ -154,11 +174,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 42px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  gap: 16px;
+  min-height: 48px;
+  padding: 12px 16px;
+  border-radius: 10px;
   background: #f8fafc;
+  transition: background 0.15s ease;
+}
+
+.recentRow:hover,
+.alertRow:hover {
+  background: #f1f5f9;
 }
 
 .recentRow > div,
@@ -166,18 +192,23 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .recentRow a,
 .alertRow a,
 .alertRow strong {
   color: #0f172a;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
-@media (max-width: 1100px) {
+.recentRow span,
+.alertRow span {
+  font-size: 12px;
+}
+
+@media (max-width: 1200px) {
   .metricsGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -188,15 +219,37 @@
   }
 }
 
-@media (max-width: 640px) {
-  .statusHeader,
-  .headerActions {
-    align-items: flex-start;
+@media (max-width: 768px) {
+  .dashboard {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .statusHeader {
     flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .statusHeader h1 {
+    font-size: 24px;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .metricsGrid {
     grid-template-columns: 1fr;
+  }
+
+  .metricCard {
+    padding: 16px;
+  }
+
+  .metricBody strong {
+    font-size: 24px;
   }
 }
 
@@ -206,7 +259,7 @@
   .panel {
     border-color: rgba(51, 65, 85, 0.9);
     background: rgba(15, 23, 42, 0.9);
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   }
 
   .statusHeader h1,
@@ -218,7 +271,10 @@
     color: #f8fafc;
   }
 
-  .eyebrow,
+  .eyebrow {
+    color: var(--app-primary-color, #60a5fa);
+  }
+
   .headerSummary,
   .refreshedAt,
   .metricLabel,
@@ -231,5 +287,15 @@
   .recentRow,
   .alertRow {
     background: rgba(30, 41, 59, 0.78);
+  }
+
+  .recentRow:hover,
+  .alertRow:hover {
+    background: rgba(51, 65, 85, 0.78);
+  }
+
+  .metricIcon {
+    background: rgba(96, 165, 250, 0.12);
+    color: #60a5fa;
   }
 }
