@@ -206,6 +206,29 @@ describe('MovieListPage', () => {
     expect(screen.queryByText('标记')).not.toBeInTheDocument()
   })
 
+  it('deduplicates detail tags and formats storage sync time', async () => {
+    vi.mocked(fetchMovie).mockResolvedValue({
+      ...movie,
+      tags: ['VR', 'VR', '高清'],
+      storage_summary: {
+        last_status: 'stored',
+        storage_status: 'stored',
+        synced_at: '2026-07-14T15:41:12.250537+00:00',
+      },
+    })
+
+    renderPage()
+
+    await screen.findByText('AAA-001')
+    await userEvent.click(screen.getByRole('button', { name: /详情/ }))
+
+    expect(await screen.findByText('影片详情')).toBeInTheDocument()
+    expect(screen.getAllByText('VR')).toHaveLength(1)
+    expect(screen.getByText('高清')).toBeInTheDocument()
+    expect(screen.queryByText('2026-07-14T15:41:12.250537+00:00')).not.toBeInTheDocument()
+    expect(screen.getByText('2026/07/14 23:41:12')).toBeInTheDocument()
+  })
+
   it('persists filter drawer settings', async () => {
     renderPage()
 

@@ -34,6 +34,38 @@ function getMagnetDisplayText(magnet: MovieMagnet): string {
     return metadata ? `${metadata}\n${magnet.magnet}` : (magnet.magnet ?? "");
 }
 
+export function uniqueStrings(values: unknown): string[] {
+    if (!Array.isArray(values)) return [];
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const value of values) {
+        if (typeof value !== "string") continue;
+        const normalized = value.trim();
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        result.push(normalized);
+    }
+    return result;
+}
+
+const DETAIL_DATE_TIME_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+});
+
+export function formatDateTime(value: unknown): string {
+    if (typeof value !== "string" || !value.trim()) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return DETAIL_DATE_TIME_FORMATTER.format(date).replace(/\//g, "/");
+}
+
 function FilterValue({value, field, onClick}: {value: string; field: string; onClick?: (field: string, value: string) => void}) {
     if (!value || value === "-") return <>{value || "-"}</>;
     if (onClick) {
@@ -47,6 +79,8 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
     const detailMagnetLinks = detailMagnets.filter((m) => typeof m.magnet === "string" && m.magnet.trim());
     const detailHasChineseSub = Boolean(detail?.has_chinese_sub) || detailMagnets.some((m) => Boolean(m.has_chinese_sub));
     const detailSizeText = getDetailSizeText(detail?.size, detailMagnets);
+    const detailActors = uniqueStrings(detail?.actors);
+    const detailTags = uniqueStrings(detail?.tags);
 
     return (
         <Drawer
@@ -75,8 +109,8 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                         <FilterValue value={detail.series as string || ""} field="series" onClick={onFilterClick} />
                     </Descriptions.Item>
                     <Descriptions.Item label="演员">
-                        {Array.isArray(detail.actors) && detail.actors.length > 0
-                            ? (detail.actors as string[]).map((a) => (
+                        {detailActors.length > 0
+                            ? detailActors.map((a) => (
                                 <Tag key={a} style={{cursor: onFilterClick ? "pointer" : undefined}} onClick={() => onFilterClick?.("actors", a)}>
                                     {a}
                                 </Tag>
@@ -84,8 +118,8 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                             : "-"}
                     </Descriptions.Item>
                     <Descriptions.Item label="标签">
-                        {Array.isArray(detail.tags) && detail.tags.length > 0
-                            ? (detail.tags as string[]).map((t) => (
+                        {detailTags.length > 0
+                            ? detailTags.map((t) => (
                                 <Tag key={t} style={{cursor: onFilterClick ? "pointer" : undefined}} onClick={() => onFilterClick?.("tags", t)}>
                                     {t}
                                 </Tag>
@@ -191,7 +225,7 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                         const storageSummary = detail.storage_summary as Record<string, unknown> | undefined;
                         const syncedAt = storageSummary?.synced_at as string | undefined;
                         if (!syncedAt) return null;
-                        return <Descriptions.Item label="最后同步时间">{syncedAt}</Descriptions.Item>;
+                        return <Descriptions.Item label="最后同步时间">{formatDateTime(syncedAt)}</Descriptions.Item>;
                     })()}
                 </Descriptions>
             )}
