@@ -46,7 +46,7 @@ htmlcov/
 
 # Superpowers task tracking (ephemeral session data)
 .superpowers/
-!docs/superpowers
+docs/superpowers/
 
 .mimocode
 /frontend/package-lock.json
