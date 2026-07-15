@@ -2824,3 +2824,61 @@ def test_storage_attempt_flow_modules_export_public_functions() -> None:
     assert callable(run_download_flow)
     assert callable(handle_existing_target_fallback)
     assert callable(run_found_files_pipeline)
+
+
+def test_is_vr_movie_tags_matches_only_clear_vr_tags() -> None:
+    from backend.app.modules.storage.tasks.policies import is_vr_movie_tags
+
+    assert is_vr_movie_tags(["VR"]) is True
+    assert is_vr_movie_tags(["vr"]) is True
+    assert is_vr_movie_tags(["VR影片"]) is True
+    assert is_vr_movie_tags(["巨乳", "中文字幕"]) is False
+    assert is_vr_movie_tags(["preview", "driver"]) is False
+    assert is_vr_movie_tags(["", None, 123]) is False
+
+
+def test_insert_vr_directory_before_code_folder_without_duplication() -> None:
+    from backend.app.modules.storage.tasks.policies import insert_vr_directory
+
+    assert (
+        insert_vr_directory("/Movies/日本/巨乳/XXX", "XXX")
+        == "/Movies/日本/巨乳/VR/XXX"
+    )
+    assert (
+        insert_vr_directory("/Movies/日本/巨乳/VR/XXX", "XXX")
+        == "/Movies/日本/巨乳/VR/XXX"
+    )
+    assert insert_vr_directory("/Movies/XXX", "XXX") == "/Movies/VR/XXX"
+
+
+def test_quality_dedupe_key_removes_quality_tokens_but_preserves_parts() -> None:
+    from backend.app.modules.storage.tasks.policies import quality_dedupe_key
+
+    assert quality_dedupe_key("XXX_1_8K.mp4") == quality_dedupe_key("XXX_1_HD.mp4")
+    assert quality_dedupe_key("XXX-CD1.mp4") != quality_dedupe_key("XXX-CD2.mp4")
+    assert quality_dedupe_key("XXX_part1_4K.mp4") != quality_dedupe_key("XXX_part2_4K.mp4")
+
+
+def test_dedupe_quality_variants_keeps_largest_per_group() -> None:
+    from backend.app.modules.storage.tasks.policies import dedupe_quality_variants
+
+    videos = [
+        {"name": "XXX_1_HD.mp4", "path": "/Downloads/XXX_1_HD.mp4", "size": 100},
+        {"name": "XXX_1_8K.mp4", "path": "/Downloads/XXX_1_8K.mp4", "size": 300},
+        {"name": "XXX-CD1.mp4", "path": "/Downloads/XXX-CD1.mp4", "size": 200},
+        {"name": "XXX-CD2.mp4", "path": "/Downloads/XXX-CD2.mp4", "size": 250},
+    ]
+
+    kept, dropped = dedupe_quality_variants(videos)
+
+    assert [item["name"] for item in kept] == ["XXX_1_8K.mp4", "XXX-CD1.mp4", "XXX-CD2.mp4"]
+    assert dropped == [
+        {
+            "name": "XXX_1_HD.mp4",
+            "path": "/Downloads/XXX_1_HD.mp4",
+            "size": 100,
+            "dedupe_group_key": "xxx_1",
+            "kept_name": "XXX_1_8K.mp4",
+            "reason": "duplicate_quality_smaller_size",
+        }
+    ]

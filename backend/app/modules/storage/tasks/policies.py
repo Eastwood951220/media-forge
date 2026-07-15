@@ -7,6 +7,8 @@ from pathlib import PurePosixPath
 CHINESE_TAG_KEYWORDS = ("字幕", "中文字幕", "中字", "中文")
 UNCENSORED_TAG_KEYWORDS = ("破解", "无码", "无码破解")
 
+VR_TAG_PATTERN = re.compile(r"(^|[^a-z0-9])vr([^a-z0-9]|$)", re.IGNORECASE)
+
 
 def generate_default_alias(now: datetime, sequence: int) -> str:
     return f"云存储_{now.strftime('%Y%m%d%H%M%S')}_{sequence:04d}"
@@ -55,3 +57,83 @@ def build_video_filename(movie_code: str, original_name: str, tags: list[str], i
 def code_folder_from_filename(filename: str) -> str:
     stem = PurePosixPath(filename).stem
     return re.sub(r"-CD\d+$", "", stem, flags=re.IGNORECASE)
+
+
+def is_vr_movie_tags(tags: list[str]) -> bool:
+    for tag in tags or []:
+        if not isinstance(tag, str):
+            continue
+        normalized = tag.strip()
+        if not normalized:
+            continue
+        if normalized.lower() == "vr":
+            return True
+        if normalized.upper().startswith("VR") and len(normalized) > 2:
+            return True
+        if VR_TAG_PATTERN.search(normalized):
+            return True
+    return False
+
+
+def insert_vr_directory(target_path: str, code_folder: str) -> str:
+    path = PurePosixPath(target_path)
+    if path.name != code_folder:
+        return str(path / "VR" / code_folder)
+    parent = path.parent
+    if parent.name.upper() == "VR":
+        return str(path)
+    return str(parent / "VR" / path.name)
+
+
+QUALITY_TOKEN_PATTERN = re.compile(
+    r"(?i)(^|[\s._\-\[\]()])(?:8k|4k|2k|uhd|fhd|hd|2160p|1440p|1080p|720p)(?=$|[\s._\-\[\]()])"
+)
+SEPARATOR_PATTERN = re.compile(r"[\s._\-\[\]()]+")
+
+
+def quality_dedupe_key(filename: str) -> str:
+    stem = PurePosixPath(str(filename or "")).stem.lower()
+    without_quality = QUALITY_TOKEN_PATTERN.sub(" ", stem)
+    normalized = SEPARATOR_PATTERN.sub("_", without_quality).strip("_")
+    return normalized or stem
+
+
+def _video_sort_key(video: dict) -> tuple[int, str, str]:
+    return (
+        -int(video.get("size") or 0),
+        str(video.get("name") or "").lower(),
+        str(video.get("path") or "").lower(),
+    )
+
+
+def dedupe_quality_variants(videos: list[dict]) -> tuple[list[dict], list[dict]]:
+    groups: dict[str, list[dict]] = {}
+    for video in videos:
+        key = quality_dedupe_key(str(video.get("name") or ""))
+        if not key:
+            key = str(video.get("path") or id(video))
+        groups.setdefault(key, []).append(video)
+
+    kept_by_identity: set[int] = set()
+    dropped: list[dict] = []
+    for key, group in groups.items():
+        winner = sorted(group, key=_video_sort_key)[0]
+        kept_by_identity.add(id(winner))
+        if len(group) <= 1:
+            continue
+        for item in group:
+            if item is winner:
+                continue
+            dropped.append(
+                {
+                    "name": item.get("name"),
+                    "path": item.get("path"),
+                    "size": int(item.get("size") or 0),
+                    "dedupe_group_key": key,
+                    "kept_name": winner.get("name"),
+                    "reason": "duplicate_quality_smaller_size",
+                }
+            )
+
+    kept = [video for video in videos if id(video) in kept_by_identity]
+    return kept, dropped
