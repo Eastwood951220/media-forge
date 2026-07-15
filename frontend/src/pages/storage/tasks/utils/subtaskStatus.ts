@@ -50,8 +50,26 @@ export function stepColor(subtask: StorageSubTask, logs: StorageTaskLog[], step:
   return 'gray'
 }
 
+const LOG_TIMESTAMP_HAS_TIMEZONE = /(Z|[+-]\d{2}:?\d{2})$/i
+
+const BEIJING_TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai',
+  hour12: false,
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+})
+
+function normalizeStorageLogTimestamp(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return trimmed
+  if (LOG_TIMESTAMP_HAS_TIMEZONE.test(trimmed)) return trimmed
+  return `${trimmed}Z`
+}
+
 export function formatTime(value: string) {
-  const date = new Date(value)
+  const normalizedValue = normalizeStorageLogTimestamp(value)
+  const date = new Date(normalizedValue)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleTimeString()
+  return BEIJING_TIME_FORMATTER.format(date)
 }
