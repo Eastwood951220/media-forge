@@ -102,3 +102,15 @@ def admin_user() -> User:
     session.refresh(user)
     session.close()
     return user
+
+
+@pytest.fixture
+def other_user(db_session):
+    from backend.app.models.user import User
+    from backend.app.core.security import get_password_hash
+
+    user = User(username="other", hashed_password=get_password_hash("other123"))
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user

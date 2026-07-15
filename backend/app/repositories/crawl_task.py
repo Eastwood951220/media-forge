@@ -200,14 +200,24 @@ class CrawlTaskRepository(BaseRepository):
         if not task_ids:
             return {}
 
+        ranked = (
+            self.session.query(
+                CrawlRun.id.label("run_id"),
+                CrawlRun.task_id.label("task_id"),
+                func.row_number()
+                .over(
+                    partition_by=CrawlRun.task_id,
+                    order_by=(CrawlRun.created_at.desc(), CrawlRun.id.desc()),
+                )
+                .label("rank"),
+            )
+            .filter(CrawlRun.task_id.in_(task_ids))
+            .subquery()
+        )
         rows = (
             self.session.query(CrawlRun)
-            .filter(CrawlRun.task_id.in_(task_ids))
-            .order_by(CrawlRun.task_id.asc(), CrawlRun.created_at.desc())
+            .join(ranked, CrawlRun.id == ranked.c.run_id)
+            .filter(ranked.c.rank == 1)
             .all()
         )
-        latest: dict[uuid.UUID, CrawlRun] = {}
-        for row in rows:
-            if row.task_id is not None and row.task_id not in latest:
-                latest[row.task_id] = row
-        return latest
+        return {row.task_id: row for row in rows if row.task_id is not None}

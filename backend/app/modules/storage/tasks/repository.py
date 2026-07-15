@@ -35,12 +35,13 @@ class StorageTaskRepository:
     def list_main_tasks(
         self,
         *,
+        created_by: uuid.UUID,
         page: int,
         limit: int,
         status: str | None,
         keyword: str | None,
     ) -> tuple[list[StorageMainTask], int]:
-        query = self.db.query(StorageMainTask)
+        query = self.db.query(StorageMainTask).filter(StorageMainTask.created_by == created_by)
         if status:
             query = query.filter(StorageMainTask.status == status)
         if keyword:

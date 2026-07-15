@@ -63,7 +63,13 @@ def list_storage_main_tasks(
     status: str | None = None,
     keyword: str | None = None,
 ):
-    rows, total = service.repository.list_main_tasks(page=page, limit=limit, status=status, keyword=keyword)
+    rows, total = service.repository.list_main_tasks(
+        created_by=current_user.id,
+        page=page,
+        limit=limit,
+        status=status,
+        keyword=keyword,
+    )
     return success(data={
         "rows": [service.to_main_response(r) for r in rows],
         "total": total,

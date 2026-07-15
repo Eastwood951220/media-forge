@@ -338,3 +338,44 @@ def test_storage_push_marks_movie_as_storing(client, db_session, auth_headers, t
     db_session.refresh(movie)
     assert movie.storage_summary["storage_status"] == "storing"
     assert movie.storage_summary["last_status"] == "storing"
+
+
+def test_storage_main_task_list_is_scoped_to_owner(admin_user, other_user) -> None:
+    from backend.app.models.storage_task import StorageMainTask
+    from backend.app.modules.storage.tasks.repository import StorageTaskRepository
+    from backend.tests.conftest import TestingSessionLocal
+
+    session = TestingSessionLocal()
+    own_task = StorageMainTask(
+        alias="own-list-task",
+        display_name="own-list-task",
+        source="single",
+        storage_mode="single",
+        status="completed",
+        total_count=1,
+        success_count=1,
+        created_by=admin_user.id,
+    )
+    other_task = StorageMainTask(
+        alias="other-list-task",
+        display_name="other-list-task",
+        source="single",
+        storage_mode="single",
+        status="completed",
+        total_count=1,
+        success_count=1,
+        created_by=other_user.id,
+    )
+    session.add_all([own_task, other_task])
+    session.commit()
+
+    rows, total = StorageTaskRepository(session).list_main_tasks(
+        created_by=admin_user.id,
+        page=1,
+        limit=20,
+        status=None,
+        keyword=None,
+    )
+
+    assert total == 1
+    assert [row.id for row in rows] == [own_task.id]
