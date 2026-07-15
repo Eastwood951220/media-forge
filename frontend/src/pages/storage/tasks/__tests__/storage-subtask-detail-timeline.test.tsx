@@ -61,6 +61,8 @@ describe('StorageSubTaskDetailPage timeline', () => {
 
     expect(await screen.findByText('步骤时间线')).toBeInTheDocument()
     expect(screen.getByText('准备任务')).toBeInTheDocument()
+    expect(screen.getByText(/11:41:43 执行步骤: prepare/)).toBeInTheDocument()
+    expect(screen.getByText('11:41:43')).toBeInTheDocument()
 
     const logHandler = subscribeRealtime.mock.calls.find((call) => call[0] === 'storage.sub.log.appended')?.[1]
     expect(logHandler).toBeTypeOf('function')
