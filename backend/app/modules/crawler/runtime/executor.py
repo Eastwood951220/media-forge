@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
@@ -9,6 +11,14 @@ from backend.app.modules.crawler.runtime.events import append_run_log_for_run
 from backend.app.modules.crawler.runtime.finalize import finalize_run
 from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
 from backend.app.modules.crawler.runtime.threaded import execute_threaded_crawl
+
+
+def selected_task_url_ids_from_run(run: CrawlRun) -> list[uuid.UUID] | None:
+    result = run.result or {}
+    if not result.get("url_subset"):
+        return None
+    raw_ids = result.get("selected_task_url_ids") or []
+    return [uuid.UUID(str(raw_id)) for raw_id in raw_ids]
 
 
 def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> None:
@@ -45,7 +55,14 @@ def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> Non
                 "INFO",
             )
 
-        result = execute_threaded_crawl(db, run, task, runtime, detail_only=detail_only)
+        result = execute_threaded_crawl(
+            db,
+            run,
+            task,
+            runtime,
+            detail_only=detail_only,
+            selected_task_url_ids=selected_task_url_ids_from_run(run),
+        )
 
         stopped = runtime.is_stop_requested(str(run.id)) or bool((result or {}).get("stopped"))
         finalize_run(db, run, runtime, result, stopped=stopped)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
@@ -124,12 +125,20 @@ def _handle_already_exists_in_worker_session(
             worker_db.close()
 
 
-def execute_threaded_crawl(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, *, detail_only: bool = False) -> dict[str, Any]:
+def execute_threaded_crawl(
+    db: Session,
+    run: CrawlRun,
+    task: CrawlTask,
+    runtime: Any,
+    *,
+    detail_only: bool = False,
+    selected_task_url_ids: list[uuid.UUID] | None = None,
+) -> dict[str, Any]:
     config = read_crawler_runtime_config()
     progress = new_progress()
 
     if not detail_only:
-        _run_list_phase(db, run, task, runtime, config)
+        _run_list_phase(db, run, task, runtime, config, selected_task_url_ids=selected_task_url_ids)
 
     _run_detail_phase(db, run, task, runtime, config, progress)
     write_progress(runtime, str(run.id), progress)
@@ -143,7 +152,15 @@ def _should_persist_list_item(run: CrawlRun, item: dict[str, Any]) -> bool:
     return not (item.get("status") == "skipped" and item.get("reason") == "already_exists")
 
 
-def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, config: Any) -> None:
+def _run_list_phase(
+    db: Session,
+    run: CrawlRun,
+    task: CrawlTask,
+    runtime: Any,
+    config: Any,
+    *,
+    selected_task_url_ids: list[uuid.UUID] | None = None,
+) -> None:
     spider = build_spider()
     worker_session_factory = _worker_session_factory(db)
     list_db_lock = threading.Lock()
@@ -152,6 +169,15 @@ def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, c
     task_name = task.name
     owner_id = str(task.owner_id)
     crawl_mode = run.crawl_mode
+
+    # Filter URLs if subset is selected
+    task_urls = task.urls
+    if selected_task_url_ids is not None:
+        selected_ids = {uuid.UUID(str(url_id)) for url_id in selected_task_url_ids}
+        task_urls = [url for url in task_urls if url.id in selected_ids]
+        if not task_urls:
+            raise ValueError("选择的 URL 不属于该任务")
+
     url_entries = [
         ThreadedUrlEntry(
             id=url_entry.id,
@@ -166,7 +192,7 @@ def _run_list_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, c
             final_url=url_entry.final_url,
             url_name=url_entry.url_name,
         )
-        for url_entry in task.urls
+        for url_entry in task_urls
     ]
 
     def _collect_url(url_entry):
