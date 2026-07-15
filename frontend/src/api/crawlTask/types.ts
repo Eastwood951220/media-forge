@@ -105,3 +105,10 @@ export interface TemporaryCrawlRunCreateParams {
   task_id: string
   detail_urls: string[]
 }
+
+export interface TaskUrlRunCreateParams {
+  url_ids: string[]
+  crawl_mode: 'incremental' | 'full'
+}
+
+export type TaskUrlRunFormValues = TaskUrlRunCreateParams
