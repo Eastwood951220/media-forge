@@ -1,45 +1,26 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getDashboardOverview } from '@/api/dashboard'
+import { queryKeys } from '@/api/queryKeys'
 import type { DashboardOverview } from '@/api/dashboard/types'
 
 export function useDashboardOverview() {
-  const [data, setData] = useState<DashboardOverview | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
-
-  const fetchOverview = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
-    if (mode === 'initial') {
-      setLoading(true)
-    } else {
-      setRefreshing(true)
-    }
-    try {
-      const overview = await getDashboardOverview()
-      setData(overview)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('首页数据加载失败'))
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void fetchOverview('initial')
-  }, [fetchOverview])
+  const queryClient = useQueryClient()
+  const query = useQuery<DashboardOverview, Error>({
+    queryKey: queryKeys.dashboard.overview(),
+    queryFn: getDashboardOverview,
+  })
 
   const refresh = useCallback(() => {
-    void fetchOverview(data ? 'refresh' : 'initial')
-  }, [data, fetchOverview])
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.overview() })
+  }, [queryClient])
 
   return {
-    data,
-    loading,
-    error,
-    refreshing,
-    fetchOverview,
+    data: query.data ?? null,
+    loading: query.isLoading,
+    error: query.error,
+    refreshing: query.isFetching && !query.isLoading,
+    fetchOverview: refresh,
     refresh,
   }
 }
