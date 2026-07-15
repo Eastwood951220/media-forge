@@ -23,6 +23,7 @@ type TaskListCardsProps = {
   onRun: (task: CrawlTask, mode: CrawlMode) => void
   onStop: (task: CrawlTask) => void
   onRestart: (task: CrawlTask) => void
+  onUrlRun: (task: CrawlTask) => void
   onTemporaryTaskClick: () => void
 }
 
@@ -102,6 +103,7 @@ function TaskCard({
   onRun,
   onStop,
   onRestart,
+  onUrlRun,
 }: {
   task: CrawlTask
   runtime: CrawlTaskRuntimeSnapshot | undefined
@@ -111,11 +113,14 @@ function TaskCard({
   onRun: (task: CrawlTask, mode: CrawlMode) => void
   onStop: (task: CrawlTask) => void
   onRestart: (task: CrawlTask) => void
+  onUrlRun: (task: CrawlTask) => void
 }) {
   const urlNames = getUrlNames(task)
   const runtimeStatus = runtime?.runtime_status ?? 'idle'
   const isIdle = runtimeStatus === 'idle'
   const canRun = isIdle && !task.is_skip
+  const hasUrls = task.urls.length > 0
+  const canUrlRun = canRun && hasUrls
   const canEditOrDelete = isIdle
   const canToggle = isIdle
   const canStop = (runtimeStatus === 'queued' || runtimeStatus === 'running') && Boolean(runtime?.latest_run_id)
@@ -179,6 +184,14 @@ function TaskCard({
             </Button>
           </Dropdown>
         )}
+        <Button
+          size="small"
+          icon={<PlayCircleOutlined />}
+          disabled={!canUrlRun}
+          onClick={() => onUrlRun(task)}
+        >
+          URL 爬取
+        </Button>
         {canStop && (
           <Button size="small" danger icon={<StopOutlined />} onClick={() => onStop(task)}>
             停止
@@ -228,6 +241,7 @@ function TaskListCards({
   onRun,
   onStop,
   onRestart,
+  onUrlRun,
   onTemporaryTaskClick,
 }: TaskListCardsProps) {
   const navigate = useNavigate()
@@ -263,6 +277,7 @@ function TaskListCards({
                 onRun={onRun}
                 onStop={onStop}
                 onRestart={onRestart}
+                onUrlRun={onUrlRun}
               />
             ))}
           </div>

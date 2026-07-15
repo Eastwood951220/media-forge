@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListPage from '../src/pages/crawler/tasks/TaskListPage'
-import { createTemporaryCrawlRun, getCrawlTaskStats, getCrawlTasks, getTaskDict } from '../src/api/crawlTask'
+import { createTemporaryCrawlRun, createTaskUrlRun, getCrawlTaskStats, getCrawlTasks, getTaskDict } from '../src/api/crawlTask'
 import { runCrawlTask } from '../src/api/crawlerRun'
 import { useTaskListQueryStore } from '../src/pages/crawler/tasks/useTaskListQueryStore'
 
@@ -13,6 +13,7 @@ vi.mock('../src/api/crawlTask', () => ({
   getCrawlTaskRuntimeStatuses: vi.fn().mockResolvedValue({ tasks: [], stats: { total: 1, idle: 1, running: 0, queued: 0, stopped: 0 } }),
   getTaskDict: vi.fn(),
   createTemporaryCrawlRun: vi.fn(),
+  createTaskUrlRun: vi.fn(),
   deleteCrawlTask: vi.fn(),
   updateCrawlTask: vi.fn(),
 }))
@@ -47,7 +48,18 @@ describe('crawler task run controls', () => {
         id: 'task-1',
         name: '任务A',
         storage_location: 'A',
-        urls: [],
+        urls: [{
+          id: 'url-1',
+          position: 0,
+          url: 'https://javdb.com/actors/a',
+          url_type: 'actors',
+          has_magnet: true,
+          has_chinese_sub: false,
+          sort_type: 0,
+          source: 'javdb',
+          final_url: 'https://javdb.com/actors/a',
+          url_name: '演员A',
+        }],
         is_skip: false,
         status: 'pending',
         task_id: null,
@@ -77,6 +89,22 @@ describe('crawler task run controls', () => {
       error: null,
       resumed_from: null,
       created_at: '2026-07-13T00:00:00',
+      updated_at: null,
+      logs: [],
+    })
+    vi.mocked(createTaskUrlRun).mockResolvedValue({
+      id: 'run-url-1',
+      task_id: 'task-1',
+      task_name: '任务A',
+      status: 'queued',
+      crawl_mode: 'incremental',
+      queued_at: '2026-07-15T00:00:00',
+      started_at: null,
+      finished_at: null,
+      result: { url_subset: true, selected_task_url_ids: ['url-1'], selected_task_url_count: 1 },
+      error: null,
+      resumed_from: null,
+      created_at: '2026-07-15T00:00:00',
       updated_at: null,
       logs: [],
     })
@@ -112,6 +140,27 @@ describe('crawler task run controls', () => {
       expect(createTemporaryCrawlRun).toHaveBeenCalledWith({
         task_id: 'task-1',
         detail_urls: ['https://javdb.com/v/temp001'],
+      })
+    })
+  })
+
+  it('submits url subset run from a task card', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    const urlRunButton = await screen.findByRole('button', { name: /URL.*爬取/ })
+    await user.click(urlRunButton)
+
+    expect(await screen.findByText(/URL 爬取 -/)).toBeInTheDocument()
+    await user.click(screen.getByLabelText('选择 URL'))
+    const options = await screen.findAllByText('演员A')
+    await user.click(options[options.length - 1])
+    await user.click(screen.getByRole('button', { name: /开.*始.*爬.*取/ }))
+
+    await waitFor(() => {
+      expect(createTaskUrlRun).toHaveBeenCalledWith('task-1', {
+        url_ids: ['url-1'],
+        crawl_mode: 'incremental',
       })
     })
   })

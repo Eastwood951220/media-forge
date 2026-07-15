@@ -4,9 +4,11 @@ import { useNavigate } from '@tanstack/react-router'
 import { createTemporaryCrawlRun, getTaskDict } from '@/api/crawlTask'
 import type { TaskDictItem, TemporaryCrawlRunCreateParams } from '@/api/crawlTask/types'
 import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
+import TaskUrlRunModal from './components/TaskUrlRunModal'
 import TemporaryTaskModal from './components/TemporaryTaskModal'
 import { useTaskListData } from './hooks/useTaskListData'
 import { useTaskListRealtime } from './hooks/useTaskListRealtime'
+import { useTaskUrlRun } from './hooks/useTaskUrlRun'
 import styles from './TaskPages.module.less'
 
 function TaskListPage() {
@@ -31,6 +33,8 @@ function TaskListPage() {
   } = useTaskListData()
 
   useTaskListRealtime({ refreshList, setRuntimeByTaskId, setStats })
+
+  const taskUrlRun = useTaskUrlRun({ onSubmitted: fetchRuntimeStatuses })
 
   const [temporaryModalOpen, setTemporaryModalOpen] = useState(false)
   const [taskOptions, setTaskOptions] = useState<TaskDictItem[]>([])
@@ -106,6 +110,7 @@ function TaskListPage() {
           onRun={handleRun}
           onStop={handleStop}
           onRestart={handleRestart}
+          onUrlRun={taskUrlRun.openTaskUrlRun}
           onTemporaryTaskClick={openTemporaryModal}
         />
       </section>
@@ -119,6 +124,14 @@ function TaskListPage() {
         onCancel={() => setTemporaryModalOpen(false)}
         onReloadTasks={loadTaskOptions}
         onSubmit={handleTemporarySubmit}
+      />
+
+      <TaskUrlRunModal
+        open={taskUrlRun.open}
+        task={taskUrlRun.selectedTask}
+        submitting={taskUrlRun.submitting}
+        onCancel={taskUrlRun.closeTaskUrlRun}
+        onSubmit={taskUrlRun.submitTaskUrlRun}
       />
     </div>
   )
