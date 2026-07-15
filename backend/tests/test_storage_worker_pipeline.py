@@ -533,7 +533,7 @@ def test_execute_subtask_pipeline_stops_after_target_exists_skip(monkeypatch):
 
     attempt_ids: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet):
+    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
         attempt_ids.append(magnet["id"])
         context.subtask.status = "skipped"
         context.subtask.skip_reason = "target_exists"
@@ -554,6 +554,7 @@ def test_execute_subtask_pipeline_stops_after_target_exists_skip(monkeypatch):
         selected: bool
 
     class FakeMovie:
+        tags = []
         magnets = [
             FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
             FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
@@ -754,7 +755,7 @@ def test_execute_subtask_pipeline_stops_after_rename_name_exists_skip(monkeypatc
 
     attempt_ids: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet):
+    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
         attempt_ids.append(magnet["id"])
         context.subtask.status = "skipped"
         context.subtask.skip_reason = "rename_name_exists"
@@ -775,6 +776,7 @@ def test_execute_subtask_pipeline_stops_after_rename_name_exists_skip(monkeypatc
         selected: bool
 
     class FakeMovie:
+        tags = []
         magnets = [
             FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
             FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
@@ -1064,7 +1066,7 @@ def test_execute_subtask_pipeline_stops_after_rename_existing_source_target_skip
 
     attempt_ids: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet):
+    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
         attempt_ids.append(magnet["id"])
         context.subtask.status = "skipped"
         context.subtask.skip_reason = "target_exists"
@@ -1095,6 +1097,7 @@ def test_execute_subtask_pipeline_stops_after_rename_existing_source_target_skip
         selected: bool
 
     class FakeMovie:
+        tags = []
         magnets = [
             FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
             FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
@@ -1352,7 +1355,7 @@ def test_subtask_pipeline_starts_next_magnet_only_after_current_failure(monkeypa
 
     attempt_order: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet):
+    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
         attempt_order.append(magnet["id"])
         return magnet["id"] == "m2"
 
@@ -1370,6 +1373,7 @@ def test_subtask_pipeline_starts_next_magnet_only_after_current_failure(monkeypa
         selected: bool
 
     class FakeMovie:
+        tags = []
         magnets = [
             FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
             FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
@@ -1429,7 +1433,7 @@ def test_subtask_pipeline_does_not_start_later_magnet_after_success(monkeypatch)
 
     attempt_order: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet):
+    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
         attempt_order.append(magnet["id"])
         return True
 
@@ -1447,6 +1451,7 @@ def test_subtask_pipeline_does_not_start_later_magnet_after_success(monkeypatch)
         selected: bool
 
     class FakeMovie:
+        tags = []
         magnets = [
             FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
             FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
@@ -2212,7 +2217,7 @@ def test_subtask_pipeline_stops_after_existing_target_skip_from_task_exists(monk
 
     attempt_ids: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet):
+    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
         attempt_ids.append(magnet["id"])
         context.subtask.status = "skipped"
         context.subtask.skip_reason = "target_exists"
@@ -2243,6 +2248,7 @@ def test_subtask_pipeline_stops_after_existing_target_skip_from_task_exists(monk
         selected: bool
 
     class FakeMovie:
+        tags = []
         magnets = [
             FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
             FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
@@ -2667,7 +2673,7 @@ def test_execute_subtask_pipeline_stops_after_existing_target_copy_success(monke
 
     attempt_ids: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet):
+    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
         attempt_ids.append(magnet["id"])
         context.subtask.result = {"status": "success", "reason": "copied_from_existing_target"}
         context.subtask.moved_files = [
@@ -2693,6 +2699,7 @@ def test_execute_subtask_pipeline_stops_after_existing_target_copy_success(monke
         selected: bool
 
     class FakeMovie:
+        tags = []
         magnets = [
             FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
             FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
@@ -2987,6 +2994,7 @@ def test_execute_subtask_pipeline_passes_movie_tags_to_attempt(monkeypatch) -> N
         selected: bool
 
     class FakeMovie:
+        tags = []
         tags = ["VR", "巨乳"]
         magnets = [FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True)]
 
@@ -3028,3 +3036,92 @@ def test_execute_subtask_pipeline_passes_movie_tags_to_attempt(monkeypatch) -> N
     execute_subtask_pipeline(FakeContext())
 
     assert observed_movie_tags == ["VR", "巨乳"]
+
+
+def test_run_found_files_pipeline_dedupes_quality_variants_before_rename(monkeypatch) -> None:
+    import uuid
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.file_pipeline import run_found_files_pipeline
+
+    renamed_inputs: list[list[dict]] = []
+
+    def fake_rename_selected_videos(context, selected_videos, tags):
+        renamed_inputs.append(selected_videos)
+        return [
+            {
+                **selected_videos[0],
+                "renamed_path": selected_videos[0]["path"],
+                "renamed_name": "XXX.mp4",
+            }
+        ]
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.file_pipeline.rename_selected_videos",
+        fake_rename_selected_videos,
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.file_pipeline.verify_moved_files",
+        lambda context, moved_files: True,
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.file_pipeline.cleanup_download_folder",
+        lambda context, download_folder, config: None,
+    )
+
+    class Provider:
+        def ensure_directory(self, path):
+            return None
+
+        def find_file(self, path):
+            return None
+
+        def move_files(self, sources, target):
+            return None
+
+    class Context:
+        def __init__(self) -> None:
+            self.subtask = SimpleNamespace(
+                id=uuid.uuid4(),
+                movie_id=uuid.uuid4(),
+                movie_code="XXX",
+                renamed_files=[],
+                moved_files=[],
+                skipped_files=[],
+                result={},
+            )
+            self.config = {"auto_create_target_folder": False}
+            self.provider = Provider()
+            self.logs: list[tuple[str, dict]] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append((message, context or {}))
+            return {}
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def publish_subtask(self):
+            return None
+
+    context = Context()
+
+    success = run_found_files_pipeline(
+        context,
+        {"id": "m1", "tags": []},
+        [
+            {"name": "XXX_1_HD.mp4", "path": "/Downloads/XXX_1_HD.mp4", "size": 100 * 1024 * 1024, "is_dir": False},
+            {"name": "XXX_1_8K.mp4", "path": "/Downloads/XXX_1_8K.mp4", "size": 300 * 1024 * 1024, "is_dir": False},
+        ],
+        ["/Movies/VR/XXX"],
+        "/Downloads/storage_task",
+        {"video_extensions": [".mp4"], "minimum_video_size_mb": 1},
+    )
+
+    assert success is True
+    assert [item["name"] for item in renamed_inputs[0]] == ["XXX_1_8K.mp4"]
+    assert any(
+        payload.get("dropped_files", [{}])[0].get("reason") == "duplicate_quality_smaller_size"
+        for _message, payload in context.logs
+        if payload.get("dropped_files")
+    )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from backend.app.modules.storage.tasks.policies import dedupe_quality_variants
 from backend.app.modules.storage.worker.cleanup_ops import cleanup_download_folder
 from backend.app.modules.storage.worker.file_ops import scan_found_files
 from backend.app.modules.storage.worker.move_ops import move_renamed_videos
@@ -38,12 +39,30 @@ def run_found_files_pipeline(
         f"文件筛选: videos={len(classified.selected_videos)}, excluded={len(classified.excluded_files)}, subtitles={len(classified.subtitle_files)}, covers={len(classified.cover_files)}, other={len(classified.other_files)}",
         step="select_videos",
     )
-    if not classified.selected_videos:
+
+    selected_videos, dropped_quality_variants = dedupe_quality_variants(classified.selected_videos)
+    if dropped_quality_variants:
+        context.log(
+            "INFO",
+            "清晰度重复筛选",
+            {
+                "kept_files": [
+                    {"name": item.get("name"), "path": item.get("path"), "size": int(item.get("size") or 0)}
+                    for item in selected_videos
+                ],
+                "dropped_files": dropped_quality_variants,
+            },
+            step="select_videos",
+        )
+    else:
+        selected_videos = classified.selected_videos
+
+    if not selected_videos:
         context.log("WARNING", "扫描到文件但未识别到主视频", {"magnet_id": magnet.get("id"), "file_count": len(scanned)}, step="select_videos")
         return False
 
     context.set_step("rename_files")
-    renamed_files = rename_selected_videos(context, classified.selected_videos, tags)
+    renamed_files = rename_selected_videos(context, selected_videos, tags)
 
     context.set_step("move_files")
     move_result = move_renamed_videos(context, renamed_files, target_paths)
