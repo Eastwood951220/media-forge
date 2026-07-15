@@ -5,7 +5,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from sqlalchemy import case, func, literal
+from sqlalchemy import case, func, literal, type_coerce
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun
@@ -118,18 +119,19 @@ def _build_runs_section(db: Session, owner_id: uuid.UUID) -> DashboardRunsSectio
     )
 
 
+def _json_text_value(column, key: str, dialect_name: str):
+    if dialect_name == "sqlite":
+        return func.json_extract(column, f"$.{key}")
+    if dialect_name == "postgresql":
+        return type_coerce(column, JSONB)[key].astext
+    return func.json_extract(column, f"$.{key}")
+
+
 def _count_movie_storage_statuses(db: Session) -> tuple[int, dict[str, int]]:
     """Count movie storage statuses using SQL aggregation."""
-    # Use raw SQL for JSON extraction to support both SQLite and PostgreSQL
     dialect = db.bind.dialect.name
-    if dialect == "sqlite":
-        # SQLite JSON extraction
-        storage_status_expr = func.json_extract(Movie.storage_summary, '$.storage_status')
-        last_status_expr = func.json_extract(Movie.storage_summary, '$.last_status')
-    else:
-        # PostgreSQL JSON extraction
-        storage_status_expr = Movie.storage_summary["storage_status"].as_string()
-        last_status_expr = Movie.storage_summary["last_status"].as_string()
+    storage_status_expr = _json_text_value(Movie.storage_summary, "storage_status", dialect)
+    last_status_expr = _json_text_value(Movie.storage_summary, "last_status", dialect)
 
     storage_status = func.coalesce(storage_status_expr, "")
     last_status = func.coalesce(last_status_expr, "")

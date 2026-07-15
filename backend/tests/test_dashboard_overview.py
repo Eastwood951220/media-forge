@@ -3,6 +3,7 @@ from http import HTTPStatus
 import uuid
 
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 
 from backend.app.models.crawl_run import CrawlRun
 from backend.app.models.crawl_task import CrawlTask
@@ -16,6 +17,16 @@ from shared.database.models.content import Movie
 def auth_headers(client: TestClient, admin_user) -> dict[str, str]:
     response = client.post("/api/auth/login", json={"username": "admin", "password": "admin123"})
     return {"Authorization": f"Bearer {response.json()['data']['access_token']}"}
+
+
+def test_dashboard_json_text_value_compiles_for_postgresql() -> None:
+    from backend.app.modules.dashboard.service import _json_text_value
+
+    expr = _json_text_value(Movie.storage_summary, "storage_status", "postgresql")
+    compiled = str(expr.compile(dialect=postgresql.dialect()))
+
+    assert "storage_summary" in compiled
+    assert "->>" in compiled
 
 
 def test_build_dashboard_overview_empty_database(admin_user) -> None:
