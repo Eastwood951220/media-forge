@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.modules.storage.tasks.policies import build_video_filename, code_folder_from_filename
+from backend.app.modules.storage.tasks.policies import (
+    build_video_filename,
+    code_folder_from_filename,
+    insert_vr_directory,
+    is_vr_movie_tags,
+)
 
 
 @dataclass(frozen=True)
@@ -15,7 +20,7 @@ class StorageAttemptPlan:
     target_paths: list[str]
 
 
-def plan_storage_attempt(subtask, config: dict, magnet: dict) -> StorageAttemptPlan:
+def plan_storage_attempt(subtask, config: dict, magnet: dict, movie_tags: list[str] | None = None) -> StorageAttemptPlan:
     tags = list(magnet.get("tags") or [])
     download_root = config.get("download_root_folder", "/Downloads")
     download_folder = f"{download_root}/storage_{subtask.id}"
@@ -28,6 +33,8 @@ def plan_storage_attempt(subtask, config: dict, magnet: dict) -> StorageAttemptP
         target_paths = [f"{target_root}/{selected_location}/{code_folder}"]
     else:
         target_paths = [f"{target_root}/{location}/{code_folder}" for location in target_locations] or [f"{target_root}/{code_folder}"]
+    if is_vr_movie_tags(list(movie_tags or [])):
+        target_paths = [insert_vr_directory(path, code_folder) for path in target_paths]
     subtask.download_path = download_folder
     subtask.target_paths = target_paths
     return StorageAttemptPlan(

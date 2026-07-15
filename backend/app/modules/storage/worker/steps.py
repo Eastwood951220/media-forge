@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 from backend.app.modules.storage.tasks.logs import write_storage_subtask_log
+from backend.app.modules.storage.tasks.policies import is_vr_movie_tags
 from backend.app.modules.storage.worker.download_flow import run_download_flow
 from backend.app.modules.storage.worker.existing_target_flow import handle_existing_target_fallback
 from backend.app.modules.storage.worker.file_pipeline import run_found_files_pipeline
@@ -20,7 +21,7 @@ def _subtask_log(context, level: str, message: str, extra: dict | None = None) -
     write_storage_subtask_log(str(subtask_id), level, message, extra or {})
 
 
-def execute_current_magnet_attempt(context, magnet: dict) -> bool:
+def execute_current_magnet_attempt(context, magnet: dict, movie_tags: list[str] | None = None) -> bool:
     """Execute a single magnet download attempt through the full step pipeline."""
     subtask = context.subtask
     config = context.config
@@ -30,16 +31,19 @@ def execute_current_magnet_attempt(context, magnet: dict) -> bool:
         return False
 
     context.set_step("prepare")
-    plan = plan_storage_attempt(subtask, config, magnet)
+    plan = plan_storage_attempt(subtask, config, magnet, movie_tags=movie_tags)
     download_root = plan.download_root
     download_folder = plan.download_folder
     preview_name = plan.preview_name
     target_paths = plan.target_paths
     tags = list(magnet.get("tags") or [])
+    prepare_context = {"download_path": download_folder, "target_paths": target_paths, "magnet_id": magnet.get("id")}
+    if is_vr_movie_tags(list(movie_tags or [])):
+        prepare_context.update({"vr_detected": True, "vr_source": "movie_tags"})
     context.log(
         "INFO",
         f"准备完成: download={download_folder}, target={target_paths[-1]}, targets={target_paths}, suffix={preview_name.replace(subtask.movie_code.upper(), '').rsplit('.', 1)[0]}",
-        {"download_path": download_folder, "target_paths": target_paths, "magnet_id": magnet.get("id")},
+        prepare_context,
         step="prepare",
     )
 
@@ -110,7 +114,7 @@ def execute_subtask_pipeline(context) -> None:
             },
         )
 
-        success = execute_current_magnet_attempt(context, magnet)
+        success = execute_current_magnet_attempt(context, magnet, movie_tags=list(movie.tags or []))
 
         context.log(
             "INFO" if success else "WARNING",

@@ -2882,3 +2882,149 @@ def test_dedupe_quality_variants_keeps_largest_per_group() -> None:
             "reason": "duplicate_quality_smaller_size",
         }
     ]
+
+
+def test_plan_storage_attempt_inserts_vr_for_movie_tags_only() -> None:
+    import uuid
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.target_planning import plan_storage_attempt
+
+    subtask = SimpleNamespace(
+        id=uuid.uuid4(),
+        movie_code="XXX",
+        target_locations=["日本/巨乳"],
+        selected_storage_location=None,
+        download_path="",
+        target_paths=[],
+    )
+
+    plan = plan_storage_attempt(
+        subtask,
+        {"download_root_folder": "/Downloads", "target_folder": "/Movies"},
+        {"tags": ["VR"]},
+        movie_tags=["VR"],
+    )
+
+    assert plan.target_paths == ["/Movies/日本/巨乳/VR/XXX"]
+    assert subtask.target_paths == ["/Movies/日本/巨乳/VR/XXX"]
+
+
+def test_plan_storage_attempt_ignores_magnet_vr_tags_for_target_path() -> None:
+    import uuid
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.target_planning import plan_storage_attempt
+
+    subtask = SimpleNamespace(
+        id=uuid.uuid4(),
+        movie_code="XXX",
+        target_locations=["日本/巨乳"],
+        selected_storage_location=None,
+        download_path="",
+        target_paths=[],
+    )
+
+    plan = plan_storage_attempt(
+        subtask,
+        {"download_root_folder": "/Downloads", "target_folder": "/Movies"},
+        {"tags": ["VR"]},
+        movie_tags=[],
+    )
+
+    assert plan.target_paths == ["/Movies/日本/巨乳/XXX"]
+
+
+def test_plan_storage_attempt_vr_multiple_targets_without_duplicate_vr() -> None:
+    import uuid
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.target_planning import plan_storage_attempt
+
+    subtask = SimpleNamespace(
+        id=uuid.uuid4(),
+        movie_code="XXX",
+        target_locations=["日本/巨乳", "日本/VR"],
+        selected_storage_location=None,
+        download_path="",
+        target_paths=[],
+    )
+
+    plan = plan_storage_attempt(
+        subtask,
+        {"download_root_folder": "/Downloads", "target_folder": "/Movies"},
+        {"tags": []},
+        movie_tags=["VR"],
+    )
+
+    assert plan.target_paths == ["/Movies/日本/巨乳/VR/XXX", "/Movies/日本/VR/XXX"]
+
+
+def test_execute_subtask_pipeline_passes_movie_tags_to_attempt(monkeypatch) -> None:
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import execute_subtask_pipeline
+
+    observed_movie_tags: list[str] | None = None
+
+    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
+        nonlocal observed_movie_tags
+        observed_movie_tags = movie_tags
+        return True
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.steps.execute_current_magnet_attempt",
+        fake_execute_current_magnet_attempt,
+    )
+
+    @dataclass
+    class FakeMagnet:
+        id: str
+        magnet_url: str
+        tags: list[str]
+        weight: int
+        selected: bool
+
+    class FakeMovie:
+        tags = ["VR", "巨乳"]
+        magnets = [FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True)]
+
+    class FakeDb:
+        def get(self, model, movie_id):
+            return FakeMovie()
+
+    @dataclass
+    class FakeSubtask:
+        id: uuid.UUID
+        movie_id: uuid.UUID
+        movie_code: str = "XXX"
+        status: str = "queued"
+        step: str = "prepare"
+        started_at: object | None = None
+        finished_at: object | None = None
+        error_message: str | None = None
+        current_magnet_id: str | None = None
+        current_magnet_url: str = ""
+        magnet_attempts: list | None = None
+        result: dict | None = None
+
+        def __post_init__(self):
+            self.magnet_attempts = [] if self.magnet_attempts is None else self.magnet_attempts
+            self.result = {} if self.result is None else self.result
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.db = FakeDb()
+            self.subtask = FakeSubtask(id=uuid.uuid4(), movie_id=uuid.uuid4())
+            self.config = {"magnet_max_attempts_per_subtask": 1}
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    execute_subtask_pipeline(FakeContext())
+
+    assert observed_movie_tags == ["VR", "巨乳"]
