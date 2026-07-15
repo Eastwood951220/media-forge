@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from sqlalchemy import func
+from sqlalchemy import case, func, literal
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun
@@ -32,7 +32,6 @@ from backend.app.modules.dashboard.schemas import (
     RecentStorageTask,
     SystemStatus,
 )
-from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
 from shared.database.models.content import Movie
 
 
@@ -119,16 +118,54 @@ def _build_runs_section(db: Session, owner_id: uuid.UUID) -> DashboardRunsSectio
     )
 
 
-def _build_content_section(db: Session) -> DashboardContentSection:
-    movies = db.query(Movie).all()
+def _count_movie_storage_statuses(db: Session) -> tuple[int, dict[str, int]]:
+    """Count movie storage statuses using SQL aggregation."""
+    # Use raw SQL for JSON extraction to support both SQLite and PostgreSQL
+    dialect = db.bind.dialect.name
+    if dialect == "sqlite":
+        # SQLite JSON extraction
+        storage_status_expr = func.json_extract(Movie.storage_summary, '$.storage_status')
+        last_status_expr = func.json_extract(Movie.storage_summary, '$.last_status')
+    else:
+        # PostgreSQL JSON extraction
+        storage_status_expr = Movie.storage_summary["storage_status"].as_string()
+        last_status_expr = Movie.storage_summary["last_status"].as_string()
+
+    storage_status = func.coalesce(storage_status_expr, "")
+    last_status = func.coalesce(last_status_expr, "")
+    raw_status = case(
+        (storage_status != "", storage_status),
+        else_=last_status,
+    )
+    status_expr = case(
+        (raw_status == "completed", literal("stored")),
+        (raw_status.in_(("stored", "storing", "not_stored")), raw_status),
+        (raw_status.in_(("queued", "running", "pending", "waiting_download", "moving")), literal("storing")),
+        else_=literal("not_stored"),
+    ).label("storage_status")
+
+    rows = (
+        db.query(status_expr, func.count(Movie.id))
+        .select_from(Movie)
+        .group_by(status_expr)
+        .all()
+    )
     counts = {"stored": 0, "storing": 0, "not_stored": 0}
-    for movie in movies:
-        status = normalized_movie_storage_status(movie)
-        if status not in counts:
-            status = "not_stored"
-        counts[status] += 1
+    total = 0
+    for status, count in rows:
+        normalized = str(status or "not_stored")
+        if normalized not in counts:
+            normalized = "not_stored"
+        count_int = int(count or 0)
+        counts[normalized] += count_int
+        total += count_int
+    return total, counts
+
+
+def _build_content_section(db: Session) -> DashboardContentSection:
+    total, counts = _count_movie_storage_statuses(db)
     return DashboardContentSection(
-        movie_total=len(movies),
+        movie_total=total,
         storage_status=DashboardMovieStorageStatus(**counts),
     )
 

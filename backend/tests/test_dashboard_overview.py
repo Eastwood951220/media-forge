@@ -164,3 +164,45 @@ def test_overview_endpoint_returns_partial_error_when_content_section_fails(clie
     body = response.json()["data"]
     assert body["content"]["movie_total"] == 0
     assert body["partial_errors"] == [{"section": "content", "message": "content broken"}]
+
+
+def test_dashboard_content_section_counts_storage_status_without_loading_movie_entities(admin_user, monkeypatch) -> None:
+    session = TestingSessionLocal()
+    session.add_all(
+        [
+            Movie(code="SQL-001", source_url="https://example.test/sql-1", storage_summary={"storage_status": "stored"}),
+            Movie(code="SQL-002", source_url="https://example.test/sql-2", storage_summary={"last_status": "completed"}),
+            Movie(code="SQL-003", source_url="https://example.test/sql-3", storage_summary={"storage_status": "running"}),
+            Movie(code="SQL-004", source_url="https://example.test/sql-4", storage_summary={}),
+        ]
+    )
+    session.commit()
+
+    def fail_on_entity_load(*args, **kwargs):
+        raise AssertionError("Movie entities should not be loaded for dashboard content counts")
+
+    monkeypatch.setattr(
+        "backend.app.modules.dashboard.service.normalized_movie_storage_status",
+        fail_on_entity_load,
+        raising=False,
+    )
+
+    overview = build_dashboard_overview(
+        db=session,
+        owner_id=admin_user.id,
+        queue_status={"queue_size": 0, "is_running": False, "current_run_id": None, "stop_requested": False},
+        index_metadata={
+            "target_folder": "",
+            "status": "completed",
+            "category_count": 0,
+            "code_folder_count": 0,
+            "video_count": 0,
+            "completed_at": None,
+            "errors": [],
+        },
+    )
+
+    assert overview.content.movie_total == 4
+    assert overview.content.storage_status.stored == 2
+    assert overview.content.storage_status.storing == 1
+    assert overview.content.storage_status.not_stored == 1
