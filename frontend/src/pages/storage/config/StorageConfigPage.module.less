@@ -2,35 +2,72 @@
   max-width: 960px;
 }
 
+.formContent {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .formCard {
-  margin-bottom: 16px;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
 }
 
 .sectionTitle {
   display: inline-flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
+  font-weight: 600;
+
+  svg {
+    color: var(--app-primary-color, #1890ff);
+  }
 }
 
 .tokenStack {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .tagList {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
 }
 
 .resultCard {
   margin-top: 16px;
+  border-radius: 12px;
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .page {
+    padding: 16px;
+    gap: 16px;
+  }
+}
+
+// Dark mode
+:global([data-theme='dark']) {
+  .formCard {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  .formCard:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
 }

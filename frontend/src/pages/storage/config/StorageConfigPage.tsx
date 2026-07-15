@@ -92,7 +92,7 @@ export default function StorageConfigPage() {
 
   return (
     <div className={styles.page}>
-      <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)}>
+      <Form className={styles.formContent} form={form} layout="vertical" onFinish={(values) => void handleSave(values)}>
         <Card
           title={<SectionTitle icon={<CloudOutlined />} text="服务配置" />}
           className={styles.formCard}
