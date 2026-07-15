@@ -28,6 +28,7 @@ from backend.app.schemas.crawl_task import (
     CrawlTaskCreate,
     CrawlTaskStats,
     CrawlTaskUpdate,
+    CrawlTaskUrlRunCreate,
     TemporaryCrawlRunCreate,
 )
 
@@ -88,6 +89,40 @@ class CrawlerTaskService:
         except Exception as exc:
             self.db.rollback()
             logger.exception("Create crawler run failed")
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
+        return CrawlRunRead.model_validate(run).model_dump(mode="json")
+
+    def create_url_subset_run(
+        self,
+        task_id: uuid.UUID,
+        data: CrawlTaskUrlRunCreate,
+        owner_id: uuid.UUID,
+    ) -> dict:
+        task = self.repo.get_owned(task_id, owner_id)
+        if task is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        if task.is_skip:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="禁用任务不能执行")
+
+        selected_ids = list(data.url_ids)
+        if not selected_ids:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="至少选择 1 条任务 URL")
+        if len(set(selected_ids)) != len(selected_ids):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="任务 URL 不能重复选择")
+
+        task_url_ids = {row.id for row in task.urls}
+        if not set(selected_ids).issubset(task_url_ids):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="选择的 URL 不属于该任务")
+
+        try:
+            run = CrawlerRunService(self.db, get_runtime_state()).create_run(
+                task,
+                data.crawl_mode,
+                selected_task_url_ids=selected_ids,
+            )
+        except Exception as exc:
+            self.db.rollback()
+            logger.exception("Create crawler URL subset run failed")
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
         return CrawlRunRead.model_validate(run).model_dump(mode="json")
 

@@ -49,6 +49,11 @@ class TemporaryCrawlRunCreate(BaseModel):
     detail_urls: list[str]
 
 
+class CrawlTaskUrlRunCreate(BaseModel):
+    url_ids: list[uuid.UUID] = Field(default_factory=list)
+    crawl_mode: Literal["incremental", "full"]
+
+
 class CrawlTaskRead(BaseModel):
     id: uuid.UUID
     _id: uuid.UUID

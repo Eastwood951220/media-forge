@@ -66,15 +66,30 @@ class CrawlerRunService:
         self.db = db
         self.runtime = runtime
 
-    def create_run(self, task: CrawlTask, crawl_mode: str) -> CrawlRun:
+    def create_run(
+        self,
+        task: CrawlTask,
+        crawl_mode: str,
+        *,
+        selected_task_url_ids: list[uuid.UUID] | None = None,
+    ) -> CrawlRun:
         if crawl_mode not in {"incremental", "full"}:
             raise ValueError("crawl_mode must be incremental or full")
+        result = None
+        if selected_task_url_ids is not None:
+            selected_ids = [str(url_id) for url_id in selected_task_url_ids]
+            result = {
+                "url_subset": True,
+                "selected_task_url_ids": selected_ids,
+                "selected_task_url_count": len(selected_ids),
+            }
         run = CrawlRun(
             task_id=task.id,
             task_name=task.name,
             status="queued",
             crawl_mode=crawl_mode,
             queued_at=datetime.now(),
+            result=result,
         )
         self.db.add(run)
         self.db.commit()

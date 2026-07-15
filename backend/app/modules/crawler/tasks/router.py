@@ -11,6 +11,7 @@ from backend.app.modules.crawler.tasks.service import CrawlerTaskService
 from backend.app.schemas.crawl_task import (
     CrawlTaskCreate,
     CrawlTaskUpdate,
+    CrawlTaskUrlRunCreate,
     ExtractNameRequest,
     TemporaryCrawlRunCreate,
 )
@@ -85,6 +86,17 @@ def run_task(
 ) -> dict:
     service = CrawlerTaskService(db)
     return success(data=service.run_task(task_id, data, current_user.id))
+
+
+@router.post("/{task_id}/url-run", status_code=status.HTTP_201_CREATED)
+def run_task_url_subset(
+    task_id: uuid.UUID,
+    data: CrawlTaskUrlRunCreate,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    service = CrawlerTaskService(db)
+    return success(data=service.create_url_subset_run(task_id, data, current_user.id))
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
