@@ -24,13 +24,22 @@ router = APIRouter(prefix="/api/crawler/tasks", tags=["crawler-tasks"])
 def list_tasks(
     current_user: CurrentUser,
     db: Session = Depends(get_db),
-    skip: int | None = Query(default=None, ge=0),
-    limit: int | None = Query(default=None, ge=1, le=1000),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
     keyword: str | None = Query(default=None, max_length=200),
 ) -> dict:
     service = CrawlerTaskService(db)
-    data = service.list_tasks(current_user.id, skip=skip, limit=limit, keyword=keyword)
-    return paginated(rows=data["rows"], total=data["total"])
+    return success(data=service.list_tasks(current_user.id, page=page, size=size, keyword=keyword))
+
+
+@router.get("/count")
+def count_tasks(
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+    keyword: str | None = Query(default=None, max_length=200),
+) -> dict:
+    service = CrawlerTaskService(db)
+    return success(data=service.count_tasks(current_user.id, keyword=keyword))
 
 
 @router.get("/stats")

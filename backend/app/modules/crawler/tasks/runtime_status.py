@@ -86,6 +86,40 @@ def build_task_runtime_snapshot(task: CrawlTask, latest_run: CrawlRun | None) ->
     )
 
 
+def build_task_runtime_status_response_for_task_ids(
+    db: Session,
+    owner_id: uuid.UUID,
+    task_ids: list[uuid.UUID],
+) -> CrawlTaskRuntimeStatusResponse:
+    if not task_ids:
+        return CrawlTaskRuntimeStatusResponse(
+            tasks=[],
+            stats=CrawlTaskRuntimeStats(total=0, idle=0, running=0, queued=0, stopped=0),
+        )
+    tasks = (
+        db.query(CrawlTask)
+        .filter(CrawlTask.owner_id == owner_id, CrawlTask.id.in_(task_ids))
+        .all()
+    )
+    task_by_id = {task.id: task for task in tasks}
+    ordered_tasks = [task_by_id[task_id] for task_id in task_ids if task_id in task_by_id]
+    latest_runs = _latest_runs_by_task(db, [task.id for task in ordered_tasks])
+    snapshots = [build_task_runtime_snapshot(task, latest_runs.get(task.id)) for task in ordered_tasks]
+    counts = {"idle": 0, "running": 0, "queued": 0, "stopped": 0}
+    for snapshot in snapshots:
+        counts[snapshot.runtime_status] += 1
+    return CrawlTaskRuntimeStatusResponse(
+        tasks=snapshots,
+        stats=CrawlTaskRuntimeStats(
+            total=len(snapshots),
+            idle=counts["idle"],
+            running=counts["running"],
+            queued=counts["queued"],
+            stopped=counts["stopped"],
+        ),
+    )
+
+
 def build_task_runtime_status_response(db: Session, owner_id: uuid.UUID) -> CrawlTaskRuntimeStatusResponse:
     """Build runtime status response for all tasks owned by the user.
 

@@ -32,16 +32,13 @@ class CrawlTaskRepository(BaseRepository):
         self,
         owner_id: uuid.UUID,
         *,
-        skip: int | None = None,
-        limit: int | None = None,
+        page: int,
+        size: int,
         keyword: str | None = None,
-    ) -> list[CrawlTask]:
+    ) -> tuple[list[CrawlTask], bool]:
         query = self._owner_query(owner_id, keyword).order_by(CrawlTask.created_at.desc())
-        if skip is not None:
-            query = query.offset(skip)
-        if limit is not None:
-            query = query.limit(limit)
-        return query.all()
+        rows = query.offset((page - 1) * size).limit(size + 1).all()
+        return rows[:size], len(rows) > size
 
     def count_by_owner(self, owner_id: uuid.UUID, keyword: str | None = None) -> int:
         query = self.session.query(CrawlTask).filter(CrawlTask.owner_id == owner_id)

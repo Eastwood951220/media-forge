@@ -14,6 +14,7 @@ from backend.app.modules.crawler.tasks.delete_service import UnsupportedDeleteMo
 from backend.app.modules.crawler.tasks.errors import raise_task_integrity_error
 from backend.app.modules.crawler.tasks.provider import open_delete_provider
 from backend.app.modules.crawler.tasks.runtime_status import (
+    build_task_runtime_status_response_for_task_ids,
     can_delete_task_runtime_status,
     get_task_runtime_status,
 )
@@ -46,20 +47,27 @@ class CrawlerTaskService:
         self,
         owner_id: uuid.UUID,
         *,
-        skip: int | None = None,
-        limit: int | None = None,
+        page: int,
+        size: int,
         keyword: str | None = None,
     ) -> dict:
-        rows = self.repo.get_by_owner(owner_id, skip=skip, limit=limit, keyword=keyword)
-        total = self.repo.count_by_owner(owner_id, keyword=keyword)
+        rows, has_more = self.repo.get_by_owner(owner_id, page=page, size=size, keyword=keyword)
         latest_runs = self.repo.get_latest_runs_by_task_ids([row.id for row in rows])
+        runtime = build_task_runtime_status_response_for_task_ids(
+            self.db,
+            owner_id,
+            [row.id for row in rows],
+        )
         return {
-            "rows": [
-                serialize_task(row, latest_runs.get(row.id)).model_dump(mode="json")
-                for row in rows
-            ],
-            "total": total,
+            "rows": [serialize_task(row, latest_runs.get(row.id)).model_dump(mode="json") for row in rows],
+            "page": page,
+            "size": size,
+            "has_more": has_more,
+            "runtime": runtime.model_dump(mode="json"),
         }
+
+    def count_tasks(self, owner_id: uuid.UUID, *, keyword: str | None = None) -> dict:
+        return {"total": self.repo.count_by_owner(owner_id, keyword=keyword)}
 
     def get_stats(self, owner_id: uuid.UUID) -> dict:
         return CrawlTaskStats(**self.repo.get_summary_stats(owner_id)).model_dump()

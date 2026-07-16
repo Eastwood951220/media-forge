@@ -63,3 +63,50 @@ def test_get_latest_runs_by_task_ids_returns_one_newest_run_per_task(admin_user)
     assert latest[task_a.id].id == newest.id
     assert latest[task_b.id].id == only_b.id
     assert set(latest) == {task_a.id, task_b.id}
+
+
+def test_crawler_task_list_uses_page_size_and_has_more(client, auth_headers):
+    for index in range(3):
+        response = client.post(
+            "/api/crawler/tasks",
+            json={
+                "name": f"paged-task-{index}",
+                "storage_location": "A",
+                "is_skip": False,
+                "urls": [{"url": f"https://javdb.com/actors/{index}", "url_type": "actors"}],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+    response = client.get("/api/crawler/tasks?page=1&size=2", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    data = body["data"] if "data" in body else body
+    assert data["page"] == 1
+    assert data["size"] == 2
+    assert data["has_more"] is True
+    assert len(data["rows"]) == 2
+    assert "total" not in data
+    assert "runtime" in data
+    assert len(data["runtime"]["tasks"]) == 2
+
+
+def test_crawler_task_count_endpoint_uses_same_keyword_filter(client, auth_headers):
+    response = client.post(
+        "/api/crawler/tasks",
+        json={
+            "name": "count-filter-task",
+            "storage_location": "A",
+            "is_skip": False,
+            "urls": [{"url": "https://javdb.com/actors/count", "url_type": "actors"}],
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+
+    count_response = client.get("/api/crawler/tasks/count?keyword=count-filter", headers=auth_headers)
+
+    assert count_response.status_code == 200
+    assert count_response.json()["data"]["total"] == 1
