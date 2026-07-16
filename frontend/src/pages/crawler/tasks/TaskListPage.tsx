@@ -16,6 +16,13 @@ function TaskListPage() {
   const { message } = App.useApp()
 
   const {
+    current,
+    pageSize,
+    hasMore,
+    total,
+    countLoading,
+    setCurrent,
+    setPageSize,
     fetchRuntimeStatuses,
     handleDelete,
     handleRestart,
@@ -29,7 +36,6 @@ function TaskListPage() {
     setStats,
     stats,
     tasks,
-    total,
   } = useTaskListData()
 
   useTaskListRealtime({ refreshList, setRuntimeByTaskId, setStats })
@@ -112,6 +118,12 @@ function TaskListPage() {
           onRestart={handleRestart}
           onUrlRun={taskUrlRun.openTaskUrlRun}
           onTemporaryTaskClick={openTemporaryModal}
+          current={current}
+          pageSize={pageSize}
+          hasMore={hasMore}
+          countLoading={countLoading}
+          onPageChange={setCurrent}
+          onPageSizeChange={setPageSize}
         />
       </section>
 

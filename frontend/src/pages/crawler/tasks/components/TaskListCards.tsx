@@ -5,7 +5,7 @@ import {
   ReloadOutlined,
   StopOutlined,
 } from '@ant-design/icons'
-import { Button, Dropdown, Empty, Popover, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
+import { Button, Dropdown, Empty, Pagination, Popover, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import type { CrawlTask, CrawlTaskRuntimeSnapshot, TaskRuntimeStatus } from '@/api/crawlTask/types'
 import type { CrawlMode } from '@/api/crawlerRun/types'
@@ -25,6 +25,12 @@ type TaskListCardsProps = {
   onRestart: (task: CrawlTask) => void
   onUrlRun: (task: CrawlTask) => void
   onTemporaryTaskClick: () => void
+  current: number
+  pageSize: number
+  hasMore: boolean
+  countLoading: boolean
+  onPageChange: (page: number) => void
+  onPageSizeChange: (size: number) => void
 }
 
 const runtimeStatusLabels: Record<TaskRuntimeStatus, { text: string; color: string }> = {
@@ -243,12 +249,21 @@ function TaskListCards({
   onRestart,
   onUrlRun,
   onTemporaryTaskClick,
+  current,
+  pageSize,
+  hasMore,
+  countLoading,
+  onPageChange,
+  onPageSizeChange,
 }: TaskListCardsProps) {
   const navigate = useNavigate()
+  const displayTotal = countLoading ? 0 : total
   return (
     <div className={styles.taskListShell}>
       <div className={styles.taskListToolbar}>
-        <Typography.Text type="secondary">共 {total} 条</Typography.Text>
+        <Typography.Text type="secondary">
+          {countLoading ? '统计中' : `共 ${total} 条`}
+        </Typography.Text>
         <Space>
           <Button onClick={onTemporaryTaskClick}>
             临时任务
@@ -285,6 +300,25 @@ function TaskListCards({
           <Empty description="暂无任务" className={styles.emptyState} />
         )}
       </Spin>
+
+      {(displayTotal > 0 || hasMore) && (
+        <div className={styles.paginationBar}>
+          <Pagination
+            current={current}
+            pageSize={pageSize}
+            total={hasMore && !countLoading ? undefined : displayTotal}
+            showSizeChanger
+            pageSizeOptions={['10', '20', '50', '100']}
+            showTotal={(count) => count !== undefined ? `共 ${count} 条` : '统计中'}
+            onChange={(page, size) => {
+              onPageChange(page)
+              if (size !== pageSize) {
+                onPageSizeChange(size)
+              }
+            }}
+          />
+        </div>
+      )}
     </div>
   )
 }

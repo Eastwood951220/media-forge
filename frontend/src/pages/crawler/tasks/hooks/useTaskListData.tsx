@@ -1,8 +1,9 @@
-import {useCallback, useEffect, useState} from 'react'
-import {Modal, Select, Typography, message} from 'antd'
+import { useCallback, useState } from 'react'
+import { Modal, Select, Typography, message } from 'antd'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteCrawlTask,
-  getCrawlTaskRuntimeStatuses,
+  getCrawlTaskCount,
   getCrawlTasks,
   updateCrawlTask,
 } from '@/api/crawlTask'
@@ -12,49 +13,63 @@ import type {
   CrawlTaskRuntimeStats,
   DeleteMode,
 } from '@/api/crawlTask/types'
-import {restartCrawlerRun, runCrawlTask, stopCrawlerRun} from '@/api/crawlerRun'
-import type {CrawlMode} from '@/api/crawlerRun/types'
+import { restartCrawlerRun, runCrawlTask, stopCrawlerRun } from '@/api/crawlerRun'
+import type { CrawlMode } from '@/api/crawlerRun/types'
+import { queryKeys } from '@/api/queryKeys'
 import styles from '../TaskPages.module.less'
-import {initialStats} from '../utils/runtimeStats'
+import { initialStats } from '../utils/runtimeStats'
 
-const deleteModeOptions: Array<{value: DeleteMode; label: string}> = [
-  {value: 'task_only', label: '仅删除任务'},
-  {value: 'task_and_movies', label: '删除任务和关联影片'},
-  {value: 'task_movies_and_cloud', label: '删除任务、关联影片和云存储'},
+const deleteModeOptions: Array<{ value: DeleteMode; label: string }> = [
+  { value: 'task_only', label: '仅删除任务' },
+  { value: 'task_and_movies', label: '删除任务和关联影片' },
+  { value: 'task_movies_and_cloud', label: '删除任务、关联影片和云存储' },
 ]
 
 export function useTaskListData() {
-  const [tasks, setTasks] = useState<CrawlTask[]>([])
-  const [stats, setStats] = useState<CrawlTaskRuntimeStats>(initialStats)
-  const [loading, setLoading] = useState(false)
-  const [total, setTotal] = useState(0)
+  const queryClient = useQueryClient()
   const [runtimeByTaskId, setRuntimeByTaskId] = useState<Record<string, CrawlTaskRuntimeSnapshot>>({})
+  const [stats, setStats] = useState<CrawlTaskRuntimeStats>(initialStats)
 
-  const fetchTasks = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getCrawlTasks()
-      setTasks(data.rows)
-      setTotal(data.total)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const [current, setCurrent] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const listParams = { page: current, size: pageSize }
+  const countParams = {}
 
+  const listQuery = useQuery({
+    queryKey: queryKeys.crawlerTasks.list(listParams),
+    queryFn: () => getCrawlTasks(listParams),
+    placeholderData: (previousData) => previousData,
+  })
+
+  const countQuery = useQuery({
+    queryKey: queryKeys.crawlerTasks.count(countParams),
+    queryFn: () => getCrawlTaskCount(countParams),
+  })
+
+  const tasks = listQuery.data?.rows ?? []
+  const total = countQuery.data?.total ?? 0
+  const loading = listQuery.isLoading
+  const hasMore = listQuery.data?.has_more ?? false
+
+  // Initialize runtime stats from list response
   const fetchRuntimeStatuses = useCallback(async () => {
-    const data = await getCrawlTaskRuntimeStatuses()
-    setRuntimeByTaskId(Object.fromEntries(data.tasks.map((item) => [item.task_id, item])))
-    setStats(data.stats)
-  }, [])
+    await queryClient.invalidateQueries({ queryKey: queryKeys.crawlerTasks.list(listParams) })
+  }, [queryClient, listParams])
 
   const refreshList = useCallback(() => {
-    void fetchTasks()
-    void fetchRuntimeStatuses()
-  }, [fetchRuntimeStatuses, fetchTasks])
+    void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerTasks.list(listParams) })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerTasks.count(countParams) })
+  }, [queryClient, listParams, countParams])
 
-  useEffect(() => {
-    refreshList()
-  }, [refreshList])
+  // Update runtime stats when list data changes
+  if (listQuery.data?.runtime) {
+    const runtime = listQuery.data.runtime
+    const currentRuntimeByTaskId = Object.fromEntries(runtime.tasks.map((item) => [item.task_id, item]))
+    if (JSON.stringify(currentRuntimeByTaskId) !== JSON.stringify(runtimeByTaskId)) {
+      setRuntimeByTaskId(currentRuntimeByTaskId)
+      setStats(runtime.stats)
+    }
+  }
 
   const handleDelete = useCallback(
     (task: CrawlTask) => {
@@ -74,7 +89,7 @@ export function useTaskListData() {
                 onChange={(value) => {
                   selectedMode = value
                 }}
-                style={{width: '100%'}}
+                style={{ width: '100%' }}
               />
             </div>
             <Typography.Text type="danger" className={styles.deleteWarning}>
@@ -104,7 +119,7 @@ export function useTaskListData() {
 
   const handleToggleSkip = useCallback(
     async (task: CrawlTask) => {
-      await updateCrawlTask(task.id, {is_skip: !task.is_skip})
+      await updateCrawlTask(task.id, { is_skip: !task.is_skip })
       message.success(task.is_skip ? '任务已启用' : '任务已禁用')
       refreshList()
     },
@@ -159,6 +174,13 @@ export function useTaskListData() {
   )
 
   return {
+    current,
+    pageSize,
+    hasMore,
+    total,
+    countLoading: countQuery.isLoading,
+    setCurrent,
+    setPageSize,
     fetchRuntimeStatuses,
     handleDelete,
     handleRestart,
@@ -172,6 +194,5 @@ export function useTaskListData() {
     setStats,
     stats,
     tasks,
-    total,
   }
 }
