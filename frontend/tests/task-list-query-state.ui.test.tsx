@@ -4,10 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListPage from '../src/pages/crawler/tasks/TaskListPage'
 import { useTaskListQueryStore } from '../src/pages/crawler/tasks/useTaskListQueryStore'
-import { getCrawlTasks } from '../src/api/crawlTask'
+import { getCrawlTaskCount, getCrawlTasks } from '../src/api/crawlTask'
 
 vi.mock('../src/api/crawlTask', () => ({
   getCrawlTasks: vi.fn(),
+  getCrawlTaskCount: vi.fn(),
   getCrawlTaskRuntimeStatuses: vi.fn().mockResolvedValue({ tasks: [] }),
   getCrawlTaskStats: vi.fn().mockResolvedValue({ total: 0, enabled: 0, disabled: 0 }),
   deleteCrawlTask: vi.fn(),
@@ -73,10 +74,15 @@ describe('TaskListPage query state', () => {
     useTaskListQueryStore.getState().reset()
     vi.mocked(getCrawlTasks).mockResolvedValue({
       rows: [],
-      total: 0,
       page: 1,
-      page_size: 20,
-    })
+      size: 20,
+      has_more: false,
+      runtime: {
+        tasks: [],
+        stats: { total: 0, idle: 0, running: 0, queued: 0, stopped: 0 },
+      },
+    } as any)
+    vi.mocked(getCrawlTaskCount).mockResolvedValue({ total: 0 } as any)
   })
 
   it('keeps the search condition after switching away and back', async () => {

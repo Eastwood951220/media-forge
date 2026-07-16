@@ -1,11 +1,19 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import StorageTaskListPage from '../StorageTaskListPage'
 import StorageTaskDetailPage from '../StorageTaskDetailPage'
 import { deleteStorageMainTask, listStorageMainTasks } from '@/api/storage/storageTasks'
 
+function wrapper({ children }: PropsWithChildren) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+}
+
 vi.mock('@/api/storage/storageTasks', () => ({
-  listStorageMainTasks: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+  listStorageMainTasks: vi.fn().mockResolvedValue({ rows: [], page: 1, size: 20, has_more: false }),
+  countStorageMainTasks: vi.fn().mockResolvedValue({ total: 0 }),
   getStorageMainTask: vi.fn().mockResolvedValue({
     id: 'task-detail-1',
     alias: '云存储_详情测试',
@@ -39,10 +47,11 @@ vi.mock('@tanstack/react-router', () => ({
 describe('StorageTaskListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(listStorageMainTasks).mockResolvedValue({ rows: [], page: 1, size: 20, has_more: false } as any)
   })
 
   it('renders storage task list heading', () => {
-    render(<StorageTaskListPage />)
+    render(<StorageTaskListPage />, { wrapper })
     expect(screen.getByText('任务列表')).toBeInTheDocument()
   })
 
@@ -64,11 +73,13 @@ describe('StorageTaskListPage', () => {
             created_at: '2026-07-05T00:00:00Z',
           },
         ],
-        total: 1,
-      })
-      .mockResolvedValueOnce({ rows: [], total: 0 })
+        page: 1,
+        size: 20,
+        has_more: false,
+      } as any)
+      .mockResolvedValueOnce({ rows: [], page: 1, size: 20, has_more: false } as any)
 
-    render(<StorageTaskListPage />)
+    render(<StorageTaskListPage />, { wrapper })
 
     expect(await screen.findByText('云存储_删除测试')).toBeInTheDocument()
     const deleteButton = screen.getByText('删除')
@@ -103,7 +114,7 @@ describe('StorageTaskListPage', () => {
   })
 
   it('renders storage task list with progress-focused table copy', async () => {
-    vi.mocked(listStorageMainTasks).mockResolvedValueOnce({
+    vi.mocked(listStorageMainTasks).mockResolvedValue({
       rows: [
         {
           id: 'task-list-1',
@@ -119,13 +130,17 @@ describe('StorageTaskListPage', () => {
           created_at: '2026-07-10T01:00:00Z',
         },
       ],
-      total: 1,
-    })
+      page: 1,
+      size: 20,
+      has_more: false,
+    } as any)
 
-    render(<StorageTaskListPage />)
+    render(<StorageTaskListPage />, { wrapper })
 
     expect(await screen.findByText('任务列表')).toBeInTheDocument()
-    expect(screen.getByText('云存储_列表测试')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('云存储_列表测试')).toBeInTheDocument()
+    })
     // Check for the progress column header
     expect(screen.getByRole('columnheader', { name: '处理进度' })).toBeInTheDocument()
   })

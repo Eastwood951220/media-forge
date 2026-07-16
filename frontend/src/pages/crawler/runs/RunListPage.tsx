@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
 import { Button, Popconfirm, Space, Table, Tag, message, Card } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { deleteCrawlerRun, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { deleteCrawlerRun, getCrawlerRunCount, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlRun } from '@/api/crawlerRun/types'
+import { queryKeys } from '@/api/queryKeys'
 import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
 import type { CrawlerRunUpdatedPayload } from '@/realtime/types'
+import { useEffect } from 'react'
 
 const statusLabels: Record<string, { text: string; color: string }> = {
   queued: { text: '排队中', color: 'default' },
@@ -20,28 +23,31 @@ const PAGE_SIZE_OPTIONS = ['10', '20', '50']
 
 function RunListPage() {
   const navigate = useNavigate()
-  const [runs, setRuns] = useState<CrawlRun[]>([])
-  const [loading, setLoading] = useState(false)
-  const [total, setTotal] = useState(0)
+  const queryClient = useQueryClient()
   const [current, setCurrent] = useState(1)
   const [pageSize, setPageSize] = useState(20)
 
-  const fetchRuns = useCallback(async (page: number, size: number) => {
-    setLoading(true)
-    try {
-      const skip = (page - 1) * size
-      const data = await getCrawlerRuns({ skip, limit: size })
-      setRuns(data.rows)
-      setTotal(data.total)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const listParams = { page: current, size: pageSize }
+  const listQuery = useQuery({
+    queryKey: queryKeys.crawlerRuns.list(listParams),
+    queryFn: () => getCrawlerRuns(listParams),
+    placeholderData: (previousData) => previousData,
+  })
+  const countQuery = useQuery({
+    queryKey: queryKeys.crawlerRuns.count({}),
+    queryFn: () => getCrawlerRunCount({}),
+  })
 
-  useEffect(() => {
-    void fetchRuns(current, pageSize)
-  }, [current, pageSize, fetchRuns])
+  const runs = listQuery.data?.rows ?? []
+  const total = countQuery.data?.total ?? 0
+  const loading = listQuery.isFetching
+  const countLoading = countQuery.isLoading
 
+  const refreshRuns = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.list(listParams) })
+  }, [listParams, queryClient])
+
+  // Realtime updates
   useEffect(() => {
     connectRealtime()
 
@@ -49,39 +55,43 @@ function RunListPage() {
       'crawler.run.updated',
       (event) => {
         const updatedRun = event.payload
-        setRuns((prev) =>
-          prev.map((run) =>
-            run.id === updatedRun.id
-              ? { ...run, status: updatedRun.status, error: updatedRun.error }
-              : run
-          )
-        )
+        queryClient.setQueryData(queryKeys.crawlerRuns.list(listParams), (prev: { rows: CrawlRun[]; total: number } | undefined) => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            rows: prev.rows.map((run) =>
+              run.id === updatedRun.id
+                ? { ...run, status: updatedRun.status, error: updatedRun.error }
+                : run,
+            ),
+          }
+        })
       },
     )
 
     return unsubscribe
-  }, [])
+  }, [queryClient, listParams])
 
   const handleStop = useCallback(async (run: CrawlRun) => {
     try {
       await stopCrawlerRun(run.id)
       message.success('已停止运行')
-      void fetchRuns(current, pageSize)
+      refreshRuns()
     } catch {
       message.error('停止失败')
     }
-  }, [current, pageSize, fetchRuns])
+  }, [refreshRuns])
 
   const handleRestart = useCallback(async (run: CrawlRun) => {
     try {
       await restartCrawlerRun(run.id)
       message.success('已重启运行')
-      void fetchRuns(current, pageSize)
+      refreshRuns()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '重启失败'
       message.error(msg)
     }
-  }, [current, pageSize, fetchRuns])
+  }, [refreshRuns])
 
   const handleDelete = useCallback(async (run: CrawlRun) => {
     try {
@@ -92,12 +102,13 @@ function RunListPage() {
         setCurrent(nextPage)
         return
       }
-      void fetchRuns(current, pageSize)
+      refreshRuns()
+      void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.count({}) })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '删除失败'
       message.error(msg)
     }
-  }, [current, pageSize, fetchRuns, runs.length])
+  }, [current, refreshRuns, queryClient, runs.length])
 
   const columns: ColumnsType<CrawlRun> = [
     {
@@ -224,11 +235,11 @@ function RunListPage() {
         loading={loading}
         pagination={{
           current,
-          total,
+          total: countLoading ? 0 : total,
           pageSize,
           pageSizeOptions: PAGE_SIZE_OPTIONS,
           showSizeChanger: true,
-          showTotal: (count) => `共 ${count} 条`,
+          showTotal: (count) => countLoading ? '统计中' : `共 ${count} 条`,
           onChange: (page, size) => {
             setCurrent(page)
             setPageSize(size)

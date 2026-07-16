@@ -2,10 +2,11 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RunListPage from '../src/pages/crawler/runs/RunListPage'
-import { getCrawlerRuns, restartCrawlerRun } from '../src/api/crawlerRun'
+import { getCrawlerRunCount, getCrawlerRuns, restartCrawlerRun } from '../src/api/crawlerRun'
 
 vi.mock('../src/api/crawlerRun', () => ({
   getCrawlerRuns: vi.fn(),
+  getCrawlerRunCount: vi.fn(),
   getCrawlerRun: vi.fn(),
   getCrawlerRunTasks: vi.fn(),
   getCrawlerRunTaskSummary: vi.fn(),
@@ -34,8 +35,11 @@ describe('RunListPage', () => {
         updated_at: null,
         logs: [],
       }],
-      total: 1,
-    })
+      page: 1,
+      size: 20,
+      has_more: false,
+    } as any)
+    vi.mocked(getCrawlerRunCount).mockResolvedValue({ total: 1 } as any)
     vi.mocked(restartCrawlerRun).mockResolvedValue({ id: 'run-2' } as never)
   })
 

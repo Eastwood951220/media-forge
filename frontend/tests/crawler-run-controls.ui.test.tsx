@@ -3,12 +3,13 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListPage from '../src/pages/crawler/tasks/TaskListPage'
-import { createTemporaryCrawlRun, createTaskUrlRun, getCrawlTaskStats, getCrawlTasks, getTaskDict } from '../src/api/crawlTask'
+import { createTemporaryCrawlRun, createTaskUrlRun, getCrawlTaskCount, getCrawlTaskStats, getCrawlTasks, getTaskDict } from '../src/api/crawlTask'
 import { runCrawlTask } from '../src/api/crawlerRun'
 import { useTaskListQueryStore } from '../src/pages/crawler/tasks/useTaskListQueryStore'
 
 vi.mock('../src/api/crawlTask', () => ({
   getCrawlTasks: vi.fn(),
+  getCrawlTaskCount: vi.fn(),
   getCrawlTaskStats: vi.fn(),
   getCrawlTaskRuntimeStatuses: vi.fn().mockResolvedValue({ tasks: [], stats: { total: 1, idle: 1, running: 0, queued: 0, stopped: 0 } }),
   getTaskDict: vi.fn(),
@@ -72,8 +73,15 @@ describe('crawler task run controls', () => {
         last_run_at: null,
         last_run_status: null,
       }],
-      total: 1,
-    })
+      page: 1,
+      size: 20,
+      has_more: false,
+      runtime: {
+        tasks: [],
+        stats: { total: 1, idle: 1, running: 0, queued: 0, stopped: 0 },
+      },
+    } as any)
+    vi.mocked(getCrawlTaskCount).mockResolvedValue({ total: 1 } as any)
     vi.mocked(runCrawlTask).mockResolvedValue({ id: 'run-1' } as never)
     vi.mocked(getTaskDict).mockResolvedValue([{ id: 'task-1', name: '任务A' }])
     vi.mocked(createTemporaryCrawlRun).mockResolvedValue({

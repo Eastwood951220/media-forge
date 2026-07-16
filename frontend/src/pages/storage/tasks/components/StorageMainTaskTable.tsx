@@ -12,6 +12,8 @@ interface StorageMainTaskTableProps {
   total: number
   current: number
   pageSize: number
+  hasMore?: boolean
+  countLoading?: boolean
   onStop: (task: StorageMainTask) => void
   onRestart: (task: StorageMainTask) => void
   onDelete: (task: StorageMainTask) => void
@@ -32,6 +34,8 @@ export function StorageMainTaskTable({
   total,
   current,
   pageSize,
+  hasMore = false,
+  countLoading = false,
   onStop,
   onRestart,
   onDelete,
@@ -172,11 +176,11 @@ export function StorageMainTaskTable({
         scroll={{ x: 980 }}
         pagination={{
           current,
-          total,
+          total: hasMore && !countLoading ? undefined : (countLoading ? 0 : total),
           pageSize,
           pageSizeOptions: PAGE_SIZE_OPTIONS,
           showSizeChanger: true,
-          showTotal: (count) => `共 ${count} 条`,
+          showTotal: (count) => countLoading ? '统计中' : (count !== undefined ? `共 ${count} 条` : '统计中'),
           onChange: (page, size) => {
             onPageChange(page)
             onPageSizeChange(size)

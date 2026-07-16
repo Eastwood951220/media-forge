@@ -1,12 +1,9 @@
 import { StorageMainTaskTable } from './components/StorageMainTaskTable'
 import { useStorageTaskList } from './hooks/useStorageTaskList'
-import { useStorageTaskListRealtime } from './hooks/useStorageTaskListRealtime'
 import styles from './StorageTasks.module.less'
 
 function StorageTaskListPage() {
   const list = useStorageTaskList()
-
-  useStorageTaskListRealtime({ setTasks: list.setTasks, setTotal: list.setTotal })
 
   return (
     <div className={styles.page}>
@@ -22,6 +19,8 @@ function StorageTaskListPage() {
         pageSize={list.pageSize}
         tasks={list.tasks}
         total={list.total}
+        hasMore={list.hasMore}
+        countLoading={list.countLoading}
       />
     </div>
   )
