@@ -2,10 +2,11 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 
 from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+from backend.app.models.crawl_task import CrawlTask
 from backend.app.modules.crawler.runs.logs import load_run_logs
 from backend.app.modules.crawler.runs.schemas import CrawlRunDetailTaskRead, CrawlRunRead, RunDetailRetryRequest, RunTaskSummary
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
@@ -60,28 +61,60 @@ def queue_status(_current_user: CurrentUser) -> dict:
     return success(data=get_runtime_state().queue_status())
 
 
-@router.get("")
-def list_runs(
-    _current_user: CurrentUser,
-    db: Session = Depends(get_db),
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=20, ge=1, le=100),
-    task_id: uuid.UUID | None = Query(default=None),
-    status_filter: str | None = Query(default=None, alias="status"),
-) -> dict:
-    query = db.query(CrawlRun)
+def _owned_run_query(
+    db: Session,
+    owner_id: uuid.UUID,
+    *,
+    task_id: uuid.UUID | None = None,
+    status_filter: str | None = None,
+):
+    query = (
+        db.query(CrawlRun)
+        .join(CrawlTask, CrawlRun.task_id == CrawlTask.id)
+        .options(noload(CrawlRun.detail_tasks))
+        .filter(CrawlTask.owner_id == owner_id)
+    )
     if task_id is not None:
         query = query.filter(CrawlRun.task_id == task_id)
     if status_filter is not None:
         query = query.filter(CrawlRun.status == status_filter)
-    total = query.count()
-    rows = query.order_by(CrawlRun.created_at.desc()).offset(skip).limit(limit).all()
+    return query
+
+
+@router.get("")
+def list_runs(
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
+    task_id: uuid.UUID | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+) -> dict:
+    rows_plus_one = (
+        _owned_run_query(db, current_user.id, task_id=task_id, status_filter=status_filter)
+        .order_by(CrawlRun.created_at.desc(), CrawlRun.id.desc())
+        .offset((page - 1) * size)
+        .limit(size + 1)
+        .all()
+    )
+    rows = rows_plus_one[:size]
     payload_rows = []
     for row in rows:
         payload = CrawlRunRead.model_validate(row).model_dump(mode="json")
         payload["logs"] = []
         payload_rows.append(payload)
-    return paginated(rows=payload_rows, total=total)
+    return success(data={"rows": payload_rows, "page": page, "size": size, "has_more": len(rows_plus_one) > size})
+
+
+@router.get("/count")
+def count_runs(
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+    task_id: uuid.UUID | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+) -> dict:
+    total = _owned_run_query(db, current_user.id, task_id=task_id, status_filter=status_filter).count()
+    return success(data={"total": total})
 
 
 @router.get("/{run_id}")

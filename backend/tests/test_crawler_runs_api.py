@@ -108,7 +108,11 @@ def test_run_list_and_detail_endpoints(client: TestClient, admin_user, monkeypat
     tasks_response = client.get(f"/api/crawler/runs/{run_id}/tasks", headers=headers)
 
     assert list_response.status_code == HTTPStatus.OK
-    assert list_response.json()["total"] == 1
+    list_data = list_response.json()["data"]
+    assert len(list_data["rows"]) == 1
+    assert list_data["has_more"] is False
+    count_response = client.get("/api/crawler/runs/count", headers=headers)
+    assert count_response.json()["data"]["total"] == 1
     assert detail_response.json()["data"]["id"] == run_id
     assert tasks_response.json()["rows"] == []
 
@@ -910,3 +914,47 @@ def test_run_task_summary_endpoint_returns_404_for_missing_run(client: TestClien
     response = client.get("/api/crawler/runs/00000000-0000-0000-0000-000000000001/tasks/summary", headers=headers)
 
     assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_run_list_uses_page_size_has_more_and_no_inline_total(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    task = CrawlTask(name="run-page-task", storage_location="A", owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    for index in range(3):
+        session.add(CrawlRun(task_id=task.id, task_name=task.name, status="completed", crawl_mode="full"))
+    session.commit()
+
+    response = client.get("/api/crawler/runs?page=1&size=2", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()["data"]
+    assert data["page"] == 1
+    assert data["size"] == 2
+    assert data["has_more"] is True
+    assert len(data["rows"]) == 2
+    assert "total" not in data
+
+
+def test_run_count_endpoint_is_owner_scoped(client: TestClient, admin_user, db_session) -> None:
+    from backend.app.models.user import User
+
+    headers = auth_headers(client, admin_user)
+    other = User(username="other-run-owner", hashed_password="x")
+    db_session.add(other)
+    db_session.flush()
+    owned_task = CrawlTask(name="owned-run-task", storage_location="A", owner_id=admin_user.id)
+    other_task = CrawlTask(name="other-run-task", storage_location="B", owner_id=other.id)
+    db_session.add_all([owned_task, other_task])
+    db_session.flush()
+    db_session.add_all([
+        CrawlRun(task_id=owned_task.id, task_name=owned_task.name, status="completed", crawl_mode="full"),
+        CrawlRun(task_id=other_task.id, task_name=other_task.name, status="completed", crawl_mode="full"),
+    ])
+    db_session.commit()
+
+    response = client.get("/api/crawler/runs/count", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["data"]["total"] == 1
