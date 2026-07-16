@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 
 from backend.app.models.storage_task import StorageMainTask, StorageSubTask
 
@@ -32,24 +32,55 @@ class StorageTaskRepository:
         main_task.failed_count = sum(1 for task in subtasks if task.status == "failed")
         main_task.skipped_count = sum(1 for task in subtasks if task.status == "skipped")
 
+    def _main_task_query(
+        self,
+        *,
+        created_by: uuid.UUID,
+        status: str | None,
+        keyword: str | None,
+    ):
+        query = (
+            self.db.query(StorageMainTask)
+            .options(noload(StorageMainTask.subtasks))
+            .filter(StorageMainTask.created_by == created_by)
+        )
+        if status:
+            query = query.filter(StorageMainTask.status == status)
+        if keyword:
+            query = query.filter(StorageMainTask.alias.ilike(f"%{keyword}%"))
+        return query
+
     def list_main_tasks(
         self,
         *,
         created_by: uuid.UUID,
         page: int,
-        limit: int,
+        size: int,
         status: str | None,
         keyword: str | None,
-    ) -> tuple[list[StorageMainTask], int]:
-        query = self.db.query(StorageMainTask).filter(StorageMainTask.created_by == created_by)
-        if status:
-            query = query.filter(StorageMainTask.status == status)
-        if keyword:
-            pattern = f"%{keyword}%"
-            query = query.filter(StorageMainTask.alias.ilike(pattern))
-        total = query.count()
-        rows = query.order_by(StorageMainTask.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
-        return rows, total
+    ) -> tuple[list[StorageMainTask], bool]:
+        rows = (
+            self._main_task_query(created_by=created_by, status=status, keyword=keyword)
+            .order_by(StorageMainTask.created_at.desc(), StorageMainTask.id.desc())
+            .offset((page - 1) * size)
+            .limit(size + 1)
+            .all()
+        )
+        return rows[:size], len(rows) > size
+
+    def count_main_tasks(
+        self,
+        *,
+        created_by: uuid.UUID,
+        status: str | None,
+        keyword: str | None,
+    ) -> int:
+        return int(
+            self._main_task_query(created_by=created_by, status=status, keyword=keyword)
+            .with_entities(func.count(StorageMainTask.id))
+            .scalar()
+            or 0
+        )
 
     def list_subtasks(
         self,

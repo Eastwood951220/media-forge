@@ -59,21 +59,38 @@ def list_storage_main_tasks(
     current_user: CurrentUser,
     service=Depends(get_storage_task_service),
     page: int = 1,
-    limit: int = 20,
+    size: int = 20,
     status: str | None = None,
     keyword: str | None = None,
 ):
-    rows, total = service.repository.list_main_tasks(
+    rows, has_more = service.repository.list_main_tasks(
         created_by=current_user.id,
         page=page,
-        limit=limit,
+        size=size,
         status=status,
         keyword=keyword,
     )
     return success(data={
         "rows": [service.to_main_response(r) for r in rows],
-        "total": total,
+        "page": page,
+        "size": size,
+        "has_more": has_more,
     })
+
+
+@router.get("/count")
+def count_storage_main_tasks(
+    current_user: CurrentUser,
+    service=Depends(get_storage_task_service),
+    status: str | None = None,
+    keyword: str | None = None,
+):
+    total = service.repository.count_main_tasks(
+        created_by=current_user.id,
+        status=status,
+        keyword=keyword,
+    )
+    return success(data={"total": total})
 
 
 @router.get("/{main_task_id}")

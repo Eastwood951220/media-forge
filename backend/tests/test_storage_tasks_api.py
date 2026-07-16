@@ -75,7 +75,9 @@ def test_list_and_detail_storage_tasks(client, db_session, auth_headers, test_us
 
     listing = client.get("/api/storage/tasks", headers=auth_headers)
     assert listing.status_code == 200
-    assert listing.json()["data"]["total"] >= 1
+    assert len(listing.json()["data"]["rows"]) >= 1
+    counting = client.get("/api/storage/tasks/count", headers=auth_headers)
+    assert counting.json()["data"]["total"] >= 1
 
     detail = client.get(f"/api/storage/tasks/{created['id']}", headers=auth_headers)
     assert detail.status_code == 200
@@ -122,15 +124,20 @@ def test_list_tasks_with_filters(client, db_session, auth_headers, test_user):
 
     filtered = client.get(f"/api/storage/tasks?keyword={alias}", headers=auth_headers)
     assert filtered.status_code == 200
-    assert filtered.json()["data"]["total"] >= 1
+    assert len(filtered.json()["data"]["rows"]) >= 1
+    filtered_count = client.get(f"/api/storage/tasks/count?keyword={alias}", headers=auth_headers)
+    assert filtered_count.json()["data"]["total"] >= 1
 
     by_status = client.get("/api/storage/tasks?status=queued", headers=auth_headers)
     assert by_status.status_code == 200
-    assert by_status.json()["data"]["total"] >= 1
+    by_status_count = client.get("/api/storage/tasks/count?status=queued", headers=auth_headers)
+    assert by_status_count.json()["data"]["total"] >= 1
 
     not_found = client.get("/api/storage/tasks?keyword=nonexistent_alias_xyz", headers=auth_headers)
     assert not_found.status_code == 200
-    assert not_found.json()["data"]["total"] == 0
+    assert len(not_found.json()["data"]["rows"]) == 0
+    not_found_count = client.get("/api/storage/tasks/count?keyword=nonexistent_alias_xyz", headers=auth_headers)
+    assert not_found_count.json()["data"]["total"] == 0
 
 
 def test_main_task_not_found(client, auth_headers):
@@ -369,13 +376,48 @@ def test_storage_main_task_list_is_scoped_to_owner(admin_user, other_user) -> No
     session.add_all([own_task, other_task])
     session.commit()
 
-    rows, total = StorageTaskRepository(session).list_main_tasks(
+    rows, has_more = StorageTaskRepository(session).list_main_tasks(
         created_by=admin_user.id,
         page=1,
-        limit=20,
+        size=20,
         status=None,
         keyword=None,
     )
 
-    assert total == 1
+    assert has_more is False
     assert [row.id for row in rows] == [own_task.id]
+
+
+def test_storage_task_list_uses_page_size_has_more_and_no_inline_total(client, db_session, auth_headers, test_user):
+    for index in range(3):
+        movie = _movie_with_source_and_magnet(db_session, test_user.id, code=f"page-{index}", location="A")
+        created = client.post(
+            "/api/storage/tasks/push",
+            json={"movie_id": str(movie.id), "storage_mode": "single", "selected_storage_location": "A"},
+            headers=auth_headers,
+        )
+        assert created.status_code == 200
+
+    response = client.get("/api/storage/tasks?page=1&size=2", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["page"] == 1
+    assert data["size"] == 2
+    assert data["has_more"] is True
+    assert len(data["rows"]) == 2
+    assert "total" not in data
+
+
+def test_storage_task_count_endpoint_uses_filters(client, db_session, auth_headers, test_user):
+    movie = _movie_with_source_and_magnet(db_session, test_user.id, code="count-storage", location="A")
+    created = client.post(
+        "/api/storage/tasks/push",
+        json={"movie_id": str(movie.id), "storage_mode": "single", "selected_storage_location": "A"},
+        headers=auth_headers,
+    ).json()["data"]
+
+    response = client.get(f"/api/storage/tasks/count?keyword={created['alias']}", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["data"]["total"] == 1
