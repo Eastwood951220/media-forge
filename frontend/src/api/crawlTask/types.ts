@@ -39,6 +39,17 @@ export interface PaginatedResponse<T> {
   msg?: string
 }
 
+export interface FastListResponse<T> {
+  rows: T[]
+  page: number
+  size: number
+  has_more: boolean
+}
+
+export interface CountResponse {
+  total: number
+}
+
 export interface CrawlTaskCreateParams {
   name: string
   storage_location: string

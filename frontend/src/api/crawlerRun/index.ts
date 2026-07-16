@@ -8,17 +8,24 @@ import type {
   RunLogEntry,
   RunTaskSummary,
 } from './types'
-import type { PaginatedResponse } from '../crawlTask/types'
+import type { CountResponse, FastListResponse, PaginatedResponse } from '../crawlTask/types'
 
 const BASE_URL = '/api/crawler/runs'
 
-export function getCrawlerRuns(params?: {
-  skip?: number
-  limit?: number
+export function getCrawlerRuns(params: {
+  page: number
+  size: number
   task_id?: string
   status?: string
-}): Promise<PaginatedResponse<CrawlRun>> {
-  return request.get<PaginatedResponse<CrawlRun>>(BASE_URL, params)
+}): Promise<FastListResponse<CrawlRun>> {
+  return request.get<FastListResponse<CrawlRun>>(BASE_URL, params)
+}
+
+export function getCrawlerRunCount(params?: {
+  task_id?: string
+  status?: string
+}): Promise<CountResponse> {
+  return request.get<CountResponse>(`${BASE_URL}/count`, params)
 }
 
 export function getCrawlerRun(runId: string): Promise<CrawlRun> {

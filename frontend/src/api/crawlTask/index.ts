@@ -1,6 +1,7 @@
 import { request } from '@/request'
 import type { CrawlRun } from '@/api/crawlerRun/types'
 import type {
+  CountResponse,
   CrawlTask,
   CrawlTaskCreateParams,
   CrawlTaskRuntimeStatusResponse,
@@ -8,6 +9,7 @@ import type {
   CrawlTaskUpdateParams,
   DeleteMode,
   DeleteTaskResult,
+  FastListResponse,
   PaginatedResponse,
   TaskDictItem,
   TaskUrlRunCreateParams,
@@ -16,12 +18,16 @@ import type {
 
 const BASE_URL = '/api/crawler/tasks'
 
-export function getCrawlTasks(params?: {
-  skip?: number
-  limit?: number
+export function getCrawlTasks(params: {
+  page: number
+  size: number
   keyword?: string
-}): Promise<PaginatedResponse<CrawlTask>> {
-  return request.get<PaginatedResponse<CrawlTask>>(BASE_URL, params)
+}): Promise<FastListResponse<CrawlTask> & { runtime?: CrawlTaskRuntimeStatusResponse }> {
+  return request.get<FastListResponse<CrawlTask> & { runtime?: CrawlTaskRuntimeStatusResponse }>(BASE_URL, params)
+}
+
+export function getCrawlTaskCount(params?: { keyword?: string }): Promise<CountResponse> {
+  return request.get<CountResponse>(`${BASE_URL}/count`, params)
 }
 
 export function getCrawlTaskStats(): Promise<CrawlTaskStats> {
