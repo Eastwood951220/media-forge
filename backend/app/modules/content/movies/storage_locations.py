@@ -6,6 +6,7 @@ from pathlib import PurePosixPath
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_task import CrawlTask
+from backend.app.modules.storage.tasks.policies import insert_vr_directory, is_vr_movie_tags
 from shared.database.models.content import Movie
 
 KNOWN_STORAGE_SUFFIXES = ("", "-C", "-U", "-UC")
@@ -17,12 +18,15 @@ def build_movie_storage_target_folders(db: Session, movie: Movie, config: dict) 
     if not code:
         return []
     storage_locations = _storage_locations_for_movie(db, movie)
+    is_vr_movie = is_vr_movie_tags(list(movie.tags or []))
     folders: list[dict] = []
     seen: set[str] = set()
     for storage_location in storage_locations:
         for suffix in KNOWN_STORAGE_SUFFIXES:
             folder_name = f"{code}{suffix}"
             target_folder = f"{target_root}/{storage_location}/{folder_name}"
+            if is_vr_movie:
+                target_folder = insert_vr_directory(target_folder, folder_name)
             if target_folder in seen:
                 continue
             seen.add(target_folder)
