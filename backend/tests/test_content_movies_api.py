@@ -668,3 +668,56 @@ def test_bulk_storage_sync_uses_index_without_remote_listing(db_session, admin_u
 
     assert payload.stored_count == 1
     assert movie.storage_summary["locations"][0]["path"].endswith("ALDN-206-U.mp4")
+
+
+def test_create_magnet_refresh_run_accepts_single_and_batch_ids(client, db_session, auth_headers, test_user, monkeypatch) -> None:
+    from backend.app.models.crawl_task import CrawlTask
+    from shared.database.models.content import Movie
+
+    source_task = CrawlTask(name="来源任务", storage_location="JP", owner_id=test_user.id)
+    db_session.add(source_task)
+    db_session.flush()
+    movie_a = Movie(code="MAG-001", source_url="https://example.test/a", source_name="电影A", source_task_ids=[source_task.id])
+    movie_b = Movie(code="MAG-002", source_url="https://example.test/b", source_name="电影B", source_task_ids=[source_task.id])
+    db_session.add_all([movie_a, movie_b])
+    db_session.commit()
+
+    enqueued: list[str] = []
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.redis_state.CrawlerRuntimeState.enqueue_run", lambda self, run_id: enqueued.append(run_id))
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.worker.ensure_crawler_worker_started", lambda runtime: None)
+
+    single = client.post("/api/content/movies/magnet-refresh", json={"movie_ids": [str(movie_a.id)]}, headers=auth_headers)
+    batch = client.post("/api/content/movies/magnet-refresh", json={"movie_ids": [str(movie_a.id), str(movie_b.id)]}, headers=auth_headers)
+
+    assert single.status_code == 201
+    assert single.json()["data"]["crawl_mode"] == "magnet_refresh"
+    assert batch.status_code == 201
+    assert batch.json()["data"]["crawl_mode"] == "magnet_refresh"
+    assert len(enqueued) == 2
+
+
+def test_magnet_refresh_creates_display_task_and_skipped_missing_source_url(client, db_session, auth_headers, test_user, monkeypatch) -> None:
+    from backend.app.models.crawl_run import CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+    from shared.database.models.content import Movie
+
+    source_task = CrawlTask(name="来源任务", storage_location="JP", owner_id=test_user.id)
+    db_session.add(source_task)
+    db_session.flush()
+    movie = Movie(code="MISS-001", source_url="", source_name="无URL", source_task_ids=[source_task.id])
+    db_session.add(movie)
+    db_session.commit()
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.redis_state.CrawlerRuntimeState.enqueue_run", lambda self, run_id: None)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.worker.ensure_crawler_worker_started", lambda runtime: None)
+
+    response = client.post("/api/content/movies/magnet-refresh", json={"movie_ids": [str(movie.id)]}, headers=auth_headers)
+
+    assert response.status_code == 201
+    run_id = uuid.UUID(response.json()["data"]["id"])
+    display_task = db_session.query(CrawlTask).filter(CrawlTask.owner_id == test_user.id, CrawlTask.name == "磁力更新").one()
+    assert str(display_task.id) == response.json()["data"]["task_id"]
+    detail = db_session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run_id).one()
+    assert detail.code == "MISS-001"
+    assert detail.status == "skipped"
+    assert detail.error == "missing_source_url"

@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MovieMagnetRead(BaseModel):
@@ -102,3 +102,7 @@ class MovieDeleteResponse(BaseModel):
     cloud_deleted_folders: list[str]
     cloud_missing_folders: list[str]
     cloud_failed_folders: list[dict[str, Any]]
+
+
+class MovieMagnetRefreshRequest(BaseModel):
+    movie_ids: list[uuid.UUID] = Field(min_length=1)

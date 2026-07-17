@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.modules.content.movies.delete_api import delete_movies_from_request
+from backend.app.modules.content.movies.magnet_refresh import create_magnet_refresh_run
+from backend.app.modules.crawler.runs.schemas import CrawlRunRead
 from backend.app.modules.content.movies.queries import (
     VALID_FILTER_TYPES,
     MovieListFilters,
@@ -14,7 +16,7 @@ from backend.app.modules.content.movies.queries import (
     list_movies_page,
     movie_matches,
 )
-from backend.app.modules.content.movies.schemas import MovieDeleteRequest, MovieStorageSyncRequest
+from backend.app.modules.content.movies.schemas import MovieDeleteRequest, MovieMagnetRefreshRequest, MovieStorageSyncRequest
 from backend.app.modules.content.movies.serializers import build_movie_storage_location_map, serialize_movie
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
 from backend.app.modules.content.movies.storage_sync_api import (
@@ -156,6 +158,16 @@ def delete_content_movies(
 ) -> dict:
     msg, payload = delete_movies_from_request(db, str(current_user.id), body)
     return success(msg=msg, data=payload)
+
+
+@router.post("/magnet-refresh", status_code=status.HTTP_201_CREATED)
+def refresh_movie_magnets(
+    body: MovieMagnetRefreshRequest,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    run = create_magnet_refresh_run(db, current_user.id, body.movie_ids)
+    return success(data=CrawlRunRead.model_validate(run).model_dump(mode="json"))
 
 
 @router.get("/{movie_id}")
