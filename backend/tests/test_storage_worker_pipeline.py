@@ -533,7 +533,7 @@ def test_execute_subtask_pipeline_stops_after_target_exists_skip(monkeypatch):
 
     attempt_ids: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
+    def fake_execute_current_magnet_attempt(context, magnet, movie=None, movie_tags=None):
         attempt_ids.append(magnet["id"])
         context.subtask.status = "skipped"
         context.subtask.skip_reason = "target_exists"
@@ -755,7 +755,7 @@ def test_execute_subtask_pipeline_stops_after_rename_name_exists_skip(monkeypatc
 
     attempt_ids: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
+    def fake_execute_current_magnet_attempt(context, magnet, movie=None, movie_tags=None):
         attempt_ids.append(magnet["id"])
         context.subtask.status = "skipped"
         context.subtask.skip_reason = "rename_name_exists"
@@ -1066,7 +1066,7 @@ def test_execute_subtask_pipeline_stops_after_rename_existing_source_target_skip
 
     attempt_ids: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
+    def fake_execute_current_magnet_attempt(context, magnet, movie=None, movie_tags=None):
         attempt_ids.append(magnet["id"])
         context.subtask.status = "skipped"
         context.subtask.skip_reason = "target_exists"
@@ -1355,7 +1355,7 @@ def test_subtask_pipeline_starts_next_magnet_only_after_current_failure(monkeypa
 
     attempt_order: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
+    def fake_execute_current_magnet_attempt(context, magnet, movie=None, movie_tags=None):
         attempt_order.append(magnet["id"])
         return magnet["id"] == "m2"
 
@@ -1433,7 +1433,7 @@ def test_subtask_pipeline_does_not_start_later_magnet_after_success(monkeypatch)
 
     attempt_order: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
+    def fake_execute_current_magnet_attempt(context, magnet, movie=None, movie_tags=None):
         attempt_order.append(magnet["id"])
         return True
 
@@ -2217,7 +2217,7 @@ def test_subtask_pipeline_stops_after_existing_target_skip_from_task_exists(monk
 
     attempt_ids: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
+    def fake_execute_current_magnet_attempt(context, magnet, movie=None, movie_tags=None):
         attempt_ids.append(magnet["id"])
         context.subtask.status = "skipped"
         context.subtask.skip_reason = "target_exists"
@@ -2975,7 +2975,7 @@ def test_execute_subtask_pipeline_passes_movie_tags_to_attempt(monkeypatch) -> N
 
     observed_movie_tags: list[str] | None = None
 
-    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
+    def fake_execute_current_magnet_attempt(context, magnet, movie=None, movie_tags=None):
         nonlocal observed_movie_tags
         observed_movie_tags = movie_tags
         return True
