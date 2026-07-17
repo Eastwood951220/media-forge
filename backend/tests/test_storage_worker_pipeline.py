@@ -3183,3 +3183,209 @@ def test_rename_selected_videos_orders_similar_numeric_parts_before_assigning_cd
         ("/Downloads/4k2.com@vrkm01668_2_12000.mp4", "VRKM-1668-CD2.mp4"),
         ("/Downloads/4k2.com@vrkm01668_10_12000.mp4", "VRKM-1668-CD10.mp4"),
     ]
+
+
+def test_copy_from_existing_movie_storage_uses_summary_location() -> None:
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.existing_movie_storage import copy_from_existing_movie_storage
+
+    class Provider:
+        def __init__(self) -> None:
+            self.ensure_calls: list[str] = []
+            self.copy_calls: list[tuple[str, str]] = []
+            self.files = {
+                "/Movies/A/AVSA-257/AVSA-257.mp4": SimpleNamespace(
+                    name="AVSA-257.mp4",
+                    full_path="/Movies/A/AVSA-257/AVSA-257.mp4",
+                    size=500 * 1024 * 1024,
+                    is_directory=False,
+                )
+            }
+
+        def ensure_directory(self, path):
+            self.ensure_calls.append(path)
+
+        def find_file(self, path):
+            return self.files.get(path)
+
+        def copy_file(self, source_path, target_folder):
+            self.copy_calls.append((source_path, target_folder))
+            target_path = f"{target_folder}/AVSA-257.mp4"
+            self.files[target_path] = SimpleNamespace(
+                name="AVSA-257.mp4",
+                full_path=target_path,
+                size=500 * 1024 * 1024,
+                is_directory=False,
+            )
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.config = {"video_extensions": [".mp4"], "minimum_video_size_mb": 100}
+            self.logs: list[dict] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+    movie = SimpleNamespace(
+        code="AVSA-257",
+        storage_summary={
+            "locations": [
+                {
+                    "path": "/Movies/A/AVSA-257/AVSA-257.mp4",
+                    "target_folder": "/Movies/A/AVSA-257",
+                    "storage_location": "A",
+                    "file_name": "AVSA-257.mp4",
+                    "size": 500 * 1024 * 1024,
+                    "exists": True,
+                }
+            ]
+        },
+    )
+    context = Context()
+
+    copied = copy_from_existing_movie_storage(context, movie, ["/Movies/B/AVSA-257"])
+
+    assert context.provider.ensure_calls == ["/Movies/B/AVSA-257"]
+    assert context.provider.copy_calls == [
+        ("/Movies/A/AVSA-257/AVSA-257.mp4", "/Movies/B/AVSA-257")
+    ]
+    assert copied == [
+        {
+            "name": "AVSA-257.mp4",
+            "path": "/Movies/A/AVSA-257/AVSA-257.mp4",
+            "size": 500 * 1024 * 1024,
+            "renamed_name": "AVSA-257.mp4",
+            "moved_path": "/Movies/A/AVSA-257/AVSA-257.mp4",
+            "copied_paths": ["/Movies/B/AVSA-257/AVSA-257.mp4"],
+            "copy_source": "/Movies/A/AVSA-257/AVSA-257.mp4",
+            "copy_source_target": "/Movies/A/AVSA-257",
+            "copy_reason": "existing_movie_storage",
+        }
+    ]
+    assert any(log["message"] == "检查电影已有存储位置" for log in context.logs)
+    assert any(log["message"] == "已从电影已有存储复制到目标目录" for log in context.logs)
+
+
+def test_copy_from_existing_movie_storage_ignores_current_target_as_source() -> None:
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.existing_movie_storage import copy_from_existing_movie_storage
+
+    class Provider:
+        def __init__(self) -> None:
+            self.copy_calls: list[tuple[str, str]] = []
+
+        def find_file(self, path):
+            return SimpleNamespace(size=500 * 1024 * 1024)
+
+        def ensure_directory(self, path):
+            return None
+
+        def copy_file(self, source_path, target_folder):
+            self.copy_calls.append((source_path, target_folder))
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.config = {"video_extensions": [".mp4"], "minimum_video_size_mb": 100}
+            self.logs: list[dict] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+    movie = SimpleNamespace(
+        code="AVSA-257",
+        storage_summary={
+            "locations": [
+                {
+                    "path": "/Movies/B/AVSA-257/AVSA-257.mp4",
+                    "target_folder": "/Movies/B/AVSA-257",
+                    "storage_location": "B",
+                    "file_name": "AVSA-257.mp4",
+                    "size": 500 * 1024 * 1024,
+                    "exists": True,
+                }
+            ]
+        },
+    )
+    context = Context()
+
+    copied = copy_from_existing_movie_storage(context, movie, ["/Movies/B/AVSA-257"])
+
+    assert copied == []
+    assert context.provider.copy_calls == []
+
+
+def test_copy_from_existing_movie_storage_scans_when_summary_has_no_source(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker import existing_movie_storage
+
+    class Provider:
+        def __init__(self) -> None:
+            self.ensure_calls: list[str] = []
+            self.copy_calls: list[tuple[str, str]] = []
+            self.files = {
+                "/Movies/A/AVSA-257/AVSA-257.mp4": SimpleNamespace(size=500 * 1024 * 1024)
+            }
+
+        def ensure_directory(self, path):
+            self.ensure_calls.append(path)
+
+        def find_file(self, path):
+            return self.files.get(path)
+
+        def copy_file(self, source_path, target_folder):
+            self.copy_calls.append((source_path, target_folder))
+            target_path = f"{target_folder}/AVSA-257.mp4"
+            self.files[target_path] = SimpleNamespace(size=500 * 1024 * 1024)
+
+    class Context:
+        def __init__(self) -> None:
+            self.db = object()
+            self.provider = Provider()
+            self.config = {"target_folder": "/Movies", "video_extensions": [".mp4"], "minimum_video_size_mb": 100}
+            self.logs: list[dict] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+    movie = SimpleNamespace(code="AVSA-257", storage_summary={"locations": []}, source_task_ids=[], tags=[])
+    context = Context()
+
+    monkeypatch.setattr(
+        existing_movie_storage,
+        "build_movie_storage_target_folders",
+        lambda db, movie, config: [
+            {"target_folder": "/Movies/A/AVSA-257", "storage_location": "A", "folder_name": "AVSA-257"}
+        ],
+    )
+    monkeypatch.setattr(
+        existing_movie_storage,
+        "scan_movie_storage_locations",
+        lambda movie, provider, config, folders, source: (
+            ["/Movies/A/AVSA-257"],
+            [
+                {
+                    "path": "/Movies/A/AVSA-257/AVSA-257.mp4",
+                    "target_folder": "/Movies/A/AVSA-257",
+                    "storage_location": "A",
+                    "file_name": "AVSA-257.mp4",
+                    "size": 500 * 1024 * 1024,
+                    "exists": True,
+                }
+            ],
+        ),
+    )
+
+    copied = existing_movie_storage.copy_from_existing_movie_storage(context, movie, ["/Movies/B/AVSA-257"])
+
+    assert copied[0]["copy_source"] == "/Movies/A/AVSA-257/AVSA-257.mp4"
+    assert context.provider.copy_calls == [
+        ("/Movies/A/AVSA-257/AVSA-257.mp4", "/Movies/B/AVSA-257")
+    ]
