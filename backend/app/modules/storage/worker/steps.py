@@ -9,7 +9,11 @@ from backend.app.modules.storage.worker.download_flow import run_download_flow
 from backend.app.modules.storage.worker.existing_target_flow import handle_existing_target_fallback
 from backend.app.modules.storage.worker.file_pipeline import run_found_files_pipeline
 from backend.app.modules.storage.worker.attempts import append_magnet_attempt, ordered_magnet_attempts
+from backend.app.modules.storage.worker.cleanup_ops import cleanup_download_folder
+from backend.app.modules.storage.worker.existing_movie_storage import copy_from_existing_movie_storage
+from backend.app.modules.storage.worker.results import mark_subtask_success_from_existing_movie_storage
 from backend.app.modules.storage.worker.target_planning import plan_storage_attempt
+from backend.app.modules.storage.worker.verify_ops import verify_moved_files
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +25,7 @@ def _subtask_log(context, level: str, message: str, extra: dict | None = None) -
     write_storage_subtask_log(str(subtask_id), level, message, extra or {})
 
 
-def execute_current_magnet_attempt(context, magnet: dict, movie_tags: list[str] | None = None) -> bool:
+def execute_current_magnet_attempt(context, magnet: dict, movie=None, movie_tags: list[str] | None = None) -> bool:
     """Execute a single magnet download attempt through the full step pipeline."""
     subtask = context.subtask
     config = context.config
@@ -46,6 +50,31 @@ def execute_current_magnet_attempt(context, magnet: dict, movie_tags: list[str] 
         prepare_context,
         step="prepare",
     )
+
+    if movie is not None:
+        try:
+            copied_files = copy_from_existing_movie_storage(context, movie, target_paths)
+        except Exception as exc:
+            context.log(
+                "WARNING",
+                "电影已有存储复制失败，继续磁力流程",
+                {"magnet_id": magnet.get("id"), "error": str(exc), "target_paths": target_paths},
+                step="prepare",
+            )
+        else:
+            if copied_files:
+                context.set_step("verify_result")
+                if verify_moved_files(context, copied_files):
+                    context.set_step("cleanup_files")
+                    cleanup_download_folder(context, download_folder, config)
+                    mark_subtask_success_from_existing_movie_storage(context, copied_files, magnet)
+                    return True
+                context.log(
+                    "WARNING",
+                    "电影已有存储复制验证失败，继续磁力流程",
+                    {"magnet_id": magnet.get("id"), "files": copied_files},
+                    step="verify_result",
+                )
 
     download_result = run_download_flow(context, magnet, download_folder, download_root)
     if download_result is None:
@@ -114,7 +143,7 @@ def execute_subtask_pipeline(context) -> None:
             },
         )
 
-        success = execute_current_magnet_attempt(context, magnet, movie_tags=list(movie.tags or []))
+        success = execute_current_magnet_attempt(context, magnet, movie=movie, movie_tags=list(movie.tags or []))
 
         context.log(
             "INFO" if success else "WARNING",

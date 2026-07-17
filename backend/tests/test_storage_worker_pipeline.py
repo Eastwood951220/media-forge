@@ -2673,7 +2673,7 @@ def test_execute_subtask_pipeline_stops_after_existing_target_copy_success(monke
 
     attempt_ids: list[str] = []
 
-    def fake_execute_current_magnet_attempt(context, magnet, movie_tags=None):
+    def fake_execute_current_magnet_attempt(context, magnet, movie=None, movie_tags=None):
         attempt_ids.append(magnet["id"])
         context.subtask.result = {"status": "success", "reason": "copied_from_existing_target"}
         context.subtask.moved_files = [
@@ -3389,3 +3389,296 @@ def test_copy_from_existing_movie_storage_scans_when_summary_has_no_source(monke
     assert context.provider.copy_calls == [
         ("/Movies/A/AVSA-257/AVSA-257.mp4", "/Movies/B/AVSA-257")
     ]
+
+
+def test_execute_current_magnet_attempt_copies_existing_movie_storage_before_submit(monkeypatch) -> None:
+    import uuid
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.steps import execute_current_magnet_attempt
+
+    class Provider:
+        def __init__(self) -> None:
+            self.submit_calls: list[tuple[str, str]] = []
+            self.ensure_calls: list[str] = []
+            self.copy_calls: list[tuple[str, str]] = []
+            self.deleted: list[str] = []
+            self.files = {
+                "/Movies/A/AVSA-257/AVSA-257.mp4": SimpleNamespace(size=500 * 1024 * 1024)
+            }
+
+        def ensure_directory(self, path):
+            self.ensure_calls.append(path)
+
+        def submit_offline_download(self, magnet_url, target_folder):
+            self.submit_calls.append((magnet_url, target_folder))
+
+        def find_file(self, path):
+            return self.files.get(path)
+
+        def copy_file(self, source_path, target_folder):
+            self.copy_calls.append((source_path, target_folder))
+            self.files[f"{target_folder}/AVSA-257.mp4"] = SimpleNamespace(size=500 * 1024 * 1024)
+
+        def delete_file(self, path):
+            self.deleted.append(path)
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = SimpleNamespace(
+                id=uuid.uuid4(),
+                movie_code="AVSA-257",
+                storage_mode="single",
+                target_locations=["B"],
+                selected_storage_location="",
+                download_path="",
+                target_paths=[],
+                renamed_files=[],
+                moved_files=[],
+                skipped_files=[],
+                status="running",
+                step="prepare",
+                result={},
+            )
+            self.config = {
+                "download_root_folder": "/Downloads",
+                "target_folder": "/Movies",
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+                "use_task_subfolder": True,
+                "auto_create_target_folder": True,
+            }
+            self.logs: list[dict] = []
+            self.publish_count = 0
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+        def publish_subtask(self):
+            self.publish_count += 1
+
+    context = Context()
+    movie = SimpleNamespace(
+        code="AVSA-257",
+        tags=[],
+        storage_summary={
+            "locations": [
+                {
+                    "path": "/Movies/A/AVSA-257/AVSA-257.mp4",
+                    "target_folder": "/Movies/A/AVSA-257",
+                    "storage_location": "A",
+                    "file_name": "AVSA-257.mp4",
+                    "size": 500 * 1024 * 1024,
+                    "exists": True,
+                }
+            ]
+        },
+    )
+
+    success = execute_current_magnet_attempt(
+        context,
+        {"id": "m1", "magnet_url": "magnet:?xt=urn:btih:first", "tags": []},
+        movie=movie,
+        movie_tags=[],
+    )
+
+    assert success is True
+    assert context.provider.submit_calls == []
+    assert context.provider.copy_calls == [
+        ("/Movies/A/AVSA-257/AVSA-257.mp4", "/Movies/B/AVSA-257")
+    ]
+    assert context.subtask.result["reason"] == "copied_from_existing_movie_storage"
+    assert context.subtask.moved_files[0]["copy_source"] == "/Movies/A/AVSA-257/AVSA-257.mp4"
+    assert context.provider.deleted == [f"/Downloads/storage_{context.subtask.id}"]
+    assert any(log["message"] == "检查电影已有存储位置" for log in context.logs)
+    assert any(log["message"] == "磁力任务处理成功" for log in context.logs)
+
+
+def test_execute_current_magnet_attempt_existing_movie_storage_copy_failure_falls_through(monkeypatch) -> None:
+    import uuid
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker import steps
+
+    class Provider:
+        def __init__(self) -> None:
+            self.submit_calls: list[tuple[str, str]] = []
+            self.files = {
+                "/Movies/A/AVSA-257/AVSA-257.mp4": SimpleNamespace(size=500 * 1024 * 1024)
+            }
+
+        def ensure_directory(self, path):
+            return None
+
+        def copy_file(self, source_path, target_folder):
+            raise RuntimeError("copy failed")
+
+        def find_file(self, path):
+            return self.files.get(path)
+
+        def submit_offline_download(self, magnet_url, target_folder):
+            self.submit_calls.append((magnet_url, target_folder))
+            return SimpleNamespace(result_paths=[])
+
+        def list_files(self, path, force_refresh=False):
+            return []
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = SimpleNamespace(
+                id=uuid.uuid4(),
+                movie_code="AVSA-257",
+                storage_mode="single",
+                target_locations=["B"],
+                selected_storage_location="",
+                download_path="",
+                target_paths=[],
+                renamed_files=[],
+                moved_files=[],
+                skipped_files=[],
+                status="running",
+                step="prepare",
+                result={},
+            )
+            self.config = {
+                "download_root_folder": "/Downloads",
+                "target_folder": "/Movies",
+                "download_max_poll_count": 1,
+                "download_poll_interval_min": 0,
+                "download_poll_interval_max": 0,
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+                "use_task_subfolder": True,
+                "auto_create_target_folder": True,
+            }
+            self.logs: list[dict] = []
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
+    context = Context()
+    movie = SimpleNamespace(
+        code="AVSA-257",
+        tags=[],
+        storage_summary={
+            "locations": [
+                {
+                    "path": "/Movies/A/AVSA-257/AVSA-257.mp4",
+                    "target_folder": "/Movies/A/AVSA-257",
+                    "storage_location": "A",
+                    "file_name": "AVSA-257.mp4",
+                    "size": 500 * 1024 * 1024,
+                    "exists": True,
+                }
+            ]
+        },
+    )
+
+    success = steps.execute_current_magnet_attempt(
+        context,
+        {"id": "m1", "magnet_url": "magnet:?xt=urn:btih:first", "tags": []},
+        movie=movie,
+        movie_tags=[],
+    )
+
+    assert success is False
+    assert context.provider.submit_calls == [
+        ("magnet:?xt=urn:btih:first", f"/Downloads/storage_{context.subtask.id}")
+    ]
+    assert any(log["message"] == "电影已有存储复制失败，继续磁力流程" for log in context.logs)
+
+
+def test_execute_current_magnet_attempt_without_existing_movie_storage_uses_magnet_flow(monkeypatch) -> None:
+    import uuid
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker import steps
+
+    class Provider:
+        def __init__(self) -> None:
+            self.submit_calls: list[tuple[str, str]] = []
+
+        def ensure_directory(self, path):
+            return None
+
+        def find_file(self, path):
+            return None
+
+        def submit_offline_download(self, magnet_url, target_folder):
+            self.submit_calls.append((magnet_url, target_folder))
+            return SimpleNamespace(result_paths=[])
+
+        def list_files(self, path, force_refresh=False):
+            return []
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.subtask = SimpleNamespace(
+                id=uuid.uuid4(),
+                movie_code="AVSA-257",
+                storage_mode="single",
+                target_locations=["B"],
+                selected_storage_location="",
+                download_path="",
+                target_paths=[],
+                renamed_files=[],
+                moved_files=[],
+                skipped_files=[],
+                status="running",
+                step="prepare",
+                result={},
+            )
+            self.config = {
+                "download_root_folder": "/Downloads",
+                "target_folder": "/Movies",
+                "download_max_poll_count": 1,
+                "download_poll_interval_min": 0,
+                "download_poll_interval_max": 0,
+                "video_extensions": [".mp4"],
+                "minimum_video_size_mb": 100,
+                "use_task_subfolder": True,
+                "auto_create_target_folder": True,
+            }
+            self.logs: list[dict] = []
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
+    context = Context()
+    movie = SimpleNamespace(code="AVSA-257", tags=[], storage_summary={"locations": []}, source_task_ids=[])
+
+    success = steps.execute_current_magnet_attempt(
+        context,
+        {"id": "m1", "magnet_url": "magnet:?xt=urn:btih:first", "tags": []},
+        movie=movie,
+        movie_tags=[],
+    )
+
+    assert success is False
+    assert context.provider.submit_calls == [
+        ("magnet:?xt=urn:btih:first", f"/Downloads/storage_{context.subtask.id}")
+    ]
+    assert any(log["message"] == "未找到可用于复制的电影已有存储文件" for log in context.logs)

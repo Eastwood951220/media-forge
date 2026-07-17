@@ -45,6 +45,25 @@ def mark_subtask_success_from_existing_targets(context, copied_files: list[dict]
     context.publish_subtask()
 
 
+def mark_subtask_success_from_existing_movie_storage(context, copied_files: list[dict], magnet: dict) -> None:
+    context.subtask.renamed_files = []
+    context.subtask.moved_files = copied_files
+    context.subtask.skipped_files = []
+    context.subtask.result = {
+        "status": "success",
+        "reason": "copied_from_existing_movie_storage",
+        "files": copied_files,
+    }
+    context.log(
+        "INFO",
+        "磁力任务处理成功",
+        {"magnet_id": magnet.get("id"), "files": copied_files, "reason": "copied_from_existing_movie_storage"},
+        step="cleanup_files",
+        event="magnet_success",
+    )
+    context.publish_subtask()
+
+
 def mark_subtask_skipped_for_move_result(context, reason: str, skipped_files: list[dict], target_paths: list[str]) -> None:
     context.subtask.status = "skipped"
     context.subtask.skip_reason = reason
