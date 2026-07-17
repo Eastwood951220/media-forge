@@ -8,6 +8,7 @@ CHINESE_TAG_KEYWORDS = ("字幕", "中文字幕", "中字", "中文")
 UNCENSORED_TAG_KEYWORDS = ("破解", "无码", "无码破解")
 
 VR_TAG_PATTERN = re.compile(r"(^|[^a-z0-9])vr([^a-z0-9]|$)", re.IGNORECASE)
+TOKEN_PATTERN = re.compile(r"\d+|[A-Za-z]+|[^A-Za-z\d]+")
 
 
 def generate_default_alias(now: datetime, sequence: int) -> str:
@@ -43,7 +44,80 @@ def infer_disc_number(original_name: str, index: int) -> int:
     letter = re.search(r"(?:^|[_.\-\s])([ABC])(?:$|[_.\-\s])", stem, re.IGNORECASE)
     if letter:
         return ord(letter.group(1).upper()) - ord("A") + 1
+    bare_part = re.search(r"(?:^|[_.\-\s])0*(\d+)(?=[_.\-\s]\d+(?:$|[_.\-\s])|$)", stem)
+    if bare_part:
+        return int(bare_part.group(1))
     return index + 1
+
+
+def _tokenize_filename_stem(filename: str) -> list[str | int]:
+    stem = PurePosixPath(str(filename or "")).stem
+    tokens: list[str | int] = []
+    for token in TOKEN_PATTERN.findall(stem):
+        if token.isdigit():
+            tokens.append(int(token))
+        else:
+            tokens.append(token.lower())
+    return tokens
+
+
+def natural_filename_sort_key(filename: str) -> tuple:
+    tokens = _tokenize_filename_stem(filename)
+    normalized = tuple((0, token) if isinstance(token, int) else (1, token) for token in tokens)
+    suffix = PurePosixPath(str(filename or "")).suffix.lower()
+    return normalized, suffix, str(filename or "").lower()
+
+
+def _all_same_except_position(token_rows: list[list[str | int]], position: int) -> bool:
+    for candidate_position in range(max(len(row) for row in token_rows)):
+        if candidate_position == position:
+            continue
+        values = {
+            row[candidate_position] if candidate_position < len(row) else None
+            for row in token_rows
+        }
+        if len(values) > 1:
+            return False
+    return True
+
+
+def _differing_numeric_position(token_rows: list[list[str | int]]) -> int | None:
+    if len(token_rows) <= 1:
+        return None
+    max_length = max(len(row) for row in token_rows)
+    for position in range(max_length):
+        values = [
+            row[position] if position < len(row) else None
+            for row in token_rows
+        ]
+        unique_values = set(values)
+        if len(unique_values) <= 1:
+            continue
+        if all(isinstance(value, int) for value in values) and _all_same_except_position(token_rows, position):
+            return position
+    return None
+
+
+def _batch_difference_sort_key(video: dict, position: int) -> tuple:
+    name = str(video.get("name") or "")
+    tokens = _tokenize_filename_stem(name)
+    part = tokens[position] if position < len(tokens) else 0
+    numeric_part = part if isinstance(part, int) else 0
+    return numeric_part, natural_filename_sort_key(name), str(video.get("path") or "").lower()
+
+
+def order_selected_videos_for_rename(videos: list[dict]) -> list[dict]:
+    token_rows = [_tokenize_filename_stem(str(video.get("name") or "")) for video in videos]
+    differing_position = _differing_numeric_position(token_rows)
+    if differing_position is not None:
+        return sorted(videos, key=lambda video: _batch_difference_sort_key(video, differing_position))
+    return sorted(
+        videos,
+        key=lambda video: (
+            natural_filename_sort_key(str(video.get("name") or "")),
+            str(video.get("path") or "").lower(),
+        ),
+    )
 
 
 def build_video_filename(movie_code: str, original_name: str, tags: list[str], index: int, total: int) -> str:
