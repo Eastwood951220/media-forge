@@ -721,3 +721,127 @@ def test_magnet_refresh_creates_display_task_and_skipped_missing_source_url(clie
     assert detail.code == "MISS-001"
     assert detail.status == "skipped"
     assert detail.error == "missing_source_url"
+
+
+def test_execute_magnet_refresh_updates_only_magnets(db_session, test_user, monkeypatch) -> None:
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies.magnet_refresh import execute_magnet_refresh_run
+    from shared.database.models.content import Movie, MovieMagnet
+
+    task = CrawlTask(name="磁力更新", storage_location="", owner_id=test_user.id)
+    db_session.add(task)
+    db_session.flush()
+    movie = Movie(
+        code="MAG-777",
+        source_url="https://example.test/mag777",
+        source_name="原始标题",
+        actors=["演员A"],
+        tags=["标签A"],
+        source_task_ids=[task.id],
+        raw_detail={"keep": True},
+    )
+    db_session.add(movie)
+    db_session.flush()
+    old_source_task_ids = list(movie.source_task_ids)
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="magnet_refresh", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=movie.code,
+        source_url=movie.source_url,
+        source_name=movie.source_name,
+        source_url_name="磁力更新",
+        task_url_type="magnet_refresh",
+        status="pending_crawl",
+        item_data={"movie_id": str(movie.id)},
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+
+    class Spider:
+        def run_single_detail_task(self, detail_info, **kwargs):
+            return {
+                "status": "completed",
+                "detail": {
+                    "code": "MAG-777",
+                    "source_name": "新标题不能覆盖",
+                    "actors": ["演员B"],
+                    "magnets": [
+                        {
+                            "magnet": "magnet:?xt=urn:btih:abcdef",
+                            "name": "MAG-777",
+                            "size_text": "1.2GB",
+                            "file_text": "1 file",
+                            "has_chinese_sub": True,
+                        }
+                    ],
+                },
+            }
+
+    monkeypatch.setattr("backend.app.modules.content.movies.magnet_refresh.build_spider", lambda: Spider())
+
+    result = execute_magnet_refresh_run(db_session, run, SimpleNamespace(is_stop_requested=lambda run_id: False))
+
+    db_session.refresh(movie)
+    magnets = db_session.query(MovieMagnet).filter(MovieMagnet.movie_id == movie.id).all()
+    assert result["saved"] == 1
+    assert magnets[0].magnet_url == "magnet:?xt=urn:btih:abcdef"
+    assert movie.source_name == "原始标题"
+    assert movie.actors == ["演员A"]
+    assert movie.tags == ["标签A"]
+    assert movie.raw_detail == {"keep": True}
+    assert [str(tid) for tid in movie.source_task_ids] == [str(tid) for tid in old_source_task_ids]
+
+
+def test_execute_magnet_refresh_marks_no_magnets_skipped(db_session, test_user, monkeypatch) -> None:
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies.magnet_refresh import execute_magnet_refresh_run
+    from shared.database.models.content import Movie
+
+    task = CrawlTask(name="磁力更新", storage_location="", owner_id=test_user.id)
+    db_session.add(task)
+    db_session.flush()
+    movie = Movie(code="NOMAG-1", source_url="https://example.test/nomag", source_name="No Magnet", source_task_ids=[task.id])
+    db_session.add(movie)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="magnet_refresh", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=movie.code,
+        source_url=movie.source_url,
+        source_name=movie.source_name,
+        source_url_name="磁力更新",
+        task_url_type="magnet_refresh",
+        status="pending_crawl",
+        item_data={"movie_id": str(movie.id)},
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+
+    class Spider:
+        def run_single_detail_task(self, detail_info, **kwargs):
+            return {"status": "completed", "detail": {"code": "NOMAG-1", "magnets": []}}
+
+    monkeypatch.setattr("backend.app.modules.content.movies.magnet_refresh.build_spider", lambda: Spider())
+
+    result = execute_magnet_refresh_run(db_session, run, SimpleNamespace(is_stop_requested=lambda run_id: False))
+
+    db_session.refresh(detail)
+    assert result["skipped"] == 1
+    assert detail.status == "skipped"
+    assert detail.error == "no_magnets_found"

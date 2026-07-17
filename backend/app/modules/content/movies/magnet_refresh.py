@@ -9,8 +9,11 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask
+from backend.app.modules.crawler.runtime.details import detail_row_to_task_info
+from backend.app.modules.crawler.runtime.events import append_run_log_for_run, publish_run_detail_updated
 from backend.app.modules.crawler.runtime.service import get_runtime_state
 from backend.app.modules.crawler.runtime.worker import ensure_crawler_worker_started
+from backend.app.modules.content.movies.magnet_persistence import upsert_magnets
 from shared.database.models.content import Movie
 
 MAGNET_REFRESH_TASK_NAME = "磁力更新"
@@ -90,3 +93,90 @@ def create_magnet_refresh_run(db: Session, owner_id: uuid.UUID, movie_ids: list[
     runtime.enqueue_run(str(run.id))
     ensure_crawler_worker_started(runtime)
     return run
+
+
+from scraper.config.sites import JAVDB_SITE
+from scraper.cookies.cookie_manager import CookieManager
+from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+from scraper.spiders.javdb.javdb_spider import JavdbSpider
+from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
+
+
+def build_spider() -> JavdbSpider:
+    runtime_config = read_crawler_runtime_config()
+    cookies = CookieManager(JAVDB_SITE["cookie_file"]).load()
+    fetcher = ScraplingFetcher(headers=JAVDB_SITE["headers"], cookies=cookies, timeout=runtime_config.REQUEST_TIMEOUT)
+    return JavdbSpider(fetcher=fetcher)
+
+
+def execute_magnet_refresh_run(db: Session, run: CrawlRun, runtime) -> dict:
+    saved = 0
+    skipped = 0
+    failed = 0
+    details = (
+        db.query(CrawlRunDetailTask)
+        .filter(CrawlRunDetailTask.run_id == run.id, CrawlRunDetailTask.status == "pending_crawl")
+        .order_by(CrawlRunDetailTask.created_at.asc())
+        .all()
+    )
+    spider = build_spider()
+    append_run_log_for_run(db, run, f"磁力更新开始: {len(details)} 条", "INFO")
+    for detail in details:
+        if runtime.is_stop_requested(str(run.id)):
+            break
+        try:
+            movie_id = uuid.UUID(str((detail.item_data or {}).get("movie_id")))
+            movie = db.get(Movie, movie_id)
+            if movie is None:
+                detail.status = "skipped"
+                detail.error = "movie_not_found"
+                skipped += 1
+                continue
+            result = spider.run_single_detail_task(
+                detail_row_to_task_info(detail),
+                task_name=run.task_name,
+                on_detail_completed=lambda task: None,
+                on_detail_failed=lambda task, err: None,
+                stop_check=lambda: runtime.is_stop_requested(str(run.id)),
+                log_callback=lambda msg, level="INFO": None,
+                on_detail_check_callback=lambda code: False,
+                on_item_already_exists=lambda task_info: None,
+            )
+            if result.get("status") != "completed":
+                detail.status = "crawl_failed"
+                detail.error = str(result.get("reason") or "detail fetch failed")[:500]
+                failed += 1
+                continue
+            detail_data = result.get("detail") or {}
+            magnets = list(detail_data.get("magnets") or [])
+            if not magnets:
+                detail.status = "skipped"
+                detail.error = "no_magnets_found"
+                skipped += 1
+                append_run_log_for_run(db, run, f"磁力更新跳过: {detail.code} 无磁力", "WARNING", source_url=detail.source_url)
+                continue
+            upsert_magnets(db, movie.id, {"code": movie.code}, magnets)
+            detail.status = "saved"
+            detail.item_data = {**(detail.item_data or {}), "updated_magnets": len(magnets)}
+            detail.crawled_at = datetime.now()
+            detail.saved_at = datetime.now()
+            detail.error = None
+            saved += 1
+            append_run_log_for_run(db, run, f"磁力更新成功: {movie.code} magnets={len(magnets)}", "INFO", code=movie.code, movie_id=str(movie.id))
+        except Exception as exc:
+            detail.status = "save_failed"
+            detail.error = str(exc)[:500]
+            failed += 1
+            append_run_log_for_run(db, run, f"磁力更新失败: {detail.code}: {exc}", "ERROR", code=detail.code)
+        finally:
+            db.commit()
+            publish_run_detail_updated(db, run, [detail])
+    return {
+        "total_tasks": saved + skipped + failed,
+        "completed_tasks": saved,
+        "failed_tasks": failed,
+        "skipped_tasks": skipped,
+        "saved": saved,
+        "failed": failed,
+        "skipped": skipped,
+    }

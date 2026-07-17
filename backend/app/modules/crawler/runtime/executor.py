@@ -23,6 +23,13 @@ def selected_task_url_ids_from_run(run: CrawlRun) -> list[uuid.UUID] | None:
 
 def execute_run(db: Session, run: CrawlRun, runtime: CrawlerRuntimeState) -> None:
     """Execute a crawler run."""
+    if run.crawl_mode == "magnet_refresh":
+        from backend.app.modules.content.movies.magnet_refresh import execute_magnet_refresh_run
+        result = execute_magnet_refresh_run(db, run, runtime)
+        stopped = runtime.is_stop_requested(str(run.id)) or bool((result or {}).get("stopped"))
+        finalize_run(db, run, runtime, result, stopped=stopped)
+        return
+
     task = db.get(CrawlTask, run.task_id) if run.task_id else None
     if task is None:
         raise ValueError("关联任务不存在")
