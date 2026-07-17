@@ -3125,3 +3125,61 @@ def test_run_found_files_pipeline_dedupes_quality_variants_before_rename(monkeyp
         for _message, payload in context.logs
         if payload.get("dropped_files")
     )
+
+
+def test_rename_selected_videos_orders_similar_numeric_parts_before_assigning_cd() -> None:
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.rename_ops import rename_selected_videos
+
+    class Provider:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        def rename_file(self, source_path, new_name):
+            self.calls.append((source_path, new_name))
+
+    class Context:
+        def __init__(self) -> None:
+            self.subtask = SimpleNamespace(movie_code="VRKM-1668")
+            self.provider = Provider()
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            return {}
+
+    context = Context()
+    videos = [
+        {
+            "name": "4k2.com@vrkm01668_10_12000.mp4",
+            "path": "/Downloads/4k2.com@vrkm01668_10_12000.mp4",
+            "size": 1000,
+        },
+        {
+            "name": "4k2.com@vrkm01668_1_12000.mp4",
+            "path": "/Downloads/4k2.com@vrkm01668_1_12000.mp4",
+            "size": 1000,
+        },
+        {
+            "name": "4k2.com@vrkm01668_2_12000.mp4",
+            "path": "/Downloads/4k2.com@vrkm01668_2_12000.mp4",
+            "size": 1000,
+        },
+    ]
+
+    renamed = rename_selected_videos(context, videos, tags=[])
+
+    assert [item["name"] for item in renamed] == [
+        "4k2.com@vrkm01668_1_12000.mp4",
+        "4k2.com@vrkm01668_2_12000.mp4",
+        "4k2.com@vrkm01668_10_12000.mp4",
+    ]
+    assert [item["renamed_name"] for item in renamed] == [
+        "VRKM-1668-CD1.mp4",
+        "VRKM-1668-CD2.mp4",
+        "VRKM-1668-CD10.mp4",
+    ]
+    assert context.provider.calls == [
+        ("/Downloads/4k2.com@vrkm01668_1_12000.mp4", "VRKM-1668-CD1.mp4"),
+        ("/Downloads/4k2.com@vrkm01668_2_12000.mp4", "VRKM-1668-CD2.mp4"),
+        ("/Downloads/4k2.com@vrkm01668_10_12000.mp4", "VRKM-1668-CD10.mp4"),
+    ]

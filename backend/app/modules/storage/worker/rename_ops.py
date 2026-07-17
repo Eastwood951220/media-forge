@@ -21,11 +21,15 @@ def _find_existing_rename_target(provider, path: str):
 
 
 def rename_selected_videos(context, selected_videos: list[dict], tags: list[str]) -> list[dict]:
-    from backend.app.modules.storage.tasks.policies import build_video_filename
+    from backend.app.modules.storage.tasks.policies import (
+        build_video_filename,
+        order_selected_videos_for_rename,
+    )
 
+    ordered_videos = order_selected_videos_for_rename(selected_videos)
     renamed = []
-    total = len(selected_videos)
-    for index, video in enumerate(selected_videos):
+    total = len(ordered_videos)
+    for index, video in enumerate(ordered_videos):
         old_path = video["path"]
         new_name = build_video_filename(context.subtask.movie_code, video["name"], tags, index, total)
         new_path = str(PurePosixPath(old_path).parent / new_name)
