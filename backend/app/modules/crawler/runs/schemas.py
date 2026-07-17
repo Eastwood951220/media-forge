@@ -56,6 +56,8 @@ class CrawlRunDetailTaskRead(BaseModel):
     created_at: datetime
     crawled_at: datetime | None
     saved_at: datetime | None
+    display_code: str | None = None
+    display_source_name: str | None = None
 
 
 class RunDetailRetryRequest(BaseModel):
@@ -74,3 +76,23 @@ class RunTaskSummary(BaseModel):
     completed: int = 0
     waiting: int = 0
     failed: int = 0
+
+
+TEMPORARY_SOURCE_NAMES = {"临时详情页", "临时任务", ""}
+
+
+def _item_data_text(row: CrawlRunDetailTask, key: str) -> str:
+    item_data = row.item_data if isinstance(row.item_data, dict) else {}
+    value = item_data.get(key)
+    return str(value or "").strip()
+
+
+def _serialize_run_detail_task(row: CrawlRunDetailTask) -> dict:
+    payload = CrawlRunDetailTaskRead.model_validate(row).model_dump(mode="json")
+    display_code = str(row.code or "").strip() or _item_data_text(row, "code") or None
+    source_name = str(row.source_name or "").strip()
+    if source_name in TEMPORARY_SOURCE_NAMES:
+        source_name = _item_data_text(row, "source_name") or _item_data_text(row, "name") or source_name
+    payload["display_code"] = display_code
+    payload["display_source_name"] = source_name or None
+    return payload

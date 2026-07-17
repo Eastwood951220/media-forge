@@ -1,4 +1,4 @@
-export type CrawlMode = 'incremental' | 'full' | 'temporary'
+export type CrawlMode = 'incremental' | 'full' | 'temporary' | 'magnet_refresh'
 export type CrawlRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'stopped'
 export type DetailTaskStatus = 'pending_crawl' | 'crawled' | 'crawl_failed' | 'saved' | 'save_failed' | 'skipped'
 
@@ -45,6 +45,8 @@ export interface CrawlRunDetailTask {
   created_at: string
   crawled_at: string | null
   saved_at: string | null
+  display_code?: string | null
+  display_source_name?: string | null
 }
 
 export interface QueueStatus {

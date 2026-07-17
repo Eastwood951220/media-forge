@@ -1,14 +1,14 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_
+from sqlalchemy import cast, func, or_, String
 from sqlalchemy.orm import Session, noload
 
 from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask
 from backend.app.modules.crawler.runs.logs import load_run_logs
-from backend.app.modules.crawler.runs.schemas import CrawlRunDetailTaskRead, CrawlRunRead, RunDetailRetryRequest, RunTaskSummary
+from backend.app.modules.crawler.runs.schemas import CrawlRunDetailTaskRead, CrawlRunRead, RunDetailRetryRequest, RunTaskSummary, _serialize_run_detail_task
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from shared.schemas.common import paginated, success
 
@@ -156,12 +156,15 @@ def list_run_tasks(
             CrawlRunDetailTask.code.ilike(f"%{keyword}%")
             | CrawlRunDetailTask.source_name.ilike(f"%{keyword}%")
             | CrawlRunDetailTask.source_url_name.ilike(f"%{keyword}%")
+            | cast(func.json_extract(CrawlRunDetailTask.item_data, "$.code"), String).ilike(f"%{keyword}%")
+            | cast(func.json_extract(CrawlRunDetailTask.item_data, "$.source_name"), String).ilike(f"%{keyword}%")
+            | cast(func.json_extract(CrawlRunDetailTask.item_data, "$.name"), String).ilike(f"%{keyword}%")
         )
     total = query.count()
     offset = (page - 1) * size
     rows = query.order_by(CrawlRunDetailTask.created_at.asc()).offset(offset).limit(size).all()
     return paginated(
-        rows=[CrawlRunDetailTaskRead.model_validate(r).model_dump(mode="json") for r in rows],
+        rows=[_serialize_run_detail_task(r) for r in rows],
         total=total,
     )
 

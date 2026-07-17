@@ -154,4 +154,24 @@ describe('RunDetail retry controls', () => {
       keyword: undefined,
     })
   })
+
+  it('renders temporary task display code and source name fallbacks', async () => {
+    vi.mocked(getCrawlerRunTasks).mockResolvedValueOnce({
+      rows: [{
+        ...savedTask,
+        id: 'detail-temp',
+        code: null,
+        source_name: '临时详情页',
+        display_code: 'AVSA-257',
+        display_source_name: '真实电影名',
+        item_data: { code: 'AVSA-257', source_name: '真实电影名' },
+      } as any],
+      total: 1,
+    })
+
+    render(<RunDetailPage />)
+
+    expect(await screen.findByText('AVSA-257')).toBeInTheDocument()
+    expect(screen.getByText('真实电影名')).toBeInTheDocument()
+  })
 })

@@ -958,3 +958,70 @@ def test_run_count_endpoint_is_owner_scoped(client: TestClient, admin_user, db_s
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["data"]["total"] == 1
+
+
+def test_run_tasks_include_display_code_and_name_from_item_data(client, db_session, auth_headers, test_user):
+    from datetime import datetime
+
+    from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+
+    task = CrawlTask(name="黑皮御姐短发", storage_location="短发", owner_id=test_user.id)
+    db_session.add(task)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="completed", crawl_mode="temporary", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=None,
+        source_url="https://example.test/detail",
+        source_name="临时详情页",
+        source_url_name="临时任务",
+        task_url_type="temporary_detail",
+        status="saved",
+        item_data={"code": "AVSA-257", "source_name": "真实电影名"},
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+
+    response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=auth_headers)
+
+    assert response.status_code == 200
+    row = response.json()["rows"][0]
+    assert row["display_code"] == "AVSA-257"
+    assert row["display_source_name"] == "真实电影名"
+
+
+def test_run_tasks_keyword_search_matches_item_data_display_fields(client, db_session, auth_headers, test_user):
+    from datetime import datetime
+
+    from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+
+    task = CrawlTask(name="临时任务", storage_location="临时", owner_id=test_user.id)
+    db_session.add(task)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="completed", crawl_mode="temporary", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    db_session.add(CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=None,
+        source_url="https://example.test/detail",
+        source_name="临时详情页",
+        source_url_name="临时任务",
+        task_url_type="temporary_detail",
+        status="saved",
+        item_data={"code": "TEMP-999", "name": "搜索电影名"},
+        created_at=datetime.now(),
+    ))
+    db_session.commit()
+
+    response = client.get(f"/api/crawler/runs/{run.id}/tasks?keyword=TEMP-999", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1

@@ -15,8 +15,20 @@ export function createRunTaskColumns({
   onRetryTask,
 }: CreateRunTaskColumnsArgs): ColumnsType<CrawlRunDetailTask> {
   return [
-    { title: '番号', dataIndex: 'code', key: 'code', width: 120 },
-    { title: '来源', dataIndex: 'source_name', key: 'source_name', ellipsis: true },
+    {
+      title: '番号',
+      dataIndex: 'code',
+      key: 'code',
+      width: 120,
+      render: (_, record) => record.display_code || record.code || '-',
+    },
+    {
+      title: '来源',
+      dataIndex: 'source_name',
+      key: 'source_name',
+      ellipsis: true,
+      render: (_, record) => record.display_source_name || record.source_name || '-',
+    },
     {
       title: 'URL来源',
       dataIndex: 'source_url_name',
