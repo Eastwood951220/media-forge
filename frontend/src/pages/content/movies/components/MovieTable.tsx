@@ -1,4 +1,5 @@
-import { Button, Space, Tag } from 'antd'
+import { Button, Dropdown, Space, Tag } from 'antd'
+import { DownOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { Movie } from '@/api/movie/types'
 
@@ -7,7 +8,9 @@ export interface MovieColumnsOptions {
   onPush?: (movie: Movie) => void
   onDelete?: (movie: Movie) => void
   onCd2Sync?: (movie: Movie) => void
+  onRefreshMagnets?: (movie: Movie) => void
   cd2SyncingId?: string | null
+  magnetRefreshingId?: string | null
 }
 
 const storageStatusColor: Record<string, string> = {
@@ -26,7 +29,7 @@ function unique(values: string[] | undefined) {
   return [...new Set(values || [])]
 }
 
-export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, cd2SyncingId }: MovieColumnsOptions): ColumnsType<Movie> {
+export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, onRefreshMagnets, cd2SyncingId, magnetRefreshingId }: MovieColumnsOptions): ColumnsType<Movie> {
   return [
     { title: '番号',
       dataIndex: 'code',
@@ -99,28 +102,36 @@ export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, 
       key: 'action',
       fixed: 'right',
       width: 220,
-      render: (_: unknown, record) => (
-        <Space size={0}>
-          <Button type="link" size="small" onClick={() => onViewDetail(record._id)}>
-            详情
-          </Button>
-          {onPush && (
-            <Button type="link" size="small" onClick={() => onPush(record)}>
-              推送
+      render: (_: unknown, record) => {
+        const menuItems = [
+          onPush ? { key: 'push', label: '推送' } : null,
+          onCd2Sync ? { key: 'cd2-sync', label: 'CD2同步', disabled: cd2SyncingId === record._id } : null,
+          onRefreshMagnets ? { key: 'refresh-magnets', label: '更新磁力', disabled: magnetRefreshingId === record._id } : null,
+          onDelete ? { key: 'delete', label: <span style={{ color: '#ff4d4f' }}>删除</span> } : null,
+        ].filter(Boolean)
+        return (
+          <Space size={0}>
+            <Button type="link" size="small" onClick={() => onViewDetail(record._id)}>
+              详情
             </Button>
-          )}
-          {onCd2Sync && (
-            <Button type="link" size="small" loading={cd2SyncingId === record._id} onClick={() => onCd2Sync(record)}>
-              CD2同步
-            </Button>
-          )}
-          {onDelete && (
-            <Button type="link" danger size="small" onClick={() => onDelete(record)}>
-              删除
-            </Button>
-          )}
-        </Space>
-      ),
+            <Dropdown
+              menu={{
+                items: menuItems as any,
+                onClick: ({ key }) => {
+                  if (key === 'push') onPush?.(record)
+                  if (key === 'cd2-sync') onCd2Sync?.(record)
+                  if (key === 'refresh-magnets') onRefreshMagnets?.(record)
+                  if (key === 'delete') onDelete?.(record)
+                },
+              }}
+            >
+              <Button type="link" size="small" loading={cd2SyncingId === record._id || magnetRefreshingId === record._id}>
+                更多 <DownOutlined />
+              </Button>
+            </Dropdown>
+          </Space>
+        )
+      },
     },
   ]
 }

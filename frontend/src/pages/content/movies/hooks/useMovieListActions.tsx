@@ -1,7 +1,8 @@
 import { useCallback } from 'react'
 import { Modal, Select, Typography, message } from 'antd'
-import { deleteMovies } from '@/api/movie'
+import { deleteMovies, refreshMovieMagnets } from '@/api/movie'
 import type { Movie, MovieDeleteMode, MovieFilterConfig } from '@/api/movie/types'
+import { useNavigate } from '@tanstack/react-router'
 import { DEFAULT_MOVIE_PAGE } from '../constants'
 import type { useMovieDetail } from './useMovieDetail'
 import type { useMovieFilters } from './useMovieFilters'
@@ -26,6 +27,7 @@ export function useMovieListActions(args: {
   push: ReturnType<typeof useStoragePush>
 }) {
   const { config, detail, filters, list, push } = args
+  const navigate = useNavigate()
 
   const confirmDeleteMovies = useCallback((movies: Movie[]) => {
     if (movies.length === 0) return
@@ -108,11 +110,36 @@ export function useMovieListActions(args: {
     list.setPage(DEFAULT_MOVIE_PAGE)
   }, [config, filters, list])
 
+  const refreshMagnetsForMovies = useCallback((movies: Movie[]) => {
+    if (movies.length === 0) return
+    const title = movies.length === 1 ? `确认更新 ${movies[0].code} 的磁力` : `确认批量更新 ${movies.length} 部影片的磁力`
+    Modal.confirm({
+      title,
+      content: '将创建磁力更新运行记录，只更新磁力库，不覆盖影片详情。',
+      okText: '更新',
+      cancelText: '取消',
+      onOk: async () => {
+        const run = await refreshMovieMagnets({ movie_ids: movies.map((movie) => movie._id) })
+        message.success('磁力更新运行记录已创建')
+        list.setSelectedRowKeys([])
+        void navigate({ to: `/crawler/runs/${run.id}` })
+      },
+    })
+  }, [list, message, navigate])
+
+  const handleBulkRefreshMagnets = useCallback(() => {
+    const selectedIds = new Set(list.selectedRowKeys.map((key) => String(key)))
+    const selectedMovies = list.data.items.filter((movie) => selectedIds.has(movie._id))
+    refreshMagnetsForMovies(selectedMovies)
+  }, [list.data.items, list.selectedRowKeys, refreshMagnetsForMovies])
+
   return {
     confirmDeleteMovies,
     handleBatchDelete,
     handleBulkPush,
     handleDetailFilterClick,
     handleResetFilters,
+    handleBulkRefreshMagnets,
+    refreshMagnetsForMovies,
   }
 }

@@ -103,3 +103,11 @@ export interface MovieFilterConfigValue {
 }
 
 export type MovieFilterConfig = Partial<Record<MovieFilterField, MovieFilterConfigValue>>
+
+import type { CrawlRun } from '@/api/crawlerRun/types'
+
+export interface MovieMagnetRefreshPayload {
+  movie_ids: string[]
+}
+
+export type MovieMagnetRefreshResponse = CrawlRun

@@ -65,9 +65,10 @@ function MovieListPage() {
       onPush: push.openSinglePush,
       onDelete: (movie) => actions.confirmDeleteMovies([movie]),
       onCd2Sync: storageIndex.handleCd2Sync,
+      onRefreshMagnets: (movie) => actions.refreshMagnetsForMovies([movie]),
       cd2SyncingId: storageIndex.cd2SyncingId,
     }),
-    [detail.showDetail, push.openSinglePush, actions.confirmDeleteMovies, storageIndex.handleCd2Sync, storageIndex.cd2SyncingId],
+    [detail.showDetail, push.openSinglePush, actions.confirmDeleteMovies, storageIndex.handleCd2Sync, storageIndex.cd2SyncingId, actions.refreshMagnetsForMovies],
   )
 
   const queryNode = configHook.loaded ? (
@@ -111,6 +112,11 @@ function MovieListPage() {
             {list.selectedRowKeys.length > 0 && (
               <Button danger size="small" onClick={actions.handleBatchDelete}>
                 批量删除
+              </Button>
+            )}
+            {list.selectedRowKeys.length > 0 && (
+              <Button size="small" icon={<SyncOutlined />} onClick={actions.handleBulkRefreshMagnets}>
+                批量更新磁力
               </Button>
             )}
             <Dropdown

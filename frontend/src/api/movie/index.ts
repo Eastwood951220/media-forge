@@ -1,7 +1,7 @@
 import { request } from '@/request'
-import type { Movie, MovieDeleteMode, MovieDeleteResult, MovieListResponse, MovieStorageStatus } from './types'
+import type { Movie, MovieDeleteMode, MovieDeleteResult, MovieListResponse, MovieMagnetRefreshPayload, MovieMagnetRefreshResponse, MovieStorageStatus } from './types'
 
-export type { Movie, MovieDeleteMode, MovieDeleteResult, MovieListResponse, MovieStorageStatus, StorageLocation } from './types'
+export type { Movie, MovieDeleteMode, MovieDeleteResult, MovieListResponse, MovieMagnetRefreshPayload, MovieMagnetRefreshResponse, MovieStorageStatus, StorageLocation } from './types'
 
 const BASE_URL = '/api/content/movies'
 
@@ -118,4 +118,8 @@ export function fetchMovieFilterConfig(): Promise<MovieFilterConfigResponse> {
 
 export function updateMovieFilterConfig(filters: Record<string, FilterItemConfig>): Promise<{ success: boolean }> {
   return request.put<{ success: boolean }>(`${BASE_URL}/filter-config`, { filters })
+}
+
+export function refreshMovieMagnets(payload: MovieMagnetRefreshPayload): Promise<MovieMagnetRefreshResponse> {
+  return request.post<MovieMagnetRefreshResponse>(`${BASE_URL}/magnet-refresh`, payload)
 }
