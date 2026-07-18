@@ -70,7 +70,7 @@ def _parse_field_value(field_name: str, row) -> Any:
                     current_actor = None
         if female_actors:
             return female_actors
-        return link_texts or ([text] if text else [])
+        return []
 
     if field_name in ("類別", "类别"):
         return link_texts or ([text] if text else [])

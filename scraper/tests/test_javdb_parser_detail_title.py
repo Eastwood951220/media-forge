@@ -70,3 +70,53 @@ def test_parse_detail_page_keeps_existing_title_fallback_when_structured_heading
 
     assert "code" not in parsed
     assert parsed["source_name"] == "Fallback Title"
+
+
+def test_parse_detail_page_returns_empty_actors_when_actor_row_has_only_male_symbols() -> None:
+    parsed = parse_detail_page(
+        page(
+            """
+            <html>
+              <body>
+                <nav class="movie-panel-info">
+                  <div class="panel-block">
+                    <strong>演員:</strong>
+                    &nbsp;<span class="value">
+                      <a href="/actors/Wr0g">タイ</a><strong class="symbol male">♂</strong>&nbsp;
+                      <a href="/actors/274p">左慈半造</a><strong class="symbol male">♂</strong>&nbsp;
+                      <a href="/actors/1BePW">渋谷優太</a><strong class="symbol male">♂</strong>&nbsp;
+                    </span>
+                  </div>
+                </nav>
+              </body>
+            </html>
+            """
+        )
+    )
+
+    assert parsed["actors"] == []
+
+
+def test_parse_detail_page_keeps_only_actors_followed_by_female_symbols() -> None:
+    parsed = parse_detail_page(
+        page(
+            """
+            <html>
+              <body>
+                <nav class="movie-panel-info">
+                  <div class="panel-block">
+                    <strong>演員:</strong>
+                    &nbsp;<span class="value">
+                      <a href="/actors/male">男優</a><strong class="symbol male">♂</strong>&nbsp;
+                      <a href="/actors/female-a">女優A</a><strong class="symbol female">♀</strong>&nbsp;
+                      <a href="/actors/female-b">女優B</a><strong class="symbol female">♀</strong>&nbsp;
+                    </span>
+                  </div>
+                </nav>
+              </body>
+            </html>
+            """
+        )
+    )
+
+    assert parsed["actors"] == ["女優A", "女優B"]
