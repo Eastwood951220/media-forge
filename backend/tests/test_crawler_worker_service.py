@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from queue import Empty
 
+import pytest
 from sqlalchemy import select
 
 from backend.app.core.security import get_password_hash
@@ -1052,7 +1053,60 @@ def test_callbacks_write_detail_logs_with_context(db_session, admin_user, monkey
     assert saved_entry["context"]["source_url_name"] == "演员A"
     assert saved_entry["context"]["detail_status"] == "saved"
 
-import pytest
+
+def test_on_item_saved_propagates_detail_publish_errors(db_session, admin_user, monkeypatch) -> None:
+    from backend.app.modules.crawler.runtime.callbacks import CrawlerCallbackContext, build_crawl_callbacks
+    from backend.app.modules.crawler.runtime.detail_index import DetailTaskIndex
+    from backend.app.modules.crawler.runtime.progress import new_progress
+
+    task = CrawlTask(name="任务-publish-error", owner_id=admin_user.id, is_skip=False)
+    db_session.add(task)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="incremental", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code="PUBLISH-001",
+        source_url="https://javdb.com/v/publish001",
+        source_name="Publish 001",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+
+    index = DetailTaskIndex()
+    index.remember(detail)
+
+    class Runtime:
+        def write_progress(self, run_id: str, progress: dict[str, int]) -> None:
+            return None
+
+    def fail_publish(*_args, **_kwargs) -> None:
+        raise RuntimeError("publish failed")
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.callbacks.publish_run_detail_updated", fail_publish)
+
+    callbacks = build_crawl_callbacks(CrawlerCallbackContext(
+        db=db_session,
+        run=run,
+        task=task,
+        runtime=Runtime(),
+        detail_index=index,
+        progress=new_progress(),
+    ))
+
+    with pytest.raises(RuntimeError, match="publish failed"):
+        callbacks.on_item_saved(
+            {"code": "PUBLISH-001", "url": "https://javdb.com/v/publish001", "name": "Publish 001"},
+            {
+                "code": "PUBLISH-001",
+                "source_url": "https://javdb.com/v/publish001",
+                "source_name": "Publish 001",
+            },
+        )
 
 
 def test_select_retry_details_rejects_non_failed_detail():

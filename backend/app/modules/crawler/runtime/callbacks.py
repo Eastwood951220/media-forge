@@ -187,10 +187,7 @@ def build_crawl_callbacks(
         except Exception:
             ctx.db.rollback()
         if detail:
-            try:
-                publish_run_detail_updated(ctx.db, ctx.run, [detail])
-            except Exception:
-                pass
+            publish_run_detail_updated(ctx.db, ctx.run, [detail])
 
     def on_detail_failed(task_info: dict[str, Any], error: str) -> None:
         detail = active_indexed_detail(task_info)
