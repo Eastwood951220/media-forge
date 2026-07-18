@@ -1,6 +1,9 @@
 import uuid
 from datetime import datetime
 
+import pytest
+from pydantic import ValidationError
+
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask
 from backend.app.modules.crawler.runtime import service
@@ -252,6 +255,45 @@ def test_publish_detail_updated_uses_display_fields_for_temporary_rows(admin_use
     assert task_payload["source_name"] == "临时详情页"
     assert task_payload["display_code"] == "TIMD-036"
     assert task_payload["display_source_name"] == "極上メス男子ゆうきくん無限アクメ肉棒大乱交！！"
+
+
+def test_publish_detail_updated_does_not_swallow_non_deleted_validation_errors(admin_user) -> None:
+    session = TestingSessionLocal()
+    task = CrawlTask(name="任务A", storage_location="A", owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    run = CrawlRun(
+        task_id=task.id,
+        task_name=task.name,
+        status="running",
+        crawl_mode="temporary",
+        created_at=datetime.now(),
+    )
+    session.add(run)
+    session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code="BAD-JSON",
+        source_url="https://javdb.com/v/bad-json",
+        source_name="Bad Json",
+        status="saved",
+        item_data=["not", "a", "dict"],
+        created_at=datetime.now(),
+    )
+    session.add(detail)
+    session.commit()
+    session.refresh(run)
+    session.refresh(detail)
+    queue = event_bus.subscribe(str(admin_user.id))
+
+    try:
+        with pytest.raises(ValidationError):
+            service.publish_run_detail_updated(session, run, [detail])
+        assert drain(queue) == []
+    finally:
+        event_bus.unsubscribe(str(admin_user.id), queue)
+        session.close()
 
 
 def test_crawler_realtime_events_keep_frontend_contract(admin_user) -> None:

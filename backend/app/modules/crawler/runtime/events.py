@@ -15,6 +15,19 @@ from backend.app.modules.crawler.tasks.runtime_status import publish_task_status
 logger = logging.getLogger(__name__)
 
 
+def _is_deleted_instance_validation_error(exc: ValidationError) -> bool:
+    errors = exc.errors()
+    if not errors:
+        return False
+    for error in errors:
+        if error.get("type") != "get_attribute_error":
+            return False
+        context_error = str((error.get("ctx") or {}).get("error") or "")
+        if "ObjectDeletedError" not in context_error and "has been deleted" not in context_error:
+            return False
+    return True
+
+
 def run_owner_id(db: Session, run: CrawlRun) -> str | None:
     if run.task_id is None:
         return None
@@ -70,7 +83,11 @@ def publish_run_detail_updated(
     for detail in details:
         try:
             detail_payloads.append(_serialize_run_detail_task(detail))
-        except (ObjectDeletedError, ValidationError):
+        except ObjectDeletedError:
+            logger.warning("Skip realtime update for deleted crawl detail task")
+        except ValidationError as exc:
+            if not _is_deleted_instance_validation_error(exc):
+                raise
             logger.warning("Skip realtime update for deleted crawl detail task")
     payload: dict[str, Any] = {
         "run_id": str(run.id),
