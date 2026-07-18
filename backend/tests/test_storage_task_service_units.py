@@ -148,3 +148,61 @@ def test_storage_task_service_create_single_push_uses_creator_path(db_session, t
     assert main_task.alias == "service-path"
     assert main_task.subtasks[0].status == "skipped"
     assert main_task.subtasks[0].skip_reason == "no_magnets"
+
+
+def test_storage_task_creator_persists_batch_multiple_target_locations_and_log_context(db_session, test_user, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
+
+    from backend.app.modules.storage.config.service import StorageConfigService
+    from backend.app.modules.storage.tasks.creation import StorageTaskCreator
+    from backend.app.modules.storage.tasks.logs import read_storage_subtask_logs
+    from backend.app.modules.storage.tasks.repository import StorageTaskRepository
+
+    task_a = CrawlTask(name="A", owner_id=test_user.id, storage_location="A")
+    task_b = CrawlTask(name="B", owner_id=test_user.id, storage_location="B")
+    movie = Movie(
+        code="MULTI-001",
+        source_name="Multi Target",
+        source_task_ids=[],
+        marked=False,
+    )
+    db_session.add_all([task_a, task_b, movie])
+    db_session.flush()
+    movie.source_task_ids = [task_a.id, task_b.id]
+
+    magnet = MovieMagnet(
+        movie_id=movie.id,
+        magnet_url="magnet:?xt=urn:btih:multi001",
+        dedupe_key="multi001",
+    )
+    db_session.add(magnet)
+    db_session.flush()
+
+    class ConfigService:
+        provider_factory = None
+
+        def get_raw_config(self):
+            return {"target_folder": "/Movies"}
+
+    creator = StorageTaskCreator(
+        db=db_session,
+        repository=StorageTaskRepository(db_session),
+        config_service=ConfigService(),
+    )
+
+    main = creator.create_main_task(
+        movie_ids=[movie.id],
+        user_id=test_user.id,
+        source="batch",
+        alias="batch-multiple",
+        storage_mode="multiple",
+        selected_storage_location=None,
+    )
+
+    subtask = main.subtasks[0]
+    logs = read_storage_subtask_logs(str(subtask.id))
+
+    assert subtask.target_locations == ["A", "B"]
+    assert logs[-1]["message"] == "存储子任务已创建并等待执行"
+    assert logs[-1]["context"]["target_locations"] == ["A", "B"]
+    assert logs[-1]["context"]["storage_mode"] == "multiple"

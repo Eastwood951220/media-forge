@@ -113,7 +113,7 @@ class StorageTaskCreator:
             return subtask
 
         # Resolve target locations from source tasks
-        target_locations = resolve_target_locations(self.db, movie, source, selected_storage_location)
+        target_locations = resolve_target_locations(self.db, movie, source, selected_storage_location, storage_mode)
 
         subtask = StorageSubTask(
             main_task_id=main_task.id,
