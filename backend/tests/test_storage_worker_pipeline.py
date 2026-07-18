@@ -2809,6 +2809,35 @@ def test_plan_storage_attempt_uses_selected_storage_location() -> None:
     assert subtask.target_paths == plan.target_paths
 
 
+def test_plan_storage_attempt_uses_all_target_locations_without_selected_location() -> None:
+    import uuid
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.target_planning import plan_storage_attempt
+
+    subtask = SimpleNamespace(
+        id=uuid.UUID("00000000-0000-0000-0000-000000000456"),
+        movie_code="KATU-125",
+        target_locations=["日本/巨乳|熟女|BBW", "日本/合集"],
+        selected_storage_location="",
+        download_path="",
+        target_paths=[],
+    )
+
+    plan = plan_storage_attempt(
+        subtask,
+        {"download_root_folder": "/云下载", "target_folder": "/嘿嘿"},
+        {"id": "m1", "tags": []},
+    )
+
+    assert plan.download_folder == "/云下载/storage_00000000-0000-0000-0000-000000000456"
+    assert plan.target_paths == [
+        "/嘿嘿/日本/巨乳|熟女|BBW/KATU-125",
+        "/嘿嘿/日本/合集/KATU-125",
+    ]
+    assert subtask.target_paths == plan.target_paths
+
+
 def test_append_magnet_attempt_records_status_and_success() -> None:
     from types import SimpleNamespace
     from backend.app.modules.storage.worker.attempts import append_magnet_attempt
