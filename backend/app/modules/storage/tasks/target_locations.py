@@ -13,6 +13,7 @@ def resolve_target_locations(
     movie: Movie,
     source: str,
     selected_storage_location: str | None,
+    storage_mode: str = "single",
 ) -> list[str]:
     locations: list[str] = []
     for task_id in movie.source_task_ids or []:
@@ -26,6 +27,8 @@ def resolve_target_locations(
 
     if not locations:
         return []
+    if storage_mode == "multiple":
+        return locations
     if source == "single" and selected_storage_location and selected_storage_location in locations:
         return [selected_storage_location]
     if source == "batch":

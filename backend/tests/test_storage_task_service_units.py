@@ -30,16 +30,18 @@ def test_classify_storage_skip_returns_expected_reasons() -> None:
     assert classify_storage_skip(usable) is None
 
 
-def test_resolve_target_locations_uses_source_task_locations(db_session, test_user) -> None:
+def test_resolve_target_locations_uses_storage_mode_and_source_task_locations(db_session, test_user) -> None:
     task_a = CrawlTask(name="A", owner_id=test_user.id, storage_location="A")
     task_b = CrawlTask(name="B", owner_id=test_user.id, storage_location="B")
     db_session.add_all([task_a, task_b])
     db_session.flush()
     movie = Movie(code="LOC-1", source_name="LOC", source_task_ids=[task_a.id, task_b.id])
 
-    assert resolve_target_locations(db_session, movie, "single", "B") == ["B"]
-    assert resolve_target_locations(db_session, movie, "batch", None) == ["A"]
-    assert resolve_target_locations(db_session, movie, "single", None) == ["A", "B"]
+    assert resolve_target_locations(db_session, movie, "single", "B", "single") == ["B"]
+    assert resolve_target_locations(db_session, movie, "batch", None, "single") == ["A"]
+    assert resolve_target_locations(db_session, movie, "batch", None, "multiple") == ["A", "B"]
+    assert resolve_target_locations(db_session, movie, "single", None, "multiple") == ["A", "B"]
+    assert resolve_target_locations(db_session, movie, "single", None, "single") == ["A", "B"]
 
 
 def test_storage_task_serializers_preserve_response_shape(test_user) -> None:
