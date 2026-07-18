@@ -27,6 +27,21 @@ from scraper.spiders.javdb.javdb_spider import JavdbSpider
 
 logger = logging.getLogger(__name__)
 
+TEMPORARY_DETAIL_SOURCE_NAMES = {"", "临时详情页", "临时任务"}
+
+
+def _is_temporary_detail_name(value: object) -> bool:
+    return str(value or "").strip() in TEMPORARY_DETAIL_SOURCE_NAMES
+
+
+def _apply_cleaned_detail_display_fields(detail: Any, cleaned: dict[str, Any]) -> None:
+    code = str(cleaned.get("code") or "").strip()
+    source_name = str(cleaned.get("source_name") or cleaned.get("name") or "").strip()
+    if code:
+        detail.code = code
+    if source_name and (_is_temporary_detail_name(detail.source_name) or source_name != str(detail.source_name or "").strip()):
+        detail.source_name = source_name
+
 
 @dataclass(frozen=True, slots=True)
 class ThreadedUrlEntry:
@@ -327,12 +342,12 @@ def _process_single_detail(db: Session, run: CrawlRun, task: CrawlTask, detail: 
         item = {
             **detail_data,
             "source_url": result.get("url") or detail.source_url,
-            "source_name": result.get("name") or detail.source_name,
+            "source_name": detail_data.get("source_name") or result.get("name") or detail.source_name,
             "code": detail.code or detail_data.get("code") or result.get("code"),
         }
         cleaned = pipeline.process_item(item, task_name=task.name, task_id=str(task.id))
         if cleaned:
-            detail.code = detail.code or cleaned.get("code")
+            _apply_cleaned_detail_display_fields(detail, cleaned)
             upsert_movie_with_magnets(db, {**cleaned, "source_task_ids": [task.id]})
             detail.status = "saved"
             detail.item_data = cleaned

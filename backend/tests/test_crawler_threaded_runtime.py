@@ -366,3 +366,73 @@ def test_detail_skip_existing_appends_source_task_id(db_session, monkeypatch) ->
     assert row.status == "skipped"
     assert row.error == "already_exists"
     assert str(task.id) in [str(value) for value in movie.source_task_ids]
+
+
+def test_temporary_detail_run_persists_parsed_code_and_title(db_session, monkeypatch) -> None:
+    task = CrawlTask(id=uuid.uuid4(), name="temporary-task", owner_id=uuid.uuid4(), is_skip=False)
+    db_session.add(task)
+    db_session.flush()
+    run = CrawlRun(
+        task_id=task.id,
+        task_name=task.name,
+        status="running",
+        crawl_mode="temporary",
+        queued_at=datetime.now(),
+    )
+    db_session.add(run)
+    db_session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=None,
+        source_url="https://javdb.com/v/timd036",
+        source_name="临时详情页",
+        source_url_name="临时任务",
+        task_url="https://javdb.com/v/timd036",
+        task_final_url="https://javdb.com/v/timd036",
+        task_url_type="temporary_detail",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+    db_session.refresh(task)
+    db_session.refresh(run)
+
+    class TemporarySpider:
+        def run_single_detail_task(
+            self,
+            task_info,
+            *,
+            task_name,
+            on_detail_completed,
+            on_detail_failed,
+            stop_check,
+            log_callback,
+            on_detail_check_callback,
+            on_item_already_exists,
+        ):
+            return {
+                **task_info,
+                "status": "completed",
+                "url": task_info["url"],
+                "detail": {
+                    "code": "TIMD-036",
+                    "source_name": "極上メス男子ゆうきくん無限アクメ肉棒大乱交！！",
+                    "source_url": task_info["url"],
+                },
+            }
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: TemporarySpider())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
+
+    result = execute_threaded_crawl(db_session, run, task, Runtime(), detail_only=True)
+
+    assert result["saved"] == 1
+    db_session.expire_all()
+    row = db_session.get(CrawlRunDetailTask, detail.id)
+    assert row.status == "saved"
+    assert row.code == "TIMD-036"
+    assert row.source_name == "極上メス男子ゆうきくん無限アクメ肉棒大乱交！！"
+    assert row.item_data["code"] == "TIMD-036"
+    assert row.item_data["source_name"] == "極上メス男子ゆうきくん無限アクメ肉棒大乱交！！"
