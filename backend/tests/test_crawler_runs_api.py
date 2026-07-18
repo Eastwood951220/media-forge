@@ -3,6 +3,7 @@ from http import HTTPStatus
 import uuid
 
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask
@@ -34,6 +35,17 @@ class FakeRuntime:
 
     def purge_run(self, run_id):
         pass
+
+
+def test_run_task_json_keyword_expression_compiles_for_postgresql() -> None:
+    from backend.app.modules.crawler.runs.router import _json_item_text
+
+    expr = _json_item_text(CrawlRunDetailTask.item_data, "source_name", "postgresql")
+    compiled = str(expr.compile(dialect=postgresql.dialect()))
+
+    assert "item_data" in compiled
+    assert "->>" in compiled
+    assert "json_extract" not in compiled
 
 
 def test_cleanup_interrupted_runs_marks_queued_and_running_stopped() -> None:

@@ -1,7 +1,8 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import cast, func, or_, String
+from sqlalchemy import cast, func, or_, String, type_coerce
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, noload
 
 from backend.app.core.dependencies import CurrentUser, get_db
@@ -54,6 +55,12 @@ def _run_task_summary(db: Session, run: CrawlRun) -> dict:
     summary.waiting = summary.pending_crawl + summary.crawling
     summary.failed = summary.crawl_failed + summary.save_failed
     return summary.model_dump()
+
+
+def _json_item_text(column, key: str, dialect_name: str):
+    if dialect_name == "postgresql":
+        return type_coerce(column, JSONB)[key].astext
+    return func.json_extract(column, f"$.{key}")
 
 
 @router.get("/queue-status")
@@ -152,13 +159,14 @@ def list_run_tasks(
     if status_filter is not None:
         query = query.filter(CrawlRunDetailTask.status == status_filter)
     if keyword:
+        dialect_name = db.bind.dialect.name
         query = query.filter(
             CrawlRunDetailTask.code.ilike(f"%{keyword}%")
             | CrawlRunDetailTask.source_name.ilike(f"%{keyword}%")
             | CrawlRunDetailTask.source_url_name.ilike(f"%{keyword}%")
-            | cast(func.json_extract(CrawlRunDetailTask.item_data, "$.code"), String).ilike(f"%{keyword}%")
-            | cast(func.json_extract(CrawlRunDetailTask.item_data, "$.source_name"), String).ilike(f"%{keyword}%")
-            | cast(func.json_extract(CrawlRunDetailTask.item_data, "$.name"), String).ilike(f"%{keyword}%")
+            | cast(_json_item_text(CrawlRunDetailTask.item_data, "code", dialect_name), String).ilike(f"%{keyword}%")
+            | cast(_json_item_text(CrawlRunDetailTask.item_data, "source_name", dialect_name), String).ilike(f"%{keyword}%")
+            | cast(_json_item_text(CrawlRunDetailTask.item_data, "name", dialect_name), String).ilike(f"%{keyword}%")
         )
     total = query.count()
     offset = (page - 1) * size

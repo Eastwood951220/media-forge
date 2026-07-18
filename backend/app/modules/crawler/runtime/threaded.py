@@ -343,7 +343,7 @@ def _process_single_detail(db: Session, run: CrawlRun, task: CrawlTask, detail: 
             **detail_data,
             "source_url": result.get("url") or detail.source_url,
             "source_name": detail_data.get("source_name") or result.get("name") or detail.source_name,
-            "code": detail.code or detail_data.get("code") or result.get("code"),
+            "code": detail_data.get("code") or detail.code or result.get("code"),
         }
         cleaned = pipeline.process_item(item, task_name=task.name, task_id=str(task.id))
         if cleaned:

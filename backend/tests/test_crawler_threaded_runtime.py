@@ -436,3 +436,56 @@ def test_temporary_detail_run_persists_parsed_code_and_title(db_session, monkeyp
     assert row.source_name == "極上メス男子ゆうきくん無限アクメ肉棒大乱交！！"
     assert row.item_data["code"] == "TIMD-036"
     assert row.item_data["source_name"] == "極上メス男子ゆうきくん無限アクメ肉棒大乱交！！"
+
+
+def test_detail_page_code_replaces_existing_list_stage_code(db_session, monkeypatch) -> None:
+    task, run = make_task_and_run(db_session)
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code="LIST-036",
+        source_url="https://javdb.com/v/timd036",
+        source_name="List Stage Title",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+    db_session.refresh(task)
+    db_session.refresh(run)
+
+    class DetailCodeSpider:
+        def run_single_detail_task(
+            self,
+            task_info,
+            *,
+            task_name,
+            on_detail_completed,
+            on_detail_failed,
+            stop_check,
+            log_callback,
+            on_detail_check_callback,
+            on_item_already_exists,
+        ):
+            return {
+                **task_info,
+                "status": "completed",
+                "url": task_info["url"],
+                "detail": {
+                    "code": "TIMD-036",
+                    "source_name": "Detail Stage Title",
+                    "source_url": task_info["url"],
+                },
+            }
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: DetailCodeSpider())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
+
+    result = execute_threaded_crawl(db_session, run, task, Runtime(), detail_only=True)
+
+    assert result["saved"] == 1
+    db_session.expire_all()
+    row = db_session.get(CrawlRunDetailTask, detail.id)
+    assert row.code == "TIMD-036"
+    assert row.source_name == "Detail Stage Title"
+    assert row.item_data["code"] == "TIMD-036"
