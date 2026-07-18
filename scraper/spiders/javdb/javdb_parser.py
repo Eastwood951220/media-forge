@@ -195,8 +195,21 @@ def parse_search_page(
     return tasks
 
 
+def _parse_detail_title_metadata(page) -> tuple[str, str]:
+    heading = page.css(".video-detail h2.title.is-4")
+    if not heading:
+        return "", ""
+
+    strong_texts = _all_text(heading[0], "strong::text")
+    code = strong_texts[0] if strong_texts else ""
+    current_title = _first_text(heading[0], ["strong.current-title::text"])
+    title = current_title or (strong_texts[1] if len(strong_texts) > 1 else "")
+    return code, title
+
+
 def parse_detail_page(page) -> dict:
-    title = _first_text(page, ["h2.title::text", ".title::text", "title::text"])
+    code, structured_title = _parse_detail_title_metadata(page)
+    title = structured_title or _first_text(page, ["h2.title::text", ".title::text", "title::text"])
     cover = _first_text(
         page,
         [
@@ -218,6 +231,8 @@ def parse_detail_page(page) -> dict:
         "tags": [],
         "actors": [],
     }
+    if code:
+        detail["code"] = code
 
     for row in page.css("nav.movie-panel-info > div.panel-block, .movie-panel-info .panel-block"):
         label = _first_text(row, ["strong::text"]).rstrip(":").strip()
