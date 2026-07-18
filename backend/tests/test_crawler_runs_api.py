@@ -1022,6 +1022,9 @@ def test_run_tasks_keyword_search_matches_item_data_display_fields(client, db_se
     db_session.commit()
 
     response = client.get(f"/api/crawler/runs/{run.id}/tasks?keyword=TEMP-999", headers=auth_headers)
+    title_response = client.get(f"/api/crawler/runs/{run.id}/tasks?keyword=搜索电影名", headers=auth_headers)
 
     assert response.status_code == 200
+    assert title_response.status_code == 200
     assert response.json()["total"] == 1
+    assert title_response.json()["total"] == 1

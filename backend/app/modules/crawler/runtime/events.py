@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy.orm.exc import ObjectDeletedError
 from sqlalchemy.orm import Session
 
@@ -58,6 +59,7 @@ def publish_run_detail_updated(
     reason: str | None = None,
 ) -> None:
     from backend.app.modules.crawler.runs.router import _run_task_summary
+    from backend.app.modules.crawler.runs.schemas import _serialize_run_detail_task
     from backend.app.modules.realtime.bus import event_bus as realtime_bus
     from backend.app.modules.realtime.schemas import make_realtime_event
 
@@ -67,24 +69,8 @@ def publish_run_detail_updated(
     detail_payloads = []
     for detail in details:
         try:
-            detail_payloads.append(
-                {
-                    "id": str(detail.id),
-                    "run_id": str(detail.run_id),
-                    "task_name": detail.task_name,
-                    "code": detail.code,
-                    "source_url": detail.source_url,
-                    "source_name": detail.source_name,
-                    "source_url_name": detail.source_url_name,
-                    "task_url": detail.task_url,
-                    "task_final_url": detail.task_final_url,
-                    "task_url_type": detail.task_url_type,
-                    "status": detail.status,
-                    "error": detail.error,
-                    "created_at": detail.created_at.isoformat() if detail.created_at else None,
-                }
-            )
-        except ObjectDeletedError:
+            detail_payloads.append(_serialize_run_detail_task(detail))
+        except (ObjectDeletedError, ValidationError):
             logger.warning("Skip realtime update for deleted crawl detail task")
     payload: dict[str, Any] = {
         "run_id": str(run.id),

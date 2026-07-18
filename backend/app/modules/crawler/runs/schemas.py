@@ -81,13 +81,13 @@ class RunTaskSummary(BaseModel):
 TEMPORARY_SOURCE_NAMES = {"临时详情页", "临时任务", ""}
 
 
-def _item_data_text(row: CrawlRunDetailTask, key: str) -> str:
+def _item_data_text(row: Any, key: str) -> str:
     item_data = row.item_data if isinstance(row.item_data, dict) else {}
     value = item_data.get(key)
     return str(value or "").strip()
 
 
-def _serialize_run_detail_task(row: CrawlRunDetailTask) -> dict:
+def _serialize_run_detail_task(row: Any) -> dict:
     payload = CrawlRunDetailTaskRead.model_validate(row).model_dump(mode="json")
     display_code = str(row.code or "").strip() or _item_data_text(row, "code") or None
     source_name = str(row.source_name or "").strip()

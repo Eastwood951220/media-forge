@@ -204,6 +204,56 @@ def test_publish_detail_updated_can_request_task_refresh(admin_user) -> None:
     assert events[0].payload["summary"]["failed"] == 0
 
 
+def test_publish_detail_updated_uses_display_fields_for_temporary_rows(admin_user) -> None:
+    session = TestingSessionLocal()
+    task = CrawlTask(name="任务A", storage_location="A", owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    run = CrawlRun(
+        task_id=task.id,
+        task_name=task.name,
+        status="running",
+        crawl_mode="temporary",
+        created_at=datetime.now(),
+    )
+    session.add(run)
+    session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=None,
+        source_url="https://javdb.com/v/timd036",
+        source_name="临时详情页",
+        source_url_name="临时任务",
+        task_url="https://javdb.com/v/timd036",
+        task_final_url="https://javdb.com/v/timd036",
+        task_url_type="temporary_detail",
+        status="saved",
+        item_data={
+            "code": "TIMD-036",
+            "source_name": "極上メス男子ゆうきくん無限アクメ肉棒大乱交！！",
+        },
+        created_at=datetime.now(),
+    )
+    session.add(detail)
+    session.commit()
+    session.refresh(run)
+    session.refresh(detail)
+    queue = event_bus.subscribe(str(admin_user.id))
+
+    service.publish_run_detail_updated(session, run, [detail])
+
+    events = drain(queue)
+    event_bus.unsubscribe(str(admin_user.id), queue)
+    session.close()
+
+    task_payload = events[0].payload["tasks"][0]
+    assert task_payload["code"] is None
+    assert task_payload["source_name"] == "临时详情页"
+    assert task_payload["display_code"] == "TIMD-036"
+    assert task_payload["display_source_name"] == "極上メス男子ゆうきくん無限アクメ肉棒大乱交！！"
+
+
 def test_crawler_realtime_events_keep_frontend_contract(admin_user) -> None:
     session = TestingSessionLocal()
     task = CrawlTask(name="任务A", storage_location="A", owner_id=admin_user.id)
@@ -257,21 +307,22 @@ def test_crawler_realtime_events_keep_frontend_contract(admin_user) -> None:
     assert detail_event.payload["run_id"] == str(run.id)
     assert detail_event.payload["refresh_tasks"] is True
     assert detail_event.payload["reason"] == "detail_saved"
-    assert detail_event.payload["tasks"][0] == {
-        "id": str(detail.id),
-        "run_id": str(run.id),
-        "task_name": "任务A",
-        "code": "AAA-001",
-        "source_url": "https://example.test/aaa",
-        "source_name": "AAA-001",
-        "source_url_name": "入口A",
-        "task_url": "https://example.test/list",
-        "task_final_url": "https://example.test/list?page=1",
-        "task_url_type": "list",
-        "status": "saved",
-        "error": None,
-        "created_at": detail.created_at.isoformat(),
-    }
+    task_payload = detail_event.payload["tasks"][0]
+    assert task_payload["id"] == str(detail.id)
+    assert task_payload["run_id"] == str(run.id)
+    assert task_payload["task_name"] == "任务A"
+    assert task_payload["code"] == "AAA-001"
+    assert task_payload["source_url"] == "https://example.test/aaa"
+    assert task_payload["source_name"] == "AAA-001"
+    assert task_payload["source_url_name"] == "入口A"
+    assert task_payload["task_url"] == "https://example.test/list"
+    assert task_payload["task_final_url"] == "https://example.test/list?page=1"
+    assert task_payload["task_url_type"] == "list"
+    assert task_payload["status"] == "saved"
+    assert task_payload["error"] is None
+    assert task_payload["created_at"] == detail.created_at.isoformat()
+    assert task_payload["display_code"] == "AAA-001"
+    assert task_payload["display_source_name"] == "AAA-001"
     assert detail_event.payload["summary"] == {
         "total": 1,
         "pending_crawl": 0,
