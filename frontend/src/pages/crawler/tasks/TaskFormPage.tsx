@@ -14,6 +14,7 @@ import { useRouteCacheControl } from '@/layout/routeCache'
 import { useTagsViewStore } from '@/stores/useTagsViewStore'
 import {
   buildFinalUrlPreview,
+  detectUrlSource,
   detectUrlType,
   type UrlType,
   URL_TYPE_LABELS,
@@ -98,14 +99,15 @@ export default function TaskFormPage() {
       const enrichedEntries: TaskUrlEntry[] = []
 
       for (const entry of urlEntries) {
-        // Auto-detect url_type if missing
-        const urlType = entry.url_type || detectUrlType(entry.url) || ''
+        // Auto-detect url_type if missing; for JavBus URLs default to 'detail'
+        const source = detectUrlSource(entry.url)
+        const urlType = entry.url_type || detectUrlType(entry.url) || (source === 'javbus' ? 'detail' : '')
 
         // Auto-fetch url_name if missing
         let urlName = entry.url_name?.trim() ?? ''
-        if (!urlName && entry.url && urlType) {
+        if (!urlName && entry.url && (urlType || source)) {
           try {
-            const result = await extractTaskName(entry.url, urlType as UrlType)
+            const result = await extractTaskName(entry.url, (urlType || 'detail') as UrlType)
             urlName = result.name?.trim() ?? ''
           } catch {
             urlName = ''
@@ -142,9 +144,10 @@ export default function TaskFormPage() {
     try {
       const enrichedEntries = await enrichUrlEntries(urlEntries)
 
-      // Validate that all URLs have a detectable type
+      // Validate that all URLs have a detectable type or source
       for (const entry of enrichedEntries) {
-        if (!entry.url_type) {
+        const source = detectUrlSource(entry.url)
+        if (!entry.url_type && !source) {
           message.error(`无法识别 URL 类型: ${entry.url}`)
           setSubmitting(false)
           return
@@ -193,7 +196,7 @@ export default function TaskFormPage() {
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>{title}</h1>
-          <p className={styles.subtitle}>按 URL 配置 JavDB 任务来源、筛选条件和排序规则。</p>
+          <p className={styles.subtitle}>按 URL 配置 JavDB/JavBus 任务来源、筛选条件和排序规则。</p>
         </div>
       </div>
 
@@ -304,8 +307,18 @@ export default function TaskFormPage() {
                     title: '类型',
                     width: 100,
                     render: (_, record) => {
+                      const url = form.getFieldValue(['urls', record.index, 'url']) as string ?? ''
+                      const source = url ? detectUrlSource(url) : null
                       const urlType = form.getFieldValue(['urls', record.index, 'url_type']) as UrlType
-                      return urlType ? <Tag>{URL_TYPE_LABELS[urlType] ?? urlType}</Tag> : '-'
+                      const sourceLabel = source === 'javbus' ? 'JavBus' : source === 'javdb' ? 'JavDB' : null
+                      const typeLabel = sourceLabel
+                        ? urlType && URL_TYPE_LABELS[urlType]
+                          ? `${sourceLabel} - ${URL_TYPE_LABELS[urlType]}`
+                          : sourceLabel
+                        : urlType
+                          ? URL_TYPE_LABELS[urlType] ?? urlType
+                          : '-'
+                      return urlType || source ? <Tag>{typeLabel}</Tag> : '-'
                     },
                   },
                   {
@@ -322,11 +335,12 @@ export default function TaskFormPage() {
                     ellipsis: true,
                     render: (_, record) => {
                       const baseUrl = form.getFieldValue(['urls', record.index, 'url']) as string ?? ''
+                      const source = baseUrl ? detectUrlSource(baseUrl) : null
                       const urlType = form.getFieldValue(['urls', record.index, 'url_type']) as UrlType
                       const hasMagnet = form.getFieldValue(['urls', record.index, 'has_magnet']) as boolean ?? false
                       const hasSub = form.getFieldValue(['urls', record.index, 'has_chinese_sub']) as boolean ?? false
                       const sortType = form.getFieldValue(['urls', record.index, 'sort_type']) as number ?? 0
-                      const finalUrl = urlType ? buildFinalUrlPreview(baseUrl, urlType, hasMagnet, hasSub, sortType) : baseUrl
+                      const finalUrl = urlType ? buildFinalUrlPreview(baseUrl, urlType, hasMagnet, hasSub, sortType, source) : baseUrl
                       return (
                         <Tooltip title={finalUrl}>
                           <span className={styles.tableUrlCell}>{finalUrl}</span>

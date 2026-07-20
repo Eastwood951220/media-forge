@@ -7,6 +7,9 @@ export type UrlType =
   | 'lists'
   | 'tags'
   | 'search'
+  | 'detail'
+
+export type UrlSource = 'javdb' | 'javbus'
 
 type CondParamConfig = {
   magnet: string
@@ -36,6 +39,7 @@ export const URL_TYPE_LABELS: Record<UrlType, string> = {
   lists: '列表 (lists)',
   tags: '标签 (tags)',
   search: '搜索 (search)',
+  detail: '详情页 (detail)',
 }
 
 export const SORT_OPTIONS = [
@@ -47,6 +51,18 @@ export const SEARCH_SORT_OPTIONS = [
   { value: 0, label: '按相关度' },
   { value: 1, label: '按发布日期' },
 ]
+
+export function detectUrlSource(url: string): UrlSource | null {
+  try {
+    const parsed = new URL(url)
+    const hostname = parsed.hostname.toLowerCase()
+    if (hostname === 'javdb.com' || hostname.endsWith('.javdb.com')) return 'javdb'
+    if (hostname === 'javbus.com' || hostname === 'www.javbus.com') return 'javbus'
+    return null
+  } catch {
+    return null
+  }
+}
 
 export function detectUrlType(url: string): UrlType | null {
   try {
@@ -83,8 +99,10 @@ export function buildFinalUrlPreview(
   hasMagnet: boolean,
   hasSub: boolean,
   sortType: number,
+  source?: UrlSource | null,
 ): string {
   if (!baseUrl) return baseUrl
+  if (source === 'javbus') return baseUrl
 
   const stripped = stripQueryParams(baseUrl)
   const parts: string[] = []

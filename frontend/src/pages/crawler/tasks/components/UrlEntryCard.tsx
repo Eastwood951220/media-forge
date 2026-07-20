@@ -4,6 +4,7 @@ import { App, Button, Card, Form, Input, Select, Switch } from 'antd'
 import { extractTaskName } from '@/api/crawlTask'
 import {
   buildFinalUrlPreview,
+  detectUrlSource,
   detectUrlType,
   SEARCH_SORT_OPTIONS,
   SORT_OPTIONS,
@@ -62,19 +63,30 @@ export default function UrlEntryCard({
       <Form.Item noStyle shouldUpdate={(prev, cur) => prev.urls?.[index]?.url !== cur.urls?.[index]?.url}>
         {({ getFieldValue }) => {
           const url = (getFieldValue(['urls', index, 'url']) as string) ?? ''
+          const source = url ? detectUrlSource(url) : null
           const detected = url ? detectUrlType(url) : null
+          const sourceLabel = source === 'javbus' ? 'JavBus' : source === 'javdb' ? 'JavDB' : null
+          const typeLabel = sourceLabel
+            ? detected && URL_TYPE_LABELS[detected]
+              ? `${sourceLabel} - ${URL_TYPE_LABELS[detected]}`
+              : sourceLabel
+            : detected
+              ? URL_TYPE_LABELS[detected]
+              : url
+                ? '无法识别'
+                : '请输入 URL'
           return (
             <>
               <Form.Item name={[index, 'url']} label="URL" rules={[{ required: true, message: '请输入 URL' }]}>
-                <Input placeholder="https://javdb.com/actors/..." />
+                <Input placeholder="https://javdb.com/actors/... 或 https://javbus.com/..." />
               </Form.Item>
               <Form.Item label="URL 类型">
                 <Input
-                  value={detected ? URL_TYPE_LABELS[detected] : url ? '无法识别' : '请输入 URL'}
+                  value={typeLabel}
                   disabled
                   style={{
-                    color: detected ? '#1e40af' : undefined,
-                    fontWeight: detected ? 500 : undefined,
+                    color: source || detected ? '#1e40af' : undefined,
+                    fontWeight: source || detected ? 500 : undefined,
                   }}
                 />
               </Form.Item>
@@ -89,10 +101,14 @@ export default function UrlEntryCard({
         }}
       </Form.Item>
 
-      <Form.Item noStyle shouldUpdate={(prev, cur) => prev.urls?.[index]?.url_type !== cur.urls?.[index]?.url_type}>
+      <Form.Item noStyle shouldUpdate={(prev, cur) => prev.urls?.[index]?.url_type !== cur.urls?.[index]?.url_type || prev.urls?.[index]?.url !== cur.urls?.[index]?.url}>
         {({ getFieldValue }) => {
           const urlType = getFieldValue(['urls', index, 'url_type']) as UrlType
+          const url = (getFieldValue(['urls', index, 'url']) as string) ?? ''
+          const source = url ? detectUrlSource(url) : null
           if (!urlType) return null
+          // Hide JavDB-specific controls for JavBus
+          if (source === 'javbus') return null
           const sortOptions = urlType === 'search' ? SEARCH_SORT_OPTIONS : SORT_OPTIONS
           const showSort = urlType === 'video_codes' || urlType === 'search'
           return (
@@ -116,11 +132,12 @@ export default function UrlEntryCard({
       <Form.Item noStyle shouldUpdate>
         {({ getFieldValue }) => {
           const baseUrl = (getFieldValue(['urls', index, 'url']) as string) ?? ''
+          const source = baseUrl ? detectUrlSource(baseUrl) : null
           const urlType = getFieldValue(['urls', index, 'url_type']) as UrlType
           const hasMagnet = (getFieldValue(['urls', index, 'has_magnet']) as boolean) ?? false
           const hasSub = (getFieldValue(['urls', index, 'has_chinese_sub']) as boolean) ?? false
           const sortType = (getFieldValue(['urls', index, 'sort_type']) as number) ?? 0
-          const finalUrl = urlType ? buildFinalUrlPreview(baseUrl, urlType, hasMagnet, hasSub, sortType) : baseUrl
+          const finalUrl = urlType ? buildFinalUrlPreview(baseUrl, urlType, hasMagnet, hasSub, sortType, source) : baseUrl
           return (
             <Form.Item label="最终 URL 预览">
               <Input
@@ -159,17 +176,18 @@ export default function UrlEntryCard({
       <Form.Item noStyle shouldUpdate={(prev, cur) => prev.urls?.[index]?.url !== cur.urls?.[index]?.url}>
         {({ getFieldValue }) => {
           const url = (getFieldValue(['urls', index, 'url']) as string) ?? ''
+          const source = url ? detectUrlSource(url) : null
           const detected = url ? detectUrlType(url) : null
           return (
             <Button
               icon={<SearchOutlined />}
               loading={extracting}
-              disabled={!url || !detected}
+              disabled={!url || (!detected && !source)}
               onClick={async () => {
-                if (!detected) return
+                if (!detected && !source) return
                 setExtracting(true)
                 try {
-                  const result = await extractTaskName(url, detected)
+                  const result = await extractTaskName(url, detected ?? 'detail')
                   if (result.name) onNameExtracted(index, result.name)
                   else message.warning('未能提取到名称')
                 } finally {

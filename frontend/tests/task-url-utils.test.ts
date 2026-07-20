@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFinalUrlPreview, detectUrlType } from '../src/pages/crawler/tasks/taskUrlUtils'
+import { buildFinalUrlPreview, detectUrlSource, detectUrlType } from '../src/pages/crawler/tasks/taskUrlUtils'
 
 describe('taskUrlUtils', () => {
   it('detects restored javdb URL types', () => {
@@ -17,5 +17,16 @@ describe('taskUrlUtils', () => {
   it('builds search final url preview with subtitle and date sort', () => {
     expect(buildFinalUrlPreview('https://javdb.com/search?q=abc', 'search', false, true, 1)).toContain('f=cnsub')
     expect(buildFinalUrlPreview('https://javdb.com/search?q=abc', 'search', false, true, 1)).toContain('sb=1')
+  })
+
+  it('detects URL source by hostname', () => {
+    expect(detectUrlSource('https://javdb.com/actors/abc')).toBe('javdb')
+    expect(detectUrlSource('https://javbus.com/page/1')).toBe('javbus')
+    expect(detectUrlSource('https://www.javbus.com/ABCD-123')).toBe('javbus')
+    expect(detectUrlSource('https://example.com/javbus.com')).toBeNull()
+  })
+
+  it('builds javbus final url preview without javdb params', () => {
+    expect(buildFinalUrlPreview('https://javbus.com/page/1?foo=bar', 'detail', true, true, 5, 'javbus')).toBe('https://javbus.com/page/1?foo=bar')
   })
 })
