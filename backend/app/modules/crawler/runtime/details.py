@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+from scraper.tasks.task_utils import determine_source
 
 UNFINISHED_DETAIL_STATUSES = {"pending_crawl", "crawling", "crawl_failed", "save_failed"}
 RESTARTABLE_DETAIL_STATUSES = UNFINISHED_DETAIL_STATUSES
@@ -69,4 +70,5 @@ def detail_row_to_task_info(detail: CrawlRunDetailTask) -> dict[str, Any]:
         "_task_final_url": detail.task_final_url,
         "_task_url_type": detail.task_url_type,
         "_task_url_name": detail.source_url_name,
+        "_task_source": determine_source(detail.source_url),
     }

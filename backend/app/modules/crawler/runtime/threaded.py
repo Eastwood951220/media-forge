@@ -19,11 +19,13 @@ from backend.app.modules.crawler.runtime.events import append_run_log_for_run, p
 from backend.app.modules.crawler.runtime.progress import new_progress, write_progress
 from backend.app.modules.crawler.runtime.source_task_names import find_existing_movie_codes, movie_code_exists
 from backend.app.modules.content.movies.persistence import append_source_task_id, append_source_task_ids_for_codes, upsert_movie_with_magnets
-from scraper.config.sites import JAVDB_SITE
+from scraper.config.sites import JAVBUS_SITE, JAVDB_SITE
 from scraper.cookies.cookie_manager import CookieManager
 from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
 from scraper.pipelines.movie_pipeline import MoviePipeline
-from scraper.spiders.javdb.javdb_spider import JavdbSpider
+from scraper.spiders.registry import get_site_spider
+from scraper.spiders.site_plugin import SiteSpiderProtocol
+from scraper.tasks.task_utils import determine_source
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +60,12 @@ class ThreadedUrlEntry:
     url_name: str | None
 
 
-def build_spider() -> JavdbSpider:
+def build_spider(source: str = "javdb") -> SiteSpiderProtocol:
     runtime_config = read_crawler_runtime_config()
-    cookies = CookieManager(JAVDB_SITE["cookie_file"]).load()
-    fetcher = ScraplingFetcher(headers=JAVDB_SITE["headers"], cookies=cookies, timeout=runtime_config.REQUEST_TIMEOUT)
-    return JavdbSpider(fetcher=fetcher)
+    site_config = JAVBUS_SITE if source == "javbus" else JAVDB_SITE
+    cookies = CookieManager(site_config["cookie_file"]).load()
+    fetcher = ScraplingFetcher(headers=site_config["headers"], cookies=cookies, timeout=runtime_config.REQUEST_TIMEOUT)
+    return get_site_spider(source, fetcher=fetcher)
 
 
 def build_pipeline() -> MoviePipeline:
@@ -176,7 +179,6 @@ def _run_list_phase(
     *,
     selected_task_url_ids: list[uuid.UUID] | None = None,
 ) -> None:
-    spider = build_spider()
     worker_session_factory = _worker_session_factory(db)
     list_db_lock = threading.Lock()
     run_id = run.id
@@ -211,7 +213,8 @@ def _run_list_phase(
     ]
 
     def _collect_url(url_entry):
-        return spider.collect_detail_tasks_for_url(
+        url_spider = build_spider(url_entry.source or "javdb")
+        return url_spider.collect_detail_tasks_for_url(
             url_entry=url_entry,
             task_name=task_name,
             crawl_mode=crawl_mode,
@@ -318,7 +321,8 @@ def _run_detail_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any,
 
 def _process_single_detail(db: Session, run: CrawlRun, task: CrawlTask, detail: Any, runtime: Any) -> None:
     detail_info = detail_row_to_task_info(detail)
-    spider = build_spider()
+    source = detail_info.get("_task_source") or determine_source(detail.source_url) or "javdb"
+    spider = build_spider(source)
     pipeline = build_pipeline()
 
     def handle_already_exists(task_info: dict) -> None:

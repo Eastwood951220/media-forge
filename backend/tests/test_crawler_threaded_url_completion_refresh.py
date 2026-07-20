@@ -100,7 +100,7 @@ def test_threaded_incremental_list_phase_does_not_persist_already_exists_skips(a
                 },
             ]
 
-    monkeypatch.setattr(threaded, "build_spider", lambda: SkipSpider())
+    monkeypatch.setattr(threaded, "build_spider", lambda source="javdb": SkipSpider())
     monkeypatch.setattr(threaded, "_find_existing_movie_codes_in_worker_session", lambda *args, **kwargs: {"OLD-001"})
 
     try:
@@ -155,7 +155,7 @@ def test_threaded_list_phase_publishes_refresh_after_each_url_completion(admin_u
     session.refresh(task)
     session.refresh(run)
 
-    monkeypatch.setattr(threaded, "build_spider", lambda: FakeSpider())
+    monkeypatch.setattr(threaded, "build_spider", lambda source="javdb": FakeSpider())
     monkeypatch.setattr(
         threaded,
         "_find_existing_movie_codes_in_worker_session",

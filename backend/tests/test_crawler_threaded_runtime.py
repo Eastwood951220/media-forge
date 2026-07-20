@@ -66,7 +66,7 @@ def make_task_and_run(db_session) -> tuple[CrawlTask, CrawlRun]:
 def test_execute_threaded_crawl_finishes_list_before_detail(db_session, monkeypatch) -> None:
     task, run = make_task_and_run(db_session)
     spider = FakeSpider()
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: spider)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda source="javdb": spider)
     monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
 
     result = execute_threaded_crawl(db_session, run, task, Runtime())
@@ -135,7 +135,7 @@ def test_list_phase_db_callbacks_use_isolated_sessions(db_session, monkeypatch, 
             ]
 
     spider = DedupeSpider()
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: spider)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda source="javdb": spider)
     monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
 
     result = execute_threaded_crawl(db_session, run, task, Runtime())
@@ -186,7 +186,7 @@ def test_threaded_list_db_check_appends_source_task_id_without_already_exists_ca
             ]
 
     spider = DbCheckOnlySpider()
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: spider)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda source="javdb": spider)
     monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
 
     result = execute_threaded_crawl(db_session, run, task, Runtime())
@@ -267,7 +267,7 @@ def test_list_phase_snapshots_worker_inputs_before_main_commit(db_session, monke
             return []
 
     spider = ExpirationRaceSpider()
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: spider)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda source="javdb": spider)
     monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
 
     result = execute_threaded_crawl(db_session, run, task, Runtime())
@@ -313,7 +313,7 @@ def test_temporary_run_skips_list_phase_and_processes_seeded_detail(db_session, 
             return completed
 
     spider = TempSpider()
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: spider)
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda source="javdb": spider)
     monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
 
     result = execute_threaded_crawl(db_session, run, task, Runtime(), detail_only=True)
@@ -355,7 +355,7 @@ def test_detail_skip_existing_appends_source_task_id(db_session, monkeypatch) ->
             kwargs["on_item_already_exists"](payload)
             return payload
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: ExistingSpider())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda source="javdb": ExistingSpider())
     monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
 
     result = execute_threaded_crawl(db_session, run, task, Runtime(), detail_only=True)
@@ -423,7 +423,7 @@ def test_temporary_detail_run_persists_parsed_code_and_title(db_session, monkeyp
                 },
             }
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: TemporarySpider())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda source="javdb": TemporarySpider())
     monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
 
     result = execute_threaded_crawl(db_session, run, task, Runtime(), detail_only=True)
@@ -478,7 +478,7 @@ def test_detail_page_code_replaces_existing_list_stage_code(db_session, monkeypa
                 },
             }
 
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda: DetailCodeSpider())
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_spider", lambda source="javdb": DetailCodeSpider())
     monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.build_pipeline", lambda: FakePipeline())
 
     result = execute_threaded_crawl(db_session, run, task, Runtime(), detail_only=True)
