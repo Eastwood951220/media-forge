@@ -168,6 +168,9 @@ class CrawlerTaskService:
                 is_skip=data.is_skip,
                 urls=data.urls,
             )
+        except ValueError as exc:
+            self.db.rollback()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         except IntegrityError as exc:
             self.db.rollback()
             raise_task_integrity_error(exc, name=data.name)
@@ -194,7 +197,11 @@ class CrawlerTaskService:
 
         if data.urls is not None:
             check_urls_unique(data.urls)
-            self.repo.replace_urls(task, data.urls)
+            try:
+                self.repo.replace_urls(task, data.urls)
+            except ValueError as exc:
+                self.db.rollback()
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
         try:
             updated = self.repo.update(task)

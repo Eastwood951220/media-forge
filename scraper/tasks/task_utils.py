@@ -47,10 +47,17 @@ def ensure_string(value) -> str:
 
 
 def determine_source(url: str) -> str:
-    url = ensure_string(url).lower()
+    parsed = urlparse(ensure_string(url))
+    hostname = (parsed.hostname or "").lower()
 
-    if "javdb.com" in url:
+    if not hostname or parsed.scheme not in ("http", "https"):
+        return "unknown"
+
+    if hostname == "javdb.com" or hostname.endswith(".javdb.com"):
         return "javdb"
+
+    if hostname == "javbus.com" or hostname == "www.javbus.com":
+        return "javbus"
 
     return "unknown"
 
@@ -119,6 +126,9 @@ def build_final_url(
 
     if not url:
         return ""
+
+    if source == "javbus":
+        return url
 
     params: dict[str, str | int] = {"page": 1}
 

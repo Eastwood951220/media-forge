@@ -64,6 +64,8 @@ class CrawlTaskRepository(BaseRepository):
 
     def build_url_values(self, entry: TaskUrlEntryCreate, position: int) -> dict:
         source = determine_source(entry.url)
+        if source == "unknown":
+            raise ValueError("不支持的 URL 来源")
         final_url = build_final_url(
             url=entry.url,
             url_type=entry.url_type,
