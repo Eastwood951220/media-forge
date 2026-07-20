@@ -17,6 +17,7 @@ from scraper.tasks.task_schema import CrawlTask, CrawlTaskUrlEntry
 
 class JavdbSpider(BaseSpider):
     name = "javdb"
+    source = "javdb"
 
     def __init__(self, fetcher):
         super().__init__(fetcher)
@@ -467,6 +468,14 @@ class JavdbSpider(BaseSpider):
 
     def run(self, task: CrawlTask) -> list[dict]:
         return self.run_task(task)
+
+    def extract_url_name(self, url: str, url_type: str) -> str | None:
+        try:
+            page = self.fetch(url)
+            detail = parse_detail_page(page)
+            return detail.get("source_name") or detail.get("title") or None
+        except Exception:
+            return None
 
     def run_single_detail_task(
         self,
