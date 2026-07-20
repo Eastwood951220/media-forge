@@ -32,6 +32,211 @@
 - Shared callback signatures and normalized item keys must be defined once in the protocol or shared schema; JavBus must not copy private JavDB helper implementations.
 - Tests for runtime dispatch use protocol-conforming fakes, while parser tests use inline response fixtures. This keeps each layer independently replaceable.
 
+## Objectives and Non-Negotiable Notes
+
+The implementation is complete only when all of the following are true:
+
+1. A new task containing `https://javdb.com/...`, `https://javbus.com/...`, or `https://www.javbus.com/...` stores the correct `source` on every URL row. A URL containing the text `javdb.com` or `javbus.com` in its path/query but hosted on another domain is rejected.
+2. A mixed task such as `[javdb actor URL, javbus list URL, javbus detail URL]` creates independent list/detail work and one failing site URL cannot cancel the other URLs.
+3. JavDB list collection continues using `build_task_page_url`, security-check retry, `MAX_LIST_PAGES`, existing-code deduplication, incremental threshold, and current callback/status behavior.
+4. JavBus list collection uses the input URL as-is after normalization, follows the absolute URL from `a#next`, and has no page counter limit. It stops only on stop request, request/parse failure, empty/no-next page, or the existing incremental threshold.
+5. A JavBus detail page triggers exactly two site requests after task scheduling: one detail-page request and one Ajax magnet request. The Ajax URL is built only inside `JavbusSpider` from `gid`, `uc`, and `img` extracted from that detail page.
+6. Every valid magnet row returned by Ajax is present in the item `magnets` list. The spider never sorts, truncates, or chooses one magnet. The persistence layer stores all distinct magnets and `auto_select_best_magnet` marks exactly one selected row.
+7. JavBus items may omit `rating` and other JavDB-only fields, but must contain enough data for the existing pipeline/movie persistence contract: `code`, `source_url`, or `source_name`.
+8. The runtime contains no JavBus CSS selectors, Ajax URL templates, or HTML parsing code. All site-specific behavior is testable by replacing a protocol fake in the registry.
+9. Legacy persisted JavDB task rows without a source remain runnable as JavDB. New unsupported or ambiguous URLs never silently default to JavDB.
+
+### Shared Data Contracts
+
+The implementation must use these plain-dictionary keys consistently. Keys prefixed with `_task_` are crawler scheduling metadata and must not be treated as movie fields:
+
+```python
+# Detail task produced by either site plugin.
+{
+    "url": "https://javbus.com/ABCD-123",  # detail URL to fetch
+    "name": "ABCD-123 title",              # display name from list/detail
+    "code": "ABCD-123",
+    "_task_source": "javbus",
+    "_task_url": "https://javbus.com/page/1",  # originating task URL
+    "_task_final_url": "https://javbus.com/page/1",
+    "_task_url_type": "detail",
+    "_task_url_name": "optional UI name",
+    "_task_has_magnet": False,
+    "_task_has_chinese_sub": False,
+    "_task_sort_type": 0,
+}
+
+# Completed detail result passed to MoviePipeline.
+{
+    "source": "javbus",
+    "source_url": "https://javbus.com/ABCD-123",
+    "source_name": "ABCD-123 title",
+    "code": "ABCD-123",
+    "release_date": "2026-07-20",
+    "duration": 120,
+    "director": "Director",
+    "maker": "Maker",
+    "series": "Series",
+    "actors": ["Actor A"],
+    "tags": ["Drama"],
+    "cover_url": "https://pics.example/cover.jpg",
+    "magnets": [
+        {
+            "magnet": "magnet:?xt=urn:btih:HASH",
+            "name": "ABCD-123-C",
+            "size_text": "2.1 GB",
+            "file_text": "12 files",
+            "file_count": 12,
+            "tags": ["中字"],
+            "has_chinese_sub": True,
+            "date": "2026-07-20",
+        }
+    ],
+}
+```
+
+`cover_url` may be converted to the existing movie field `cover` at the pipeline boundary. Do not add a second cover persistence path. The plugin should include the source URL even when the code is missing so the existing movie validation can still decide whether the item is saveable.
+
+### Exact Plugin Boundary
+
+The protocol file should define the callback aliases and method signatures once. The implementation should be equivalent to this shape, with project-specific callback return annotations added where known:
+
+```python
+from collections.abc import Callable
+from typing import Any, Protocol
+
+
+class SiteSpiderProtocol(Protocol):
+    source: str
+
+    def collect_detail_tasks_for_url(
+        self,
+        *,
+        url_entry: CrawlTaskUrlEntry,
+        task_name: str,
+        crawl_mode: str = "incremental",
+        incremental_threshold: int = 0,
+        stop_check: Callable[[], bool] | None = None,
+        log_callback: Callable[..., None] | None = None,
+        on_tasks_batch_created: Callable[[list[dict[str, Any]]], None] | None = None,
+        db_check_callback: Callable[[list[str]], set[str]] | None = None,
+        on_item_already_exists: Callable[[dict[str, Any]], None] | None = None,
+    ) -> list[dict[str, Any]]: ...
+
+    def run_single_detail_task(
+        self,
+        task: dict[str, Any],
+        *,
+        task_name: str | None = None,
+        on_detail_completed: Callable[[dict[str, Any]], None] | None = None,
+        on_detail_failed: Callable[[dict[str, Any], str], None] | None = None,
+        stop_check: Callable[[], bool] | None = None,
+        log_callback: Callable[..., None] | None = None,
+        on_detail_check_callback: Callable[[str], bool] | None = None,
+        on_item_already_exists: Callable[[dict[str, Any]], None] | None = None,
+    ) -> dict[str, Any]: ...
+
+    def extract_url_name(self, url: str, url_type: str) -> str: ...
+```
+
+The protocol must be implemented by `JavdbSpider` and `JavbusSpider`; it must not contain default HTML parsing or site branching. The registry factory accepts the source and a fetcher factory/configuration, then returns one concrete plugin. Runtime code receives the protocol object and never imports a concrete site class.
+
+### Exact JavBus Request Sequence
+
+For each JavBus detail task, implement this order and no extra duplicate requests:
+
+```text
+detail_url = task["url"]
+detail_page = fetcher.get(detail_url)
+detail_data = parse_detail_page(detail_page, detail_url)
+ajax_params = extract_ajax_params(detail_page)
+if gid/uc/img is incomplete:
+    report detail failure and return failed result
+ajax_url = build_magnet_ajax_url(ajax_params)
+ajax_page = fetcher.get(ajax_url)
+detail_data["magnets"] = parse_magnet_ajax(ajax_page)
+detail_data["source"] = "javbus"
+detail_data["source_url"] = detail_url
+return completed result
+```
+
+`build_magnet_ajax_url` must URL-encode parameter values with `urllib.parse.urlencode` while preserving the fixed `lang=zh` and `floor=735` values. Tests must assert the parsed query dictionary rather than relying only on string order. Ajax failure is a detail failure; an Ajax response with zero rows is a completed item with `magnets=[]` if the base item is otherwise valid.
+
+### Exact JavBus List Algorithm
+
+```text
+current_url = url_entry.final_url or url_entry.url
+if is_detail_url(current_url):
+    return [make_detail_task(current_url, url_entry)]
+
+while current_url and not stop_check():
+    page = fetcher.get(current_url)
+    page_items, next_url = parse_list_page(page, current_url)
+    fresh_items = dedupe_by_code_or_url(page_items, seen_codes, seen_urls)
+    annotate_task_metadata(fresh_items, url_entry)
+    apply_existing_code_policy(fresh_items, crawl_mode, db_check_callback, on_item_already_exists)
+    append fresh crawlable items to result
+    if incremental_threshold_reached(...):
+        break
+    current_url = next_url
+```
+
+Do not convert JavBus pagination to `page=2`, do not call `build_page_url`, and do not read `MAX_LIST_PAGES` in this algorithm. `a#next` absent is normal completion. A failed request/parse must be logged with the current URL and returned to the runtime as a URL-scoped failure.
+
+### JavBus Parser Mapping Contract
+
+Implement the parser with small helpers whose inputs and outputs are independently testable:
+
+| Helper | Input | Output and rule |
+| --- | --- | --- |
+| `parse_list_page(page, source_url)` | list response and current URL | `(items, next_url)`; select only `div.item a.movie-box`, resolve `href` with `urljoin`, read nested `img[title]` and `date` text |
+| `parse_detail_page(page, source_url)` | detail response and URL | normalized base item; missing optional fields become `""`, `[]`, or `None`, never an exception |
+| `extract_ajax_params(page)` | detail response | `{"gid": ..., "uc": ..., "img": ...}`; values are stripped and URL-decoded when needed |
+| `parse_magnet_ajax(page)` | Ajax response | one dict per row with magnet URL, name, size text, file text, file count, tags, subtitle flag, and date |
+| `_parse_basic_info(row)` | one labeled basic-info row | `(label, value)` using the `識別碼`/`發行日期`/`長度`/`導演`/`發行商`/`系列`/`類別`/`演員` labels |
+| `_parse_magnet_row(row)` | one Ajax table row | one magnet dict or `None` when no magnet URL/name/size/file text exists |
+
+Use these selector rules from the reference spider and keep them in `javbus_parser.py`, not in the runtime:
+
+- Title and cover: `.screencap img::attr(title)` and `.screencap img::attr(src)`.
+- Basic info: the label cell/text identifies the field; the adjacent value cell supplies text and links. `類別` returns a list; `演員` returns a list; scalar fields return stripped text.
+- List next page: `a#next::attr(href)`.
+- Magnet rows: table rows containing `a[href^="magnet:"]`; size/file text comes from the second cell, date from the third cell, and row tags from `.btn`.
+- Subtitle marker: `any("中字" in tag or "字幕" in tag for tag in tags)`.
+
+The parser must not silently turn a missing magnet URL into a fake URL. Such a row is skipped; a valid row with an empty optional date or file count is retained.
+
+### Failure-State Matrix
+
+| Failure | Owning layer | Required result | Must continue? |
+| --- | --- | --- | --- |
+| unsupported task URL host | repository/API validation | HTTP 400; no task row created | no task is started |
+| JavBus list request exception | `JavbusSpider` + threaded runtime | URL-scoped collection error with current URL in log | yes, other task URLs |
+| JavBus list parse exception | `JavbusSpider` + threaded runtime | URL-scoped collection error | yes, other task URLs |
+| no `a#next` | `JavbusSpider` | normal URL completion | yes, detail phase proceeds |
+| detail page request exception | `JavbusSpider` | one detail task `crawl_failed` | yes, other detail tasks |
+| missing `gid`, `uc`, or `img` | `JavbusSpider` | one detail task `crawl_failed`; error names missing keys | yes, other detail tasks |
+| Ajax request exception | `JavbusSpider` | one detail task `crawl_failed` | yes, other detail tasks |
+| Ajax has zero magnet rows | parser/plugin | completed item with `magnets=[]` if base item is valid | yes |
+| missing optional JavBus field | parser/plugin | empty optional normalized field | yes |
+| unknown source in legacy detail row | threaded runtime | one detail task `crawl_failed` with source error | yes, other detail tasks |
+| movie pipeline returns `None` | existing runtime | `save_failed` | yes, existing behavior |
+
+### Required Test Fixtures and Assertions
+
+The implementation tests must include these cases, not just a happy-path count assertion:
+
+- A mixed task with one JavDB URL, one JavBus list URL, and one JavBus detail URL.
+- A JavBus list whose first page links to a second page and whose second page has no next link. Assert both pages were fetched and no `MAX_LIST_PAGES` value was accessed.
+- Duplicate code on two JavBus pages. Assert one detail task is returned and the first-seen metadata is retained.
+- Incremental mode with an existing code. Assert the existing item callback fires and no pending detail task is persisted for that code.
+- Full mode with an existing code. Assert the skipped detail task is retained according to current JavDB behavior.
+- A detail page with two magnets. Assert both magnet URLs are in the result in source order.
+- A detail page missing one Ajax parameter. Assert no Ajax request is made and the result is `crawl_failed`.
+- An Ajax request failure for one JavBus detail while a JavDB detail succeeds. Assert the run continues and the failure is isolated.
+- Two persisted magnets with different weights. Assert both rows exist and exactly one is selected.
+- A legacy JavDB detail row without `_task_source`. Assert it resolves to JavDB; a non-JavDB row without source fails explicitly.
+
 ## File Map
 
 Create these files:
