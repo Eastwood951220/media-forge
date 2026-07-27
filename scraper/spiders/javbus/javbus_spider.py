@@ -1,4 +1,5 @@
 import re
+from random import randint
 from typing import Any
 from urllib.parse import urlencode
 
@@ -13,6 +14,22 @@ TASK_STATUS_FAILED = "failed"
 TASK_STATUS_PENDING = "pending"
 TASK_STATUS_RUNNING = "running"
 TASK_STATUS_SKIPPED = "skipped"
+
+
+def _response_cookies(page) -> dict[str, str]:
+    raw = getattr(page, "cookies", None)
+    if isinstance(raw, dict):
+        return {str(key): str(value) for key, value in raw.items()}
+
+    merged: dict[str, str] = {}
+    if isinstance(raw, (list, tuple)):
+        for cookie_group in raw:
+            if isinstance(cookie_group, dict):
+                merged.update({
+                    str(key): str(value)
+                    for key, value in cookie_group.items()
+                })
+    return merged
 
 
 def _is_detail_url(url: str) -> bool:
@@ -59,9 +76,11 @@ class JavbusSpider(BaseSpider):
 
     def extract_url_name(self, url: str, url_type: str) -> str | None:
         try:
-            page = self.fetch(url)
-            result = javbus_parser.parse_detail_page(page, url)
-            return result.get("source_name") or result.get("title") or None
+            page = self.fetch(url, cookies={"existmag": "mag"})
+            if _is_detail_url(url):
+                result = javbus_parser.parse_detail_page(page, url)
+                return result.get("source_name") or result.get("title") or None
+            return javbus_parser.parse_javbus_url_name(page) or None
         except Exception:
             return None
 
@@ -271,7 +290,7 @@ class JavbusSpider(BaseSpider):
         self._emit(msg, log_callback)
 
         try:
-            page = self.fetch(url)
+            page = self.fetch(url, cookies={"existmag": "mag"})
             detail = javbus_parser.parse_detail_page(page, url)
 
             ajax_params = javbus_parser.extract_ajax_params(page)
@@ -289,12 +308,36 @@ class JavbusSpider(BaseSpider):
                     on_detail_failed(task, task["reason"])
                 return task
 
-            ajax_url = f"https://www.javbus.com/ajax/uncledatoolsbyajax.php?{urlencode({'gid': gid, 'lang': 'zh', 'img': img, 'uc': uc, 'floor': '735'})}"
+            ajax_query = urlencode(
+                {
+                    "gid": gid,
+                    "lang": "zh",
+                    "img": img,
+                    "uc": uc,
+                    "floor": str(randint(1, 1000)),
+                },
+                safe="/",
+            )
+            ajax_url = (
+                "https://www.javbus.com/ajax/uncledatoolsbyajax.php?"
+                f"{ajax_query}"
+            )
             msg = f"{detail_prefix} 请求 Ajax 磁力链接"
             self._emit(msg, log_callback)
 
             try:
-                ajax_page = self.fetch(ajax_url)
+                ajax_page = self.fetch(
+                    ajax_url,
+                    headers={
+                        "Accept": "*/*",
+                        "Referer": url,
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    cookies={
+                        **_response_cookies(page),
+                        "existmag": "mag",
+                    },
+                )
                 magnets = javbus_parser.parse_magnet_ajax(ajax_page)
             except Exception as exc:
                 task["status"] = TASK_STATUS_FAILED

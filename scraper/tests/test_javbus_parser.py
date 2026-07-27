@@ -3,6 +3,7 @@ from scrapling.parser import Adaptor
 from scraper.spiders.javbus.javbus_parser import (
     extract_ajax_params,
     parse_detail_page,
+    parse_javbus_url_name,
     parse_list_page,
     parse_magnet_ajax,
 )
@@ -160,3 +161,93 @@ def test_parse_magnet_ajax_extracts_all_magnets() -> None:
     assert magnets[0]["has_chinese_sub"] is True
     assert magnets[0]["date"] == "2026-07-15"
     assert magnets[1]["has_chinese_sub"] is False
+
+
+# --- Real JavBus markup fixtures ---
+
+REAL_DETAIL_HTML = """
+<div class="container">
+  <h3>CEMD-869 もしも人気AV女優と同棲したら 波多野結衣</h3>
+  <div class="row movie">
+    <div class="col-md-9 screencap">
+      <img src="/pics/cover/cdor_b.jpg"
+           title="もしも人気AV女優と同棲したら 波多野結衣">
+    </div>
+    <div class="col-md-3 info">
+      <p><span class="header">識別碼:</span>
+         <span style="color:#CC0000;">CEMD-869</span></p>
+      <p><span class="header">發行日期:</span> 2026-07-25</p>
+      <p><span class="header">長度:</span> 134分鐘</p>
+      <p><span class="header">導演:</span><a>ケンタブリトニー</a></p>
+      <p><span class="header">製作商:</span><a>セレブの友</a></p>
+      <p class="header">類別:</p>
+      <p>
+        <span class="genre"><a>成熟的女人</a></span>
+        <span class="genre"><a>高畫質</a></span>
+      </p>
+      <p class="star-show"><span class="header">演員</span>:</p>
+    </div>
+  </div>
+  <div id="star-div">
+    <a class="avatar-box"><span>波多野結衣</span></a>
+  </div>
+</div>
+"""
+
+
+def test_parse_real_detail_does_not_use_label_as_code() -> None:
+    result = parse_detail_page(
+        _page(REAL_DETAIL_HTML),
+        "https://www.javbus.com/CEMD-869",
+    )
+
+    assert result["code"] == "CEMD-869"
+    assert result["code"] != "識別碼:"
+    assert result["release_date"] == "2026-07-25"
+    assert result["duration"] == 134
+    assert result["director"] == "ケンタブリトニー"
+    assert result["maker"] == "セレブの友"
+    assert result["tags"] == ["成熟的女人", "高畫質"]
+    assert result["actors"] == ["波多野結衣"]
+    assert result["cover_url"] == "https://www.javbus.com/pics/cover/cdor_b.jpg"
+
+
+STAR_LIST_HEADER_HTML = """
+<div class="alert alert-success alert-common">
+  <p><b>波多野結衣 - 女優 - 影片</b>
+     &nbsp;：&nbsp;當前顯示<b>已有磁力 2337</b>部</p>
+</div>
+"""
+
+
+def test_parse_javbus_url_name_extracts_primary_name() -> None:
+    assert parse_javbus_url_name(_page(STAR_LIST_HEADER_HTML)) == "波多野結衣"
+
+
+REAL_MAGNET_HTML = """
+<tr>
+  <td width="70%">
+    <a href="magnet:?xt=urn:btih:HASH&dn=TIKB-224">
+      TIKB-224
+      <a class="btn btn-mini-new btn-primary disabled">高清</a>
+    </a>
+  </td>
+  <td><a href="magnet:?xt=urn:btih:HASH&dn=TIKB-224">7.09GB</a></td>
+  <td><a href="magnet:?xt=urn:btih:HASH&dn=TIKB-224">2026-07-21</a></td>
+</tr>
+"""
+
+
+def test_parse_real_magnet_row_extracts_nested_values() -> None:
+    magnets = parse_magnet_ajax(_page(REAL_MAGNET_HTML))
+
+    assert magnets == [{
+        "magnet": "magnet:?xt=urn:btih:HASH&dn=TIKB-224",
+        "name": "TIKB-224",
+        "size_text": "7.09GB",
+        "file_text": "",
+        "file_count": None,
+        "tags": ["高清"],
+        "has_chinese_sub": False,
+        "date": "2026-07-21",
+    }]

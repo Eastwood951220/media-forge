@@ -14,18 +14,28 @@ class ScraplingFetcher:
         self.timeout = timeout
         self.dynamic = dynamic
 
-    def get(self, url: str):
+    def get(
+        self,
+        url: str,
+        *,
+        headers: dict | None = None,
+        cookies: dict | None = None,
+    ):
+        merged_headers = {**self.headers, **(headers or {})}
+        merged_cookies = {**self.cookies, **(cookies or {})}
+
         if self.dynamic:
             return DynamicFetcher.fetch(
                 url,
                 headless=True,
                 network_idle=True,
                 timeout=self.timeout,
+                extra_headers=merged_headers,
             )
 
         return Fetcher.get(
             url,
-            headers=self.headers,
-            cookies=self.cookies,
+            headers=merged_headers,
+            cookies=merged_cookies,
             timeout=self.timeout,
         )

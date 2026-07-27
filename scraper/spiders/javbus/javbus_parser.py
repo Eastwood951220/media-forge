@@ -12,6 +12,7 @@ FIELD_MAPPING = {
     "長度": "duration",
     "導演": "director",
     "發行商": "maker",
+    "製作商": "maker",
     "系列": "series",
     "類別": "tags",
     "演員": "actors",
@@ -28,28 +29,29 @@ def _all_text(node, selector: str) -> list[str]:
     return [str(clean_text(v)) for v in values if clean_text(v)]
 
 
-def _parse_basic_info(row) -> tuple[str, str | list[str]]:
-    label = _first_text(row, "span.header::text")
-    label = label.rstrip(":").strip()
+def _direct_texts(row) -> list[str]:
+    values = row.xpath("./text()[normalize-space()]").getall()
+    return [str(clean_text(value)) for value in values if clean_text(value)]
 
-    if label in ("類別", "演員"):
-        link_texts = _all_text(row, "a::text")
-        return label, link_texts
+
+def _parse_basic_info(row) -> tuple[str, str | list[str]]:
+    label = _first_text(row, "span.header::text").rstrip(":：").strip()
+    if not label:
+        return "", ""
+
+    if label in {"類別", "演員"}:
+        return label, _all_text(row, "a::text")
 
     link_text = _first_text(row, "a::text")
     if link_text:
         return label, link_text
 
-    text = _first_text(row, "p::text")
-    if not text and label:
-        full = clean_text(row.css("::text").getall())
-        for t in full:
-            t = str(t).strip()
-            if t and t != label and not t.startswith(":"):
-                text = t
-                break
+    non_header_text = _first_text(row, "span:not(.header)::text")
+    if non_header_text:
+        return label, non_header_text
 
-    return label, text
+    direct_texts = _direct_texts(row)
+    return label, direct_texts[0] if direct_texts else ""
 
 
 def _extract_code_from_url(url: str) -> str:
@@ -75,6 +77,14 @@ def parse_list_page(page: Adaptor, source_url: str) -> tuple[list[dict[str, Any]
     next_href = page.css("a#next::attr(href)").get("")
     next_url = urljoin(source_url, next_href) if next_href else None
     return items, next_url
+
+
+def parse_javbus_url_name(page: Adaptor) -> str:
+    raw = _first_text(
+        page,
+        ".alert.alert-success.alert-common p b:first-of-type::text",
+    )
+    return raw.split(" - ", 1)[0].strip() if raw else ""
 
 
 def parse_detail_page(page: Adaptor, source_url: str) -> dict[str, Any]:
@@ -109,6 +119,43 @@ def parse_detail_page(page: Adaptor, source_url: str) -> dict[str, Any]:
         else:
             result[field] = value
 
+    # Real markup: tags live in sibling <p> after the 類別 header
+    tag_values = page.xpath(
+        "//div[contains(@class,'info')]"
+        "/p[contains(@class,'header') and contains(normalize-space(.),'類別')]"
+        "/following-sibling::p[1]//span[contains(@class,'genre')]//a/text()"
+    ).getall()
+    if not tag_values:
+        # Fallback: tags inline in same <p> as header
+        tag_values = page.xpath(
+            "//div[contains(@class,'info')]"
+            "/p[span[contains(@class,'header') and contains(text(),'類別')]]"
+            "//span[contains(@class,'genre')]//a/text()"
+        ).getall()
+    result["tags"] = [
+        str(clean_text(value)) for value in tag_values if clean_text(value)
+    ]
+
+    # Real markup: actors live in #star-div
+    actor_values = page.css("#star-div .avatar-box > span::text").getall()
+    if not actor_values:
+        actor_values = page.css(".star-name a::text").getall()
+    if not actor_values:
+        actor_values = page.css(".star a::text").getall()
+    result["actors"] = [
+        str(clean_text(value)) for value in actor_values if clean_text(value)
+    ]
+
+    # Make cover_url absolute
+    result["cover_url"] = urljoin(source_url, result["cover_url"])
+
+    # Validate code: "識別碼:" or empty → fallback to URL
+    code = result["code"]
+    if not code or code == "識別碼:" or code.startswith("識別碼"):
+        result["code"] = _extract_code_from_url(source_url)
+    if not result["code"]:
+        result["code"] = _extract_code_from_url(source_url)
+
     return result
 
 
@@ -129,39 +176,43 @@ def extract_ajax_params(page: Adaptor) -> dict[str, str]:
 
 
 def _parse_magnet_row(row) -> dict[str, Any] | None:
-    magnet_href = row.css("a[href^='magnet:']::attr(href)").get("")
+    cells = row.css("td")
+    if len(cells) < 3:
+        return None
+
+    magnet_href = cells[0].css("a[href^='magnet:']::attr(href)").get("")
     if not magnet_href:
         return None
 
-    name = _first_text(row, "a[href^='magnet:']::text")
+    name_parts = cells[0].css("a[href^='magnet:']::text").getall()
+    name = next(
+        (str(clean_text(value)) for value in name_parts if clean_text(value)),
+        "",
+    )
     if not name:
         return None
 
-    cells = row.css("td")
-    size_text = ""
-    file_text = ""
-    file_count = 0
-    date = ""
-    tags: list[str] = []
+    size_text = _first_text(cells[1], "a::text")
+    if not size_text:
+        size_text = _first_text(cells[1], "::text")
 
-    if len(cells) >= 2:
-        cell_texts = cells[1].css("::text").getall()
-        texts = [str(clean_text(t)) for t in cell_texts if clean_text(t)]
-        if texts:
-            size_text = texts[0]
-        for t in texts:
-            if "files" in t.lower():
-                file_text = t
-                match = re.search(r"(\d+)", t)
-                if match:
-                    file_count = int(match.group(1))
+    date = _first_text(cells[2], "a::text")
+    if not date:
+        date = _first_text(cells[2], "::text")
 
-    if len(cells) >= 3:
-        date = str(clean_text(cells[2].css("::text").get("")))
+    row_texts = [str(clean_text(value)) for value in cells[1].css("::text").getall()]
+    file_text = next(
+        (value for value in row_texts if "files" in value.lower()),
+        "",
+    )
+    file_match = re.search(r"\d+", file_text)
+    file_count = int(file_match.group()) if file_match else None
 
-    if len(cells) >= 4:
-        btn_texts = cells[3].css(".btn::text").getall()
-        tags = [str(clean_text(t)) for t in btn_texts if clean_text(t)]
+    tags = [
+        str(clean_text(value))
+        for value in row.css(".btn::text").getall()
+        if clean_text(value)
+    ]
 
     has_chinese_sub = any("中字" in tag or "字幕" in tag for tag in tags)
 
