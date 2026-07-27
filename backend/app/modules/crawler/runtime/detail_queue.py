@@ -39,6 +39,7 @@ def upsert_detail_task(
         task_url=item.get("_task_url"),
         task_final_url=item.get("_task_final_url"),
         task_url_type=item.get("_task_url_type"),
+        list_item_data=item.get("_list_item_data"),
         status="skipped" if is_skipped else "pending_crawl",
         error=item.get("reason") if is_skipped else None,
         created_at=datetime.now(),

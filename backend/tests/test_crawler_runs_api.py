@@ -728,6 +728,7 @@ def test_detail_row_to_task_info_preserves_url_context() -> None:
         "_task_final_url": "https://javdb.com/actors/a?page=1",
         "_task_url_type": "actors",
         "_task_url_name": "演员A",
+        "_task_source": "javdb",
     }
 
 
@@ -1040,3 +1041,28 @@ def test_run_tasks_keyword_search_matches_item_data_display_fields(client, db_se
     assert title_response.status_code == 200
     assert response.json()["total"] == 1
     assert title_response.json()["total"] == 1
+
+
+def test_detail_row_to_task_info_restores_list_item_data() -> None:
+    list_item_data = {
+        "title": "AAA 001 List Title",
+        "cover_url": "https://www.javbus.com/pics/thumb/aaa1.jpg",
+        "release_date": "2026-07-01",
+    }
+    detail = CrawlRunDetailTask(
+        run_id=uuid.uuid4(),
+        task_name="任务",
+        code="AAA-001",
+        source_url="https://www.javbus.com/AAA-001",
+        source_name="AAA 001 List Title",
+        list_item_data=list_item_data,
+        status="pending_crawl",
+        created_at=datetime.now(),
+    )
+
+    from backend.app.modules.crawler.runtime.details import detail_row_to_task_info
+
+    task_info = detail_row_to_task_info(detail)
+
+    assert task_info["_list_item_data"] == list_item_data
+    assert "item_data" not in task_info

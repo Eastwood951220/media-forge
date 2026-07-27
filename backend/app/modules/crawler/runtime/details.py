@@ -62,7 +62,7 @@ def count_run_detail_tasks(db: Session, run_id: uuid.UUID, status: str | None = 
 
 
 def detail_row_to_task_info(detail: CrawlRunDetailTask) -> dict[str, Any]:
-    return {
+    task_info: dict[str, Any] = {
         "code": detail.code,
         "url": detail.source_url,
         "name": detail.source_name,
@@ -72,3 +72,6 @@ def detail_row_to_task_info(detail: CrawlRunDetailTask) -> dict[str, Any]:
         "_task_url_name": detail.source_url_name,
         "_task_source": determine_source(detail.source_url),
     }
+    if isinstance(detail.list_item_data, dict):
+        task_info["_list_item_data"] = dict(detail.list_item_data)
+    return task_info

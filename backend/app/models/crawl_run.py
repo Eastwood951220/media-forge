@@ -67,6 +67,10 @@ class CrawlRunDetailTask(Base, UUIDPrimaryKeyMixin):
     task_url_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    list_item_data: Mapped[dict | None] = mapped_column(
+        CompatibleJSON,
+        nullable=True,
+    )
     item_data: Mapped[dict | None] = mapped_column(CompatibleJSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     crawled_at: Mapped[datetime | None] = mapped_column(nullable=True)
