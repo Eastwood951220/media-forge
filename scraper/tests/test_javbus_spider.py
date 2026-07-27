@@ -8,15 +8,15 @@ from scraper.tasks.task_schema import CrawlTaskUrlEntry
 
 LIST_PAGE_1 = """
 <html><body>
-<div class="item"><a class="movie-box" href="/AAA-001"><img title="AAA 001" src="x.jpg" /><date>2026-07-01</date></a></div>
-<div class="item"><a class="movie-box" href="/AAA-002"><img title="AAA 002" src="x.jpg" /><date>2026-07-02</date></a></div>
+<div class="item"><a class="movie-box" href="/AAA-001"><img title="AAA 001 List Title" src="/pics/thumb/aaa1.jpg"><date>AAA-001</date> / <date>2026-07-01</date></a></div>
+<div class="item"><a class="movie-box" href="/AAA-002"><img title="AAA 002 List Title" src="/pics/thumb/aaa2.jpg"><date>AAA-002</date> / <date>2026-07-02</date></a></div>
 <a id="next" href="https://www.javbus.com/page/2">Next</a>
 </body></html>
 """
 
 LIST_PAGE_2 = """
 <html><body>
-<div class="item"><a class="movie-box" href="/AAA-003"><img title="AAA 003" src="x.jpg" /><date>2026-07-03</date></a></div>
+<div class="item"><a class="movie-box" href="/AAA-003"><img title="AAA 003 List Title" src="/pics/thumb/aaa3.jpg"><date>AAA-003</date> / <date>2026-07-03</date></a></div>
 </body></html>
 """
 
@@ -89,6 +89,17 @@ def test_javbus_spider_collects_detail_tasks_with_pagination() -> None:
     assert result[1]["code"] == "AAA-002"
     assert result[2]["code"] == "AAA-003"
     assert all(t["_task_source"] == "javbus" for t in result)
+    assert result[0]["_list_item_data"] == {
+        "title": "AAA 001 List Title",
+        "cover_url": "https://www.javbus.com/pics/thumb/aaa1.jpg",
+        "release_date": "2026-07-01",
+    }
+    assert result[2]["_list_item_data"] == {
+        "title": "AAA 003 List Title",
+        "cover_url": "https://www.javbus.com/pics/thumb/aaa3.jpg",
+        "release_date": "2026-07-03",
+    }
+    assert all("tags" not in task["_list_item_data"] for task in result)
     assert len(fetcher.requested_urls) == 2
 
 
@@ -274,3 +285,71 @@ def test_javbus_detail_parses_seven_magnets() -> None:
     assert result["detail"]["magnets"][0]["name"] == "TIKB224"
     assert result["detail"]["magnets"][0]["date"] == "2026-07-24"
     assert result["detail"]["magnets"][3]["tags"] == ["高清"]
+
+
+DETAIL_PAGE_WITH_EMPTY_DISPLAY_FIELDS = """
+<html><body>
+<div class="screencap"><img title="" src=""></div>
+<div class="col-md-3 info">
+  <p><span class="header">識別碼:</span> AAA-001</p>
+  <p><span class="header">發行日期:</span></p>
+</div>
+<script>
+var gid = 111;
+var uc = 222;
+var img = 'https://pics.example/ajax-cover.jpg';
+</script>
+</body></html>
+"""
+
+
+def test_javbus_detail_uses_list_metadata_for_empty_fields() -> None:
+    fetcher = FakeFetcher({
+        "AAA-001": DETAIL_PAGE_WITH_EMPTY_DISPLAY_FIELDS,
+        "uncledatoolsbyajax": AJAX_PAGE,
+    })
+    spider = JavbusSpider(fetcher=fetcher)
+
+    result = spider.run_single_detail_task({
+        "url": "https://www.javbus.com/AAA-001",
+        "name": "AAA 001 List Title",
+        "code": "AAA-001",
+        "_task_source": "javbus",
+        "_list_item_data": {
+            "title": "AAA 001 List Title",
+            "cover_url": "https://www.javbus.com/pics/thumb/aaa1.jpg",
+            "release_date": "2026-07-01",
+        },
+    })
+
+    assert result["status"] == "completed"
+    assert result["detail"]["title"] == "AAA 001 List Title"
+    assert result["detail"]["source_name"] == "AAA 001 List Title"
+    assert result["detail"]["cover_url"] == "https://www.javbus.com/pics/thumb/aaa1.jpg"
+    assert result["detail"]["release_date"] == "2026-07-01"
+
+
+def test_javbus_detail_keeps_non_empty_detail_fields() -> None:
+    fetcher = FakeFetcher({
+        "AAA-001": DETAIL_PAGE,
+        "uncledatoolsbyajax": AJAX_PAGE,
+    })
+    spider = JavbusSpider(fetcher=fetcher)
+
+    result = spider.run_single_detail_task({
+        "url": "https://www.javbus.com/AAA-001",
+        "name": "List Title",
+        "code": "AAA-001",
+        "_task_source": "javbus",
+        "_list_item_data": {
+            "title": "List Title",
+            "cover_url": "https://www.javbus.com/pics/thumb/list.jpg",
+            "release_date": "2020-01-01",
+        },
+    })
+
+    assert result["status"] == "completed"
+    assert result["detail"]["title"] == "AAA 001"
+    assert result["detail"]["source_name"] == "AAA 001"
+    assert result["detail"]["cover_url"] == "https://pics.example/cover.jpg"
+    assert result["detail"]["release_date"] == "2026-07-01"

@@ -36,6 +36,29 @@ def _is_detail_url(url: str) -> bool:
     return bool(re.search(r"/[A-Za-z]+-\d+", url))
 
 
+def _apply_list_item_fallbacks(
+    detail: dict[str, Any],
+    task: dict[str, Any],
+) -> None:
+    raw = task.get("_list_item_data")
+    if not isinstance(raw, dict):
+        return
+
+    title = str(raw.get("title") or "").strip()
+    cover_url = str(raw.get("cover_url") or "").strip()
+    release_date = str(raw.get("release_date") or "").strip()
+
+    if title:
+        if not detail.get("title"):
+            detail["title"] = title
+        if not detail.get("source_name"):
+            detail["source_name"] = title
+    if cover_url and not detail.get("cover_url"):
+        detail["cover_url"] = cover_url
+    if release_date and not detail.get("release_date"):
+        detail["release_date"] = release_date
+
+
 class JavbusSpider(BaseSpider):
     name = "javbus"
     source = "javbus"
@@ -178,6 +201,11 @@ class JavbusSpider(BaseSpider):
                     "_task_has_magnet": url_entry.has_magnet,
                     "_task_has_chinese_sub": url_entry.has_chinese_sub,
                     "_task_sort_type": url_entry.sort_type,
+                    "_list_item_data": {
+                        "title": item.get("title") or "",
+                        "cover_url": item.get("cover_url") or "",
+                        "release_date": item.get("release_date") or "",
+                    },
                 }
                 fresh_tasks.append(task)
 
@@ -349,6 +377,7 @@ class JavbusSpider(BaseSpider):
                 return task
 
             detail["magnets"] = magnets
+            _apply_list_item_fallbacks(detail, task)
             task["detail"] = detail
             task["status"] = TASK_STATUS_COMPLETED
 
