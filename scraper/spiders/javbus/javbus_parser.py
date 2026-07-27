@@ -65,13 +65,19 @@ def parse_list_page(page: Adaptor, source_url: str) -> tuple[list[dict[str, Any]
         href = node.css("::attr(href)").get("")
         if not href:
             continue
+
         detail_url = urljoin(source_url, href)
+        dates = _all_text(node, "date::text")
+        code = dates[0] if dates else _extract_code_from_url(detail_url)
         title = _first_text(node, "img::attr(title)")
-        code = _extract_code_from_url(href)
+        cover_path = _first_text(node, "img::attr(src)")
+
         items.append({
             "url": detail_url,
             "title": title,
             "code": code,
+            "cover_url": urljoin(source_url, cover_path) if cover_path else "",
+            "release_date": dates[1] if len(dates) > 1 else "",
         })
 
     next_href = page.css("a#next::attr(href)").get("")
@@ -146,8 +152,9 @@ def parse_detail_page(page: Adaptor, source_url: str) -> dict[str, Any]:
         str(clean_text(value)) for value in actor_values if clean_text(value)
     ]
 
-    # Make cover_url absolute
-    result["cover_url"] = urljoin(source_url, result["cover_url"])
+    # Make cover_url absolute (keep empty if missing)
+    if result["cover_url"]:
+        result["cover_url"] = urljoin(source_url, result["cover_url"])
 
     # Validate code: "識別碼:" or empty → fallback to URL
     code = result["code"]

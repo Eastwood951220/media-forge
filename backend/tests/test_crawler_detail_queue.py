@@ -90,3 +90,30 @@ def test_reset_crawling_details_to_pending(db_session) -> None:
     db_session.refresh(detail)
     assert detail.status == "pending_crawl"
     assert detail.error is None
+
+
+def test_upsert_detail_task_persists_list_item_data(db_session) -> None:
+    run = make_run(db_session)
+    list_item_data = {
+        "title": "AAA 001 List Title",
+        "cover_url": "https://www.javbus.com/pics/thumb/aaa1.jpg",
+        "release_date": "2026-07-01",
+    }
+
+    detail = upsert_detail_task(
+        db_session,
+        run=run,
+        task_name=run.task_name,
+        item={
+            "code": "AAA-001",
+            "url": "https://www.javbus.com/AAA-001",
+            "name": "AAA 001 List Title",
+            "_list_item_data": list_item_data,
+        },
+    )
+    db_session.commit()
+
+    assert detail is not None
+    db_session.refresh(detail)
+    assert detail.list_item_data == list_item_data
+    assert detail.item_data is None
