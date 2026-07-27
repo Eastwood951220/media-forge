@@ -1,3 +1,5 @@
+from urllib.parse import parse_qs, urlparse
+
 from scrapling.parser import Adaptor
 
 from scraper.spiders.javbus.javbus_spider import JavbusSpider
@@ -39,16 +41,30 @@ AJAX_PAGE = """
 """
 
 
+class FakePage:
+    def __init__(self, html: str, cookies=None):
+        self._page = Adaptor(html)
+        self.cookies = cookies or {}
+
+    def css(self, selector):
+        return self._page.css(selector)
+
+    def xpath(self, selector):
+        return self._page.xpath(selector)
+
+
 class FakeFetcher:
-    def __init__(self, responses: dict[str, str]):
+    def __init__(self, responses):
         self._responses = responses
         self.requested_urls: list[str] = []
+        self.requests: list[dict] = []
 
-    def get(self, url: str):
+    def get(self, url: str, **kwargs):
         self.requested_urls.append(url)
-        for pattern, html in self._responses.items():
+        self.requests.append({"url": url, **kwargs})
+        for pattern, response in self._responses.items():
             if pattern in url:
-                return Adaptor(html)
+                return response if not isinstance(response, str) else Adaptor(response)
         raise ValueError(f"No response for: {url}")
 
 
@@ -162,3 +178,83 @@ def test_get_site_spider_raises_for_unknown_source() -> None:
         assert False, "Should have raised"
     except ValueError as exc:
         assert "不支持" in str(exc)
+
+
+def test_javbus_ajax_request_uses_detail_context(monkeypatch) -> None:
+    monkeypatch.setattr("scraper.spiders.javbus.javbus_spider.randint", lambda _a, _b: 45)
+
+    fetcher = FakeFetcher({
+        "TIKB-224": FakePage(
+            DETAIL_PAGE,
+            cookies={"PHPSESSID": "session-from-detail"},
+        ),
+        "uncledatoolsbyajax": AJAX_PAGE,
+    })
+    spider = JavbusSpider(fetcher=fetcher)
+
+    result = spider.run_single_detail_task({
+        "url": "https://www.javbus.com/TIKB-224",
+        "name": "TIKB-224",
+        "code": "TIKB-224",
+        "_task_source": "javbus",
+    })
+
+    assert result["status"] == "completed"
+
+    detail_request, ajax_request = fetcher.requests
+    assert detail_request["cookies"]["existmag"] == "mag"
+    assert ajax_request["headers"] == {
+        "Accept": "*/*",
+        "Referer": "https://www.javbus.com/TIKB-224",
+        "X-Requested-With": "XMLHttpRequest",
+    }
+    assert ajax_request["cookies"] == {
+        "PHPSESSID": "session-from-detail",
+        "existmag": "mag",
+    }
+
+    parsed = urlparse(ajax_request["url"])
+    query = parse_qs(parsed.query)
+    assert query == {
+        "gid": ["111"],
+        "lang": ["zh"],
+        "img": ["https://pics.example/cover.jpg"],
+        "uc": ["222"],
+        "floor": ["45"],
+    }
+
+
+SEVEN_MAGNET_AJAX = """
+<html><body>
+<table>
+<tr><td><a href="magnet:?xt=urn:btih:H1">TIKB224</a></td><td><a>5.76GB</a></td><td><a>2026-07-24</a></td></tr>
+<tr><td><a href="magnet:?xt=urn:btih:H2">TIKB224-2</a></td><td><a>6.10GB</a></td><td><a>2026-07-24</a></td></tr>
+<tr><td><a href="magnet:?xt=urn:btih:H3">TIKB224-3</a></td><td><a>3.40GB</a></td><td><a>2026-07-23</a></td></tr>
+<tr><td><a href="magnet:?xt=urn:btih:H4">TIKB224-4</a><a class="btn">高清</a></td><td><a>7.09GB</a></td><td><a>2026-07-21</a></td></tr>
+<tr><td><a href="magnet:?xt=urn:btih:H5">TIKB224-5</a></td><td><a>2.50GB</a></td><td><a>2026-07-20</a></td></tr>
+<tr><td><a href="magnet:?xt=urn:btih:H6">TIKB224-6</a></td><td><a>1.80GB</a></td><td><a>2026-07-19</a></td></tr>
+<tr><td><a href="magnet:?xt=urn:btih:H7">TIKB224-7</a></td><td><a>4.20GB</a></td><td><a>2026-07-18</a></td></tr>
+</table>
+</body></html>
+"""
+
+
+def test_javbus_detail_parses_seven_magnets() -> None:
+    fetcher = FakeFetcher({
+        "TIKB-224": FakePage(DETAIL_PAGE, cookies={}),
+        "uncledatoolsbyajax": SEVEN_MAGNET_AJAX,
+    })
+    spider = JavbusSpider(fetcher=fetcher)
+
+    result = spider.run_single_detail_task({
+        "url": "https://www.javbus.com/TIKB-224",
+        "name": "TIKB-224",
+        "code": "TIKB-224",
+        "_task_source": "javbus",
+    })
+
+    assert result["status"] == "completed"
+    assert len(result["detail"]["magnets"]) == 7
+    assert result["detail"]["magnets"][0]["name"] == "TIKB224"
+    assert result["detail"]["magnets"][0]["date"] == "2026-07-24"
+    assert result["detail"]["magnets"][3]["tags"] == ["高清"]
