@@ -771,6 +771,11 @@ def test_on_tasks_batch_created_persists_url_context(admin_user) -> None:
             "_task_url": "https://javdb.com/actors/a",
             "_task_final_url": "https://javdb.com/actors/a?page=1",
             "_task_url_type": "actors",
+            "_list_item_data": {
+                "title": "AAA 001 List Title",
+                "cover_url": "https://www.javbus.com/pics/thumb/aaa1.jpg",
+                "release_date": "2026-07-01",
+            },
         }
     ])
 
@@ -780,6 +785,13 @@ def test_on_tasks_batch_created_persists_url_context(admin_user) -> None:
     assert detail.task_url == "https://javdb.com/actors/a"
     assert detail.task_final_url == "https://javdb.com/actors/a?page=1"
     assert detail.task_url_type == "actors"
+    assert detail.list_item_data == {
+        "title": "AAA 001 List Title",
+        "cover_url": "https://www.javbus.com/pics/thumb/aaa1.jpg",
+        "release_date": "2026-07-01",
+    }
+    assert detail.item_data is None
+    session.close()
 
 
 def test_run_task_rows_created_from_spider_payload_keep_url_context(client: TestClient, admin_user) -> None:

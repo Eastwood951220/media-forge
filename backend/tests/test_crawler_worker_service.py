@@ -1132,3 +1132,85 @@ def test_select_retry_details_rejects_non_failed_detail():
         select_retry_details(session, run, detail_ids=[detail.id], retry_all=False)
 
     session.close()
+
+
+def test_on_tasks_batch_created_refreshes_list_item_data(admin_user) -> None:
+    from backend.app.modules.crawler.runtime.callbacks import (
+        CrawlerCallbackContext,
+        build_crawl_callbacks,
+    )
+    from backend.app.modules.crawler.runtime.detail_index import DetailTaskIndex
+    from backend.app.modules.crawler.runtime.progress import new_progress
+
+    session = TestingSessionLocal()
+    task = CrawlTask(
+        name="任务",
+        owner_id=admin_user.id,
+        is_skip=False,
+    )
+    session.add(task)
+    session.flush()
+    run = CrawlRun(
+        task_id=task.id,
+        task_name=task.name,
+        status="running",
+        crawl_mode="incremental",
+    )
+    session.add(run)
+    session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code="AAA-001",
+        source_url="https://www.javbus.com/AAA-001",
+        source_name="Old title",
+        list_item_data={"title": "Old title"},
+        item_data={"source_name": "Old crawled result"},
+        status="crawl_failed",
+        created_at=datetime.now(),
+    )
+    session.add(detail)
+    session.commit()
+
+    detail_index = DetailTaskIndex()
+    detail_index.remember(detail)
+
+    class Runtime:
+        def write_progress(
+            self,
+            run_id: str,
+            progress: dict[str, int],
+        ) -> None:
+            return None
+
+        def is_stop_requested(self, run_id: str) -> bool:
+            return False
+
+    callbacks = build_crawl_callbacks(CrawlerCallbackContext(
+        db=session,
+        run=run,
+        task=task,
+        runtime=Runtime(),
+        detail_index=detail_index,
+        progress=new_progress(),
+    ))
+    callbacks.on_tasks_batch_created([{
+        "code": "AAA-001",
+        "url": "https://www.javbus.com/AAA-001",
+        "name": "New list title",
+        "_list_item_data": {
+            "title": "New list title",
+            "cover_url": "https://www.javbus.com/pics/thumb/new.jpg",
+            "release_date": "2026-07-02",
+        },
+    }])
+
+    session.refresh(detail)
+    assert detail.list_item_data == {
+        "title": "New list title",
+        "cover_url": "https://www.javbus.com/pics/thumb/new.jpg",
+        "release_date": "2026-07-02",
+    }
+    assert detail.item_data is None
+    assert detail.status == "pending_crawl"
+    session.close()

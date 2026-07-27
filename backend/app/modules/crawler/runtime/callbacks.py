@@ -105,6 +105,7 @@ def build_crawl_callbacks(
                     task_url=item.get("_task_url"),
                     task_final_url=item.get("_task_final_url"),
                     task_url_type=item.get("_task_url_type"),
+                    list_item_data=item.get("_list_item_data"),
                     status="skipped" if is_skipped else "pending_crawl",
                     error=reason,
                     created_at=datetime.now(),
@@ -121,6 +122,7 @@ def build_crawl_callbacks(
                 detail.task_url = item.get("_task_url")
                 detail.task_final_url = item.get("_task_final_url")
                 detail.task_url_type = item.get("_task_url_type")
+                detail.list_item_data = item.get("_list_item_data")
             ctx.detail_index.remember(detail)
             created_details.append(detail)
             if is_skipped:
