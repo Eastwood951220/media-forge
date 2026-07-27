@@ -77,8 +77,10 @@ class JavbusSpider(BaseSpider):
     def extract_url_name(self, url: str, url_type: str) -> str | None:
         try:
             page = self.fetch(url, cookies={"existmag": "mag"})
-            result = javbus_parser.parse_detail_page(page, url)
-            return result.get("source_name") or result.get("title") or None
+            if _is_detail_url(url):
+                result = javbus_parser.parse_detail_page(page, url)
+                return result.get("source_name") or result.get("title") or None
+            return javbus_parser.parse_javbus_url_name(page) or None
         except Exception:
             return None
 

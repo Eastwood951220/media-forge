@@ -110,3 +110,29 @@ def test_crawler_task_count_endpoint_uses_same_keyword_filter(client, auth_heade
 
     assert count_response.status_code == 200
     assert count_response.json()["data"]["total"] == 1
+
+
+def test_extract_javbus_star_task_name(monkeypatch) -> None:
+    from scrapling.parser import Adaptor
+    from backend.app.modules.crawler.tasks.name_extractor import extract_task_name
+    from backend.app.schemas.crawl_task import ExtractNameRequest
+    from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+
+    page = Adaptor("""
+    <div class="alert alert-success alert-common">
+      <p><b>波多野結衣 - 女優 - 影片</b>：當前顯示</p>
+    </div>
+    """)
+
+    monkeypatch.setattr(
+        ScraplingFetcher,
+        "get",
+        lambda self, url, **kwargs: page,
+    )
+
+    name = extract_task_name(ExtractNameRequest(
+        url="https://www.javbus.com/star/2jv",
+        url_type="detail",
+    ))
+
+    assert name == "波多野結衣"

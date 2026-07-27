@@ -239,6 +239,22 @@ SEVEN_MAGNET_AJAX = """
 """
 
 
+def test_extract_star_url_name_from_success_alert() -> None:
+    fetcher = FakeFetcher({
+        "/star/2jv": """
+        <div class="alert alert-success alert-common">
+          <p><b>波多野結衣 - 女優 - 影片</b>：當前顯示</p>
+        </div>
+        """,
+    })
+    spider = JavbusSpider(fetcher=fetcher)
+
+    assert spider.extract_url_name(
+        "https://www.javbus.com/star/2jv",
+        "detail",
+    ) == "波多野結衣"
+
+
 def test_javbus_detail_parses_seven_magnets() -> None:
     fetcher = FakeFetcher({
         "TIKB-224": FakePage(DETAIL_PAGE, cookies={}),
