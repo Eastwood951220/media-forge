@@ -44,7 +44,10 @@ def _worker_loop(runtime: CrawlerRuntimeState) -> None:
 
 
 def cleanup_interrupted_runs(db: Session, runtime: CrawlerRuntimeState) -> int:
-    runtime.cleanup_runtime()
+    try:
+        runtime.cleanup_runtime()
+    except Exception:
+        logger.warning("Failed to cleanup Redis runtime state (Redis may be unavailable)", exc_info=True)
     rows = db.query(CrawlRun).filter(CrawlRun.status.in_(["queued", "running"])).all()
     now = datetime.now()
     for run in rows:

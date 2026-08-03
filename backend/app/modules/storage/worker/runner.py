@@ -12,7 +12,12 @@ _worker_running = False
 
 
 def cleanup_interrupted_storage_tasks(db: Session, runtime) -> int:
-    runtime.cleanup_runtime()
+    try:
+        runtime.cleanup_runtime()
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Failed to cleanup Redis runtime state (Redis may be unavailable)", exc_info=True
+        )
     rows = db.query(StorageMainTask).filter(StorageMainTask.status.in_(["queued", "running", "stopping"])).all()
     now = datetime.now(timezone.utc)
     for main in rows:
