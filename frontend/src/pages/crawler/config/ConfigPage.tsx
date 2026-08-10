@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, App, Button, Card, Form, InputNumber, Segmented, Spin, Typography } from 'antd'
+import { Alert, App, Button, Card, Descriptions, Form, InputNumber, Popconfirm, Segmented, Space, Spin, Tag, Typography } from 'antd'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import {
   fetchConfig,
@@ -10,6 +10,14 @@ import {
   type CookiesConfig,
   testCookiesConfig,
   type CookieTestResponse,
+  fetchJavdbSessionStatus,
+  openJavdbSession,
+  closeJavdbSession,
+  checkJavdbSession,
+  exportJavdbSession,
+  resetJavdbSession,
+  type JavDBSessionStatus,
+  type JavDBSessionCheck,
 } from '@/api/crawler/crawlerConfig'
 import { useThemeStore } from '@/stores/useThemeStore'
 import styles from './ConfigPage.module.less'
@@ -41,6 +49,15 @@ export default function ConfigPage() {
   const [cookieTesting, setCookieTesting] = useState(false)
   const [cookieTestResult, setCookieTestResult] = useState<CookieTestResponse | null>(null)
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
+  const [sessionStatus, setSessionStatus] = useState<JavDBSessionStatus | null>(null)
+  const [sessionCheck, setSessionCheck] = useState<JavDBSessionCheck | null>(null)
+  const [sessionLoading, setSessionLoading] = useState(false)
+
+  useEffect(() => {
+    fetchJavdbSessionStatus()
+      .then(setSessionStatus)
+      .catch(() => setSessionStatus(null))
+  }, [])
 
   useEffect(() => {
     fetchConfig()
@@ -136,6 +153,82 @@ export default function ConfigPage() {
       message.error(getErrorMessage(error))
     } finally {
       setCookieTesting(false)
+    }
+  }
+
+  const refreshSessionStatus = async () => {
+    const status = await fetchJavdbSessionStatus()
+    setSessionStatus(status)
+    return status
+  }
+
+  const handleOpenSession = async () => {
+    setSessionLoading(true)
+    try {
+      const status = await openJavdbSession()
+      setSessionStatus(status)
+      if (status.verification_browser_open) {
+        message.success('验证浏览器已打开')
+      } else {
+        message.warning(status.last_message)
+      }
+    } catch (error: unknown) {
+      message.error(getErrorMessage(error))
+    } finally {
+      setSessionLoading(false)
+    }
+  }
+
+  const handleCheckSession = async () => {
+    setSessionLoading(true)
+    try {
+      const result = await checkJavdbSession()
+      setSessionCheck(result)
+      await refreshSessionStatus()
+      if (result.ok) message.success(result.message)
+      else message.error(result.message)
+    } catch (error: unknown) {
+      message.error(getErrorMessage(error))
+    } finally {
+      setSessionLoading(false)
+    }
+  }
+
+  const handleCloseSession = async () => {
+    setSessionLoading(true)
+    try {
+      setSessionStatus(await closeJavdbSession())
+      message.success('验证浏览器已关闭')
+    } catch (error: unknown) {
+      message.error(getErrorMessage(error))
+    } finally {
+      setSessionLoading(false)
+    }
+  }
+
+  const handleExportSession = async () => {
+    setSessionLoading(true)
+    try {
+      const result = await exportJavdbSession()
+      message.success(`会话状态已导出: ${result.path}`)
+      await refreshSessionStatus()
+    } catch (error: unknown) {
+      message.error(getErrorMessage(error))
+    } finally {
+      setSessionLoading(false)
+    }
+  }
+
+  const handleResetSession = async () => {
+    setSessionLoading(true)
+    try {
+      setSessionStatus(await resetJavdbSession())
+      setSessionCheck(null)
+      message.success('JavDB 会话已清除')
+    } catch (error: unknown) {
+      message.error(getErrorMessage(error))
+    } finally {
+      setSessionLoading(false)
     }
   }
 
@@ -253,6 +346,54 @@ export default function ConfigPage() {
       </div>
 
       <div className={styles.configRight}>
+        <Card title="JavDB 访问状态" className={styles.formCard}>
+          <Space wrap className={styles.cookieActions}>
+            <Button onClick={() => void handleOpenSession()} loading={sessionLoading}>
+              打开验证浏览器
+            </Button>
+            <Button onClick={() => void handleCloseSession()} loading={sessionLoading}>
+              关闭验证浏览器
+            </Button>
+            <Button type="primary" onClick={() => void handleCheckSession()} loading={sessionLoading}>
+              检测会话
+            </Button>
+            <Button onClick={() => void handleExportSession()} loading={sessionLoading}>
+              导出会话状态
+            </Button>
+            <Popconfirm
+              title="清除 JavDB 会话？"
+              description="这会删除持久浏览器 Profile 和导出的 storage state。"
+              onConfirm={() => void handleResetSession()}
+            >
+              <Button danger loading={sessionLoading}>
+                清除失效会话
+              </Button>
+            </Popconfirm>
+          </Space>
+          <Descriptions size="small" column={1} className={styles.cookieTestResult}>
+            <Descriptions.Item label="Profile">
+              {sessionStatus?.profile_exists ? <Tag color="success">Profile 已创建</Tag> : <Tag>Profile 未创建</Tag>}
+            </Descriptions.Item>
+            <Descriptions.Item label="验证浏览器">
+              {sessionStatus?.verification_browser_open ? <Tag color="processing">已打开</Tag> : <Tag>未打开</Tag>}
+            </Descriptions.Item>
+            <Descriptions.Item label="运行环境">
+              {sessionStatus?.runtime_environment ?? '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="最近状态">
+              {sessionCheck?.message ?? sessionStatus?.last_message ?? '尚未检测 JavDB 浏览器会话'}
+            </Descriptions.Item>
+          </Descriptions>
+          {sessionCheck && (
+            <Alert
+              className={styles.cookieTestResult}
+              type={sessionCheck.ok ? 'success' : 'error'}
+              showIcon
+              title={sessionCheck.message}
+              description={`URL: ${sessionCheck.url} · 状态: ${sessionCheck.status_code ?? '-'} · 原因: ${sessionCheck.reason} · 环境: ${sessionCheck.runtime_environment}`}
+            />
+          )}
+        </Card>
         <Card
           title="Cookie 配置"
           className={styles.formCard}

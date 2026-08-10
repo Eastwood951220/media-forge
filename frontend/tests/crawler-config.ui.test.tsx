@@ -9,6 +9,12 @@ import {
   testCookiesConfig,
   updateConfig,
   updateCookiesConfig,
+  fetchJavdbSessionStatus,
+  openJavdbSession,
+  closeJavdbSession,
+  checkJavdbSession,
+  exportJavdbSession,
+  resetJavdbSession,
 } from '@/api/crawler/crawlerConfig'
 
 vi.mock('@monaco-editor/react', () => ({
@@ -33,6 +39,12 @@ vi.mock('@/api/crawler/crawlerConfig', () => ({
   fetchCookiesConfig: vi.fn(),
   updateCookiesConfig: vi.fn(),
   testCookiesConfig: vi.fn(),
+  fetchJavdbSessionStatus: vi.fn(),
+  openJavdbSession: vi.fn(),
+  closeJavdbSession: vi.fn(),
+  checkJavdbSession: vi.fn(),
+  exportJavdbSession: vi.fn(),
+  resetJavdbSession: vi.fn(),
 }))
 
 function renderPage() {
@@ -85,6 +97,58 @@ describe('ConfigPage', () => {
       url: 'https://javdb.com',
       logged_in_detected: true,
       fetch_mode: 'static',
+    })
+    vi.mocked(fetchJavdbSessionStatus).mockResolvedValue({
+      profile_exists: false,
+      storage_state_exists: false,
+      verification_browser_open: false,
+      last_check_at: null,
+      last_check_url: null,
+      last_status_code: null,
+      last_reason: 'not_checked',
+      last_message: '尚未检测 JavDB 浏览器会话',
+      logged_in_detected: false,
+      runtime_environment: 'local_gui',
+    })
+    vi.mocked(openJavdbSession).mockResolvedValue({
+      profile_exists: true,
+      storage_state_exists: false,
+      verification_browser_open: true,
+      last_reason: 'not_checked',
+      last_message: '尚未检测 JavDB 浏览器会话',
+      logged_in_detected: false,
+      runtime_environment: 'local_gui',
+    })
+    vi.mocked(closeJavdbSession).mockResolvedValue({
+      profile_exists: true,
+      storage_state_exists: false,
+      verification_browser_open: false,
+      last_reason: 'not_checked',
+      last_message: '尚未检测 JavDB 浏览器会话',
+      logged_in_detected: false,
+      runtime_environment: 'local_gui',
+    })
+    vi.mocked(checkJavdbSession).mockResolvedValue({
+      ok: true,
+      status_code: 200,
+      reason: 'ok',
+      message: 'JavDB 浏览器会话检测通过',
+      url: 'https://javdb.com',
+      logged_in_detected: true,
+      checked_at: '2026-08-10T00:00:00+00:00',
+      runtime_environment: 'local_gui',
+    })
+    vi.mocked(exportJavdbSession).mockResolvedValue({
+      path: '/app/data/cookies/javdb_storage_state.json',
+    })
+    vi.mocked(resetJavdbSession).mockResolvedValue({
+      profile_exists: false,
+      storage_state_exists: false,
+      verification_browser_open: false,
+      last_reason: 'not_checked',
+      last_message: '尚未检测 JavDB 浏览器会话',
+      logged_in_detected: false,
+      runtime_environment: 'local_gui',
     })
   })
 
@@ -200,5 +264,36 @@ describe('ConfigPage', () => {
     await userEvent.click(screen.getByText('测试 Cookie'))
 
     expect(await screen.findByText(/模式: static/)).toBeInTheDocument()
+  })
+
+  it('renders javdb session status panel', async () => {
+    renderPage()
+
+    expect(await screen.findByText('JavDB 访问状态')).toBeInTheDocument()
+    expect(screen.getByText('Profile 未创建')).toBeInTheDocument()
+    expect(screen.getByText('尚未检测 JavDB 浏览器会话')).toBeInTheDocument()
+  })
+
+  it('checks javdb browser session', async () => {
+    renderPage()
+
+    expect(await screen.findByText('JavDB 访问状态')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('检测会话'))
+
+    await waitFor(() => {
+      expect(checkJavdbSession).toHaveBeenCalledWith()
+    })
+    expect(await screen.findAllByText('JavDB 浏览器会话检测通过')).toHaveLength(3)
+  })
+
+  it('opens javdb verification browser', async () => {
+    renderPage()
+
+    expect(await screen.findByText('JavDB 访问状态')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('打开验证浏览器'))
+
+    await waitFor(() => {
+      expect(openJavdbSession).toHaveBeenCalledWith()
+    })
   })
 })

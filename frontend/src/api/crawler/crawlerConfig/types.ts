@@ -45,3 +45,31 @@ export interface CookieTestResponse {
   logged_in_detected: boolean
   fetch_mode: string
 }
+
+export interface JavDBSessionStatus {
+  profile_exists: boolean
+  storage_state_exists: boolean
+  verification_browser_open: boolean
+  last_check_at?: string | null
+  last_check_url?: string | null
+  last_status_code?: number | null
+  last_reason: string
+  last_message: string
+  logged_in_detected: boolean
+  runtime_environment: string
+}
+
+export interface JavDBSessionCheck {
+  ok: boolean
+  status_code: number | null
+  reason: string
+  message: string
+  url: string
+  logged_in_detected: boolean
+  checked_at?: string | null
+  runtime_environment: string
+}
+
+export interface JavDBSessionExportResponse {
+  path: string
+}
