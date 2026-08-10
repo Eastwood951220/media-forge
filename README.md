@@ -176,10 +176,11 @@ Media Forge 是一个全栈媒体处理应用，前端提供初始化配置、�
 - JSON 格式错误时页面会提示错误位置。
 - 点击u201c测试 Cookieu201d测试已保存的 Cookie 是否能正常访问 JavDB。
 - 配置 JavDB 请求模式：
-  - `static`：默认静态请求，速度快，适合 Cookie 可直接通过后端请求的情况。
-  - `browser`：浏览器模式，使用容器内 headless Chromium 加载页面，适合浏览器可打开但后端 static 请求返回 403 的情况。
-- 使用浏览器模式时，仍需在真实浏览器完成 JavDB 验证后导出 Cookie；系统不会自动处理验证码。
-- 浏览器模式资源占用更高，如机器内存有限，建议降低列表线程数和详情线程数。
+  - `static`：默认静态请求，速度快，适合后端请求可以直接访问 JavDB 的情况。
+  - `browser`：持久浏览器会话模式，使用 `data/browser-profiles/javdb/` 中的 Playwright Chromium Profile 加载页面。
+- 使用浏览器模式时，优先在"JavDB 访问状态"中点击"打开验证浏览器"，完成 JavDB 验证/登录/成人确认后再点击"检测会话"。
+- 浏览器模式会自动串行访问 JavDB，以降低安全验证触发概率；即使列表线程数或详情线程数大于 1，JavDB browser fetch 仍会在后端进程内串行执行。
+- Cookie JSON 编辑器保留为兼容配置；browser 模式主要依赖持久浏览器 Profile，而不是只依赖 Cookie JSON。
 
 ## 影片列表 `/content/movies`
 
