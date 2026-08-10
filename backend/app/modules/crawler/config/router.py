@@ -9,10 +9,18 @@ from backend.app.modules.crawler.config.conf_reader import (
     read_crawler_runtime_config,
     write_crawler_config,
 )
-from backend.app.modules.crawler.config.schemas import ConfigUpdate, CookiesConfig, CookieTestRequest, CookieTestResponse
+from backend.app.modules.crawler.config.schemas import (
+    ConfigUpdate,
+    CookiesConfig,
+    CookieTestRequest,
+    CookieTestResponse,
+    JavDBSessionCheckRequest,
+    JavDBSessionExportResponse,
+)
 from scraper.config import settings as scraper_paths
 from scraper.config.sites import JAVDB_SITE
 from scraper.core.security import detect_access_state
+from scraper.fetchers.javdb_browser_session import JavDBBrowserSession
 from scraper.fetchers.site_fetcher import build_site_fetcher
 from shared.schemas.common import success
 
@@ -110,7 +118,7 @@ def test_cookies_config(body: CookieTestRequest, _current_user: CurrentUser) -> 
         if fetch_mode == "static" and access_state.reason == "http_403":
             message = "JavDB static 模式返回 403，请切换浏览器模式后重试"
         elif fetch_mode == "browser":
-            message = "JavDB 浏览器模式仍触发安全验证，请在浏览器完成验证后重新导出 Cookie"
+            message = "JavDB 浏览器模式仍触发安全验证，请在配置页检测会话或打开验证浏览器"
         else:
             message = access_state.message
 
@@ -124,3 +132,44 @@ def test_cookies_config(body: CookieTestRequest, _current_user: CurrentUser) -> 
         fetch_mode=fetch_mode,
     )
     return success(data=payload.model_dump())
+
+
+@router.get("/javdb-session")
+def get_javdb_session(_current_user: CurrentUser) -> dict:
+    return success(data=JavDBBrowserSession().status().model_dump())
+
+
+@router.post("/javdb-session/open")
+def open_javdb_session(body: JavDBSessionCheckRequest, _current_user: CurrentUser) -> dict:
+    runtime_config = read_crawler_runtime_config()
+    url = body.url or JAVDB_SITE["base_url"]
+    status = JavDBBrowserSession().open_verification_browser(url=url, timeout=runtime_config.REQUEST_TIMEOUT)
+    return success(data=status.model_dump())
+
+
+@router.post("/javdb-session/close")
+def close_javdb_session(_current_user: CurrentUser) -> dict:
+    return success(data=JavDBBrowserSession().close_verification_browser().model_dump())
+
+
+@router.post("/javdb-session/check")
+def check_javdb_session(body: JavDBSessionCheckRequest, _current_user: CurrentUser) -> dict:
+    runtime_config = read_crawler_runtime_config()
+    url = body.url or JAVDB_SITE["base_url"]
+    result = JavDBBrowserSession().check(
+        url=url,
+        timeout=runtime_config.REQUEST_TIMEOUT,
+        headers=JAVDB_SITE["headers"],
+    )
+    return success(data=result.model_dump())
+
+
+@router.post("/javdb-session/export")
+def export_javdb_session(_current_user: CurrentUser) -> dict:
+    path = JavDBBrowserSession().export_storage_state()
+    return success(data=JavDBSessionExportResponse(path=str(path)).model_dump())
+
+
+@router.delete("/javdb-session")
+def reset_javdb_session(_current_user: CurrentUser) -> dict:
+    return success(data=JavDBBrowserSession().reset().model_dump())
