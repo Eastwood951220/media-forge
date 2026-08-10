@@ -1,0 +1,16 @@
+{
+  "name": "media-forge-javdb-agent",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "typescript": "^6.0.0",
+    "vite": "^8.0.0"
+  }
+}

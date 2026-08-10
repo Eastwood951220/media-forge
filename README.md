@@ -321,3 +321,23 @@ make docker-build-amd64 \
   NODE_BASE_IMAGE=mirror.gcr.io/library/node:22-bookworm-slim \
   PYTHON_BASE_IMAGE=mirror.gcr.io/library/python:3.12-slim
 ```
+
+
+### JavDB Chrome Agent
+
+当 JavDB 拒绝后端 HTTP 访问时，设置 `JAVDB_FETCH_MODE=agent` 并使用 `chrome-extension/` 中的 Chrome 插件。
+
+```
+cd chrome-extension
+npm install
+npm run build
+```
+
+安装：
+1. 打开 `chrome://extensions`
+2. 启用开发者模式
+3. 加载已解压的扩展，选择 `chrome-extension/dist`
+4. 在扩展选项中输入 Media Forge 后端 URL
+5. 在爬虫配置页生成 Agent Token，粘贴到扩展选项中
+
+前端仍通过 EventSource 接收运行状态，WebSocket 仅用于 Agent 任务分派、Cookie 同步和页面片段上传。
