@@ -12,10 +12,17 @@ This causes a visible stale-data problem in the crawler workflow: after starting
 a task from the task list, navigating to the run list can show the previously
 cached run list without the newly created run.
 
+The same cache behavior affects task edits. After saving changes in the task
+form and returning to `/crawler/tasks`, the cached task list can still show the
+pre-edit task data while the task-list query remains inside the global fresh
+window.
+
 ## Goals
 
 - Show the latest run entry after a task, temporary task, or task URL run is
   submitted from the task list.
+- Show updated task data after creating or editing a task from the task form and
+  returning to the task list.
 - Refresh the task list and run list when their cached route page becomes active
   again.
 - Preserve existing keep-alive UX, including current pagination and in-page
@@ -43,9 +50,11 @@ Use a small frontend-only freshness boundary:
    - normal task run
    - temporary task run
    - task URL run
-3. In the task list page, refresh the current task list when the cached page is
+3. In the task form submit path, invalidate crawler task list and count queries
+   after a successful create or edit save before returning to `/crawler/tasks`.
+4. In the task list page, refresh the current task list when the cached page is
    reactivated.
-4. In the run list page, refresh the current run list and run count when the
+5. In the run list page, refresh the current run list and run count when the
    cached page is reactivated.
 
 This keeps mutation-side invalidation and page-side refetch responsibilities
@@ -73,6 +82,16 @@ Cached page re-entry:
 4. Current pagination is preserved because the page component state is not
    destroyed.
 
+Task form save:
+
+1. User creates or edits a task from `/crawler/tasks/new` or
+   `/crawler/tasks/$id/edit`.
+2. The API save succeeds.
+3. The form submit path invalidates all `crawlerTasks` list queries and the
+   `crawlerTasks` count query.
+4. The user returns to `/crawler/tasks`; the cached list keeps its page state but
+   refetches the latest task data.
+
 ## Error Handling
 
 Activation refreshes should use existing TanStack Query request handling. They
@@ -82,7 +101,8 @@ reflect `isFetching` where already wired.
 
 Submission actions should keep their existing success and error messages. A run
 creation failure should not invalidate run-list queries, because no new run was
-created.
+created. A task save failure should not invalidate task-list queries, because no
+task change was persisted.
 
 ## Testing
 
@@ -92,6 +112,8 @@ Add focused frontend tests:
   successful normal run submission.
 - Temporary task and task URL submission paths trigger the same run-list
   invalidation through their submit handlers.
+- Task create and edit submit paths invalidate crawler task list/count queries
+  after successful saves.
 - Run list page activation refetches the current list and count while preserving
   pagination state.
 - Existing task-list and run-list query tests continue to pass.
@@ -100,4 +122,3 @@ Run verification from `frontend/`:
 
 - Focused Vitest tests for crawler task/run list modules.
 - `npm run build`.
-
