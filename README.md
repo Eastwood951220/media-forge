@@ -174,6 +174,12 @@ Media Forge 是一个全栈媒体处理应用，前端提供初始化配置、�
 - 点击“格式化”格式化 Cookie JSON。
 - 点击“保存 Cookie”保存 Cookie 配置。
 - JSON 格式错误时页面会提示错误位置。
+- 点击u201c测试 Cookieu201d测试已保存的 Cookie 是否能正常访问 JavDB。
+- 配置 JavDB 请求模式：
+  - `static`：默认静态请求，速度快，适合 Cookie 可直接通过后端请求的情况。
+  - `browser`：浏览器模式，使用容器内 headless Chromium 加载页面，适合浏览器可打开但后端 static 请求返回 403 的情况。
+- 使用浏览器模式时，仍需在真实浏览器完成 JavDB 验证后导出 Cookie；系统不会自动处理验证码。
+- 浏览器模式资源占用更高，如机器内存有限，建议降低列表线程数和详情线程数。
 
 ## 影片列表 `/content/movies`
 
@@ -296,6 +302,8 @@ Media Forge 是一个全栈媒体处理应用，前端提供初始化配置、�
 - 页面会通过实时事件更新子任务状态和日志。
 
 ## Docker 打包
+
+Docker 镜像包含 Chromium/Playwright 运行依赖，用于 JavDB 浏览器模式；镜像体积会比纯后端镜像更大。
 
 项目提供 Makefile 打包目标：
 

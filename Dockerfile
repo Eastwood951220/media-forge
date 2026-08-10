@@ -23,6 +23,7 @@ RUN apt-get update \
 
 COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+RUN python -m playwright install --with-deps chromium
 
 COPY backend /app/backend
 COPY shared /app/shared
