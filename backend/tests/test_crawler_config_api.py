@@ -250,3 +250,74 @@ def test_crawler_config_reads_worker_counts_from_conf_file(tmp_path) -> None:
 
     assert data["LIST_MAX_WORKERS"] == 3
     assert data["DETAIL_MAX_WORKERS"] == 5
+
+
+def test_cookies_test_reports_blocked_javdb_access(
+    client: TestClient,
+    admin_user,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+
+    class FakePage:
+        text = "Forbidden"
+        status_code = 403
+
+    cookie_dir = tmp_path / "data" / "cookies"
+    cookie_dir.mkdir(parents=True)
+    monkeypatch.setattr(settings, "COOKIE_DIR", cookie_dir)
+    (cookie_dir / "javdb_cookies.json").write_text(
+        json.dumps([{"domain": "javdb.com", "name": "_jdb_session", "value": "abc", "path": "/"}]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ScraplingFetcher, "get", lambda self, url, **kwargs: FakePage())
+
+    response = client.post(
+        "/api/crawler/config/cookies/test",
+        json={"url": "https://javdb.com/actors/8VGXO"},
+        headers=auth_headers(client, admin_user),
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()["data"]
+    assert data["ok"] is False
+    assert data["status_code"] == 403
+    assert data["reason"] == "http_403"
+    assert "Cookie" in data["message"]
+    assert data["url"] == "https://javdb.com/actors/8VGXO"
+
+
+def test_cookies_test_reports_ok_javdb_access(
+    client: TestClient,
+    admin_user,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+
+    class FakePage:
+        text = "JavDB 成人影片數據庫\n/users/profile"
+        status_code = 200
+
+    cookie_dir = tmp_path / "data" / "cookies"
+    cookie_dir.mkdir(parents=True)
+    monkeypatch.setattr(settings, "COOKIE_DIR", cookie_dir)
+    (cookie_dir / "javdb_cookies.json").write_text(
+        json.dumps([{"domain": "javdb.com", "name": "_jdb_session", "value": "abc", "path": "/"}]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ScraplingFetcher, "get", lambda self, url, **kwargs: FakePage())
+
+    response = client.post(
+        "/api/crawler/config/cookies/test",
+        json={},
+        headers=auth_headers(client, admin_user),
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()["data"]
+    assert data["ok"] is True
+    assert data["status_code"] == 200
+    assert data["reason"] == "ok"
+    assert data["logged_in_detected"] is True

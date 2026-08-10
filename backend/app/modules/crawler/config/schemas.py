@@ -34,3 +34,16 @@ class CookiesConfig(BaseModel):
     """Wrapper for the cookie array stored in the JSON file."""
 
     cookies: list[JavdbCookie] = Field(default_factory=list)
+
+
+class CookieTestRequest(BaseModel):
+    url: str | None = None
+
+
+class CookieTestResponse(BaseModel):
+    ok: bool
+    status_code: int | None = None
+    reason: str
+    message: str
+    url: str
+    logged_in_detected: bool = False

@@ -6,10 +6,15 @@ from fastapi import APIRouter
 from backend.app.core.dependencies import CurrentUser
 from backend.app.modules.crawler.config.conf_reader import (
     read_crawler_config_dict,
+    read_crawler_runtime_config,
     write_crawler_config,
 )
-from backend.app.modules.crawler.config.schemas import ConfigUpdate, CookiesConfig
+from backend.app.modules.crawler.config.schemas import ConfigUpdate, CookiesConfig, CookieTestRequest, CookieTestResponse
 from scraper.config import settings as scraper_paths
+from scraper.config.sites import JAVDB_SITE
+from scraper.cookies.cookie_manager import CookieManager
+from scraper.core.security import detect_access_state
+from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
 from shared.schemas.common import success
 
 router = APIRouter(prefix="/api/crawler/config", tags=["crawler-config"])
@@ -66,3 +71,38 @@ def update_cookies_config(body: CookiesConfig, _current_user: CurrentUser) -> di
     with filepath.open("w", encoding="utf-8") as file:
         json.dump(cookies_list, file, ensure_ascii=False, indent=2)
     return success(data=body.model_dump())
+
+
+def _page_text(page) -> str:
+    text = getattr(page, "text", "") or ""
+    if callable(text):
+        text = text() or ""
+    return str(text)
+
+
+def _logged_in_detected(page) -> bool:
+    text = _page_text(page)
+    return "/users/profile" in text or "users/profile" in text
+
+
+@router.post("/cookies/test")
+def test_cookies_config(body: CookieTestRequest, _current_user: CurrentUser) -> dict:
+    url = body.url or JAVDB_SITE["base_url"]
+    runtime_config = read_crawler_runtime_config()
+    cookies = CookieManager(DEFAULT_COOKIE_FILE).load()
+    fetcher = ScraplingFetcher(
+        headers=JAVDB_SITE["headers"],
+        cookies=cookies,
+        timeout=runtime_config.REQUEST_TIMEOUT,
+    )
+    page = fetcher.get(url)
+    access_state = detect_access_state(page)
+    payload = CookieTestResponse(
+        ok=access_state.ok,
+        status_code=access_state.status_code,
+        reason=access_state.reason,
+        message="JavDB Cookie 测试通过" if access_state.ok else access_state.message,
+        url=url,
+        logged_in_detected=access_state.ok and _logged_in_detected(page),
+    )
+    return success(data=payload.model_dump())
