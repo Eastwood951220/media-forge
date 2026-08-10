@@ -5,6 +5,23 @@ type AgentSettings = {
 
 let socket: WebSocket | null = null
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null
+let reconnecting = false
+
+type AgentLocalStatus = {
+  connected: boolean
+  phase: 'idle' | 'connecting' | 'connected' | 'error'
+  message: string
+  updatedAt: string
+}
+
+async function setLocalStatus(status: Omit<AgentLocalStatus, 'updatedAt'>) {
+  await chrome.storage.local.set({
+    agentStatus: {
+      ...status,
+      updatedAt: new Date().toISOString(),
+    },
+  })
+}
 
 async function settings(): Promise<AgentSettings | null> {
   const data = await chrome.storage.sync.get(['backendUrl', 'token'])
@@ -54,17 +71,70 @@ function wsUrl(backendUrl: string, session: string): string {
 
 async function connect() {
   const config = await settings()
-  if (!config) return
-  const session = await createSession(config)
-  socket = new WebSocket(wsUrl(config.backendUrl, session))
-  socket.addEventListener('open', async () => {
-    send('agent.hello', { version: chrome.runtime.getManifest().version })
-    send('agent.cookie_sync', { cookies: await javdbCookies() })
-    heartbeatInterval = setInterval(() => send('agent.heartbeat', {}), 20_000)
-  })
-  socket.addEventListener('message', (event) => {
-    void handleServerMessage(JSON.parse(String(event.data)))
-  })
+  if (!config) {
+    await setLocalStatus({ connected: false, phase: 'idle', message: 'missing_settings' })
+    return
+  }
+  if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return
+
+  await setLocalStatus({ connected: false, phase: 'connecting', message: 'connecting' })
+  try {
+    const session = await createSession(config)
+    socket = new WebSocket(wsUrl(config.backendUrl, session))
+    socket.addEventListener('open', async () => {
+      await setLocalStatus({ connected: true, phase: 'connected', message: 'connected' })
+      send('agent.hello', { version: chrome.runtime.getManifest().version })
+      send('agent.cookie_sync', { cookies: await javdbCookies() })
+      heartbeatInterval = setInterval(() => send('agent.heartbeat', {}), 20_000)
+    })
+    socket.addEventListener('message', (event) => {
+      void handleServerMessage(JSON.parse(String(event.data)))
+    })
+    socket.addEventListener('close', () => {
+      clearHeartbeat()
+      socket = null
+      void setLocalStatus({ connected: false, phase: 'idle', message: 'socket_closed' })
+    })
+    socket.addEventListener('error', () => {
+      clearHeartbeat()
+      socket = null
+      void setLocalStatus({ connected: false, phase: 'error', message: 'socket_error' })
+    })
+  } catch (error) {
+    clearHeartbeat()
+    socket = null
+    await setLocalStatus({
+      connected: false,
+      phase: 'error',
+      message: error instanceof Error ? error.message : 'connect_failed',
+    })
+  }
+}
+
+function clearHeartbeat() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval)
+    heartbeatInterval = null
+  }
+}
+
+function disconnect() {
+  clearHeartbeat()
+  if (socket) {
+    socket.close()
+    socket = null
+  }
+}
+
+async function reconnect() {
+  if (reconnecting) return
+  reconnecting = true
+  try {
+    disconnect()
+    await connect()
+  } finally {
+    reconnecting = false
+  }
 }
 
 function send(type: string, payload: Record<string, unknown>) {
@@ -105,5 +175,25 @@ function waitForTabComplete(tabId: number): Promise<void> {
     chrome.tabs.onUpdated.addListener(listener)
   })
 }
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'sync') return
+  if (!changes.backendUrl && !changes.token) return
+  void reconnect()
+})
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== 'agent_settings_saved') return false
+  void reconnect().then(() => sendResponse({ ok: true }))
+  return true
+})
+
+chrome.runtime.onInstalled.addListener(() => {
+  void connect()
+})
+
+chrome.runtime.onStartup.addListener(() => {
+  void connect()
+})
 
 void connect()

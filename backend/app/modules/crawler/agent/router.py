@@ -14,6 +14,7 @@ from backend.app.modules.crawler.agent.auth import (
     session_is_expired,
     verify_agent_token,
 )
+from backend.app.modules.crawler.agent.cookie_sync import AgentCookie, sync_javdb_cookies
 from backend.app.modules.crawler.agent.registry import agent_registry
 from backend.app.modules.crawler.agent.runtime import complete_work_item_from_snapshot
 from backend.app.modules.crawler.agent.work_items import claim_next_work_item
@@ -135,6 +136,27 @@ async def agent_ws(
     try:
         while True:
             message = await websocket.receive_json()
+            if message.get("type") == "agent.cookie_sync":
+                payload = message.get("payload") or {}
+                cookies = [
+                    AgentCookie.model_validate(cookie)
+                    for cookie in payload.get("cookies", [])
+                ]
+                result = sync_javdb_cookies(cookies)
+                agent.last_cookie_sync_at = datetime.now(UTC)
+                agent.last_seen_at = datetime.now(UTC)
+                db.commit()
+                await websocket.send_json({
+                    "id": f"ack_{message.get('id')}",
+                    "type": "server.ack",
+                    "payload": {
+                        "message_id": message.get("id"),
+                        "accepted": result.accepted,
+                        "rejected": result.rejected,
+                        "cookie_names": result.cookie_names,
+                    },
+                })
+                continue
             if message.get("type") == "agent.heartbeat":
                 await agent_registry.touch(str(agent.id))
                 agent.last_seen_at = datetime.now(UTC)
@@ -172,6 +194,13 @@ async def agent_ws(
                 continue
             if message.get("type") == "agent.page_snapshot":
                 payload = message.get("payload") or {}
+                if payload.get("cookies"):
+                    cookies = [
+                        AgentCookie.model_validate(cookie)
+                        for cookie in payload.get("cookies", [])
+                    ]
+                    sync_javdb_cookies(cookies)
+                    agent.last_cookie_sync_at = datetime.now(UTC)
                 snapshot = AgentPageSnapshot.model_validate(payload["snapshot"])
                 item = complete_work_item_from_snapshot(
                     db, work_item_id=str(payload["agent_task_id"]), snapshot=snapshot

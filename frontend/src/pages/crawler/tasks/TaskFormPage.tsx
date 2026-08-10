@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DeleteOutlined, EditOutlined, PlusOutlined, UnorderedListOutlined, AppstoreOutlined } from '@ant-design/icons'
 import { useNavigate, useParams, useRouterState } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { App, Button, Col, Form, Input, Row, Switch, Table, Space, Tooltip, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -11,6 +12,7 @@ import {
 } from '@/api/crawlTask'
 import type { CrawlTaskCreateParams, TaskUrlEntry } from '@/api/crawlTask/types'
 import { useRouteCacheControl } from '@/layout/routeCache'
+import { invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
 import { useTagsViewStore } from '@/stores/useTagsViewStore'
 import {
   buildFinalUrlPreview,
@@ -31,6 +33,7 @@ export default function TaskFormPage() {
   const isEdit = Boolean(taskId)
   const navigate = useNavigate()
   const { message } = App.useApp()
+  const queryClient = useQueryClient()
   const [form] = Form.useForm<CrawlTaskCreateParams>()
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -170,6 +173,7 @@ export default function TaskFormPage() {
         message.success('任务已创建')
       }
       closeCurrentTag()
+      await invalidateCrawlerTaskLists(queryClient)
       void navigate({ to: '/crawler/tasks' })
     } finally {
       setSubmitting(false)

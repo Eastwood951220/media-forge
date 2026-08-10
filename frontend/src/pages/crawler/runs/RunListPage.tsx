@@ -10,6 +10,7 @@ import { queryKeys } from '@/api/queryKeys'
 import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
 import type { CrawlerRunUpdatedPayload } from '@/realtime/types'
 import { useEffect } from 'react'
+import { useRouteActivationRefresh } from '@/hooks/useRouteActivationRefresh'
 
 const statusLabels: Record<string, { text: string; color: string }> = {
   queued: { text: '排队中', color: 'default' },
@@ -45,6 +46,7 @@ function RunListPage() {
 
   const refreshRuns = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.list(listParams) })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.count({}) })
   }, [listParams, queryClient])
 
   // Realtime updates
@@ -71,6 +73,8 @@ function RunListPage() {
 
     return unsubscribe
   }, [queryClient, listParams])
+
+  useRouteActivationRefresh(refreshRuns)
 
   const handleStop = useCallback(async (run: CrawlRun) => {
     try {

@@ -9,6 +9,7 @@ import TemporaryTaskModal from './components/TemporaryTaskModal'
 import { useTaskListData } from './hooks/useTaskListData'
 import { useTaskListRealtime } from './hooks/useTaskListRealtime'
 import { useTaskUrlRun } from './hooks/useTaskUrlRun'
+import { useRouteActivationRefresh } from '@/hooks/useRouteActivationRefresh'
 import styles from './TaskPages.module.less'
 
 function TaskListPage() {
@@ -27,6 +28,7 @@ function TaskListPage() {
     handleDelete,
     handleRestart,
     handleRun,
+    handleRunSubmitted,
     handleStop,
     handleToggleSkip,
     loading,
@@ -39,8 +41,9 @@ function TaskListPage() {
   } = useTaskListData()
 
   useTaskListRealtime({ refreshList, setRuntimeByTaskId, setStats })
+  useRouteActivationRefresh(refreshList)
 
-  const taskUrlRun = useTaskUrlRun({ onSubmitted: fetchRuntimeStatuses })
+  const taskUrlRun = useTaskUrlRun({ onSubmitted: handleRunSubmitted })
 
   const [temporaryModalOpen, setTemporaryModalOpen] = useState(false)
   const [taskOptions, setTaskOptions] = useState<TaskDictItem[]>([])
@@ -71,7 +74,7 @@ function TaskListPage() {
       await createTemporaryCrawlRun(payload)
       message.success('临时任务已提交')
       setTemporaryModalOpen(false)
-      void fetchRuntimeStatuses()
+      handleRunSubmitted()
     } catch (error) {
       message.error(error instanceof Error ? error.message : '临时任务提交失败')
     } finally {

@@ -16,6 +16,7 @@ import type {
 import { restartCrawlerRun, runCrawlTask, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlMode } from '@/api/crawlerRun/types'
 import { queryKeys } from '@/api/queryKeys'
+import { invalidateCrawlerRunLists } from '@/api/queryInvalidation'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import styles from '../TaskPages.module.less'
 import { initialStats } from '../utils/runtimeStats'
@@ -70,6 +71,11 @@ export function useTaskListData() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerTasks.list(listParams) })
     void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerTasks.count(countParams) })
   }, [queryClient, listParams, countParams])
+
+  const handleRunSubmitted = useCallback(() => {
+    void invalidateCrawlerRunLists(queryClient)
+    void fetchRuntimeStatuses()
+  }, [fetchRuntimeStatuses, queryClient])
 
   // Update runtime stats when list data changes
   if (listQuery.data?.runtime) {
@@ -141,12 +147,12 @@ export function useTaskListData() {
       try {
         await runCrawlTask(task.id, mode)
         message.success(`已提交${mode === 'incremental' ? '增量' : '全量'}爬取任务`)
-        void fetchRuntimeStatuses()
+        handleRunSubmitted()
       } catch {
         message.error('启动爬取任务失败')
       }
     },
-    [fetchRuntimeStatuses],
+    [handleRunSubmitted],
   )
 
   const handleStop = useCallback(
@@ -195,6 +201,7 @@ export function useTaskListData() {
     handleDelete,
     handleRestart,
     handleRun,
+    handleRunSubmitted,
     handleStop,
     handleToggleSkip,
     loading,
