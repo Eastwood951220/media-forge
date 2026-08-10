@@ -1,4 +1,6 @@
 import { getToken } from '@/utils/auth'
+import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
+import { applyRealtimeEvent } from './applyRealtimeEvent'
 import type { RealtimeEvent, RealtimeEventName, RealtimeHandler } from './types'
 
 const EVENT_NAMES: RealtimeEventName[] = [
@@ -34,6 +36,7 @@ function dispatch(eventName: string, message: MessageEvent) {
     return
   }
 
+  applyRealtimeEvent(parsed)
   for (const handler of handlers.get(eventName) ?? []) {
     handler(parsed)
   }
@@ -59,11 +62,13 @@ export function connectRealtime() {
   const token = getToken()
   if (!token) return null
 
+  useCrawlerRuntimeStore.getState().setConnectionStatus('connecting')
   source = new EventSource(eventStreamUrl(token))
   for (const eventName of EVENT_NAMES) {
     source.addEventListener(eventName, (message) => dispatch(eventName, message))
   }
   source.onerror = () => {
+    useCrawlerRuntimeStore.getState().setConnectionStatus('error')
     emitLocalResync('connection_error')
   }
   return source
