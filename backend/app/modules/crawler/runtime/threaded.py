@@ -19,9 +19,7 @@ from backend.app.modules.crawler.runtime.events import append_run_log_for_run, p
 from backend.app.modules.crawler.runtime.progress import new_progress, write_progress
 from backend.app.modules.crawler.runtime.source_task_names import find_existing_movie_codes, movie_code_exists
 from backend.app.modules.content.movies.persistence import append_source_task_id, append_source_task_ids_for_codes, upsert_movie_with_magnets
-from scraper.config.sites import JAVBUS_SITE, JAVDB_SITE
-from scraper.cookies.cookie_manager import CookieManager
-from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+from scraper.fetchers.site_fetcher import build_site_fetcher
 from scraper.pipelines.movie_pipeline import MoviePipeline
 from scraper.spiders.registry import get_site_spider
 from scraper.spiders.site_plugin import SiteSpiderProtocol
@@ -61,11 +59,7 @@ class ThreadedUrlEntry:
 
 
 def build_spider(source: str = "javdb") -> SiteSpiderProtocol:
-    runtime_config = read_crawler_runtime_config()
-    site_config = JAVBUS_SITE if source == "javbus" else JAVDB_SITE
-    cookies = CookieManager(site_config["cookie_file"]).load()
-    fetcher = ScraplingFetcher(headers=site_config["headers"], cookies=cookies, timeout=runtime_config.REQUEST_TIMEOUT)
-    return get_site_spider(source, fetcher=fetcher)
+    return get_site_spider(source, fetcher=build_site_fetcher(source))
 
 
 def build_pipeline() -> MoviePipeline:

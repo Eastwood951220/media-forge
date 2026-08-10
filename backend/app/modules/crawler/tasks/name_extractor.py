@@ -5,12 +5,9 @@ from urllib.parse import parse_qs, urlparse
 
 from fastapi import HTTPException
 
-from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
 from backend.app.schemas.crawl_task import ExtractNameRequest
-from scraper.config.sites import JAVBUS_SITE, JAVDB_SITE
-from scraper.cookies.cookie_manager import CookieManager
 from scraper.core.security import detect_access_state
-from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+from scraper.fetchers.site_fetcher import build_site_fetcher
 from scraper.spiders.javdb.javdb_parser import parse_page_section_name
 from scraper.spiders.registry import get_site_spider
 from scraper.tasks.task_utils import determine_source
@@ -35,14 +32,7 @@ def extract_task_name(body: ExtractNameRequest) -> str:
         raise HTTPException(status_code=400, detail="不支持的 URL 来源")
 
     try:
-        runtime_config = read_crawler_runtime_config()
-        site_config = JAVBUS_SITE if source == "javbus" else JAVDB_SITE
-        cookie_manager = CookieManager(site_config["cookie_file"])
-        fetcher = ScraplingFetcher(
-            headers=site_config["headers"],
-            cookies=cookie_manager.load(),
-            timeout=runtime_config.REQUEST_TIMEOUT,
-        )
+        fetcher = build_site_fetcher(source)
 
         if source == "javbus":
             spider = get_site_spider(source, fetcher=fetcher)

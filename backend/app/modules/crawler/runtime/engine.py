@@ -4,11 +4,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
 from backend.app.modules.crawler.runtime.results import build_skipped_task_result, build_task_result
-from scraper.config.sites import JAVBUS_SITE, JAVDB_SITE
-from scraper.cookies.cookie_manager import CookieManager
-from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+from scraper.fetchers.site_fetcher import build_site_fetcher
 from scraper.pipelines.movie_pipeline import MoviePipeline
 from scraper.spiders.javdb.javdb_spider import JavdbSpider
 from scraper.spiders.registry import get_site_spider
@@ -62,15 +59,7 @@ class JavdbCrawlerEngine:
         self._pipeline_factory = pipeline_factory or MoviePipeline
 
     def _build_spider(self, source: str = "javdb") -> SiteSpiderProtocol:
-        runtime_config = read_crawler_runtime_config()
-        site_config = JAVBUS_SITE if source == "javbus" else JAVDB_SITE
-        cookie_manager = CookieManager(site_config["cookie_file"])
-        cookies = cookie_manager.load()
-        fetcher = ScraplingFetcher(
-            headers=site_config["headers"],
-            cookies=cookies,
-            timeout=runtime_config.REQUEST_TIMEOUT,
-        )
+        fetcher = build_site_fetcher(source)
         return get_site_spider(source, fetcher=fetcher)
 
     def crawl_task(

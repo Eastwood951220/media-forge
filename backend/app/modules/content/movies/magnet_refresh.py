@@ -95,18 +95,12 @@ def create_magnet_refresh_run(db: Session, owner_id: uuid.UUID, movie_ids: list[
     return run
 
 
-from scraper.config.sites import JAVDB_SITE
-from scraper.cookies.cookie_manager import CookieManager
-from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+from scraper.fetchers.site_fetcher import build_site_fetcher
 from scraper.spiders.javdb.javdb_spider import JavdbSpider
-from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
 
 
 def build_spider() -> JavdbSpider:
-    runtime_config = read_crawler_runtime_config()
-    cookies = CookieManager(JAVDB_SITE["cookie_file"]).load()
-    fetcher = ScraplingFetcher(headers=JAVDB_SITE["headers"], cookies=cookies, timeout=runtime_config.REQUEST_TIMEOUT)
-    return JavdbSpider(fetcher=fetcher)
+    return JavdbSpider(fetcher=build_site_fetcher("javdb"))
 
 
 def execute_magnet_refresh_run(db: Session, run: CrawlRun, runtime) -> dict:
