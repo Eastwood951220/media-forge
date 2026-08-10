@@ -9,7 +9,7 @@ from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_
 from backend.app.schemas.crawl_task import ExtractNameRequest
 from scraper.config.sites import JAVBUS_SITE, JAVDB_SITE
 from scraper.cookies.cookie_manager import CookieManager
-from scraper.core.security import is_security_check_page
+from scraper.core.security import detect_access_state
 from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
 from scraper.spiders.javdb.javdb_parser import parse_page_section_name
 from scraper.spiders.registry import get_site_spider
@@ -50,9 +50,17 @@ def extract_task_name(body: ExtractNameRequest) -> str:
             return name or ""
 
         page = fetcher.get(body.url)
-        if is_security_check_page(page):
-            raise HTTPException(status_code=429, detail="触发安全验证，请稍后重试")
-        return parse_page_section_name(page, body.url_type)
+        access_state = detect_access_state(page)
+        if not access_state.ok:
+            raise HTTPException(status_code=429, detail=access_state.message)
+
+        name = parse_page_section_name(page, body.url_type)
+        if not name and body.url_type not in {"search"}:
+            raise HTTPException(
+                status_code=502,
+                detail="JavDB 页面可访问，但未解析到名称，请检查 URL 类型或页面结构",
+            )
+        return name
     except HTTPException:
         raise
     except Exception as exc:
