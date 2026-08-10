@@ -100,6 +100,14 @@ class JavdbSpider(BaseSpider):
             access_state = detect_access_state(page)
             if not access_state.ok:
                 verification_count += 1
+                browser_mode = runtime_config.JAVDB_FETCH_MODE == "browser"
+                if browser_mode:
+                    error_message = (
+                        f"{prefix} 列表页 {page_no} 浏览器会话访问受限: "
+                        "请在配置页重新检测或打开验证浏览器"
+                    )
+                    self._emit(error_message, log_callback, "ERROR")
+                    raise AccessBlockedError(error_message, access_state=access_state)
                 msg = (
                     f"{prefix} 列表页 {page_no} 访问受限: "
                     f"status={access_state.status_code or '-'} reason={access_state.reason}, "
@@ -379,16 +387,12 @@ class JavdbSpider(BaseSpider):
                 if not access_state.ok:
                     verification_count += 1
                     task["status"] = TASK_STATUS_PENDING
-                    msg = (
-                        f"{detail_prefix} 详情 {index + 1}/{total} 访问受限: "
-                        f"status={access_state.status_code or '-'} reason={access_state.reason}, "
-                        f"等待 {runtime_config.SECURITY_WAIT_SECONDS}s 后重试"
-                    )
-                    self._emit(msg, log_callback, "WARNING")
-                    if verification_count >= 5:
+                    browser_mode = runtime_config.JAVDB_FETCH_MODE == "browser"
+                    if browser_mode or verification_count >= 5:
                         reason = (
-                            f"连续访问受限次数={verification_count}: "
-                            f"{access_state.message}"
+                            "JavDB 浏览器会话已失效或仍被安全验证拦截，请在配置页重新检测或打开验证浏览器"
+                            if browser_mode
+                            else f"连续访问受限次数={verification_count}: {access_state.message}"
                         )
                         task["status"] = TASK_STATUS_FAILED
                         task["reason"] = reason
@@ -402,6 +406,12 @@ class JavdbSpider(BaseSpider):
                         verification_count = 0
                         index += 1
                         continue
+                    msg = (
+                        f"{detail_prefix} 详情 {index + 1}/{total} 访问受限: "
+                        f"status={access_state.status_code or '-'} reason={access_state.reason}, "
+                        f"等待 {runtime_config.SECURITY_WAIT_SECONDS}s 后重试"
+                    )
+                    self._emit(msg, log_callback, "WARNING")
                     fixed_sleep(runtime_config.SECURITY_WAIT_SECONDS, reason="详情页访问受限")
                     continue
 

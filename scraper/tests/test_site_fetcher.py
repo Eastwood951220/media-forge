@@ -38,3 +38,13 @@ def test_build_site_fetcher_keeps_javbus_static(monkeypatch) -> None:
     assert fetcher.timeout == 20
     assert fetcher.cookies == {"existmag": "mag"}
     assert fetcher.browser_cookies == []
+
+
+def test_build_site_fetcher_attaches_browser_session_for_javdb_browser_mode(monkeypatch) -> None:
+    monkeypatch.setattr("scraper.fetchers.site_fetcher.CookieManager.load", lambda self: {"locale": "zh"})
+    runtime_config = CrawlerRuntimeConfig(REQUEST_TIMEOUT=45, JAVDB_FETCH_MODE="browser")
+
+    fetcher = build_site_fetcher("javdb", runtime_config)
+
+    assert fetcher.dynamic is True
+    assert fetcher.browser_session is not None

@@ -23,8 +23,15 @@ class FakeFetcher:
 
 
 def test_list_collection_fails_after_blocked_retries(monkeypatch) -> None:
+    from backend.app.modules.crawler.config.conf_reader import CrawlerRuntimeConfig
+
     monkeypatch.setattr(spider_module, "fixed_sleep", lambda *args, **kwargs: None)
     monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        spider_module,
+        "read_crawler_runtime_config",
+        lambda: CrawlerRuntimeConfig(JAVDB_FETCH_MODE="static"),
+    )
 
     fetcher = FakeFetcher(FakePage(status_code=403))
     spider = JavdbSpider(fetcher)
@@ -48,8 +55,15 @@ def test_list_collection_fails_after_blocked_retries(monkeypatch) -> None:
 
 
 def test_detail_task_fails_after_blocked_retries(monkeypatch) -> None:
+    from backend.app.modules.crawler.config.conf_reader import CrawlerRuntimeConfig
+
     monkeypatch.setattr(spider_module, "fixed_sleep", lambda *args, **kwargs: None)
     monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        spider_module,
+        "read_crawler_runtime_config",
+        lambda: CrawlerRuntimeConfig(JAVDB_FETCH_MODE="static"),
+    )
 
     fetcher = FakeFetcher(FakePage(status_code=403))
     spider = JavdbSpider(fetcher)
@@ -66,3 +80,25 @@ def test_detail_task_fails_after_blocked_retries(monkeypatch) -> None:
     assert result[0]["status"] == "failed"
     assert "403" in result[0]["reason"]
     assert failed
+
+
+def test_browser_mode_detail_403_fails_without_long_retry(monkeypatch) -> None:
+    from backend.app.modules.crawler.config.conf_reader import CrawlerRuntimeConfig
+
+    fetcher = FakeFetcher(FakePage(status_code=403))
+    spider = JavdbSpider(fetcher=fetcher)
+    monkeypatch.setattr(
+        spider_module,
+        "read_crawler_runtime_config",
+        lambda: CrawlerRuntimeConfig(JAVDB_FETCH_MODE="browser", SECURITY_WAIT_SECONDS=120),
+    )
+    monkeypatch.setattr(spider_module, "fixed_sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(spider_module, "random_sleep", lambda *_args, **_kwargs: None)
+
+    tasks = [{"code": "AAA-001", "name": "AAA-001", "url": "https://javdb.com/v/aaa001"}]
+
+    result = spider.run_detail_tasks(tasks)
+
+    assert result[0]["status"] == "failed"
+    assert "浏览器会话" in result[0]["reason"]
+    assert fetcher.calls == 1

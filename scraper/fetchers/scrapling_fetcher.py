@@ -2,13 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-from playwright.sync_api import sync_playwright
 from scrapling.fetchers import Fetcher
-from scrapling.parser import Adaptor
 
-from scraper.core.exceptions import FetchError
+from scraper.fetchers.javdb_browser_session import JavDBBrowserSession
 
 
 def _normalize_same_site(value: Any) -> str | None:
@@ -63,12 +59,14 @@ class ScraplingFetcher:
         browser_cookies: list[dict] | None = None,
         timeout: int = 30,
         dynamic: bool = False,
+        browser_session: JavDBBrowserSession | None = None,
     ):
         self.headers = headers or {}
         self.cookies = cookies or {}
         self.browser_cookies = browser_cookies or []
         self.timeout = timeout
         self.dynamic = dynamic
+        self.browser_session = browser_session
 
     def get(
         self,
@@ -92,32 +90,5 @@ class ScraplingFetcher:
         )
 
     def _browser_get(self, url: str, *, headers: dict):
-        timeout_ms = int(self.timeout * 1000)
-        try:
-            with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(headless=True)
-                context = browser.new_context(locale="zh-CN")
-                try:
-                    normalized_cookies = normalize_browser_cookies(self.browser_cookies)
-                    if normalized_cookies:
-                        context.add_cookies(normalized_cookies)
-                    page = context.new_page()
-                    page.set_default_timeout(timeout_ms)
-                    if headers:
-                        page.set_extra_http_headers(headers)
-                    response = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-                    try:
-                        page.wait_for_load_state("networkidle", timeout=min(timeout_ms, 10000))
-                    except PlaywrightTimeoutError:
-                        pass
-                    html = page.content()
-                    adaptor = Adaptor(html)
-                    setattr(adaptor, "status_code", getattr(response, "status", None))
-                    return adaptor
-                finally:
-                    context.close()
-                    browser.close()
-        except PlaywrightTimeoutError as exc:
-            raise FetchError("JavDB 浏览器模式加载超时，请稍后重试或降低并发") from exc
-        except PlaywrightError as exc:
-            raise FetchError("浏览器模式不可用，Chromium/Playwright 未正确安装或启动失败") from exc
+        session = self.browser_session or JavDBBrowserSession()
+        return session.fetch(url, headers=headers, timeout=self.timeout)
