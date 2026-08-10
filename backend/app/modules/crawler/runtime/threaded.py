@@ -149,6 +149,15 @@ def execute_threaded_crawl(
     config = read_crawler_runtime_config()
     progress = new_progress()
 
+    if config.JAVDB_FETCH_MODE == "agent" and task.source == "javdb":
+        from backend.app.modules.crawler.agent.runtime import execute_agent_crawl
+
+        return execute_agent_crawl(
+            db, run, task, runtime,
+            detail_only=detail_only,
+            selected_task_url_ids=selected_task_url_ids,
+        )
+
     if not detail_only:
         _run_list_phase(db, run, task, runtime, config, selected_task_url_ids=selected_task_url_ids)
 

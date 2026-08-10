@@ -15,7 +15,9 @@ from backend.app.modules.crawler.agent.auth import (
     verify_agent_token,
 )
 from backend.app.modules.crawler.agent.registry import agent_registry
+from backend.app.modules.crawler.agent.runtime import complete_work_item_from_snapshot
 from backend.app.modules.crawler.agent.work_items import claim_next_work_item
+from backend.app.modules.crawler.agent.parser_bridge import AgentPageSnapshot
 from backend.app.modules.crawler.agent.schemas import (
     AgentSessionCreateRequest,
     AgentSessionCreateResponse,
@@ -167,6 +169,18 @@ async def agent_ws(
                             "attempt": item.attempt,
                         },
                     })
+                continue
+            if message.get("type") == "agent.page_snapshot":
+                payload = message.get("payload") or {}
+                snapshot = AgentPageSnapshot.model_validate(payload["snapshot"])
+                item = complete_work_item_from_snapshot(
+                    db, work_item_id=str(payload["agent_task_id"]), snapshot=snapshot
+                )
+                await websocket.send_json({
+                    "id": f"ack_{message.get('id')}",
+                    "type": "server.ack",
+                    "payload": {"agent_task_id": str(item.id)},
+                })
                 continue
     except WebSocketDisconnect:
         pass

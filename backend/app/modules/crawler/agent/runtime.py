@@ -33,3 +33,17 @@ def complete_work_item_from_snapshot(
     db.commit()
     db.refresh(item)
     return item
+
+
+def execute_agent_crawl(
+    db: Session,
+    run,  # CrawlRun
+    task,  # CrawlTask
+    runtime,  # Any
+    *,
+    detail_only: bool = False,
+    selected_task_url_ids: list | None = None,
+) -> dict:
+    raise RuntimeError(
+        "JavDB Agent runtime is configured but Agent work execution is not available in this task"
+    )
