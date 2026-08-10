@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { message } from 'antd'
 import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTaskSummary, getCrawlerRunTasks, restartCrawlerRun, retryCrawlerRunTasks, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawlerRun/types'
+import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 
 const emptyTaskSummary: RunTaskSummary = {
   total: 0,
@@ -29,6 +30,10 @@ export function useRunDetail(id: string | undefined) {
   const [taskSummary, setTaskSummary] = useState<RunTaskSummary>(emptyTaskSummary)
   const [actionLoading, setActionLoading] = useState<'stop' | 'restart' | 'retry' | null>(null)
 
+  const hydrateRun = useCrawlerRuntimeStore((state) => state.hydrateRun)
+  const hydrateRunLogs = useCrawlerRuntimeStore((state) => state.hydrateRunLogs)
+  const hydrateRunDetails = useCrawlerRuntimeStore((state) => state.hydrateRunDetails)
+
   // Reset state when run ID changes
   useEffect(() => {
     setRun(null)
@@ -46,13 +51,15 @@ export function useRunDetail(id: string | undefined) {
     if (!id) return
     const data = await getCrawlerRun(id)
     setRun(data)
-  }, [id])
+    hydrateRun(data)
+  }, [hydrateRun, id])
 
   const fetchLogs = useCallback(async () => {
     if (!id) return
     const data = await getCrawlerRunLogs(id)
     setLogs(data)
-  }, [id])
+    hydrateRunLogs(id, data)
+  }, [hydrateRunLogs, id])
 
   const fetchTasks = useCallback(async () => {
     if (!id) return
@@ -66,6 +73,7 @@ export function useRunDetail(id: string | undefined) {
       })
       setTasks(data.rows)
       setTaskTotal(data.total)
+      hydrateRunDetails(id, data.rows)
     } finally {
       setLoading(false)
     }
@@ -75,7 +83,8 @@ export function useRunDetail(id: string | undefined) {
     if (!id) return
     const data = await getCrawlerRunTaskSummary(id)
     setTaskSummary(data)
-  }, [id])
+    hydrateRunDetails(id, tasks, data)
+  }, [hydrateRunDetails, id, tasks])
 
   const resyncSnapshot = useCallback(() => {
     void fetchRun()

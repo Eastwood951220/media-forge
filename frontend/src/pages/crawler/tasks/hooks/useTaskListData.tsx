@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Modal, Select, Typography, message } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -16,6 +16,7 @@ import type {
 import { restartCrawlerRun, runCrawlTask, stopCrawlerRun } from '@/api/crawlerRun'
 import type { CrawlMode } from '@/api/crawlerRun/types'
 import { queryKeys } from '@/api/queryKeys'
+import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import styles from '../TaskPages.module.less'
 import { initialStats } from '../utils/runtimeStats'
 
@@ -50,6 +51,15 @@ export function useTaskListData() {
   const total = countQuery.data?.total ?? 0
   const loading = listQuery.isLoading
   const hasMore = listQuery.data?.has_more ?? false
+
+  const hydrateTaskRuntime = useCrawlerRuntimeStore((state) => state.hydrateTaskRuntime)
+
+  // Hydrate crawler runtime store from HTTP list response
+  useEffect(() => {
+    if (listQuery.data?.runtime) {
+      hydrateTaskRuntime(listQuery.data.runtime.tasks)
+    }
+  }, [hydrateTaskRuntime, listQuery.data?.runtime])
 
   // Initialize runtime stats from list response
   const fetchRuntimeStatuses = useCallback(async () => {
