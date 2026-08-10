@@ -347,9 +347,16 @@ export default function ConfigPage() {
 
       <div className={styles.configRight}>
         <Card title="JavDB 访问状态" className={styles.formCard}>
+          <Alert
+            className={styles.cookieTestResult}
+            type="info"
+            showIcon
+            title="普通 Chrome 是首选验证入口"
+            description="如果普通 Chrome 可以通过 JavDB 验证，但 Playwright 辅助浏览器一直循环人机验证，请不要反复重试辅助浏览器。先在普通 Chrome 完成验证并导出 Cookie，再保存到 Cookie 配置中检测。"
+          />
           <Space wrap className={styles.cookieActions}>
             <Button onClick={() => void handleOpenSession()} loading={sessionLoading}>
-              打开验证浏览器
+              打开辅助验证浏览器
             </Button>
             <Button onClick={() => void handleCloseSession()} loading={sessionLoading}>
               关闭验证浏览器
@@ -374,7 +381,7 @@ export default function ConfigPage() {
             <Descriptions.Item label="Profile">
               {sessionStatus?.profile_exists ? <Tag color="success">Profile 已创建</Tag> : <Tag>Profile 未创建</Tag>}
             </Descriptions.Item>
-            <Descriptions.Item label="验证浏览器">
+            <Descriptions.Item label="辅助浏览器">
               {sessionStatus?.verification_browser_open ? <Tag color="processing">已打开</Tag> : <Tag>未打开</Tag>}
             </Descriptions.Item>
             <Descriptions.Item label="运行环境">

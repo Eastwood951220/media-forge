@@ -482,3 +482,35 @@ def test_javdb_session_reset_endpoint(client: TestClient, admin_user, monkeypatc
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["data"]["profile_exists"] is False
+
+
+def test_cookies_test_browser_security_page_mentions_playwright_rejection(
+    client: TestClient,
+    admin_user,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    from backend.app.modules.crawler.config import conf_reader
+    from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+
+    class FakePage:
+        text = "Verify you are human Cloudflare"
+        status_code = 200
+
+    conf_dir = tmp_path / "data" / "configs"
+    monkeypatch.setattr(conf_reader, "crawler_conf_path", lambda base_dir=None: conf_dir / "crawler.conf")
+    conf_dir.mkdir(parents=True)
+    (conf_dir / "crawler.conf").write_text("JAVDB_FETCH_MODE=browser\n", encoding="utf-8")
+    monkeypatch.setattr(ScraplingFetcher, "get", lambda self, url, **kwargs: FakePage())
+
+    response = client.post(
+        "/api/crawler/config/cookies/test",
+        json={},
+        headers=auth_headers(client, admin_user),
+    )
+
+    data = response.json()["data"]
+    assert data["ok"] is False
+    assert data["fetch_mode"] == "browser"
+    assert "Playwright" in data["message"]
+    assert "普通 Chrome" in data["message"]

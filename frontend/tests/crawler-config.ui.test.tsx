@@ -290,10 +290,18 @@ describe('ConfigPage', () => {
     renderPage()
 
     expect(await screen.findByText('JavDB 访问状态')).toBeInTheDocument()
-    await userEvent.click(screen.getByText('打开验证浏览器'))
+    await userEvent.click(screen.getByText('打开辅助验证浏览器'))
 
     await waitFor(() => {
       expect(openJavdbSession).toHaveBeenCalledWith()
     })
+  })
+
+  it('shows normal chrome as the primary javdb verification path', async () => {
+    renderPage()
+
+    expect(await screen.findByText('JavDB 访问状态')).toBeInTheDocument()
+    expect(screen.getAllByText(/普通 Chrome/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Playwright 辅助浏览器/).length).toBeGreaterThan(0)
   })
 })

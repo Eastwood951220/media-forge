@@ -178,9 +178,10 @@ Media Forge 是一个全栈媒体处理应用，前端提供初始化配置、�
 - 配置 JavDB 请求模式：
   - `static`：默认静态请求，速度快，适合后端请求可以直接访问 JavDB 的情况。
   - `browser`：持久浏览器会话模式，使用 `data/browser-profiles/javdb/` 中的 Playwright Chromium Profile 加载页面。
-- 使用浏览器模式时，优先在"JavDB 访问状态"中点击"打开验证浏览器"，完成 JavDB 验证/登录/成人确认后再点击"检测会话"。
+- JavDB 验证的首选路径是普通 Chrome：先用普通 Chrome 完成验证/登录/成人确认，再导出 Cookie 并保存到 Cookie 配置中。
+- "打开辅助验证浏览器"只用于诊断 Playwright/后端浏览器是否能被 JavDB 接受。如果它一直循环人机验证，说明自动化浏览器被拒，请不要反复重试该浏览器。
 - 浏览器模式会自动串行访问 JavDB，以降低安全验证触发概率；即使列表线程数或详情线程数大于 1，JavDB browser fetch 仍会在后端进程内串行执行。
-- Cookie JSON 编辑器保留为兼容配置；browser 模式主要依赖持久浏览器 Profile，而不是只依赖 Cookie JSON。
+- Cookie JSON 编辑器是普通 Chrome 验证状态的主要导入入口；browser Profile 是后端浏览器访问状态，不保证可通过 JavDB 验证。
 
 ## 影片列表 `/content/movies`
 

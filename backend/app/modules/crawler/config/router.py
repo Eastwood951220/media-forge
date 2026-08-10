@@ -118,7 +118,7 @@ def test_cookies_config(body: CookieTestRequest, _current_user: CurrentUser) -> 
         if fetch_mode == "static" and access_state.reason == "http_403":
             message = "JavDB static 模式返回 403，请切换浏览器模式后重试"
         elif fetch_mode == "browser":
-            message = "JavDB 浏览器模式仍触发安全验证，请在配置页检测会话或打开验证浏览器"
+            message = "JavDB 浏览器模式仍触发安全验证。普通 Chrome 可通过不代表 Playwright/后端浏览器会被接受；请优先用普通 Chrome 完成验证后导出 Cookie 并测试 static 模式，若仍失败则说明目标环境拒绝后端访问。"
         else:
             message = access_state.message
 
