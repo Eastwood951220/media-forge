@@ -12,3 +12,11 @@ class ParseError(CrawlerError):
 
 class ConfigError(CrawlerError):
     """Configuration exception."""
+
+
+class AccessBlockedError(CrawlerError):
+    """Raised when a remote site blocks crawler access."""
+
+    def __init__(self, message: str, access_state=None):
+        super().__init__(message)
+        self.access_state = access_state
