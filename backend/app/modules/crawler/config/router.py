@@ -9,18 +9,10 @@ from backend.app.modules.crawler.config.conf_reader import (
     read_crawler_runtime_config,
     write_crawler_config,
 )
-from backend.app.modules.crawler.config.schemas import (
-    ConfigUpdate,
-    CookiesConfig,
-    CookieTestRequest,
-    CookieTestResponse,
-    JavDBSessionCheckRequest,
-    JavDBSessionExportResponse,
-)
+from backend.app.modules.crawler.config.schemas import ConfigUpdate, CookiesConfig, CookieTestRequest, CookieTestResponse
 from scraper.config import settings as scraper_paths
 from scraper.config.sites import JAVDB_SITE
 from scraper.core.security import detect_access_state
-from scraper.fetchers.javdb_browser_session import JavDBBrowserSession
 from scraper.fetchers.site_fetcher import build_site_fetcher
 from shared.schemas.common import success
 
@@ -104,8 +96,8 @@ def test_cookies_config(body: CookieTestRequest, _current_user: CurrentUser) -> 
         payload = CookieTestResponse(
             ok=False,
             status_code=None,
-            reason="browser_unavailable" if fetch_mode == "browser" else "fetch_error",
-            message="浏览器模式不可用，Chromium/Playwright 未正确安装或启动失败" if fetch_mode == "browser" else "请求 JavDB 失败，请检查网络连接和 Cookie 配置",
+            reason="agent_unavailable" if fetch_mode == "agent" else "fetch_error",
+            message="Agent 模式需要 Chrome 插件在线并完成页面采集" if fetch_mode == "agent" else "请求 JavDB 失败，请检查网络连接和 Cookie 配置",
             url=url,
             logged_in_detected=False,
             fetch_mode=fetch_mode,
@@ -116,9 +108,9 @@ def test_cookies_config(body: CookieTestRequest, _current_user: CurrentUser) -> 
     message = "JavDB Cookie 测试通过"
     if not access_state.ok:
         if fetch_mode == "static" and access_state.reason == "http_403":
-            message = "JavDB static 模式返回 403，请切换浏览器模式后重试"
-        elif fetch_mode == "browser":
-            message = "JavDB 浏览器模式仍触发安全验证。普通 Chrome 可通过不代表 Playwright/后端浏览器会被接受；请优先用普通 Chrome 完成验证后导出 Cookie 并测试 static 模式，若仍失败则说明目标环境拒绝后端访问。"
+            message = "JavDB static 模式返回 403，可切换 Agent 模式并通过 Chrome 插件访问"
+        elif fetch_mode == "agent":
+            message = "JavDB Agent 模式需要 Chrome 插件在线并完成页面采集"
         else:
             message = access_state.message
 
@@ -132,44 +124,3 @@ def test_cookies_config(body: CookieTestRequest, _current_user: CurrentUser) -> 
         fetch_mode=fetch_mode,
     )
     return success(data=payload.model_dump())
-
-
-@router.get("/javdb-session")
-def get_javdb_session(_current_user: CurrentUser) -> dict:
-    return success(data=JavDBBrowserSession().status().model_dump())
-
-
-@router.post("/javdb-session/open")
-def open_javdb_session(body: JavDBSessionCheckRequest, _current_user: CurrentUser) -> dict:
-    runtime_config = read_crawler_runtime_config()
-    url = body.url or JAVDB_SITE["base_url"]
-    status = JavDBBrowserSession().open_verification_browser(url=url, timeout=runtime_config.REQUEST_TIMEOUT)
-    return success(data=status.model_dump())
-
-
-@router.post("/javdb-session/close")
-def close_javdb_session(_current_user: CurrentUser) -> dict:
-    return success(data=JavDBBrowserSession().close_verification_browser().model_dump())
-
-
-@router.post("/javdb-session/check")
-def check_javdb_session(body: JavDBSessionCheckRequest, _current_user: CurrentUser) -> dict:
-    runtime_config = read_crawler_runtime_config()
-    url = body.url or JAVDB_SITE["base_url"]
-    result = JavDBBrowserSession().check(
-        url=url,
-        timeout=runtime_config.REQUEST_TIMEOUT,
-        headers=JAVDB_SITE["headers"],
-    )
-    return success(data=result.model_dump())
-
-
-@router.post("/javdb-session/export")
-def export_javdb_session(_current_user: CurrentUser) -> dict:
-    path = JavDBBrowserSession().export_storage_state()
-    return success(data=JavDBSessionExportResponse(path=str(path)).model_dump())
-
-
-@router.delete("/javdb-session")
-def reset_javdb_session(_current_user: CurrentUser) -> dict:
-    return success(data=JavDBBrowserSession().reset().model_dump())

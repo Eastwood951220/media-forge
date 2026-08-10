@@ -82,7 +82,7 @@ def test_detail_task_fails_after_blocked_retries(monkeypatch) -> None:
     assert failed
 
 
-def test_browser_mode_detail_403_fails_without_long_retry(monkeypatch) -> None:
+def test_agent_mode_detail_403_fails_without_long_retry(monkeypatch) -> None:
     from backend.app.modules.crawler.config.conf_reader import CrawlerRuntimeConfig
 
     fetcher = FakeFetcher(FakePage(status_code=403))
@@ -90,7 +90,7 @@ def test_browser_mode_detail_403_fails_without_long_retry(monkeypatch) -> None:
     monkeypatch.setattr(
         spider_module,
         "read_crawler_runtime_config",
-        lambda: CrawlerRuntimeConfig(JAVDB_FETCH_MODE="browser", SECURITY_WAIT_SECONDS=120),
+        lambda: CrawlerRuntimeConfig(JAVDB_FETCH_MODE="agent", SECURITY_WAIT_SECONDS=120),
     )
     monkeypatch.setattr(spider_module, "fixed_sleep", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(spider_module, "random_sleep", lambda *_args, **_kwargs: None)
@@ -100,5 +100,5 @@ def test_browser_mode_detail_403_fails_without_long_retry(monkeypatch) -> None:
     result = spider.run_detail_tasks(tasks)
 
     assert result[0]["status"] == "failed"
-    assert "浏览器会话" in result[0]["reason"]
+    assert "Chrome 插件" in result[0]["reason"]
     assert fetcher.calls == 1

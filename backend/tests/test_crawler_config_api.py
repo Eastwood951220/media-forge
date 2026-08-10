@@ -285,7 +285,7 @@ def test_cookies_test_reports_blocked_javdb_access(
     assert data["ok"] is False
     assert data["status_code"] == 403
     assert data["reason"] == "http_403"
-    assert "请切换浏览器模式" in data["message"]
+    assert "可切换 Agent 模式" in data["message"]
     assert data["url"] == "https://javdb.com/actors/8VGXO"
 
 
@@ -347,12 +347,12 @@ def test_update_crawler_config_accepts_browser_fetch_mode(
 
     response = client.put(
         "/api/crawler/config",
-        json={"JAVDB_FETCH_MODE": "browser"},
+        json={"JAVDB_FETCH_MODE": "agent"},
         headers=auth_headers(client, admin_user),
     )
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json()["data"]["JAVDB_FETCH_MODE"] == "browser"
+    assert response.json()["data"]["JAVDB_FETCH_MODE"] == "agent"
 
 
 def test_cookies_test_includes_fetch_mode(
@@ -400,117 +400,5 @@ def test_cookies_test_static_403_suggests_browser_mode(
     data = response.json()["data"]
     assert data["ok"] is False
     assert data["fetch_mode"] == "static"
-    assert "切换浏览器模式" in data["message"]
+    assert "切换 Agent" in data["message"]
 
-
-def test_javdb_session_status_endpoint(client: TestClient, admin_user, monkeypatch) -> None:
-    from backend.app.modules.crawler.config import router as config_router
-    from scraper.fetchers.javdb_browser_session import JavDBSessionStatus
-
-    class FakeSession:
-        def status(self):
-            return JavDBSessionStatus(
-                profile_exists=True,
-                storage_state_exists=False,
-                verification_browser_open=False,
-                runtime_environment="local_gui",
-            )
-
-    monkeypatch.setattr(config_router, "JavDBBrowserSession", lambda: FakeSession())
-
-    response = client.get(
-        "/api/crawler/config/javdb-session",
-        headers=auth_headers(client, admin_user),
-    )
-
-    assert response.status_code == HTTPStatus.OK
-    data = response.json()["data"]
-    assert data["profile_exists"] is True
-    assert data["runtime_environment"] == "local_gui"
-
-
-def test_javdb_session_check_endpoint(client: TestClient, admin_user, monkeypatch) -> None:
-    from backend.app.modules.crawler.config import router as config_router
-    from scraper.fetchers.javdb_browser_session import JavDBSessionCheck
-
-    class FakeSession:
-        def check(self, url, *, timeout=30, headers=None):
-            return JavDBSessionCheck(
-                ok=False,
-                status_code=403,
-                reason="profile_expired_or_blocked",
-                message="profile blocked",
-                url=url,
-                logged_in_detected=False,
-                checked_at="2026-08-10T00:00:00+00:00",
-                runtime_environment="headless",
-            )
-
-    monkeypatch.setattr(config_router, "JavDBBrowserSession", lambda: FakeSession())
-
-    response = client.post(
-        "/api/crawler/config/javdb-session/check",
-        json={"url": "https://javdb.com"},
-        headers=auth_headers(client, admin_user),
-    )
-
-    assert response.status_code == HTTPStatus.OK
-    data = response.json()["data"]
-    assert data["ok"] is False
-    assert data["reason"] == "profile_expired_or_blocked"
-
-
-def test_javdb_session_reset_endpoint(client: TestClient, admin_user, monkeypatch) -> None:
-    from backend.app.modules.crawler.config import router as config_router
-    from scraper.fetchers.javdb_browser_session import JavDBSessionStatus
-
-    class FakeSession:
-        def reset(self):
-            return JavDBSessionStatus(
-                profile_exists=False,
-                storage_state_exists=False,
-                verification_browser_open=False,
-                runtime_environment="local_gui",
-            )
-
-    monkeypatch.setattr(config_router, "JavDBBrowserSession", lambda: FakeSession())
-
-    response = client.delete(
-        "/api/crawler/config/javdb-session",
-        headers=auth_headers(client, admin_user),
-    )
-
-    assert response.status_code == HTTPStatus.OK
-    assert response.json()["data"]["profile_exists"] is False
-
-
-def test_cookies_test_browser_security_page_mentions_playwright_rejection(
-    client: TestClient,
-    admin_user,
-    monkeypatch,
-    tmp_path,
-) -> None:
-    from backend.app.modules.crawler.config import conf_reader
-    from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
-
-    class FakePage:
-        text = "Verify you are human Cloudflare"
-        status_code = 200
-
-    conf_dir = tmp_path / "data" / "configs"
-    monkeypatch.setattr(conf_reader, "crawler_conf_path", lambda base_dir=None: conf_dir / "crawler.conf")
-    conf_dir.mkdir(parents=True)
-    (conf_dir / "crawler.conf").write_text("JAVDB_FETCH_MODE=browser\n", encoding="utf-8")
-    monkeypatch.setattr(ScraplingFetcher, "get", lambda self, url, **kwargs: FakePage())
-
-    response = client.post(
-        "/api/crawler/config/cookies/test",
-        json={},
-        headers=auth_headers(client, admin_user),
-    )
-
-    data = response.json()["data"]
-    assert data["ok"] is False
-    assert data["fetch_mode"] == "browser"
-    assert "Playwright" in data["message"]
-    assert "普通 Chrome" in data["message"]

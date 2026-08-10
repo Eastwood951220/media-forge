@@ -100,11 +100,11 @@ class JavdbSpider(BaseSpider):
             access_state = detect_access_state(page)
             if not access_state.ok:
                 verification_count += 1
-                browser_mode = runtime_config.JAVDB_FETCH_MODE == "browser"
-                if browser_mode:
+                agent_mode = runtime_config.JAVDB_FETCH_MODE == "agent"
+                if agent_mode:
                     error_message = (
-                        f"{prefix} 列表页 {page_no} 浏览器会话访问受限: "
-                        "请在配置页重新检测或打开验证浏览器"
+                        f"{prefix} 列表页 {page_no} 需要 Chrome Agent 访问: "
+                        "请确认 Chrome 插件已连接并同步 JavDB 验证状态"
                     )
                     self._emit(error_message, log_callback, "ERROR")
                     raise AccessBlockedError(error_message, access_state=access_state)
@@ -387,11 +387,11 @@ class JavdbSpider(BaseSpider):
                 if not access_state.ok:
                     verification_count += 1
                     task["status"] = TASK_STATUS_PENDING
-                    browser_mode = runtime_config.JAVDB_FETCH_MODE == "browser"
-                    if browser_mode or verification_count >= 5:
+                    agent_mode = runtime_config.JAVDB_FETCH_MODE == "agent"
+                    if agent_mode or verification_count >= 5:
                         reason = (
-                            "JavDB 浏览器会话已失效或仍被安全验证拦截，请在配置页重新检测或打开验证浏览器"
-                            if browser_mode
+                            "JavDB Agent 模式需要 Chrome 插件在线并完成页面采集"
+                            if agent_mode
                             else f"连续访问受限次数={verification_count}: {access_state.message}"
                         )
                         task["status"] = TASK_STATUS_FAILED

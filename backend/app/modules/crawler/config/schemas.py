@@ -14,7 +14,8 @@ class ConfigUpdate(BaseModel):
     SECURITY_WAIT_SECONDS: float | None = Field(None, ge=0)
     INCREMENTAL_EXIST_THRESHOLD: int | None = Field(None, ge=0)
     REQUEST_TIMEOUT: int | None = Field(None, ge=1)
-    JAVDB_FETCH_MODE: Literal["static", "browser"] | None = None
+    JAVDB_FETCH_MODE: Literal["static", "agent"] | None = None
+    JAVDB_AGENT_PARSE_MODE: Literal["backend", "extension"] | None = None
 
 
 class JavdbCookie(BaseModel):
@@ -51,35 +52,3 @@ class CookieTestResponse(BaseModel):
     url: str
     logged_in_detected: bool = False
     fetch_mode: str = "static"
-
-
-class JavDBSessionCheckRequest(BaseModel):
-    url: str | None = None
-
-
-class JavDBSessionStatusResponse(BaseModel):
-    profile_exists: bool
-    storage_state_exists: bool
-    verification_browser_open: bool
-    last_check_at: str | None = None
-    last_check_url: str | None = None
-    last_status_code: int | None = None
-    last_reason: str = "not_checked"
-    last_message: str = "尚未检测 JavDB 浏览器会话"
-    logged_in_detected: bool = False
-    runtime_environment: str = "unknown"
-
-
-class JavDBSessionCheckResponse(BaseModel):
-    ok: bool
-    status_code: int | None = None
-    reason: str
-    message: str
-    url: str
-    logged_in_detected: bool = False
-    checked_at: str | None = None
-    runtime_environment: str = "unknown"
-
-
-class JavDBSessionExportResponse(BaseModel):
-    path: str
