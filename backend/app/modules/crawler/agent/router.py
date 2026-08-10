@@ -15,6 +15,7 @@ from backend.app.modules.crawler.agent.auth import (
     verify_agent_token,
 )
 from backend.app.modules.crawler.agent.registry import agent_registry
+from backend.app.modules.crawler.agent.work_items import claim_next_work_item
 from backend.app.modules.crawler.agent.schemas import (
     AgentSessionCreateRequest,
     AgentSessionCreateResponse,
@@ -141,6 +142,32 @@ async def agent_ws(
                     "type": "server.ack",
                     "payload": {"message_id": message.get("id")},
                 })
+                continue
+            if message.get("type") == "agent.task_request":
+                item = claim_next_work_item(
+                    db, owner_id=str(agent.owner_id), agent_id=str(agent.id)
+                )
+                if item is None:
+                    await websocket.send_json({
+                        "id": f"none_{message.get('id')}",
+                        "type": "task.none",
+                        "payload": {},
+                    })
+                else:
+                    await websocket.send_json({
+                        "id": f"task_{item.id}",
+                        "type": "task.assigned",
+                        "payload": {
+                            "agent_task_id": str(item.id),
+                            "run_id": str(item.run_id),
+                            "detail_task_id": str(item.detail_task_id) if item.detail_task_id else None,
+                            "url_entry_id": str(item.url_entry_id) if item.url_entry_id else None,
+                            "page_kind": item.page_kind,
+                            "url": item.url,
+                            "attempt": item.attempt,
+                        },
+                    })
+                continue
     except WebSocketDisconnect:
         pass
     finally:
