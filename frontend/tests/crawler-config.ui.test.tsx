@@ -56,6 +56,7 @@ describe('ConfigPage', () => {
       SECURITY_WAIT_SECONDS: 60,
       REQUEST_TIMEOUT: 30,
       INCREMENTAL_EXIST_THRESHOLD: 10,
+      JAVDB_FETCH_MODE: 'static',
     })
     vi.mocked(fetchCookiesConfig).mockResolvedValue({
       cookies: [
@@ -83,6 +84,7 @@ describe('ConfigPage', () => {
       message: 'JavDB Cookie 测试通过',
       url: 'https://javdb.com',
       logged_in_detected: true,
+      fetch_mode: 'static',
     })
   })
 
@@ -99,6 +101,7 @@ describe('ConfigPage', () => {
     expect(screen.getByText('详情页最大延迟 (秒)')).toBeInTheDocument()
     expect(screen.getByText('安全验证等待 (秒)')).toBeInTheDocument()
     expect(screen.getByText('请求超时 (秒)')).toBeInTheDocument()
+    expect(screen.getByText('JavDB 请求模式')).toBeInTheDocument()
     expect(screen.getByText('增量爬取阈值')).toBeInTheDocument()
     expect(screen.getByText('Cookie 配置')).toBeInTheDocument()
   })
@@ -147,6 +150,7 @@ describe('ConfigPage', () => {
       message: 'JavDB 返回 403，后端爬虫会话被拒绝，请在浏览器完成验证后重新导出 Cookie',
       url: 'https://javdb.com',
       logged_in_detected: false,
+      fetch_mode: 'static',
     })
 
     renderPage()
@@ -155,5 +159,46 @@ describe('ConfigPage', () => {
     await userEvent.click(screen.getByText('测试 Cookie'))
 
     expect(await screen.findAllByText(/JavDB 返回 403/)).toHaveLength(2)
+  })
+
+  it('renders javdb fetch mode select', async () => {
+    renderPage()
+
+    expect(await screen.findByText('爬取参数')).toBeInTheDocument()
+    expect(screen.getByText('JavDB 请求模式')).toBeInTheDocument()
+    expect(screen.getByText('静态请求')).toBeInTheDocument()
+  })
+
+  it('saves browser fetch mode with crawler config', async () => {
+    renderPage()
+
+    expect(await screen.findByText('爬取参数')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('浏览器模式'))
+    await userEvent.click(screen.getByText('保存配置'))
+
+    await waitFor(() => {
+      expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({
+        JAVDB_FETCH_MODE: 'browser',
+      }))
+    })
+  })
+
+  it('shows fetch mode in cookie test result', async () => {
+    vi.mocked(testCookiesConfig).mockResolvedValue({
+      ok: false,
+      status_code: 403,
+      reason: 'http_403',
+      message: 'JavDB static 模式返回 403，请切换浏览器模式后重试',
+      url: 'https://javdb.com',
+      logged_in_detected: false,
+      fetch_mode: 'static',
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('爬取参数')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('测试 Cookie'))
+
+    expect(await screen.findByText(/模式: static/)).toBeInTheDocument()
   })
 })

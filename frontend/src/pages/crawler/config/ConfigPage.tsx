@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, App, Button, Card, Form, InputNumber, Spin, Typography } from 'antd'
+import { Alert, App, Button, Card, Form, InputNumber, Segmented, Spin, Typography } from 'antd'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import {
   fetchConfig,
@@ -223,6 +223,19 @@ export default function ConfigPage() {
                   <InputNumber min={10} max={600} style={{ width: '100%' }} />
                 </Form.Item>
               </div>
+              <Form.Item
+                name="JAVDB_FETCH_MODE"
+                label="JavDB 请求模式"
+                tooltip="静态请求速度快；浏览器模式更接近真实浏览器，适合 Cookie 有效但 static 仍返回 403 的情况"
+              >
+                <Segmented
+                  block
+                  options={[
+                    { label: '静态请求', value: 'static' },
+                    { label: '浏览器模式', value: 'browser' },
+                  ]}
+                />
+              </Form.Item>
             </div>
 
             <div className={styles.formSection}>
@@ -303,7 +316,7 @@ export default function ConfigPage() {
                   type={cookieTestResult.ok ? 'success' : 'error'}
                   showIcon
                   title={cookieTestResult.message}
-                  description={`URL: ${cookieTestResult.url} · 状态: ${cookieTestResult.status_code ?? '-'} · 原因: ${cookieTestResult.reason}`}
+                  description={`URL: ${cookieTestResult.url} · 状态: ${cookieTestResult.status_code ?? '-'} · 原因: ${cookieTestResult.reason} · 模式: ${cookieTestResult.fetch_mode}`}
                 />
               )}
             </>

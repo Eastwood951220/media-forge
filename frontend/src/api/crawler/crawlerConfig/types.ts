@@ -18,6 +18,8 @@ export interface CookiesConfig {
   cookies: JavdbCookie[]
 }
 
+export type JavdbFetchMode = 'static' | 'browser'
+
 /** Application config stored in env vars. */
 export interface AppConfig {
   MAX_LIST_PAGES?: number
@@ -30,6 +32,7 @@ export interface AppConfig {
   SECURITY_WAIT_SECONDS?: number
   REQUEST_TIMEOUT?: number
   INCREMENTAL_EXIST_THRESHOLD?: number
+  JAVDB_FETCH_MODE?: JavdbFetchMode
   [key: string]: unknown
 }
 
@@ -40,4 +43,5 @@ export interface CookieTestResponse {
   message: string
   url: string
   logged_in_detected: boolean
+  fetch_mode: string
 }
