@@ -12,9 +12,8 @@ from backend.app.modules.crawler.config.conf_reader import (
 from backend.app.modules.crawler.config.schemas import ConfigUpdate, CookiesConfig, CookieTestRequest, CookieTestResponse
 from scraper.config import settings as scraper_paths
 from scraper.config.sites import JAVDB_SITE
-from scraper.cookies.cookie_manager import CookieManager
 from scraper.core.security import detect_access_state
-from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+from scraper.fetchers.site_fetcher import build_site_fetcher
 from shared.schemas.common import success
 
 router = APIRouter(prefix="/api/crawler/config", tags=["crawler-config"])
@@ -89,20 +88,39 @@ def _logged_in_detected(page) -> bool:
 def test_cookies_config(body: CookieTestRequest, _current_user: CurrentUser) -> dict:
     url = body.url or JAVDB_SITE["base_url"]
     runtime_config = read_crawler_runtime_config()
-    cookies = CookieManager(DEFAULT_COOKIE_FILE).load()
-    fetcher = ScraplingFetcher(
-        headers=JAVDB_SITE["headers"],
-        cookies=cookies,
-        timeout=runtime_config.REQUEST_TIMEOUT,
-    )
-    page = fetcher.get(url)
+    fetch_mode = runtime_config.JAVDB_FETCH_MODE
+    fetcher = build_site_fetcher("javdb", runtime_config)
+    try:
+        page = fetcher.get(url)
+    except Exception:
+        payload = CookieTestResponse(
+            ok=False,
+            status_code=None,
+            reason="browser_unavailable" if fetch_mode == "browser" else "fetch_error",
+            message="浏览器模式不可用，Chromium/Playwright 未正确安装或启动失败" if fetch_mode == "browser" else "请求 JavDB 失败，请检查网络连接和 Cookie 配置",
+            url=url,
+            logged_in_detected=False,
+            fetch_mode=fetch_mode,
+        )
+        return success(data=payload.model_dump())
+
     access_state = detect_access_state(page)
+    message = "JavDB Cookie 测试通过"
+    if not access_state.ok:
+        if fetch_mode == "static" and access_state.reason == "http_403":
+            message = "JavDB static 模式返回 403，请切换浏览器模式后重试"
+        elif fetch_mode == "browser":
+            message = "JavDB 浏览器模式仍触发安全验证，请在浏览器完成验证后重新导出 Cookie"
+        else:
+            message = access_state.message
+
     payload = CookieTestResponse(
         ok=access_state.ok,
         status_code=access_state.status_code,
         reason=access_state.reason,
-        message="JavDB Cookie 测试通过" if access_state.ok else access_state.message,
+        message=message,
         url=url,
         logged_in_detected=access_state.ok and _logged_in_detected(page),
+        fetch_mode=fetch_mode,
     )
     return success(data=payload.model_dump())

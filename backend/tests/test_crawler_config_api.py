@@ -285,7 +285,7 @@ def test_cookies_test_reports_blocked_javdb_access(
     assert data["ok"] is False
     assert data["status_code"] == 403
     assert data["reason"] == "http_403"
-    assert "Cookie" in data["message"]
+    assert "请切换浏览器模式" in data["message"]
     assert data["url"] == "https://javdb.com/actors/8VGXO"
 
 
@@ -353,3 +353,51 @@ def test_update_crawler_config_accepts_browser_fetch_mode(
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["data"]["JAVDB_FETCH_MODE"] == "browser"
+
+
+def test_cookies_test_includes_fetch_mode(
+    client: TestClient,
+    admin_user,
+    monkeypatch,
+) -> None:
+    from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+
+    class FakePage:
+        text = "JavDB 成人影片數據庫 /users/profile"
+        status_code = 200
+
+    monkeypatch.setattr(ScraplingFetcher, "get", lambda self, url, **kwargs: FakePage())
+
+    response = client.post(
+        "/api/crawler/config/cookies/test",
+        json={},
+        headers=auth_headers(client, admin_user),
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["data"]["fetch_mode"] == "static"
+
+
+def test_cookies_test_static_403_suggests_browser_mode(
+    client: TestClient,
+    admin_user,
+    monkeypatch,
+) -> None:
+    from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+
+    class FakePage:
+        text = "Forbidden"
+        status_code = 403
+
+    monkeypatch.setattr(ScraplingFetcher, "get", lambda self, url, **kwargs: FakePage())
+
+    response = client.post(
+        "/api/crawler/config/cookies/test",
+        json={},
+        headers=auth_headers(client, admin_user),
+    )
+
+    data = response.json()["data"]
+    assert data["ok"] is False
+    assert data["fetch_mode"] == "static"
+    assert "切换浏览器模式" in data["message"]
