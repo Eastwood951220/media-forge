@@ -40,6 +40,7 @@ def test_get_crawler_config_returns_original_keys(
     assert "SECURITY_WAIT_SECONDS" in body["data"]
     assert "REQUEST_TIMEOUT" in body["data"]
     assert "INCREMENTAL_EXIST_THRESHOLD" in body["data"]
+    assert "JAVDB_FETCH_MODE" in body["data"]
     assert "LIST_MAX_WORKERS" in body["data"]
     assert "DETAIL_MAX_WORKERS" in body["data"]
     assert body["data"]["LIST_MAX_WORKERS"] >= 1
@@ -321,3 +322,34 @@ def test_cookies_test_reports_ok_javdb_access(
     assert data["status_code"] == 200
     assert data["reason"] == "ok"
     assert data["logged_in_detected"] is True
+
+
+def test_crawler_config_exposes_javdb_fetch_mode(client: TestClient, admin_user) -> None:
+    response = client.get(
+        "/api/crawler/config",
+        headers=auth_headers(client, admin_user),
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["data"]["JAVDB_FETCH_MODE"] == "static"
+
+
+def test_update_crawler_config_accepts_browser_fetch_mode(
+    client: TestClient,
+    admin_user,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    from backend.app.modules.crawler.config import conf_reader
+
+    conf_dir = tmp_path / "data" / "configs"
+    monkeypatch.setattr(conf_reader, "crawler_conf_path", lambda base_dir=None: conf_dir / "crawler.conf")
+
+    response = client.put(
+        "/api/crawler/config",
+        json={"JAVDB_FETCH_MODE": "browser"},
+        headers=auth_headers(client, admin_user),
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["data"]["JAVDB_FETCH_MODE"] == "browser"

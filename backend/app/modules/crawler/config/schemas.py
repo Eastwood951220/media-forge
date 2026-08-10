@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -12,6 +14,7 @@ class ConfigUpdate(BaseModel):
     SECURITY_WAIT_SECONDS: float | None = Field(None, ge=0)
     INCREMENTAL_EXIST_THRESHOLD: int | None = Field(None, ge=0)
     REQUEST_TIMEOUT: int | None = Field(None, ge=1)
+    JAVDB_FETCH_MODE: Literal["static", "browser"] | None = None
 
 
 class JavdbCookie(BaseModel):
@@ -47,3 +50,4 @@ class CookieTestResponse(BaseModel):
     message: str
     url: str
     logged_in_detected: bool = False
+    fetch_mode: str = "static"

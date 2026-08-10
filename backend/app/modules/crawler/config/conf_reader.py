@@ -18,7 +18,10 @@ CONFIG_KEYS: tuple[str, ...] = (
     "SECURITY_WAIT_SECONDS",
     "REQUEST_TIMEOUT",
     "INCREMENTAL_EXIST_THRESHOLD",
+    "JAVDB_FETCH_MODE",
 )
+
+VALID_JAVDB_FETCH_MODES = {"static", "browser"}
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,7 @@ class CrawlerRuntimeConfig:
     SECURITY_WAIT_SECONDS: float = 120.0
     REQUEST_TIMEOUT: int = 30
     INCREMENTAL_EXIST_THRESHOLD: int = 0
+    JAVDB_FETCH_MODE: str = "static"
 
 
 DEFAULT_CRAWLER_CONFIG = CrawlerRuntimeConfig()
@@ -69,14 +73,18 @@ def read_crawler_conf_values(base_dir: Path | None = None) -> dict[str, str]:
     return values
 
 
-def read_crawler_config_dict(base_dir: Path | None = None) -> dict[str, int | float]:
+def read_crawler_config_dict(base_dir: Path | None = None) -> dict[str, int | float | str]:
     defaults = asdict(DEFAULT_CRAWLER_CONFIG)
     persisted = read_crawler_conf_values(base_dir)
-    result: dict[str, int | float] = {}
+    result: dict[str, int | float | str] = {}
     for key in CONFIG_KEYS:
         raw_value = persisted.get(key)
         if raw_value is None:
             result[key] = defaults[key]
+            continue
+        if key == "JAVDB_FETCH_MODE":
+            mode = str(raw_value).strip().lower()
+            result[key] = mode if mode in VALID_JAVDB_FETCH_MODES else defaults[key]
             continue
         coerced = _coerce_value(raw_value)
         if key in {"MAX_LIST_PAGES", "LIST_MAX_WORKERS", "DETAIL_MAX_WORKERS", "REQUEST_TIMEOUT", "INCREMENTAL_EXIST_THRESHOLD"}:
