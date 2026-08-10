@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { App, Button, Card, Form, InputNumber, Spin, Typography } from 'antd'
+import { Alert, App, Button, Card, Form, InputNumber, Spin, Typography } from 'antd'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import {
   fetchConfig,
@@ -8,6 +8,8 @@ import {
   updateCookiesConfig,
   type AppConfig,
   type CookiesConfig,
+  testCookiesConfig,
+  type CookieTestResponse,
 } from '@/api/crawler/crawlerConfig'
 import { useThemeStore } from '@/stores/useThemeStore'
 import styles from './ConfigPage.module.less'
@@ -36,6 +38,8 @@ export default function ConfigPage() {
   const [cookieJson, setCookieJson] = useState('')
   const [cookieLoading, setCookieLoading] = useState(true)
   const [jsonError, setJsonError] = useState<string | null>(null)
+  const [cookieTesting, setCookieTesting] = useState(false)
+  const [cookieTestResult, setCookieTestResult] = useState<CookieTestResponse | null>(null)
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
 
   useEffect(() => {
@@ -115,6 +119,23 @@ export default function ConfigPage() {
       message.error(getErrorMessage(error))
     } finally {
       setCookieSaving(false)
+    }
+  }
+
+  const handleTestCookies = async () => {
+    setCookieTesting(true)
+    try {
+      const result = await testCookiesConfig()
+      setCookieTestResult(result)
+      if (result.ok) {
+        message.success(result.message)
+      } else {
+        message.error(result.message)
+      }
+    } catch (error: unknown) {
+      message.error(getErrorMessage(error))
+    } finally {
+      setCookieTesting(false)
     }
   }
 
@@ -224,6 +245,14 @@ export default function ConfigPage() {
           className={styles.formCard}
           extra={
             <div className={styles.cookieActions}>
+              <Button
+                onClick={() => {
+                  void handleTestCookies()
+                }}
+                loading={cookieTesting}
+              >
+                测试 Cookie
+              </Button>
               <Button onClick={handleFormatJson} disabled={!!jsonError && cookieJson.trim() !== ''}>
                 格式化
               </Button>
@@ -267,6 +296,15 @@ export default function ConfigPage() {
                 <Typography.Text type="danger" className={styles.jsonError}>
                   JSON 格式错误: {jsonError}
                 </Typography.Text>
+              )}
+              {cookieTestResult && (
+                <Alert
+                  className={styles.cookieTestResult}
+                  type={cookieTestResult.ok ? 'success' : 'error'}
+                  showIcon
+                  title={cookieTestResult.message}
+                  description={`URL: ${cookieTestResult.url} · 状态: ${cookieTestResult.status_code ?? '-'} · 原因: ${cookieTestResult.reason}`}
+                />
               )}
             </>
           )}

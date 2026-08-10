@@ -32,3 +32,12 @@ export interface AppConfig {
   INCREMENTAL_EXIST_THRESHOLD?: number
   [key: string]: unknown
 }
+
+export interface CookieTestResponse {
+  ok: boolean
+  status_code: number | null
+  reason: string
+  message: string
+  url: string
+  logged_in_detected: boolean
+}

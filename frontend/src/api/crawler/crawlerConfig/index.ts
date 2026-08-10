@@ -1,7 +1,7 @@
 import { request } from '@/request'
-import type { AppConfig, CookiesConfig } from './types.ts'
+import type { AppConfig, CookiesConfig, CookieTestResponse } from './types.ts'
 
-export type { AppConfig, CookiesConfig, JavdbCookie } from './types.ts'
+export type { AppConfig, CookiesConfig, CookieTestResponse, JavdbCookie } from './types.ts'
 
 const BASE_URL = '/api/crawler/config'
 
@@ -19,4 +19,8 @@ export function fetchCookiesConfig(): Promise<CookiesConfig> {
 
 export function updateCookiesConfig(data: CookiesConfig): Promise<CookiesConfig> {
   return request.put<CookiesConfig>(`${BASE_URL}/cookies`, data)
+}
+
+export function testCookiesConfig(url?: string): Promise<CookieTestResponse> {
+  return request.post<CookieTestResponse>(`${BASE_URL}/cookies/test`, url ? { url } : {})
 }

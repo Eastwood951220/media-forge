@@ -6,6 +6,7 @@ import ConfigPage from '../src/pages/crawler/config/ConfigPage'
 import {
   fetchConfig,
   fetchCookiesConfig,
+  testCookiesConfig,
   updateConfig,
   updateCookiesConfig,
 } from '@/api/crawler/crawlerConfig'
@@ -31,6 +32,7 @@ vi.mock('@/api/crawler/crawlerConfig', () => ({
   updateConfig: vi.fn(),
   fetchCookiesConfig: vi.fn(),
   updateCookiesConfig: vi.fn(),
+  testCookiesConfig: vi.fn(),
 }))
 
 function renderPage() {
@@ -74,6 +76,14 @@ describe('ConfigPage', () => {
     })
     vi.mocked(updateConfig).mockResolvedValue({})
     vi.mocked(updateCookiesConfig).mockResolvedValue({ cookies: [] })
+    vi.mocked(testCookiesConfig).mockResolvedValue({
+      ok: true,
+      status_code: 200,
+      reason: 'ok',
+      message: 'JavDB Cookie 测试通过',
+      url: 'https://javdb.com',
+      logged_in_detected: true,
+    })
   })
 
   it('renders original crawler config fields and cookie editor', async () => {
@@ -116,5 +126,34 @@ describe('ConfigPage', () => {
         ],
       })
     })
+  })
+
+  it('tests javdb cookies from config page', async () => {
+    renderPage()
+
+    expect(await screen.findByText('爬取参数')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('测试 Cookie'))
+
+    await waitFor(() => {
+      expect(testCookiesConfig).toHaveBeenCalledWith()
+    })
+  })
+
+  it('shows blocked cookie test result', async () => {
+    vi.mocked(testCookiesConfig).mockResolvedValue({
+      ok: false,
+      status_code: 403,
+      reason: 'http_403',
+      message: 'JavDB 返回 403，后端爬虫会话被拒绝，请在浏览器完成验证后重新导出 Cookie',
+      url: 'https://javdb.com',
+      logged_in_detected: false,
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('爬取参数')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('测试 Cookie'))
+
+    expect(await screen.findAllByText(/JavDB 返回 403/)).toHaveLength(2)
   })
 })
