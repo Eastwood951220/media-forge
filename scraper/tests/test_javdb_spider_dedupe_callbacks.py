@@ -1,6 +1,7 @@
 import pytest
 
 from backend.app.modules.crawler.config.conf_reader import CrawlerRuntimeConfig
+from scraper.core.security import AccessState
 from scraper.spiders.javdb import javdb_spider as spider_module
 from scraper.spiders.javdb.javdb_spider import JavdbSpider
 from scraper.tasks.task_schema import CrawlTaskUrlEntry
@@ -19,7 +20,7 @@ def test_incremental_list_phase_excludes_existing_codes_from_detail_tasks(monkey
         lambda: CrawlerRuntimeConfig(MAX_LIST_PAGES=1),
     )
     monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
-    monkeypatch.setattr(spider_module, "is_security_check_page", lambda page: False)
+    monkeypatch.setattr(spider_module, "detect_access_state", lambda page: AccessState(ok=True, status_code=None, reason="ok", message="ok"))
     monkeypatch.setattr(
         spider_module,
         "parse_search_page",
@@ -78,7 +79,7 @@ def test_full_list_phase_keeps_existing_codes_as_skipped_tasks(monkeypatch) -> N
         lambda: CrawlerRuntimeConfig(MAX_LIST_PAGES=1),
     )
     monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
-    monkeypatch.setattr(spider_module, "is_security_check_page", lambda page: False)
+    monkeypatch.setattr(spider_module, "detect_access_state", lambda page: AccessState(ok=True, status_code=None, reason="ok", message="ok"))
     monkeypatch.setattr(
         spider_module,
         "parse_search_page",
@@ -116,7 +117,7 @@ def test_incremental_threshold_stops_current_url_and_continues_next_url(monkeypa
         lambda: CrawlerRuntimeConfig(MAX_LIST_PAGES=5),
     )
     monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
-    monkeypatch.setattr(spider_module, "is_security_check_page", lambda page: False)
+    monkeypatch.setattr(spider_module, "detect_access_state", lambda page: AccessState(ok=True, status_code=None, reason="ok", message="ok"))
 
     fetched_urls: list[str] = []
 
@@ -170,7 +171,7 @@ def test_spider_reads_max_pages_from_conf_reader(monkeypatch) -> None:
         lambda: CrawlerRuntimeConfig(MAX_LIST_PAGES=1),
     )
     monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
-    monkeypatch.setattr(spider_module, "is_security_check_page", lambda page: False)
+    monkeypatch.setattr(spider_module, "detect_access_state", lambda page: AccessState(ok=True, status_code=None, reason="ok", message="ok"))
     monkeypatch.setattr(
         spider_module,
         "parse_search_page",
@@ -190,7 +191,7 @@ def test_spider_reads_max_pages_from_conf_reader(monkeypatch) -> None:
 def test_run_single_detail_task_processes_one_detail(monkeypatch) -> None:
     spider = JavdbSpider(fetcher=Fetcher())
     monkeypatch.setattr(spider_module, "random_sleep", lambda *args, **kwargs: None)
-    monkeypatch.setattr(spider_module, "is_security_check_page", lambda page: False)
+    monkeypatch.setattr(spider_module, "detect_access_state", lambda page: AccessState(ok=True, status_code=None, reason="ok", message="ok"))
     monkeypatch.setattr(spider, "fetch", lambda url: "<html>detail</html>")
     monkeypatch.setattr(
         spider_module,

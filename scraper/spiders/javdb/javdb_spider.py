@@ -1,6 +1,7 @@
 from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
 from scraper.config.logging import get_logger
-from scraper.core.security import is_security_check_page
+from scraper.core.exceptions import AccessBlockedError
+from scraper.core.security import detect_access_state
 from scraper.core.throttle import fixed_sleep, random_sleep
 from scraper.spiders.base_spider import BaseSpider
 from scraper.spiders.javdb.javdb_constants import (
@@ -96,20 +97,23 @@ class JavdbSpider(BaseSpider):
 
             page = self.fetch(page_url)
 
-            if is_security_check_page(page):
+            access_state = detect_access_state(page)
+            if not access_state.ok:
                 verification_count += 1
                 msg = (
-                    f"{prefix} 列表页 {page_no} 触发安全验证, "
+                    f"{prefix} 列表页 {page_no} 访问受限: "
+                    f"status={access_state.status_code or '-'} reason={access_state.reason}, "
                     f"等待 {runtime_config.SECURITY_WAIT_SECONDS}s 后重试"
                 )
                 self._emit(msg, log_callback, "WARNING")
                 if verification_count >= 5:
-                    msg = (
-                        f"{prefix} 连续验证次数={verification_count}, "
-                        "请手动刷新 cookies 或完成浏览器验证"
+                    error_message = (
+                        f"{prefix} 列表页 {page_no} 连续访问受限次数={verification_count}: "
+                        f"{access_state.message}"
                     )
-                    self._emit(msg, log_callback, "ERROR")
-                fixed_sleep(runtime_config.SECURITY_WAIT_SECONDS, reason="列表页触发人工验证")
+                    self._emit(error_message, log_callback, "ERROR")
+                    raise AccessBlockedError(error_message, access_state=access_state)
+                fixed_sleep(runtime_config.SECURITY_WAIT_SECONDS, reason="列表页访问受限")
                 continue
 
             verification_count = 0
@@ -371,21 +375,34 @@ class JavdbSpider(BaseSpider):
             try:
                 page = self.fetch(url)
 
-                if is_security_check_page(page):
+                access_state = detect_access_state(page)
+                if not access_state.ok:
                     verification_count += 1
                     task["status"] = TASK_STATUS_PENDING
                     msg = (
-                        f"{detail_prefix} 详情 {index + 1}/{total} 触发安全验证, "
+                        f"{detail_prefix} 详情 {index + 1}/{total} 访问受限: "
+                        f"status={access_state.status_code or '-'} reason={access_state.reason}, "
                         f"等待 {runtime_config.SECURITY_WAIT_SECONDS}s 后重试"
                     )
                     self._emit(msg, log_callback, "WARNING")
                     if verification_count >= 5:
-                        msg = (
-                            f"{detail_prefix} 连续验证次数={verification_count}, "
-                            "请手动刷新 cookies 或完成浏览器验证"
+                        reason = (
+                            f"连续访问受限次数={verification_count}: "
+                            f"{access_state.message}"
                         )
-                        self._emit(msg, log_callback, "ERROR")
-                    fixed_sleep(runtime_config.SECURITY_WAIT_SECONDS, reason="详情页触发人工验证")
+                        task["status"] = TASK_STATUS_FAILED
+                        task["reason"] = reason
+                        if on_detail_failed:
+                            on_detail_failed(task, reason)
+                        self._emit(
+                            f"{detail_prefix} 详情 {index + 1}/{total} 失败: {reason}",
+                            log_callback,
+                            "ERROR",
+                        )
+                        verification_count = 0
+                        index += 1
+                        continue
+                    fixed_sleep(runtime_config.SECURITY_WAIT_SECONDS, reason="详情页访问受限")
                     continue
 
                 verification_count = 0
