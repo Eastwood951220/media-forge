@@ -6,3 +6,4 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 LOG_DIR = BASE_DIR / "data" / "logs"
 RUN_DATA_DIR = BASE_DIR / "data" / "run_data"
 COOKIE_DIR = BASE_DIR / "data" / "cookies"
+BROWSER_PROFILE_DIR = BASE_DIR / "data" / "browser-profiles"
