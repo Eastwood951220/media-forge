@@ -110,7 +110,7 @@ class JavDBBrowserSession:
                 storage_state_exists=self.storage_state_path.exists(),
                 verification_browser_open=False,
                 last_reason="browser_unavailable",
-                last_message="当前环境不支持本地弹窗验证，请在本机完成验证后同步 data/browser-profiles/javdb",
+                last_message="当前环境不支持本地弹窗诊断。请用普通 Chrome 完成 JavDB 验证后导出 Cookie，并在 Media Forge 的 Cookie 配置中保存。",
                 runtime_environment="headless",
             )
         self.profile_dir.mkdir(parents=True, exist_ok=True)
@@ -134,7 +134,7 @@ class JavDBBrowserSession:
                 storage_state_exists=self.storage_state_path.exists(),
                 verification_browser_open=False,
                 last_reason="browser_unavailable",
-                last_message="浏览器模式不可用，Chromium/Playwright 未正确安装或启动失败",
+                last_message="Playwright 辅助浏览器不可用，Chromium/Playwright 未正确安装或启动失败。请使用普通 Chrome 完成验证并导出 Cookie。",
                 runtime_environment=_runtime_environment(),
             )
 
@@ -188,7 +188,7 @@ class JavDBBrowserSession:
                 ok=False,
                 status_code=None,
                 reason="no_browser_profile",
-                message="尚未建立 JavDB 浏览器会话，请先打开验证浏览器",
+                message="尚未建立 JavDB 浏览器会话。请先用普通 Chrome 完成 JavDB 验证并在 Cookie 配置中保存导出的 Cookie；Playwright 辅助验证浏览器仅用于诊断，可能被 JavDB 拒绝。",
                 url=url,
                 checked_at=_now_iso(),
                 runtime_environment=_runtime_environment(),
@@ -228,10 +228,13 @@ class JavDBBrowserSession:
         message = access_state.message
         if access_state.status_code == 403:
             reason = "profile_expired_or_blocked"
-            message = "JavDB 浏览器会话已存在但仍返回 403，可能是验证过期、IP/环境变化或访问频率过高"
+            message = "JavDB 浏览器会话已存在但仍返回 403。普通 Chrome 可访问不代表 Playwright/后端浏览器也会被接受，请优先使用普通 Chrome 导出的 Cookie 做静态检测；若仍失败，说明目标环境的后端访问被拒。"
+        elif access_state.reason == "security_keywords":
+            reason = "verification_loop_or_rejected"
+            message = "普通 Chrome 可以通过验证，但 Playwright 辅助浏览器仍停留在人机验证页面，说明自动化浏览器被 JavDB 拒绝。请不要在该浏览器中反复重试，改用普通 Chrome 完成验证后导出 Cookie。"
         elif access_state.ok and not logged_in:
             reason = "profile_not_verified"
-            message = "JavDB 页面可访问，但未检测到登录或验证状态，请在验证浏览器中完成确认"
+            message = "JavDB 页面可访问，但未检测到登录或验证状态。请用普通 Chrome 完成验证后导出 Cookie，再回到 Media Forge 保存并检测。"
         elif access_state.ok:
             reason = "ok"
             message = "JavDB 浏览器会话检测通过"

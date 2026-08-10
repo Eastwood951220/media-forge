@@ -160,3 +160,35 @@ def test_reset_removes_profile_and_storage_state(tmp_path) -> None:
     assert status.storage_state_exists is False
     assert not profile_dir.exists()
     assert not storage_state.exists()
+
+
+def test_check_maps_security_keywords_to_verification_loop_or_rejected(monkeypatch, tmp_path) -> None:
+    fake_context = FakeContext()
+    fake_context.page = FakePage("<html><body>Verify you are human Cloudflare</body></html>")
+    fake_sync = FakeSyncPlaywright(fake_context)
+    monkeypatch.setattr(module, "sync_playwright", lambda: fake_sync)
+    session = JavDBBrowserSession(
+        profile_dir=tmp_path / "profile",
+        storage_state_path=tmp_path / "cookies" / "state.json",
+    )
+    session.profile_dir.mkdir(parents=True)
+
+    result = session.check("https://javdb.com", timeout=30)
+
+    assert result.ok is False
+    assert result.reason == "verification_loop_or_rejected"
+    assert "普通 Chrome" in result.message
+    assert "Playwright" in result.message
+
+
+def test_check_without_profile_points_to_normal_chrome_cookie_export(tmp_path) -> None:
+    session = JavDBBrowserSession(
+        profile_dir=tmp_path / "missing-profile",
+        storage_state_path=tmp_path / "cookies" / "state.json",
+    )
+
+    result = session.check("https://javdb.com", timeout=30)
+
+    assert result.reason == "no_browser_profile"
+    assert "普通 Chrome" in result.message
+    assert "Cookie" in result.message
