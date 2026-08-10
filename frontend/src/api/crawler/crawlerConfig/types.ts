@@ -1,24 +1,5 @@
-/** A single cookie entry matching the browser-export format. */
-export interface JavdbCookie {
-  domain: string
-  expirationDate: number | null
-  hostOnly: boolean
-  httpOnly: boolean
-  name: string
-  path: string
-  sameSite: string | null
-  secure: boolean
-  session: boolean
-  storeId: string | null
-  value: string
-}
-
-/** Wrapper for the cookie array stored in the JSON file. */
-export interface CookiesConfig {
-  cookies: JavdbCookie[]
-}
-
-export type JavdbFetchMode = 'static' | 'browser'
+export type JavdbFetchMode = 'static' | 'agent'
+export type JavdbAgentParseMode = 'backend' | 'extension'
 
 /** Application config stored in env vars. */
 export interface AppConfig {
@@ -33,6 +14,7 @@ export interface AppConfig {
   REQUEST_TIMEOUT?: number
   INCREMENTAL_EXIST_THRESHOLD?: number
   JAVDB_FETCH_MODE?: JavdbFetchMode
+  JAVDB_AGENT_PARSE_MODE?: JavdbAgentParseMode
   [key: string]: unknown
 }
 
@@ -46,30 +28,16 @@ export interface CookieTestResponse {
   fetch_mode: string
 }
 
-export interface JavDBSessionStatus {
-  profile_exists: boolean
-  storage_state_exists: boolean
-  verification_browser_open: boolean
-  last_check_at?: string | null
-  last_check_url?: string | null
-  last_status_code?: number | null
-  last_reason: string
-  last_message: string
-  logged_in_detected: boolean
-  runtime_environment: string
+export interface JavdbAgentStatus {
+  status: 'not_configured' | 'offline' | 'online' | 'busy' | 'error'
+  agent_id?: string | null
+  name?: string | null
+  last_seen_at?: string | null
+  last_cookie_sync_at?: string | null
+  version?: string | null
 }
 
-export interface JavDBSessionCheck {
-  ok: boolean
-  status_code: number | null
-  reason: string
-  message: string
-  url: string
-  logged_in_detected: boolean
-  checked_at?: string | null
-  runtime_environment: string
-}
-
-export interface JavDBSessionExportResponse {
-  path: string
+export interface JavdbAgentTokenRotateResponse {
+  token: string
+  status: JavdbAgentStatus
 }

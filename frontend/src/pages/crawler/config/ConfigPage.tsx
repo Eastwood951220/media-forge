@@ -1,35 +1,30 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, App, Button, Card, Descriptions, Form, InputNumber, Popconfirm, Segmented, Space, Spin, Tag, Typography } from 'antd'
-import Editor, { type OnMount } from '@monaco-editor/react'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  InputNumber,
+  Popconfirm,
+  Segmented,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+} from 'antd'
 import {
   fetchConfig,
-  fetchCookiesConfig,
   updateConfig,
-  updateCookiesConfig,
   type AppConfig,
-  type CookiesConfig,
   testCookiesConfig,
   type CookieTestResponse,
-  fetchJavdbSessionStatus,
-  openJavdbSession,
-  closeJavdbSession,
-  checkJavdbSession,
-  exportJavdbSession,
-  resetJavdbSession,
-  type JavDBSessionStatus,
-  type JavDBSessionCheck,
+  fetchAgentStatus,
+  rotateAgentToken,
+  type JavdbAgentStatus,
 } from '@/api/crawler/crawlerConfig'
-import { useThemeStore } from '@/stores/useThemeStore'
 import styles from './ConfigPage.module.less'
-
-const DEFAULT_COOKIE_JSON = `[
-  {
-    "domain": "javdb.com",
-    "name": "",
-    "value": "",
-    "path": "/"
-  }
-]`
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -38,25 +33,19 @@ function getErrorMessage(error: unknown): string {
 
 export default function ConfigPage() {
   const { message } = App.useApp()
-  const darkMode = useThemeStore((state) => state.darkMode)
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [cookieSaving, setCookieSaving] = useState(false)
-  const [cookieJson, setCookieJson] = useState('')
-  const [cookieLoading, setCookieLoading] = useState(true)
-  const [jsonError, setJsonError] = useState<string | null>(null)
   const [cookieTesting, setCookieTesting] = useState(false)
   const [cookieTestResult, setCookieTestResult] = useState<CookieTestResponse | null>(null)
-  const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
-  const [sessionStatus, setSessionStatus] = useState<JavDBSessionStatus | null>(null)
-  const [sessionCheck, setSessionCheck] = useState<JavDBSessionCheck | null>(null)
-  const [sessionLoading, setSessionLoading] = useState(false)
+  const [agentStatus, setAgentStatus] = useState<JavdbAgentStatus | null>(null)
+  const [agentToken, setAgentToken] = useState<string | null>(null)
+  const [agentLoading, setAgentLoading] = useState(false)
 
   useEffect(() => {
-    fetchJavdbSessionStatus()
-      .then(setSessionStatus)
-      .catch(() => setSessionStatus(null))
+    fetchAgentStatus()
+      .then(setAgentStatus)
+      .catch(() => setAgentStatus(null))
   }, [])
 
   useEffect(() => {
@@ -68,47 +57,6 @@ export default function ConfigPage() {
       .finally(() => setLoading(false))
   }, [form, message])
 
-  useEffect(() => {
-    fetchCookiesConfig()
-      .then((data: CookiesConfig) => {
-        setCookieJson(JSON.stringify(data.cookies, null, 2))
-      })
-      .catch(() => {
-        setCookieJson(DEFAULT_COOKIE_JSON)
-      })
-      .finally(() => setCookieLoading(false))
-  }, [])
-
-  const handleEditorMount: OnMount = useCallback((editor) => {
-    editorRef.current = editor
-  }, [])
-
-  const validateJson = (value: string): object | null => {
-    try {
-      const parsed = JSON.parse(value)
-      if (!Array.isArray(parsed)) {
-        setJsonError('Cookie 配置必须是 JSON 数组格式')
-        return null
-      }
-      setJsonError(null)
-      return parsed
-    } catch (error: unknown) {
-      const msg = error instanceof SyntaxError ? error.message : '无效的 JSON 格式'
-      setJsonError(msg)
-      return null
-    }
-  }
-
-  const handleCookieChange = (value: string | undefined) => {
-    const text = value ?? ''
-    setCookieJson(text)
-    if (text.trim()) {
-      validateJson(text)
-    } else {
-      setJsonError(null)
-    }
-  }
-
   const handleSaveConfig = async (values: AppConfig) => {
     setSaving(true)
     try {
@@ -118,24 +66,6 @@ export default function ConfigPage() {
       message.error(getErrorMessage(error))
     } finally {
       setSaving(false)
-    }
-  }
-
-  const handleSaveCookies = async () => {
-    const parsed = validateJson(cookieJson)
-    if (!parsed) {
-      message.error('请先修复 JSON 格式错误再保存')
-      return
-    }
-
-    setCookieSaving(true)
-    try {
-      await updateCookiesConfig({ cookies: parsed as CookiesConfig['cookies'] })
-      message.success('Cookie 配置已保存')
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error))
-    } finally {
-      setCookieSaving(false)
     }
   }
 
@@ -156,90 +86,23 @@ export default function ConfigPage() {
     }
   }
 
-  const refreshSessionStatus = async () => {
-    const status = await fetchJavdbSessionStatus()
-    setSessionStatus(status)
+  const refreshAgentStatus = useCallback(async () => {
+    const status = await fetchAgentStatus()
+    setAgentStatus(status)
     return status
-  }
+  }, [])
 
-  const handleOpenSession = async () => {
-    setSessionLoading(true)
+  const handleRotateAgentToken = async () => {
+    setAgentLoading(true)
     try {
-      const status = await openJavdbSession()
-      setSessionStatus(status)
-      if (status.verification_browser_open) {
-        message.success('验证浏览器已打开')
-      } else {
-        message.warning(status.last_message)
-      }
+      const result = await rotateAgentToken()
+      setAgentToken(result.token)
+      setAgentStatus(result.status)
+      message.success('Agent Token 已生成，请保存到 Chrome 插件')
     } catch (error: unknown) {
       message.error(getErrorMessage(error))
     } finally {
-      setSessionLoading(false)
-    }
-  }
-
-  const handleCheckSession = async () => {
-    setSessionLoading(true)
-    try {
-      const result = await checkJavdbSession()
-      setSessionCheck(result)
-      await refreshSessionStatus()
-      if (result.ok) message.success(result.message)
-      else message.error(result.message)
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error))
-    } finally {
-      setSessionLoading(false)
-    }
-  }
-
-  const handleCloseSession = async () => {
-    setSessionLoading(true)
-    try {
-      setSessionStatus(await closeJavdbSession())
-      message.success('验证浏览器已关闭')
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error))
-    } finally {
-      setSessionLoading(false)
-    }
-  }
-
-  const handleExportSession = async () => {
-    setSessionLoading(true)
-    try {
-      const result = await exportJavdbSession()
-      message.success(`会话状态已导出: ${result.path}`)
-      await refreshSessionStatus()
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error))
-    } finally {
-      setSessionLoading(false)
-    }
-  }
-
-  const handleResetSession = async () => {
-    setSessionLoading(true)
-    try {
-      setSessionStatus(await resetJavdbSession())
-      setSessionCheck(null)
-      message.success('JavDB 会话已清除')
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error))
-    } finally {
-      setSessionLoading(false)
-    }
-  }
-
-  const handleFormatJson = () => {
-    try {
-      const parsed = JSON.parse(cookieJson)
-      const formatted = JSON.stringify(parsed, null, 2)
-      setCookieJson(formatted)
-      setJsonError(null)
-    } catch {
-      return
+      setAgentLoading(false)
     }
   }
 
@@ -319,13 +182,13 @@ export default function ConfigPage() {
               <Form.Item
                 name="JAVDB_FETCH_MODE"
                 label="JavDB 请求模式"
-                tooltip="静态请求速度快；浏览器模式更接近真实浏览器，适合 Cookie 有效但 static 仍返回 403 的情况"
+                tooltip="静态请求使用后端 HTTP；Agent 模式通过 Chrome 插件采集页面片段到后端解析"
               >
                 <Segmented
                   block
                   options={[
                     { label: '静态请求', value: 'static' },
-                    { label: '浏览器模式', value: 'browser' },
+                    { label: 'Chrome Agent', value: 'agent' },
                   ]}
                 />
               </Form.Item>
@@ -346,128 +209,85 @@ export default function ConfigPage() {
       </div>
 
       <div className={styles.configRight}>
-        <Card title="JavDB 访问状态" className={styles.formCard}>
-          <Alert
-            className={styles.cookieTestResult}
-            type="info"
-            showIcon
-            title="普通 Chrome 是首选验证入口"
-            description="如果普通 Chrome 可以通过 JavDB 验证，但 Playwright 辅助浏览器一直循环人机验证，请不要反复重试辅助浏览器。先在普通 Chrome 完成验证并导出 Cookie，再保存到 Cookie 配置中检测。"
-          />
-          <Space wrap className={styles.cookieActions}>
-            <Button onClick={() => void handleOpenSession()} loading={sessionLoading}>
-              打开辅助验证浏览器
-            </Button>
-            <Button onClick={() => void handleCloseSession()} loading={sessionLoading}>
-              关闭验证浏览器
-            </Button>
-            <Button type="primary" onClick={() => void handleCheckSession()} loading={sessionLoading}>
-              检测会话
-            </Button>
-            <Button onClick={() => void handleExportSession()} loading={sessionLoading}>
-              导出会话状态
+        <Card title="Chrome Agent" className={styles.formCard}>
+          <Descriptions column={1} size="small">
+            <Descriptions.Item label="状态">
+              <Tag
+                color={
+                  agentStatus?.status === 'online'
+                    ? 'success'
+                    : agentStatus?.status === 'error'
+                      ? 'error'
+                      : 'default'
+                }
+              >
+                {agentStatus?.status ?? 'not_configured'}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="最后心跳">
+              {agentStatus?.last_seen_at ?? '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="最后 Cookie 同步">
+              {agentStatus?.last_cookie_sync_at ?? '-'}
+            </Descriptions.Item>
+          </Descriptions>
+          {agentToken && (
+            <Alert
+              className={styles.cookieTestResult}
+              type="warning"
+              showIcon
+              title="Agent Token 仅显示一次"
+              description={
+                <Typography.Text copyable={{ text: agentToken }}>
+                  {agentToken}
+                </Typography.Text>
+              }
+            />
+          )}
+          <Space style={{ marginTop: 12 }}>
+            <Button onClick={refreshAgentStatus} loading={agentLoading}>
+              刷新状态
             </Button>
             <Popconfirm
-              title="清除 JavDB 会话？"
-              description="这会删除持久浏览器 Profile 和导出的 storage state。"
-              onConfirm={() => void handleResetSession()}
+              title="重新生成 Agent Token？"
+              description="重新生成后旧 Token 将失效。"
+              onConfirm={handleRotateAgentToken}
             >
-              <Button danger loading={sessionLoading}>
-                清除失效会话
+              <Button danger loading={agentLoading}>
+                生成 Agent Token
               </Button>
             </Popconfirm>
           </Space>
-          <Descriptions size="small" column={1} className={styles.cookieTestResult}>
-            <Descriptions.Item label="Profile">
-              {sessionStatus?.profile_exists ? <Tag color="success">Profile 已创建</Tag> : <Tag>Profile 未创建</Tag>}
-            </Descriptions.Item>
-            <Descriptions.Item label="辅助浏览器">
-              {sessionStatus?.verification_browser_open ? <Tag color="processing">已打开</Tag> : <Tag>未打开</Tag>}
-            </Descriptions.Item>
-            <Descriptions.Item label="运行环境">
-              {sessionStatus?.runtime_environment ?? '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="最近状态">
-              {sessionCheck?.message ?? sessionStatus?.last_message ?? '尚未检测 JavDB 浏览器会话'}
-            </Descriptions.Item>
-          </Descriptions>
-          {sessionCheck && (
-            <Alert
-              className={styles.cookieTestResult}
-              type={sessionCheck.ok ? 'success' : 'error'}
-              showIcon
-              title={sessionCheck.message}
-              description={`URL: ${sessionCheck.url} · 状态: ${sessionCheck.status_code ?? '-'} · 原因: ${sessionCheck.reason} · 环境: ${sessionCheck.runtime_environment}`}
-            />
-          )}
         </Card>
+
         <Card
-          title="Cookie 配置"
+          title="Cookie 检测"
           className={styles.formCard}
           extra={
-            <div className={styles.cookieActions}>
-              <Button
-                onClick={() => {
-                  void handleTestCookies()
-                }}
-                loading={cookieTesting}
-              >
-                测试 Cookie
-              </Button>
-              <Button onClick={handleFormatJson} disabled={!!jsonError && cookieJson.trim() !== ''}>
-                格式化
-              </Button>
-              <Button
-                type="primary"
-                onClick={() => {
-                  void handleSaveCookies()
-                }}
-                loading={cookieSaving}
-              >
-                保存 Cookie
-              </Button>
-            </div>
+            <Button
+              type="primary"
+              onClick={() => {
+                void handleTestCookies()
+              }}
+              loading={cookieTesting}
+            >
+              测试 Cookie
+            </Button>
           }
         >
-          {cookieLoading ? (
-            <div className={styles.editorLoading}>
-              <Spin />
-            </div>
-          ) : (
-            <>
-              <div className={styles.editorFrame}>
-                <Editor
-                  height="400px"
-                  defaultLanguage="json"
-                  theme={darkMode ? 'vs-dark' : 'light'}
-                  value={cookieJson}
-                  onChange={handleCookieChange}
-                  onMount={handleEditorMount}
-                  options={{
-                    minimap: { enabled: false },
-                    lineNumbers: 'on',
-                    scrollBeyondLastLine: false,
-                    wordWrap: 'on',
-                    tabSize: 2,
-                    formatOnPaste: true,
-                  }}
-                />
-              </div>
-              {jsonError && (
-                <Typography.Text type="danger" className={styles.jsonError}>
-                  JSON 格式错误: {jsonError}
-                </Typography.Text>
-              )}
-              {cookieTestResult && (
-                <Alert
-                  className={styles.cookieTestResult}
-                  type={cookieTestResult.ok ? 'success' : 'error'}
-                  showIcon
-                  title={cookieTestResult.message}
-                  description={`URL: ${cookieTestResult.url} · 状态: ${cookieTestResult.status_code ?? '-'} · 原因: ${cookieTestResult.reason} · 模式: ${cookieTestResult.fetch_mode}`}
-                />
-              )}
-            </>
+          {cookieTestResult && (
+            <Alert
+              className={styles.cookieTestResult}
+              type={cookieTestResult.ok ? 'success' : 'error'}
+              showIcon
+              title={cookieTestResult.message}
+              description={`URL: ${cookieTestResult.url} · 状态: ${cookieTestResult.status_code ?? '-'} · 原因: ${cookieTestResult.reason} · 模式: ${cookieTestResult.fetch_mode}`}
+            />
+          )}
+          {!cookieTestResult && (
+            <Typography.Text type="secondary">
+              点击"测试 Cookie"检测当前 JavDB 访问状态。Agent 模式下 Cookie 由 Chrome 插件自动同步。
+            </Typography.Text>
           )}
         </Card>
       </div>
