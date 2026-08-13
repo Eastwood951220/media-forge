@@ -5,12 +5,40 @@ import { useThemeStore } from '@/stores/useThemeStore'
 
 type MockViewTransition = ReturnType<typeof vi.fn>
 
+function mockViewport(width: number, height: number) {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    writable: true,
+    value: width,
+  })
+  Object.defineProperty(window, 'innerHeight', {
+    configurable: true,
+    writable: true,
+    value: height,
+  })
+}
+
+function mockButtonRect(element: HTMLElement, rect: Pick<DOMRect, 'top' | 'left' | 'width' | 'height'>) {
+  element.getBoundingClientRect = () => ({
+    x: rect.left,
+    y: rect.top,
+    top: rect.top,
+    left: rect.left,
+    right: rect.left + rect.width,
+    bottom: rect.top + rect.height,
+    width: rect.width,
+    height: rect.height,
+    toJSON: () => ({}),
+  })
+}
+
 describe('useThemeViewTransition', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     document.startViewTransition = undefined as unknown as Document['startViewTransition']
     document.documentElement.dataset.theme = 'light'
     document.documentElement.className = ''
+    document.documentElement.removeAttribute('style')
     useThemeStore.setState({
       mode: 'light',
       darkMode: false,
@@ -30,22 +58,21 @@ describe('useThemeViewTransition', () => {
         dispatchEvent: vi.fn(),
       })),
     })
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      writable: true,
-      value: 2000,
-    })
-    Object.defineProperty(window, 'innerHeight', {
-      configurable: true,
-      writable: true,
-      value: 1000,
-    })
+    mockViewport(2000, 1000)
   })
 
-  it('animates linearly from the trigger button center and covers the viewport', async () => {
-    const animateMock = vi.fn().mockReturnValue({ finished: Promise.resolve() })
+  it('prepares button-centered CSS variables before the first View Transition frame', async () => {
+    const animateMock = vi.fn()
     document.documentElement.animate = animateMock
+    let cssStatePreparedBeforeCallback = false
     ;(document as unknown as { startViewTransition: MockViewTransition }).startViewTransition = vi.fn((callback: () => void) => {
+      cssStatePreparedBeforeCallback =
+        document.documentElement.classList.contains('theme-transition-active') &&
+        document.documentElement.style.getPropertyValue('--theme-transition-x') === '1920px' &&
+        document.documentElement.style.getPropertyValue('--theme-transition-y') === '92px' &&
+        document.documentElement.style.getPropertyValue('--theme-transition-radius') === '2123.879469273151px' &&
+        document.documentElement.style.getPropertyValue('--theme-transition-duration') === '280ms' &&
+        document.documentElement.style.getPropertyValue('--theme-transition-easing') === 'linear'
       callback()
       return {
         ready: Promise.resolve(),
@@ -59,41 +86,48 @@ describe('useThemeViewTransition', () => {
     const toggleTheme = () => useThemeStore.getState().toggleMode()
     const { result } = renderHook(() => useThemeViewTransition({ toggleTheme }))
     const trigger = document.createElement('button')
-    trigger.getBoundingClientRect = () => ({
-      x: 1900,
-      y: 72,
-      top: 72,
-      left: 1900,
-      right: 1940,
-      bottom: 112,
-      width: 40,
-      height: 40,
-      toJSON: () => ({}),
-    })
-    result.current.triggerRef.current = trigger as never
+    mockButtonRect(trigger, { top: 72, left: 1900, width: 40, height: 40 })
 
     await act(async () => {
-      await result.current.runTransition()
+      await result.current.runTransition(trigger)
     })
 
     expect((document as unknown as { startViewTransition: MockViewTransition }).startViewTransition).toHaveBeenCalledTimes(1)
     expect(useThemeStore.getState().darkMode).toBe(true)
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(document.documentElement).toHaveClass('dark')
-    expect(animateMock).toHaveBeenCalledWith(
-      {
-        clipPath: [
-          'circle(0px at 1920px 92px)',
-          'circle(2123.879469273151px at 1920px 92px)',
-        ],
-      },
-      {
-        duration: 280,
-        easing: 'linear',
-        pseudoElement: '::view-transition-new(root)',
-      },
-    )
+    expect(cssStatePreparedBeforeCallback).toBe(true)
+    expect(animateMock).not.toHaveBeenCalled()
     expect(document.documentElement).not.toHaveClass('theme-transition-active')
+    expect(document.documentElement.style.getPropertyValue('--theme-transition-x')).toBe('')
+  })
+
+  it('falls back to the upper-right visible point when no trigger is supplied', async () => {
+    let cssStatePreparedBeforeCallback = false
+    ;(document as unknown as { startViewTransition: MockViewTransition }).startViewTransition = vi.fn((callback: () => void) => {
+      cssStatePreparedBeforeCallback =
+        document.documentElement.style.getPropertyValue('--theme-transition-x') === '1956px' &&
+        document.documentElement.style.getPropertyValue('--theme-transition-y') === '44px' &&
+        document.documentElement.style.getPropertyValue('--theme-transition-radius') === '2177.1247093356874px'
+      callback()
+      return {
+        ready: Promise.resolve(),
+        finished: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+        skipTransition: () => {},
+        types: new Set<string>(),
+      }
+    })
+
+    const toggleTheme = () => useThemeStore.getState().toggleMode()
+    const { result } = renderHook(() => useThemeViewTransition({ toggleTheme }))
+
+    await act(async () => {
+      await result.current.runTransition()
+    })
+
+    expect(cssStatePreparedBeforeCallback).toBe(true)
+    expect(useThemeStore.getState().darkMode).toBe(true)
   })
 
   it('switches immediately without root animation when reduced motion is requested', async () => {
