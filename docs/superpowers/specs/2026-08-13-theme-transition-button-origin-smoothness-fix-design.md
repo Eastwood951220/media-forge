@@ -20,7 +20,9 @@ const y = 0
 const DEFAULT_DURATION = 5000
 ```
 
-That combination explains both symptoms. The reveal is not anchored to the actual toggle button, and a 5-second clip-path expansion leaves a long tail where most of the screen is already covered but the animation is still running.
+- The previous design kept `cubic-bezier(0.2, 0, 0, 1)`, which is an ease-out curve. That pacing intentionally slows near the end and can still read as a tail pause.
+
+That combination explains both symptoms. The reveal is not anchored to the actual toggle button, and a 5-second clip-path expansion leaves a long tail where most of the screen is already covered but the animation is still running. The final fix must also use linear radial pacing so the circle edge does not visibly speed up, slow down, pause, or snap.
 
 The current working tree contains many unrelated crawler/run-list changes. This fix must not touch or revert those files.
 
@@ -33,7 +35,7 @@ The selected behavior is:
 - The reveal starts from the visual center of the theme toggle button.
 - The same logic works on the authenticated header and the login page's fixed top-right toggle.
 - The transition duration is `280ms`.
-- The easing remains `cubic-bezier(0.2, 0, 0, 1)`.
+- The easing is exactly `linear`.
 - The reveal radius covers the whole viewport from the button center.
 - Reduced-motion behavior remains immediate and non-animated.
 
@@ -42,7 +44,8 @@ The selected behavior is:
 - Clicking the theme toggle on the login page expands the new theme from the button in the top-right corner.
 - Clicking the theme toggle in the app header expands the new theme from that header button.
 - The reveal no longer starts from the top-middle area.
-- The reveal does not pause near completion or snap at the end.
+- The reveal edge moves at a constant radial pace from start to finish.
+- The reveal does not suddenly accelerate, pause near completion, or snap at the end.
 - Repeated clicks during an active reveal do not queue multiple transitions.
 - If the browser does not support the View Transition API, the theme still switches immediately.
 
@@ -112,6 +115,14 @@ This is more precise than assuming the farthest corner is always the bottom-left
 const DEFAULT_DURATION = 280
 ```
 
+`DEFAULT_EASING` will be:
+
+```ts
+const DEFAULT_EASING = 'linear'
+```
+
+Do not use an ease-out curve for the circular reveal. The animation must use linear timing so the clip-path radius expands at a constant rate. This is a deliberate exception to the usual UI preference for eased motion because the user-visible defect is non-linear pacing: the reveal appears to stop near the end, then finish abruptly.
+
 The hook will keep awaiting `newAnim.finished`, but the lock duration is now short enough for a UI interaction. The `finally` block continues to remove `theme-transition-active` and release `transitionLockRef`.
 
 The CSS override remains:
@@ -140,6 +151,7 @@ Update focused tests:
 - A button at `left: 1900, top: 72, width: 40, height: 40` produces origin `1920px 92px`.
 - `useThemeViewTransition` does not use `window.innerWidth 0` as the origin.
 - `useThemeViewTransition` uses `duration: 280`.
+- `useThemeViewTransition` uses `easing: 'linear'`.
 - `ThemeModeToggle` passes `triggerRef` to the actual `Classic` button.
 - Reduced-motion and unsupported-browser fallbacks still skip `root.animate`.
 
@@ -154,7 +166,7 @@ Manual verification at `http://localhost:18643`:
 
 - Login page toggle starts from the top-right toggle button.
 - App header toggle starts from the header toggle button.
-- The circular reveal completes smoothly without a long tail pause.
+- The circular reveal expands at a constant pace without sudden acceleration, a long tail pause, or an end snap.
 - The toggle remains clickable after the reveal completes.
 
 ## Out Of Scope
