@@ -6,7 +6,9 @@ import { createMemoryHistory } from '@tanstack/react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { router as baseRouter } from '../src/routes'
 import { queryClient } from '../src/lib/query-client'
+import App from '../src/App'
 import { useAuthStore } from '../src/stores/useAuthStore'
+import { useThemeStore } from '../src/stores/useThemeStore'
 import { setToken, removeToken } from '../src/utils/auth'
 
 vi.mock('@/api/init', () => ({
@@ -15,6 +17,15 @@ vi.mock('@/api/init', () => ({
   testPostgres: vi.fn(),
   testRedis: vi.fn(),
 }))
+
+vi.mock('@theme-toggles/react/styles/classic.css', () => ({}))
+
+vi.mock('@theme-toggles/react', () => {
+  const { createElement } = require('react')
+  const Classic = ({ className, 'aria-label': ariaLabel, onClick, ...props }: Record<string, unknown>) =>
+    createElement('button', { className, 'aria-label': ariaLabel, onClick, type: 'button', ...props })
+  return { Classic }
+})
 
 vi.mock('@/api/crawlTask', () => ({
   getCrawlTasks: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
@@ -68,6 +79,43 @@ describe('App auth routing', () => {
       token: '',
       isAuthenticated: false,
       userInfo: null,
+    })
+    document.documentElement.dataset.theme = 'light'
+    document.documentElement.className = ''
+    document.documentElement.style.removeProperty('--app-primary-color')
+    useThemeStore.setState({
+      mode: 'light',
+      darkMode: false,
+      primaryColor: '#006AFF',
+    })
+  })
+
+  it('syncs root dark class with dark theme state', async () => {
+    setToken('test-token')
+    useAuthStore.setState({ token: 'test-token', isAuthenticated: true })
+    useThemeStore.setState({
+      mode: 'dark',
+      darkMode: true,
+      primaryColor: '#006AFF',
+    })
+
+    const { rerender } = render(<App />)
+
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe('dark')
+      expect(document.documentElement).toHaveClass('dark')
+    })
+
+    useThemeStore.setState({
+      mode: 'light',
+      darkMode: false,
+      primaryColor: '#006AFF',
+    })
+    rerender(<App />)
+
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe('light')
+      expect(document.documentElement).not.toHaveClass('dark')
     })
   })
 

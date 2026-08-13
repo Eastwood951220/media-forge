@@ -16,10 +16,12 @@ function App() {
   const primaryColor = useThemeStore((s) => s.primaryColor)
   const [ready, setReady] = useState(false)
 
-  // Sync data-theme to <html> for Tailwind dark mode + CSS custom properties
+  // Sync root theme attributes for Ant Design tokens, app CSS, and theme-toggle CSS.
   useEffect(() => {
-    document.documentElement.dataset.theme = darkMode ? 'dark' : 'light'
-    document.documentElement.style.setProperty('--app-primary-color', primaryColor)
+    const root = document.documentElement
+    root.dataset.theme = darkMode ? 'dark' : 'light'
+    root.classList.toggle('dark', darkMode)
+    root.style.setProperty('--app-primary-color', primaryColor)
   }, [darkMode, primaryColor])
 
   useEffect(() => {
