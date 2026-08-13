@@ -19,15 +19,23 @@
 }
 
 .toggleButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 40px;
-  min-height: 40px;
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
   padding: 0;
+  border: 0;
   border-radius: 8px;
+  background: transparent;
   color: currentColor;
+  line-height: 1;
+  cursor: pointer;
   transition: background-color 180ms ease, color 180ms ease;
+}
+
+.toggleButton :global(svg) {
+  display: block;
+  flex: 0 0 auto;
 }
 
 .toggleButton:hover {
@@ -40,9 +48,13 @@
 }
 
 .small {
+  width: 36px;
+  height: 36px;
   font-size: 18px;
 }
 
 .middle {
+  width: 40px;
+  height: 40px;
   font-size: 22px;
 }

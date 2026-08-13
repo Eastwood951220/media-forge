@@ -23,23 +23,16 @@ export function ThemeModeToggle({
   })
 
   return (
-    <div
-      ref={triggerRef}
-      className={`${styles.toggleWrap} ${styles[variant]} ${className ?? ''}`}
-    >
+    <div className={`${styles.toggleWrap} ${styles[variant]} ${className ?? ''}`}>
       {variant === 'login' ? (
         <span className={styles.label}>
           {darkMode ? '深色模式' : '浅色模式'}
         </span>
       ) : null}
       <Classic
+        ref={triggerRef}
         aria-label="切换明暗模式"
-        className={clsx(
-          'theme-toggle',
-          darkMode && 'theme-toggle--toggled',
-          styles.toggleButton,
-          styles[size],
-        )}
+        className={clsx('theme-toggle', styles.toggleButton, styles[size])}
         duration={450}
         onClick={() => {
           void runTransition()

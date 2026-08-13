@@ -9,9 +9,23 @@ vi.mock('@theme-toggles/react/styles/classic.css', () => ({}))
 
 // Mock @theme-toggles/react since it ships raw TSX without React imports
 vi.mock('@theme-toggles/react', () => {
-  const { createElement } = require('react')
-  const Classic = ({ className, 'aria-label': ariaLabel, onClick, ...props }: Record<string, unknown>) =>
-    createElement('button', { className, 'aria-label': ariaLabel, onClick, type: 'button', ...props })
+  const React = require('react')
+  const Classic = React.forwardRef<HTMLButtonElement, Record<string, unknown>>(
+    (props, ref) => {
+      const className = props.className
+      const ariaLabel = props['aria-label']
+      const onClick = props.onClick
+      return React.createElement('button', {
+        className,
+        'aria-label': ariaLabel,
+        onClick,
+        ref,
+        type: 'button',
+        title: props.title,
+      })
+    },
+  )
+  Classic.displayName = 'Classic'
   return { Classic }
 })
 
@@ -44,14 +58,12 @@ describe('ThemeModeToggle', () => {
     render(<ThemeModeToggle />)
 
     const button = screen.getByRole('button', { name: '切换明暗模式' })
-    expect(button).not.toHaveClass('theme-toggle--toggled')
 
     await userEvent.click(button)
 
     await waitFor(() => {
       expect(useThemeStore.getState().darkMode).toBe(true)
     })
-    expect(button).toHaveClass('theme-toggle--toggled')
     expect(button).not.toBeDisabled()
   })
 
@@ -61,6 +73,52 @@ describe('ThemeModeToggle', () => {
     render(<ThemeModeToggle variant="login" />)
 
     expect(screen.getByText('深色模式')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '切换明暗模式' })).toHaveClass('theme-toggle--toggled')
+    expect(screen.getByRole('button', { name: '切换明暗模式' })).toHaveClass('theme-toggle')
+  })
+
+  it('uses the actual button rectangle as the reveal origin', async () => {
+    const animateMock = vi.fn().mockReturnValue({ finished: Promise.resolve() })
+    document.documentElement.animate = animateMock
+    document.startViewTransition = vi.fn((callback: () => void) => {
+      callback()
+      return {
+        ready: Promise.resolve(),
+        finished: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+        skipTransition: () => {},
+        types: new Set<string>(),
+      }
+    }) as unknown as Document['startViewTransition']
+
+    render(<ThemeModeToggle />)
+
+    const button = screen.getByRole('button', { name: '切换明暗模式' })
+    button.getBoundingClientRect = () => ({
+      x: 80,
+      y: 24,
+      top: 24,
+      left: 80,
+      right: 120,
+      bottom: 64,
+      width: 40,
+      height: 40,
+      toJSON: () => ({}),
+    })
+
+    await userEvent.click(button)
+
+    await waitFor(() => {
+      expect(animateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clipPath: [
+            'circle(0px at 100px 44px)',
+            expect.stringMatching(/^circle\(.+px at 100px 44px\)$/),
+          ],
+        }),
+        expect.objectContaining({
+          pseudoElement: '::view-transition-new(root)',
+        }),
+      )
+    })
   })
 })
