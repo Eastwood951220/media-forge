@@ -6,6 +6,12 @@ import type { StartViewTransition, UseThemeViewTransitionOptions } from './types
 const DEFAULT_DURATION = 280
 const DEFAULT_EASING = 'linear'
 const TRANSITION_CLASS = 'theme-transition-active'
+const TRANSITION_X = '--theme-transition-x'
+const TRANSITION_Y = '--theme-transition-y'
+const TRANSITION_RADIUS = '--theme-transition-radius'
+const TRANSITION_DURATION = '--theme-transition-duration'
+const TRANSITION_EASING = '--theme-transition-easing'
+const TOP_RIGHT_ORIGIN_INSET = 44
 
 function shouldSkipTransition(): boolean {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -23,6 +29,57 @@ function getStartViewTransition(): StartViewTransition | null {
   return typeof fn === 'function' ? fn.bind(doc) : null
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
+function getTransitionOrigin(originEl?: HTMLElement | null) {
+  if (originEl) {
+    const { top, left, width, height } = originEl.getBoundingClientRect()
+    return {
+      x: left + width / 2,
+      y: top + height / 2,
+    }
+  }
+
+  return {
+    x: Math.max(window.innerWidth - TOP_RIGHT_ORIGIN_INSET, 0),
+    y: TOP_RIGHT_ORIGIN_INSET,
+  }
+}
+
+function getCoveringRadius(x: number, y: number) {
+  return Math.max(
+    Math.hypot(x, y),
+    Math.hypot(window.innerWidth - x, y),
+    Math.hypot(x, window.innerHeight - y),
+    Math.hypot(window.innerWidth - x, window.innerHeight - y),
+  )
+}
+
+function prepareTransition(root: HTMLElement, originEl: HTMLElement | null, duration: number, easing: string) {
+  const { x, y } = getTransitionOrigin(originEl)
+  const maxRadius = getCoveringRadius(x, y)
+
+  root.style.setProperty(TRANSITION_X, `${x}px`)
+  root.style.setProperty(TRANSITION_Y, `${y}px`)
+  root.style.setProperty(TRANSITION_RADIUS, `${maxRadius}px`)
+  root.style.setProperty(TRANSITION_DURATION, `${duration}ms`)
+  root.style.setProperty(TRANSITION_EASING, easing)
+  root.classList.add(TRANSITION_CLASS)
+}
+
+function clearPreparedTransition(root: HTMLElement) {
+  root.classList.remove(TRANSITION_CLASS)
+  root.style.removeProperty(TRANSITION_X)
+  root.style.removeProperty(TRANSITION_Y)
+  root.style.removeProperty(TRANSITION_RADIUS)
+  root.style.removeProperty(TRANSITION_DURATION)
+  root.style.removeProperty(TRANSITION_EASING)
+}
+
 export function useThemeViewTransition({
   duration = DEFAULT_DURATION,
   easing = DEFAULT_EASING,
@@ -31,15 +88,14 @@ export function useThemeViewTransition({
   const transitionLockRef = useRef(false)
   const triggerRef = useRef<HTMLElement | null>(null)
 
-  const runTransition = useCallback(async () => {
+  const runTransition = useCallback(async (originEl?: HTMLElement | null) => {
     if (transitionLockRef.current) {
       return
     }
 
-    const triggerEl = triggerRef.current
     const startViewTransition = getStartViewTransition()
 
-    if (!triggerEl || !startViewTransition || shouldSkipTransition()) {
+    if (!startViewTransition || shouldSkipTransition()) {
       toggleTheme()
       return
     }
@@ -47,45 +103,24 @@ export function useThemeViewTransition({
     transitionLockRef.current = true
 
     const root = document.documentElement
+    prepareTransition(root, originEl ?? triggerRef.current, duration, easing)
 
     try {
       const transition = startViewTransition(() => {
         const nextDark = !useThemeStore.getState().darkMode
         root.dataset.theme = nextDark ? 'dark' : 'light'
         root.classList.toggle('dark', nextDark)
-        root.classList.add(TRANSITION_CLASS)
         flushSync(() => {
           toggleTheme()
         })
       })
 
       await transition.ready
-
-      const { top, left, width, height } = triggerEl.getBoundingClientRect()
-      const x = left + width / 2
-      const y = top + height / 2
-      const maxRadius = Math.max(
-        Math.hypot(x, y),
-        Math.hypot(window.innerWidth - x, y),
-        Math.hypot(x, window.innerHeight - y),
-        Math.hypot(window.innerWidth - x, window.innerHeight - y),
-      )
-
-      const newAnim = root.animate(
-        {
-          clipPath: [
-            `circle(0px at ${x}px ${y}px)`,
-            `circle(${maxRadius}px at ${x}px ${y}px)`,
-          ],
-        },
-        { duration, easing, pseudoElement: '::view-transition-new(root)' },
-      )
-
-      await newAnim.finished
+      await (transition.finished ?? wait(duration))
     } catch (error) {
       console.warn('[theme transition] failed:', error)
     } finally {
-      root.classList.remove(TRANSITION_CLASS)
+      clearPreparedTransition(root)
       transitionLockRef.current = false
     }
   }, [duration, easing, toggleTheme])
