@@ -43,6 +43,7 @@ coverage/
 .pytest_cache/
 htmlcov/
 .coverage
+.playwright-cli
 
 # Superpowers task tracking (ephemeral session data)
 .superpowers/

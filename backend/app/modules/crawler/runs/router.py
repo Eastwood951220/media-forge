@@ -9,7 +9,16 @@ from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask
 from backend.app.modules.crawler.runs.logs import load_run_logs
-from backend.app.modules.crawler.runs.schemas import CrawlRunDetailTaskRead, CrawlRunRead, RunDetailRetryRequest, RunTaskSummary, _serialize_run_detail_task
+from backend.app.modules.crawler.runs.schemas import (
+    CrawlRunDetailRead,
+    CrawlRunDetailTaskListItem,
+    CrawlRunListItem,
+    RunDetailRetryRequest,
+    RunTaskPage,
+    RunTaskSummary,
+    _serialize_run_detail_task,
+    accepted_run_action,
+)
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from shared.schemas.common import paginated, success
 
@@ -34,38 +43,25 @@ def _visible_run_detail_task_query(db: Session, run: CrawlRun):
     return query
 
 
-def _run_task_summary(db: Session, run: CrawlRun) -> dict:
-    rows = (
-        _visible_run_detail_task_query(db, run)
-        .with_entities(CrawlRunDetailTask.status, func.count(CrawlRunDetailTask.id))
-        .group_by(CrawlRunDetailTask.status)
-        .all()
-    )
-    counts = {status: int(count) for status, count in rows}
-    summary = RunTaskSummary(
-        total=sum(counts.values()),
-        pending_crawl=counts.get("pending_crawl", 0),
-        crawling=counts.get("crawling", 0),
-        saved=counts.get("saved", 0),
-        skipped=counts.get("skipped", 0),
-        crawl_failed=counts.get("crawl_failed", 0),
-        save_failed=counts.get("save_failed", 0),
-    )
-    summary.completed = summary.saved + summary.skipped
-    summary.waiting = summary.pending_crawl + summary.crawling
-    summary.failed = summary.crawl_failed + summary.save_failed
-    return summary.model_dump()
-
-
 def _json_item_text(column, key: str, dialect_name: str):
     if dialect_name == "postgresql":
         return type_coerce(column, JSONB)[key].astext
     return func.json_extract(column, f"$.{key}")
 
 
-@router.get("/queue-status")
-def queue_status(_current_user: CurrentUser) -> dict:
-    return success(data=get_runtime_state().queue_status())
+def _run_task_summary(db: Session, run: CrawlRun) -> dict:
+    query = _visible_run_detail_task_query(db, run)
+    total = query.count()
+    counts = (
+        query.with_entities(CrawlRunDetailTask.status, func.count(CrawlRunDetailTask.id))
+        .group_by(CrawlRunDetailTask.status)
+        .all()
+    )
+    summary = RunTaskSummary(total=total)
+    for status, count in counts:
+        if hasattr(summary, status):
+            setattr(summary, status, count)
+    return summary.model_dump(mode="json")
 
 
 def _owned_run_query(
@@ -97,31 +93,19 @@ def list_runs(
     task_id: uuid.UUID | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
 ) -> dict:
-    rows_plus_one = (
-        _owned_run_query(db, current_user.id, task_id=task_id, status_filter=status_filter)
+    query = _owned_run_query(db, current_user.id, task_id=task_id, status_filter=status_filter)
+    total = query.count()
+    rows = (
+        query
         .order_by(CrawlRun.created_at.desc(), CrawlRun.id.desc())
         .offset((page - 1) * size)
-        .limit(size + 1)
+        .limit(size)
         .all()
     )
-    rows = rows_plus_one[:size]
-    payload_rows = []
-    for row in rows:
-        payload = CrawlRunRead.model_validate(row).model_dump(mode="json")
-        payload["logs"] = []
-        payload_rows.append(payload)
-    return success(data={"rows": payload_rows, "page": page, "size": size, "has_more": len(rows_plus_one) > size})
-
-
-@router.get("/count")
-def count_runs(
-    current_user: CurrentUser,
-    db: Session = Depends(get_db),
-    task_id: uuid.UUID | None = Query(default=None),
-    status_filter: str | None = Query(default=None, alias="status"),
-) -> dict:
-    total = _owned_run_query(db, current_user.id, task_id=task_id, status_filter=status_filter).count()
-    return success(data={"total": total})
+    return paginated(
+        rows=[CrawlRunListItem.model_validate(r).model_dump(mode="json") for r in rows],
+        total=total,
+    )
 
 
 @router.get("/{run_id}")
@@ -129,7 +113,7 @@ def get_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends
     run = db.get(CrawlRun, run_id)
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
-    payload = CrawlRunRead.model_validate(run).model_dump(mode="json")
+    payload = CrawlRunDetailRead.model_validate(run).model_dump(mode="json")
     payload["logs"] = []
     return success(data=payload)
 
@@ -177,14 +161,6 @@ def list_run_tasks(
     )
 
 
-@router.get("/{run_id}/tasks/summary")
-def get_run_task_summary(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
-    run = db.get(CrawlRun, run_id)
-    if run is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
-    return success(data=_run_task_summary(db, run))
-
-
 @router.post("/{run_id}/tasks/retry", status_code=status.HTTP_201_CREATED)
 def retry_run_tasks(
     run_id: uuid.UUID,
@@ -193,7 +169,7 @@ def retry_run_tasks(
     db: Session = Depends(get_db),
 ) -> dict:
     try:
-        run = CrawlerRunService(db, get_runtime_state()).retry_failed_details(
+        CrawlerRunService(db, get_runtime_state()).retry_failed_details(
             run_id,
             detail_ids=payload.detail_ids,
             retry_all=payload.retry_all,
@@ -203,7 +179,7 @@ def retry_run_tasks(
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
-    return success(data=CrawlRunRead.model_validate(run).model_dump(mode="json"))
+    return success(data=accepted_run_action(run_id))
 
 
 @router.delete("/{run_id}")
@@ -215,25 +191,25 @@ def delete_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depe
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="运行中任务不能删除，请先停止")
     db.delete(run)
     db.commit()
-    return success(data={"id": str(run_id), "deleted": True})
+    return success(data=accepted_run_action(run_id))
 
 
 @router.post("/{run_id}/stop")
 def stop_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
     try:
-        run = CrawlerRunService(db, get_runtime_state()).stop_run(run_id)
+        CrawlerRunService(db, get_runtime_state()).stop_run(run_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return success(data=CrawlRunRead.model_validate(run).model_dump(mode="json"))
+    return success(data=accepted_run_action(run_id))
 
 
 @router.post("/{run_id}/restart", status_code=status.HTTP_201_CREATED)
 def restart_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
     try:
-        run = CrawlerRunService(db, get_runtime_state()).restart_run(run_id)
+        CrawlerRunService(db, get_runtime_state()).restart_run(run_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
-    return success(data=CrawlRunRead.model_validate(run).model_dump(mode="json"))
+    return success(data=accepted_run_action(run_id))

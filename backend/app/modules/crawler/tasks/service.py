@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun
-from backend.app.modules.crawler.runs.schemas import CrawlRunRead, RunCreateRequest
+from backend.app.modules.crawler.runs.schemas import accepted_run_action, RunCreateRequest
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from backend.app.modules.crawler.tasks.delete_service import UnsupportedDeleteMode, delete_task
 from backend.app.modules.crawler.tasks.errors import raise_task_integrity_error
@@ -85,7 +85,7 @@ class CrawlerTaskService:
             self.db.rollback()
             logger.exception("Create crawler run failed")
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
-        return CrawlRunRead.model_validate(run).model_dump(mode="json")
+        return accepted_run_action(run.id)
 
     def create_url_subset_run(
         self,
@@ -119,7 +119,7 @@ class CrawlerTaskService:
             self.db.rollback()
             logger.exception("Create crawler URL subset run failed")
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
-        return CrawlRunRead.model_validate(run).model_dump(mode="json")
+        return accepted_run_action(run.id)
 
     def create_temporary_run(
         self,
@@ -141,7 +141,7 @@ class CrawlerTaskService:
             self.db.rollback()
             logger.exception("Create temporary crawler run failed")
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"任务运行时不可用: {exc}") from exc
-        return CrawlRunRead.model_validate(run).model_dump(mode="json")
+        return accepted_run_action(run.id)
 
     def create_task(self, data: CrawlTaskCreate, owner_id: uuid.UUID) -> dict:
         if self.repo.get_by_name(owner_id, data.name):

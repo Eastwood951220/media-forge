@@ -72,15 +72,9 @@ def test_url_subset_run_creates_queued_incremental_run(client: TestClient, admin
 
     assert response.status_code == HTTPStatus.CREATED
     body = response.json()["data"]
-    assert body["task_id"] == str(task.id)
-    assert body["status"] == "queued"
-    assert body["crawl_mode"] == "incremental"
-    assert body["result"] == {
-        "url_subset": True,
-        "selected_task_url_ids": [str(first_url.id), str(second_url.id)],
-        "selected_task_url_count": 2,
-    }
-    assert runtime.enqueued == [body["id"]]
+    assert body["run_id"] == runtime.enqueued[0]
+    assert body["accepted"] is True
+    assert len(runtime.enqueued) == 1
 
 
 def test_url_subset_run_accepts_full_mode(client: TestClient, admin_user, monkeypatch) -> None:
@@ -97,7 +91,9 @@ def test_url_subset_run_accepts_full_mode(client: TestClient, admin_user, monkey
     )
 
     assert response.status_code == HTTPStatus.CREATED
-    assert response.json()["data"]["crawl_mode"] == "full"
+    body = response.json()["data"]
+    assert body["run_id"] == runtime.enqueued[0]
+    assert body["accepted"] is True
 
 
 def test_url_subset_run_rejects_duplicate_url_ids(client: TestClient, admin_user) -> None:

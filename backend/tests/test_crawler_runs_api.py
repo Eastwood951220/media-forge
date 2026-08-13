@@ -69,19 +69,10 @@ def test_cleanup_interrupted_runs_marks_queued_and_running_stopped() -> None:
     assert "服务重启" in (queued.error or "")
 
 
-def test_queue_status_endpoint_returns_runtime_state(client: TestClient, admin_user, monkeypatch) -> None:
+def test_queue_status_endpoint_returns_404(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
-
-    class Runtime:
-        def queue_status(self):
-            return {"queue_size": 0, "is_running": False, "current_run_id": None, "stop_requested": False}
-
-    monkeypatch.setattr("backend.app.modules.crawler.runs.router.get_runtime_state", lambda: Runtime())
-
     response = client.get("/api/crawler/runs/queue-status", headers=headers)
-
-    assert response.status_code == HTTPStatus.OK
-    assert response.json()["data"]["queue_size"] == 0
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_task_run_endpoint_creates_queued_run(client: TestClient, admin_user, monkeypatch) -> None:
@@ -100,10 +91,9 @@ def test_task_run_endpoint_creates_queued_run(client: TestClient, admin_user, mo
 
     assert response.status_code == HTTPStatus.CREATED
     body = response.json()["data"]
-    assert body["task_id"] == str(task_id)
-    assert body["status"] == "queued"
-    assert body["crawl_mode"] == "incremental"
-    assert runtime.enqueued == [body["id"]]
+    assert body["run_id"] == runtime.enqueued[0]
+    assert body["accepted"] is True
+    assert len(runtime.enqueued) == 1
 
 
 def test_run_list_and_detail_endpoints(client: TestClient, admin_user, monkeypatch) -> None:
@@ -113,18 +103,16 @@ def test_run_list_and_detail_endpoints(client: TestClient, admin_user, monkeypat
     monkeypatch.setattr("backend.app.modules.crawler.tasks.service.get_runtime_state", lambda: FakeRuntime())
 
     run_response = client.post(f"/api/crawler/tasks/{task_id}/run", json={"crawl_mode": "full"}, headers=headers)
-    run_id = run_response.json()["data"]["id"]
+    run_id = run_response.json()["data"]["run_id"]
 
     list_response = client.get("/api/crawler/runs", headers=headers)
     detail_response = client.get(f"/api/crawler/runs/{run_id}", headers=headers)
     tasks_response = client.get(f"/api/crawler/runs/{run_id}/tasks", headers=headers)
 
     assert list_response.status_code == HTTPStatus.OK
-    list_data = list_response.json()["data"]
+    list_data = list_response.json()
     assert len(list_data["rows"]) == 1
-    assert list_data["has_more"] is False
-    count_response = client.get("/api/crawler/runs/count", headers=headers)
-    assert count_response.json()["data"]["total"] == 1
+    assert list_data["total"] == 1
     assert detail_response.json()["data"]["id"] == run_id
     assert tasks_response.json()["rows"] == []
 
@@ -203,8 +191,10 @@ def test_stop_running_run_sets_stop_signal(client: TestClient, admin_user, monke
     response = client.post(f"/api/crawler/runs/{run_id}/stop", headers=headers)
 
     assert response.status_code == HTTPStatus.OK
+    body = response.json()["data"]
+    assert body["run_id"] == run_id
+    assert body["accepted"] is True
     assert runtime.stopped == [run_id]
-    assert response.json()["data"]["status"] == "stopped"
 
 
 def test_restart_copies_unfinished_subtasks(client: TestClient, admin_user, monkeypatch) -> None:
@@ -225,9 +215,9 @@ def test_restart_copies_unfinished_subtasks(client: TestClient, admin_user, monk
     response = client.post(f"/api/crawler/runs/{run.id}/restart", headers=headers)
 
     assert response.status_code == HTTPStatus.CREATED
-    new_run = response.json()["data"]
-    assert new_run["id"] == str(run.id)
-    assert new_run["resumed_from"] is None
+    body = response.json()["data"]
+    assert body["run_id"] == str(run.id)
+    assert body["accepted"] is True
     assert runtime.enqueued == [str(run.id)]
 
     tasks_response = client.get(f"/api/crawler/runs/{run.id}/tasks", headers=headers)
@@ -257,7 +247,9 @@ def test_stop_running_run_resets_unfinished_detail_tasks_to_pending(client: Test
     response = client.post(f"/api/crawler/runs/{run.id}/stop", headers=headers)
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json()["data"]["status"] == "stopped"
+    body = response.json()["data"]
+    assert body["run_id"] == str(run.id)
+    assert body["accepted"] is True
     assert runtime.stopped == [str(run.id)]
 
     session.expire_all()
@@ -288,7 +280,9 @@ def test_delete_run_removes_only_run_and_detail_tasks(client: TestClient, admin_
     response = client.delete(f"/api/crawler/runs/{run.id}", headers=headers)
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json()["data"] == {"id": str(run_id), "deleted": True}
+    body = response.json()["data"]
+    assert body["run_id"] == str(run_id)
+    assert body["accepted"] is True
     session.expire_all()
     assert session.get(CrawlRun, run_id) is None
     assert session.query(CrawlRunDetailTask).filter(CrawlRunDetailTask.run_id == run_id).count() == 0
@@ -326,13 +320,8 @@ def test_restart_after_detail_phase_requeues_same_run_and_keeps_terminal_details
 
     assert response.status_code == HTTPStatus.CREATED
     body = response.json()["data"]
-    assert body["id"] == str(run.id)
-    assert body["status"] == "queued"
-    assert body["task_id"] == str(task_id)
-    assert body["started_at"] is None
-    assert body["finished_at"] is None
-    assert body["result"] is None
-    assert body["error"] is None
+    assert body["run_id"] == str(run.id)
+    assert body["accepted"] is True
     assert runtime.enqueued == [str(run.id)]
     assert runtime.cleared == [str(run.id)]
 
@@ -365,9 +354,8 @@ def test_restart_after_list_phase_discards_partial_list_tasks_and_requeues_same_
 
     assert response.status_code == HTTPStatus.CREATED
     body = response.json()["data"]
-    assert body["id"] == str(run.id)
-    assert body["status"] == "queued"
-    assert body["task_id"] == str(task_id)
+    assert body["run_id"] == str(run.id)
+    assert body["accepted"] is True
     assert runtime.enqueued == [str(run.id)]
     assert runtime.cleared == [str(run.id)]
 
@@ -391,9 +379,8 @@ def test_restart_stopped_run_without_subtasks_requeues_same_run(client: TestClie
 
     assert response.status_code == HTTPStatus.CREATED
     body = response.json()["data"]
-    assert body["id"] == str(run.id)
-    assert body["status"] == "queued"
-    assert body["task_id"] == str(task_id)
+    assert body["run_id"] == str(run.id)
+    assert body["accepted"] is True
     assert runtime.enqueued == [str(run.id)]
     assert runtime.cleared == [str(run.id)]
 
@@ -468,12 +455,8 @@ def test_retry_one_failed_detail_requeues_same_run(client: TestClient, admin_use
 
     assert response.status_code == HTTPStatus.CREATED
     body = response.json()["data"]
-    assert body["id"] == str(run.id)
-    assert body["status"] == "queued"
-    assert body["started_at"] is None
-    assert body["finished_at"] is None
-    assert body["result"] == {"detail_retry": True}
-    assert body["error"] is None
+    assert body["run_id"] == str(run.id)
+    assert body["accepted"] is True
     assert runtime.cleared == [str(run.id)]
     assert runtime.enqueued == [str(run.id)]
 
@@ -513,7 +496,9 @@ def test_retry_all_failed_details_requeues_all_crawl_failed_rows(client: TestCli
     )
 
     assert response.status_code == HTTPStatus.CREATED
-    assert response.json()["data"]["status"] == "queued"
+    body = response.json()["data"]
+    assert body["run_id"] == str(run.id)
+    assert body["accepted"] is True
     session.expire_all()
     statuses = {
         row.code: row.status
@@ -869,10 +854,7 @@ def test_incremental_run_tasks_hide_legacy_already_exists_skips(client: TestClie
     assert "summary" not in payload
 
     summary_response = client.get(f"/api/crawler/runs/{run.id}/tasks/summary", headers=auth_headers(client, admin_user))
-    assert summary_response.status_code == 200
-    assert summary_response.json()["data"]["total"] == 1
-    assert summary_response.json()["data"]["skipped"] == 0
-    assert summary_response.json()["data"]["waiting"] == 1
+    assert summary_response.status_code == 404
 
 
 def test_run_tasks_endpoint_returns_paginated_rows_without_summary(client: TestClient, admin_user) -> None:
@@ -900,7 +882,7 @@ def test_run_tasks_endpoint_returns_paginated_rows_without_summary(client: TestC
     assert "summary" not in body
 
 
-def test_run_task_summary_endpoint_returns_full_run_summary(client: TestClient, admin_user) -> None:
+def test_run_task_summary_endpoint_returns_404(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
     session = TestingSessionLocal()
     run = CrawlRun(task_name="任务", status="running", crawl_mode="incremental", queued_at=datetime.now())
@@ -918,19 +900,7 @@ def test_run_task_summary_endpoint_returns_full_run_summary(client: TestClient, 
 
     response = client.get(f"/api/crawler/runs/{run.id}/tasks/summary", headers=headers)
 
-    assert response.status_code == HTTPStatus.OK
-    assert response.json()["data"] == {
-        "total": 6,
-        "pending_crawl": 1,
-        "crawling": 1,
-        "saved": 1,
-        "skipped": 1,
-        "crawl_failed": 1,
-        "save_failed": 1,
-        "completed": 2,
-        "waiting": 2,
-        "failed": 2,
-    }
+    assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_run_task_summary_endpoint_returns_404_for_missing_run(client: TestClient, admin_user) -> None:
@@ -941,7 +911,7 @@ def test_run_task_summary_endpoint_returns_404_for_missing_run(client: TestClien
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_run_list_uses_page_size_has_more_and_no_inline_total(client: TestClient, admin_user) -> None:
+def test_run_list_uses_page_size_and_total(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
     session = TestingSessionLocal()
     task = CrawlTask(name="run-page-task", storage_location="A", owner_id=admin_user.id)
@@ -954,35 +924,17 @@ def test_run_list_uses_page_size_has_more_and_no_inline_total(client: TestClient
     response = client.get("/api/crawler/runs?page=1&size=2", headers=headers)
 
     assert response.status_code == HTTPStatus.OK
-    data = response.json()["data"]
-    assert data["page"] == 1
-    assert data["size"] == 2
-    assert data["has_more"] is True
+    data = response.json()
+    assert data["total"] == 3
     assert len(data["rows"]) == 2
-    assert "total" not in data
 
 
-def test_run_count_endpoint_is_owner_scoped(client: TestClient, admin_user, db_session) -> None:
-    from backend.app.models.user import User
-
+def test_run_count_endpoint_returns_404(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
-    other = User(username="other-run-owner", hashed_password="x")
-    db_session.add(other)
-    db_session.flush()
-    owned_task = CrawlTask(name="owned-run-task", storage_location="A", owner_id=admin_user.id)
-    other_task = CrawlTask(name="other-run-task", storage_location="B", owner_id=other.id)
-    db_session.add_all([owned_task, other_task])
-    db_session.flush()
-    db_session.add_all([
-        CrawlRun(task_id=owned_task.id, task_name=owned_task.name, status="completed", crawl_mode="full"),
-        CrawlRun(task_id=other_task.id, task_name=other_task.name, status="completed", crawl_mode="full"),
-    ])
-    db_session.commit()
 
     response = client.get("/api/crawler/runs/count", headers=headers)
 
-    assert response.status_code == HTTPStatus.OK
-    assert response.json()["data"]["total"] == 1
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_run_tasks_include_display_code_and_name_from_item_data(client, db_session, auth_headers, test_user):

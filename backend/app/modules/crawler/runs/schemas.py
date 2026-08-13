@@ -19,6 +19,48 @@ class RunLogEntry(BaseModel):
 
 
 class CrawlRunRead(BaseModel):
+    """Full run read model — used for detail endpoint."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    task_id: uuid.UUID | None
+    task_name: str
+    status: str
+    crawl_mode: str
+    queued_at: datetime | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    result: dict[str, Any] | None
+    error: str | None
+    resumed_from: uuid.UUID | None
+    created_at: datetime
+    updated_at: datetime | None
+
+
+class CrawlRunListItem(BaseModel):
+    """Lightweight list item — no logs, no detail_tasks."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    task_id: uuid.UUID | None
+    task_name: str
+    status: str
+    crawl_mode: str
+    queued_at: datetime | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    result: dict[str, Any] | None
+    error: str | None
+    resumed_from: uuid.UUID | None
+    created_at: datetime
+    updated_at: datetime | None
+
+
+class CrawlRunDetailRead(BaseModel):
+    """Full run read model with logs — used for detail endpoint."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -35,6 +77,50 @@ class CrawlRunRead(BaseModel):
     created_at: datetime
     updated_at: datetime | None
     logs: list[RunLogEntry] = []
+
+
+class RunActionAccepted(BaseModel):
+    """Minimal action response for stop, restart, delete, retry, run."""
+
+    run_id: str
+    accepted: bool
+
+
+class CrawlRunDetailTaskListItem(BaseModel):
+    """Lightweight detail task item for paginated task list."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    run_id: uuid.UUID
+    task_name: str
+    code: str | None
+    source_url: str
+    source_name: str
+    source_url_name: str | None = None
+    task_url: str | None = None
+    task_final_url: str | None = None
+    task_url_type: str | None = None
+    status: str
+    error: str | None
+    item_data: dict[str, Any] | None
+    created_at: datetime
+    crawled_at: datetime | None
+    saved_at: datetime | None
+    display_code: str | None = None
+    display_source_name: str | None = None
+
+
+class RunTaskPage(BaseModel):
+    """Paginated task list response."""
+
+    rows: list[CrawlRunDetailTaskListItem]
+    total: int
+
+
+def accepted_run_action(run_id: str | uuid.UUID) -> dict:
+    """Build a RunActionAccepted response dict."""
+    return {"run_id": str(run_id), "accepted": True}
 
 
 class CrawlRunDetailTaskRead(BaseModel):

@@ -263,7 +263,6 @@ def test_create_temporary_run_seeds_detail_rows_and_enqueues(client: TestClient,
     import uuid as uuid_module
 
     from backend.app.models.crawl_run import CrawlRunDetailTask
-    from backend.app.modules.crawler.runs.schemas import CrawlRunRead
 
     headers = auth_headers(client, admin_user)
     task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
@@ -298,15 +297,12 @@ def test_create_temporary_run_seeds_detail_rows_and_enqueues(client: TestClient,
 
     assert response.status_code == HTTPStatus.CREATED
     body = response.json()["data"]
-    assert body["task_id"] == task_id
-    assert body["status"] == "queued"
-    assert body["crawl_mode"] == "temporary"
-    assert body["result"] == {"temporary": True, "detail_url_count": 2}
-    assert runtime.enqueued == [body["id"]]
+    assert body == {"run_id": runtime.enqueued[0], "accepted": True}
+    assert len(runtime.enqueued) == 1
 
     session = TestingSessionLocal()
     try:
-        run_uuid = uuid_module.UUID(body["id"])
+        run_uuid = uuid_module.UUID(body["run_id"])
         rows = (
             session.query(CrawlRunDetailTask)
             .filter(CrawlRunDetailTask.run_id == run_uuid)
