@@ -29,7 +29,7 @@ export function ThemeModeToggle({
           {darkMode ? '深色模式' : '浅色模式'}
         </span>
       ) : null}
-      <div ref={triggerRef} className={styles.buttonWrap}>
+      <div ref={triggerRef as React.Ref<HTMLDivElement>} className={styles.buttonWrap}>
         <Classic
           aria-label="切换明暗模式"
           className={clsx('theme-toggle', styles.toggleButton, styles[size])}

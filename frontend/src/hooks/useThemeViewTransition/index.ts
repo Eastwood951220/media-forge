@@ -3,8 +3,8 @@ import { flushSync } from 'react-dom'
 import { useThemeStore } from '@/stores/useThemeStore'
 import type { StartViewTransition, UseThemeViewTransitionOptions } from './types'
 
-const DEFAULT_DURATION = 5000
-const DEFAULT_EASING = 'cubic-bezier(0.2, 0, 0, 1)'
+const DEFAULT_DURATION = 280
+const DEFAULT_EASING = 'linear'
 const TRANSITION_CLASS = 'theme-transition-active'
 
 function shouldSkipTransition(): boolean {
@@ -29,7 +29,7 @@ export function useThemeViewTransition({
   toggleTheme,
 }: UseThemeViewTransitionOptions) {
   const transitionLockRef = useRef(false)
-  const triggerRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLElement | null>(null)
 
   const runTransition = useCallback(async () => {
     if (transitionLockRef.current) {
@@ -61,9 +61,15 @@ export function useThemeViewTransition({
 
       await transition.ready
 
-      const x = window.innerWidth   // 右上角 → 右边缘
-      const y = 0                   // 右上角 → 顶部
-      const maxRadius = Math.hypot(window.innerWidth, window.innerHeight) // 从右上到左下对角距离
+      const { top, left, width, height } = triggerEl.getBoundingClientRect()
+      const x = left + width / 2
+      const y = top + height / 2
+      const maxRadius = Math.max(
+        Math.hypot(x, y),
+        Math.hypot(window.innerWidth - x, y),
+        Math.hypot(x, window.innerHeight - y),
+        Math.hypot(window.innerWidth - x, window.innerHeight - y),
+      )
 
       const newAnim = root.animate(
         {
