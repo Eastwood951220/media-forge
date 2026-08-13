@@ -75,6 +75,41 @@ class CrawlTaskRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TaskUrlListItem(BaseModel):
+    """Lightweight URL entry for the task list view (no created_at/updated_at)."""
+
+    id: uuid.UUID
+    position: int
+    url: str
+    url_type: str
+    has_magnet: bool
+    has_chinese_sub: bool
+    url_name: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class CrawlTaskListItem(BaseModel):
+    """Task row for the paginated list view (no runtime fields)."""
+
+    id: uuid.UUID
+    name: str
+    storage_location: str
+    is_skip: bool
+    urls: list[TaskUrlListItem]
+
+    model_config = {"from_attributes": True}
+
+
+class CrawlTaskListResponse(BaseModel):
+    """Paginated task list response — static data only."""
+
+    rows: list[CrawlTaskListItem]
+    total: int
+    page: int
+    size: int
+
+
 class ExtractNameRequest(BaseModel):
     url: str = Field(..., min_length=1)
     url_type: str = Field(..., min_length=1)

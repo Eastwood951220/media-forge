@@ -14,11 +14,10 @@ from backend.app.modules.crawler.tasks.delete_service import UnsupportedDeleteMo
 from backend.app.modules.crawler.tasks.errors import raise_task_integrity_error
 from backend.app.modules.crawler.tasks.provider import open_delete_provider
 from backend.app.modules.crawler.tasks.runtime_status import (
-    build_task_runtime_status_response_for_task_ids,
     can_delete_task_runtime_status,
     get_task_runtime_status,
 )
-from backend.app.modules.crawler.tasks.serializers import serialize_task
+from backend.app.modules.crawler.tasks.serializers import serialize_task, serialize_task_list_item
 from backend.app.modules.crawler.tasks.validation import (
     check_urls_unique,
     ensure_delete_mode_supported,
@@ -27,7 +26,7 @@ from backend.app.modules.crawler.tasks.validation import (
 from backend.app.repositories.crawl_task import CrawlTaskRepository
 from backend.app.schemas.crawl_task import (
     CrawlTaskCreate,
-    CrawlTaskStats,
+    CrawlTaskListResponse,
     CrawlTaskUpdate,
     CrawlTaskUrlRunCreate,
     TemporaryCrawlRunCreate,
@@ -51,26 +50,14 @@ class CrawlerTaskService:
         size: int,
         keyword: str | None = None,
     ) -> dict:
-        rows, has_more = self.repo.get_by_owner(owner_id, page=page, size=size, keyword=keyword)
-        latest_runs = self.repo.get_latest_runs_by_task_ids([row.id for row in rows])
-        runtime = build_task_runtime_status_response_for_task_ids(
-            self.db,
-            owner_id,
-            [row.id for row in rows],
-        )
-        return {
-            "rows": [serialize_task(row, latest_runs.get(row.id)).model_dump(mode="json") for row in rows],
-            "page": page,
-            "size": size,
-            "has_more": has_more,
-            "runtime": runtime.model_dump(mode="json"),
-        }
-
-    def count_tasks(self, owner_id: uuid.UUID, *, keyword: str | None = None) -> dict:
-        return {"total": self.repo.count_by_owner(owner_id, keyword=keyword)}
-
-    def get_stats(self, owner_id: uuid.UUID) -> dict:
-        return CrawlTaskStats(**self.repo.get_summary_stats(owner_id)).model_dump()
+        rows, _ = self.repo.get_by_owner(owner_id, page=page, size=size, keyword=keyword)
+        total = self.repo.count_by_owner(owner_id, keyword=keyword)
+        return CrawlTaskListResponse(
+            rows=[serialize_task_list_item(row) for row in rows],
+            total=total,
+            page=page,
+            size=size,
+        ).model_dump(mode="json")
 
     def task_dict(self, owner_id: uuid.UUID) -> dict:
         return self.repo.get_dict_by_owner(owner_id)

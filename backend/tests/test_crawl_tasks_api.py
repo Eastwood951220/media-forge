@@ -3,7 +3,6 @@ from http import HTTPStatus
 
 from fastapi.testclient import TestClient
 
-from backend.app.models.crawl_run import CrawlRun
 from backend.app.models.crawl_task import CrawlTask
 from backend.tests.conftest import TestingSessionLocal
 
@@ -81,9 +80,10 @@ class TestCrawlTasksApi:
         list_response = client.get("/api/crawler/tasks", headers=headers)
         assert list_response.status_code == HTTPStatus.OK
         body = list_response.json()
-        assert body["total"] == 1
-        assert [item["name"] for item in body["rows"]] == ["每日演员任务"]
-        assert body["rows"][0]["urls"][0]["url_name"] == "演员 A"
+        data = body["data"]
+        assert data["total"] == 1
+        assert [item["name"] for item in data["rows"]] == ["每日演员任务"]
+        assert data["rows"][0]["urls"][0]["url_name"] == "演员 A"
 
     def test_create_task_rejects_duplicate_urls(
         self,
@@ -228,77 +228,35 @@ class TestCrawlTasksApi:
         session.commit()
         session.close()
 
-        response = client.get("/api/crawler/tasks", headers=headers)
+        response = client.get("/api/crawler/tasks?size=100", headers=headers)
 
         assert response.status_code == HTTPStatus.OK
         body = response.json()
-        assert body["total"] == 25
-        assert len(body["rows"]) == 25
+        data = body["data"]
+        assert data["total"] == 25
+        assert len(data["rows"]) == 25
 
-    def test_stats_returns_total_enabled_and_disabled_counts(
+    def test_task_detail_keeps_full_edit_fields(
         self,
         client: TestClient,
         admin_user,
     ) -> None:
         headers = auth_headers(client, admin_user)
-        session = TestingSessionLocal()
-        session.add_all(
-            [
-                CrawlTask(name="启用任务1", storage_location="ENABLED1", owner_id=admin_user.id, is_skip=False),
-                CrawlTask(name="启用任务2", storage_location="ENABLED2", owner_id=admin_user.id, is_skip=False),
-                CrawlTask(name="禁用任务", storage_location="DISABLED", owner_id=admin_user.id, is_skip=True),
-            ]
-        )
-        session.commit()
-        session.close()
+        payload = task_payload()
+        created_response = client.post("/api/crawler/tasks", json=payload, headers=headers)
+        assert created_response.status_code == HTTPStatus.CREATED
+        task_id = created_response.json()["data"]["id"]
 
-        response = client.get("/api/crawler/tasks/stats", headers=headers)
+        response = client.get(f"/api/crawler/tasks/{task_id}", headers=headers)
 
         assert response.status_code == HTTPStatus.OK
-        assert response.json()["data"] == {
-            "total": 3,
-            "enabled": 2,
-            "disabled": 1,
-        }
-
-    def test_list_tasks_returns_latest_run_metadata(
-        self,
-        client: TestClient,
-        admin_user,
-    ) -> None:
-        headers = auth_headers(client, admin_user)
-        session = TestingSessionLocal()
-        task = CrawlTask(name="有码任务", storage_location="AV", owner_id=admin_user.id, status="success")
-        session.add(task)
-        session.flush()
-        session.add_all(
-            [
-                CrawlRun(
-                    task_id=task.id,
-                    task_name=task.name,
-                    status="failed",
-                    crawl_mode="incremental",
-                    created_at=datetime(2026, 7, 2, 8, 0, 0),
-                ),
-                CrawlRun(
-                    task_id=task.id,
-                    task_name=task.name,
-                    status="completed",
-                    crawl_mode="full",
-                    created_at=datetime(2026, 7, 3, 8, 0, 0),
-                ),
-            ]
-        )
-        session.commit()
-        session.close()
-
-        response = client.get("/api/crawler/tasks", headers=headers)
-
-        assert response.status_code == HTTPStatus.OK
-        row = response.json()["rows"][0]
-        assert row["name"] == "有码任务"
-        assert row["last_run_status"] == "completed"
-        assert row["last_run_at"].startswith("2026-07-03T08:00:00")
+        detail = response.json()["data"]
+        assert detail["id"] == task_id
+        assert detail["name"] == "每日演员任务"
+        assert detail["storage_location"] == "每日演员任务"
+        assert detail["is_skip"] is False
+        assert len(detail["urls"]) == 1
+        assert detail["urls"][0]["url"] == "https://javdb.com/actors/abc"
 
 
 def test_create_temporary_run_seeds_detail_rows_and_enqueues(client: TestClient, admin_user, monkeypatch) -> None:
