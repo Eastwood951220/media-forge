@@ -5,7 +5,7 @@ import type {
   UseThemeViewTransitionOptions,
 } from './types'
 
-const DEFAULT_DURATION = 1200
+const DEFAULT_DURATION = 280
 const DEFAULT_EASING = 'linear'
 const TOP_RIGHT_ORIGIN_INSET = 44
 const THEME_TRANSITION_ACTIVE_CLASS = 'theme-transition-active'
@@ -83,6 +83,7 @@ export function useThemeViewTransition({
   const triggerRef = useRef<HTMLElement | null>(null)
   const warmupCompleteRef = useRef(false)
   const warmupPromiseRef = useRef<Promise<void> | null>(null)
+  const visibleTransitionCountRef = useRef(0)
 
   const ensureWarmup = useCallback((startViewTransition: StartViewTransition) => {
     if (warmupCompleteRef.current) {
@@ -144,7 +145,9 @@ export function useThemeViewTransition({
         originEl ?? triggerRef.current,
       )
 
-      const coordinateScale = getViewTransitionCoordinateScale()
+      const coordinateScale = visibleTransitionCountRef.current === 0
+        ? getViewTransitionCoordinateScale()
+        : 1
       const revealX = x * coordinateScale
       const revealY = y * coordinateScale
       const radius = getCoveringRadius(
@@ -192,6 +195,7 @@ export function useThemeViewTransition({
           animation.finished,
           transition.finished,
         ])
+        visibleTransitionCountRef.current += 1
       } catch (error) {
         console.warn('[theme transition] failed:', error)
       } finally {

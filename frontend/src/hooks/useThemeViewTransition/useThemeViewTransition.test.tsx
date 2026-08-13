@@ -261,6 +261,56 @@ describe('useThemeViewTransition', () => {
     )
   })
 
+  it('uses the high-density correction only for the first visible transition', async () => {
+    mockDevicePixelRatio(2)
+    const animateMock = vi.fn().mockReturnValue({ finished: Promise.resolve() })
+    document.documentElement.animate = animateMock
+    const startViewTransition = vi.fn((callback: () => void) => {
+      callback()
+      return createViewTransition()
+    })
+    ;(document as unknown as { startViewTransition: MockViewTransition }).startViewTransition = startViewTransition
+
+    const toggleTheme = () => useThemeStore.getState().toggleMode()
+    const { result } = renderHook(() => useThemeViewTransition({ duration: 280, toggleTheme }))
+    const trigger = document.createElement('button')
+    mockButtonRect(trigger, { top: 72, left: 1900, width: 40, height: 40 })
+
+    await waitFor(() => {
+      expect(startViewTransition).toHaveBeenCalledTimes(1)
+    })
+
+    await act(async () => {
+      await result.current.runTransition(trigger)
+      await result.current.runTransition(trigger)
+    })
+
+    expect(animateMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        clipPath: [
+          'circle(0px at 3840px 184px)',
+          'circle(4247.758938546302px at 3840px 184px)',
+        ],
+      }),
+      expect.objectContaining({
+        pseudoElement: '::view-transition-new(root)',
+      }),
+    )
+    expect(animateMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        clipPath: [
+          'circle(0px at 1920px 92px)',
+          'circle(2123.879469273151px at 1920px 92px)',
+        ],
+      }),
+      expect.objectContaining({
+        pseudoElement: '::view-transition-new(root)',
+      }),
+    )
+  })
+
   it('switches immediately without root animation when reduced motion is requested', async () => {
     const animateMock = vi.fn()
     document.documentElement.animate = animateMock
