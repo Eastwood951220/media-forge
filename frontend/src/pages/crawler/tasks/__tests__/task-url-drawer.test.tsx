@@ -157,4 +157,25 @@ describe('TaskFormPage URL table drawer', () => {
     const finalDelete = screen.getByRole('button', { name: /删除/ })
     expect(finalDelete).toBeDisabled()
   })
+
+  it('auto-fetches missing URL names during whole-task create submit in card mode', async () => {
+    paramsMock = {}
+    vi.mocked(extractTaskName).mockResolvedValue({ name: 'Created Actor' })
+
+    render(<TaskFormPage />, { wrapper })
+
+    await userEvent.type(screen.getByLabelText('任务名称'), 'Manual Task')
+    await userEvent.type(screen.getByLabelText('网盘路径'), 'Manual Task')
+    await userEvent.type(screen.getByLabelText('URL'), 'https://javdb.com/actors/create-person')
+    fireEvent.click(await screen.findByText('创 建'))
+
+    await waitFor(() => {
+      expect(extractTaskName).toHaveBeenCalledWith('https://javdb.com/actors/create-person', 'actors')
+    })
+    await waitFor(() => {
+      expect(createCrawlTask).toHaveBeenCalledWith(expect.objectContaining({
+        urls: [expect.objectContaining({ url_name: 'Created Actor' })],
+      }))
+    })
+  })
 })
