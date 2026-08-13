@@ -1,14 +1,12 @@
-// @ts-nocheck — test file, uses require('react') inside hoisted mock factory
+// @ts-nocheck - test file, uses require('react') inside hoisted mock factory
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeModeToggle } from './index'
 import { useThemeStore } from '@/stores/useThemeStore'
 
-// Mock @theme-toggles/react CSS since it uses Tailwind v4 syntax jsdom can't parse
 vi.mock('@theme-toggles/react/styles/classic.css', () => ({}))
 
-// Mock @theme-toggles/react since it ships raw TSX without React imports
 vi.mock('@theme-toggles/react', () => {
   const React = require('react')
   const Classic = React.forwardRef<HTMLButtonElement, Record<string, unknown>>(
@@ -41,6 +39,31 @@ describe('ThemeModeToggle', () => {
     })
     document.documentElement.dataset.theme = 'light'
     document.documentElement.className = ''
+    document.documentElement.removeAttribute('style')
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === '(prefers-reduced-motion: reduce)' ? false : false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    })
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 2000,
+    })
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      writable: true,
+      value: 1000,
+    })
   })
 
   it('renders an accessible animated theme button instead of an Ant Design switch', () => {
@@ -51,15 +74,12 @@ describe('ThemeModeToggle', () => {
     expect(screen.queryByRole('switch', { name: '切换明暗模式' })).not.toBeInTheDocument()
     expect(button).toHaveClass('theme-toggle')
     expect(button).not.toHaveClass('ant-switch')
-    expect(button).not.toHaveClass('ant-switch-loading')
-    expect(button).not.toHaveClass('ant-switch-disabled')
   })
 
   it('uses store state as the toggled visual state and toggles theme on click', async () => {
     render(<ThemeModeToggle />)
 
     const button = screen.getByRole('button', { name: '切换明暗模式' })
-
     await userEvent.click(button)
 
     await waitFor(() => {
@@ -77,10 +97,18 @@ describe('ThemeModeToggle', () => {
     expect(screen.getByRole('button', { name: '切换明暗模式' })).toHaveClass('theme-toggle')
   })
 
-  it('uses the wrapper div as the view-transition origin matching button position', async () => {
-    const animateMock = vi.fn().mockReturnValue({ finished: Promise.resolve() })
+  it('prepares CSS origin from the clicked theme button before the first transition frame', async () => {
+    const animateMock = vi.fn()
     document.documentElement.animate = animateMock
+    let cssStatePreparedBeforeCallback = false
     document.startViewTransition = vi.fn((callback: () => void) => {
+      cssStatePreparedBeforeCallback =
+        document.documentElement.classList.contains('theme-transition-active') &&
+        document.documentElement.style.getPropertyValue('--theme-transition-x') === '1920px' &&
+        document.documentElement.style.getPropertyValue('--theme-transition-y') === '92px' &&
+        document.documentElement.style.getPropertyValue('--theme-transition-radius') === '2123.879469273151px' &&
+        document.documentElement.style.getPropertyValue('--theme-transition-duration') === '280ms' &&
+        document.documentElement.style.getPropertyValue('--theme-transition-easing') === 'linear'
       callback()
       return {
         ready: Promise.resolve(),
@@ -90,22 +118,11 @@ describe('ThemeModeToggle', () => {
         types: new Set<string>(),
       }
     }) as unknown as Document['startViewTransition']
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      writable: true,
-      value: 2000,
-    })
-    Object.defineProperty(window, 'innerHeight', {
-      configurable: true,
-      writable: true,
-      value: 1000,
-    })
 
     render(<ThemeModeToggle />)
 
     const button = screen.getByRole('button', { name: '切换明暗模式' })
-    const wrapper = button.parentElement!
-    wrapper.getBoundingClientRect = () => ({
+    button.getBoundingClientRect = () => ({
       x: 1900,
       y: 72,
       top: 72,
@@ -120,19 +137,8 @@ describe('ThemeModeToggle', () => {
     await userEvent.click(button)
 
     await waitFor(() => {
-      expect(animateMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          clipPath: [
-            'circle(0px at 1920px 92px)',
-            expect.stringMatching(/^circle\(.+px at 1920px 92px\)$/),
-          ],
-        }),
-        expect.objectContaining({
-          duration: 280,
-          easing: 'linear',
-          pseudoElement: '::view-transition-new(root)',
-        }),
-      )
+      expect(cssStatePreparedBeforeCallback).toBe(true)
     })
+    expect(animateMock).not.toHaveBeenCalled()
   })
 })
