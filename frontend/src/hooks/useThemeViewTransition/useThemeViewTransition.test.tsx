@@ -3,14 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useThemeViewTransition } from './index'
 import { useThemeStore } from '@/stores/useThemeStore'
 
-type TestDocument = Document & {
-  startViewTransition?: (callback: () => void) => { ready: Promise<void> }
-}
+type MockViewTransition = ReturnType<typeof vi.fn>
 
 describe('useThemeViewTransition', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    delete (document as TestDocument).startViewTransition
+    document.startViewTransition = undefined as unknown as Document['startViewTransition']
     document.documentElement.dataset.theme = 'light'
     document.documentElement.className = ''
     useThemeStore.setState({
@@ -37,9 +35,9 @@ describe('useThemeViewTransition', () => {
   it('animates the root view transition with tuned duration and easing', async () => {
     const animateMock = vi.fn().mockReturnValue({ finished: Promise.resolve() })
     document.documentElement.animate = animateMock
-    ;(document as TestDocument).startViewTransition = vi.fn((callback: () => void) => {
+    ;(document as unknown as { startViewTransition: MockViewTransition }).startViewTransition = vi.fn((callback: () => void) => {
       callback()
-      return { ready: Promise.resolve() }
+      return { ready: Promise.resolve(), finished: Promise.resolve(), updateCallbackDone: Promise.resolve(), skipTransition: () => {}, types: new Set<string>() }
     })
 
     const toggleTheme = () => useThemeStore.getState().toggleMode()
@@ -62,7 +60,7 @@ describe('useThemeViewTransition', () => {
       await result.current.runTransition()
     })
 
-    expect((document as TestDocument).startViewTransition).toHaveBeenCalledTimes(1)
+    expect((document as unknown as { startViewTransition: MockViewTransition }).startViewTransition).toHaveBeenCalledTimes(1)
     expect(useThemeStore.getState().darkMode).toBe(true)
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(animateMock).toHaveBeenCalledWith(
@@ -84,7 +82,7 @@ describe('useThemeViewTransition', () => {
   it('switches immediately without root animation when reduced motion is requested', async () => {
     const animateMock = vi.fn()
     document.documentElement.animate = animateMock
-    ;(window.matchMedia as ReturnType<typeof vi.fn>).mockImplementation((query: string) => ({
+    ;(window.matchMedia as MockViewTransition).mockImplementation((query: string) => ({
       matches: query === '(prefers-reduced-motion: reduce)',
       media: query,
       onchange: null,
@@ -94,9 +92,9 @@ describe('useThemeViewTransition', () => {
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
     }))
-    ;(document as TestDocument).startViewTransition = vi.fn((callback: () => void) => {
+    ;(document as unknown as { startViewTransition: MockViewTransition }).startViewTransition = vi.fn((callback: () => void) => {
       callback()
-      return { ready: Promise.resolve() }
+      return { ready: Promise.resolve(), finished: Promise.resolve(), updateCallbackDone: Promise.resolve(), skipTransition: () => {}, types: new Set<string>() }
     })
 
     const toggleTheme = () => useThemeStore.getState().toggleMode()
@@ -108,7 +106,7 @@ describe('useThemeViewTransition', () => {
     })
 
     expect(useThemeStore.getState().darkMode).toBe(true)
-    expect((document as TestDocument).startViewTransition).not.toHaveBeenCalled()
+    expect((document as unknown as { startViewTransition: MockViewTransition }).startViewTransition).not.toHaveBeenCalled()
     expect(animateMock).not.toHaveBeenCalled()
   })
 

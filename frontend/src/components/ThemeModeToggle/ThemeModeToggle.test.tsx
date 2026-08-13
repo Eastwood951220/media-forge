@@ -18,7 +18,7 @@ vi.mock('@theme-toggles/react', () => {
 describe('ThemeModeToggle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    delete (document as Document & { startViewTransition?: unknown }).startViewTransition
+    document.startViewTransition = undefined as unknown as Document['startViewTransition']
     useThemeStore.setState({
       mode: 'light',
       darkMode: false,
