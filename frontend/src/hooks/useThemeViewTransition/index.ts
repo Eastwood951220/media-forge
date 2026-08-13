@@ -29,7 +29,7 @@ export function useThemeViewTransition({
   toggleTheme,
 }: UseThemeViewTransitionOptions) {
   const transitionLockRef = useRef(false)
-  const triggerRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
 
   const runTransition = useCallback(async () => {
     if (transitionLockRef.current) {
@@ -52,6 +52,7 @@ export function useThemeViewTransition({
       const transition = startViewTransition(() => {
         const nextDark = !useThemeStore.getState().darkMode
         root.dataset.theme = nextDark ? 'dark' : 'light'
+        root.classList.toggle('dark', nextDark)
         root.classList.add(TRANSITION_CLASS)
         flushSync(() => {
           toggleTheme()

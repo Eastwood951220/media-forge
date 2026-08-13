@@ -42,7 +42,7 @@ describe('useThemeViewTransition', () => {
 
     const toggleTheme = () => useThemeStore.getState().toggleMode()
     const { result } = renderHook(() => useThemeViewTransition({ toggleTheme }))
-    const trigger = document.createElement('div')
+    const trigger = document.createElement('button')
     trigger.getBoundingClientRect = () => ({
       x: 12,
       y: 20,
@@ -63,12 +63,13 @@ describe('useThemeViewTransition', () => {
     expect((document as unknown as { startViewTransition: MockViewTransition }).startViewTransition).toHaveBeenCalledTimes(1)
     expect(useThemeStore.getState().darkMode).toBe(true)
     expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(document.documentElement).toHaveClass('dark')
     expect(animateMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        clipPath: expect.arrayContaining([
-          expect.stringContaining('circle(0px at'),
-          expect.stringContaining('circle('),
-        ]),
+        clipPath: [
+          'circle(0px at 32px 40px)',
+          expect.stringMatching(/^circle\(.+px at 32px 40px\)$/),
+        ],
       }),
       expect.objectContaining({
         duration: 280,
@@ -99,7 +100,7 @@ describe('useThemeViewTransition', () => {
 
     const toggleTheme = () => useThemeStore.getState().toggleMode()
     const { result } = renderHook(() => useThemeViewTransition({ toggleTheme }))
-    result.current.triggerRef.current = document.createElement('div')
+    result.current.triggerRef.current = document.createElement('button')
 
     await act(async () => {
       await result.current.runTransition()
@@ -116,7 +117,7 @@ describe('useThemeViewTransition', () => {
 
     const toggleTheme = () => useThemeStore.getState().toggleMode()
     const { result } = renderHook(() => useThemeViewTransition({ toggleTheme }))
-    result.current.triggerRef.current = document.createElement('div')
+    result.current.triggerRef.current = document.createElement('button')
 
     await act(async () => {
       await result.current.runTransition()
