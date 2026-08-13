@@ -107,15 +107,19 @@ export default function UrlEntryDrawer({
       }
     >
       <Form form={form} layout="vertical" disabled={saving}>
-        <UrlEntryFields
-          index={0}
-          onNameExtracted={(index, name) => {
-            form.setFieldValue(['urls', index, 'url_name'], name)
-          }}
-          onUrlTypeDetected={(index, urlType) => {
-            form.setFieldValue(['urls', index, 'url_type'], urlType)
-          }}
-        />
+        <Form.List name="urls">
+          {() => (
+            <UrlEntryFields
+              index={0}
+              onNameExtracted={(index, name) => {
+                form.setFieldValue(['urls', index, 'url_name'], name)
+              }}
+              onUrlTypeDetected={(index, urlType) => {
+                form.setFieldValue(['urls', index, 'url_type'], urlType)
+              }}
+            />
+          )}
+        </Form.List>
       </Form>
     </Drawer>
   )

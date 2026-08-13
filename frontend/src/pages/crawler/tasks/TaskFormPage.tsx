@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DeleteOutlined, EditOutlined, PlusOutlined, UnorderedListOutlined, AppstoreOutlined } from '@ant-design/icons'
 import { useNavigate, useParams, useRouterState } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { App, Button, Col, Form, Input, Row, Switch, Table, Space, Tooltip, Tag } from 'antd'
+import { App, Button, Col, Form, Input, Row, Space, Switch, Table, Tooltip, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   createCrawlTask,
@@ -23,9 +23,16 @@ import {
 } from './taskUrlUtils'
 import { getRouteViewKey } from '@/routes/tags'
 import UrlEntryCard from './components/UrlEntryCard'
+import UrlEntryDrawer from './components/UrlEntryDrawer'
+import type { UrlEntryDrawerSaveResult } from './components/UrlEntryDrawer'
 import styles from './TaskPages.module.less'
 
 const COMPACT_PAGE_SIZE = 10
+
+type UrlDrawerState =
+  | { open: false; mode: 'create'; index: null }
+  | { open: true; mode: 'create'; index: null }
+  | { open: true; mode: 'edit'; index: number; initialValue: TaskUrlEntry }
 
 export default function TaskFormPage() {
   const params = useParams({ strict: false }) as { id?: string }
@@ -40,6 +47,13 @@ export default function TaskFormPage() {
   const [storageLocationManuallyEdited, setStorageLocationManuallyEdited] = useState(false)
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
   const [currentPage, setCurrentPage] = useState(1)
+  const [urlDrawer, setUrlDrawer] = useState<UrlDrawerState>({
+    open: false,
+    mode: 'create',
+    index: null,
+  })
+  const formListAddRef = useRef<((entry: TaskUrlEntry) => void) | null>(null)
+  const formListUrlCountRef = useRef(0)
   const title = useMemo(() => (isEdit ? '编辑任务' : '新建任务'), [isEdit])
 
   const pathname = useRouterState({ select: (state) => state.location.pathname })
@@ -180,20 +194,28 @@ export default function TaskFormPage() {
     }
   }
 
+  const getUrlEntryAt = useCallback((index: number): TaskUrlEntry => {
+    const urls = form.getFieldValue('urls') ?? []
+    return urls[index] ?? { url: '', url_type: '', has_magnet: true, has_chinese_sub: false, sort_type: 0, url_name: '' }
+  }, [form])
+
+  const openCreateUrlDrawer = useCallback(() => {
+    setUrlDrawer({ open: true, mode: 'create', index: null })
+  }, [])
+
+  const openEditUrlDrawer = useCallback((index: number) => {
+    setUrlDrawer({ open: true, mode: 'edit', index, initialValue: getUrlEntryAt(index) })
+  }, [getUrlEntryAt])
+
+  const closeUrlDrawer = useCallback(() => {
+    setUrlDrawer({ open: false, mode: 'create', index: null })
+  }, [])
+
   const handleCancel = useCallback(() => {
     form.resetFields()
     closeCurrentTag()
     void navigate({ to: '/crawler/tasks' })
   }, [form, navigate, closeCurrentTag])
-
-  const handleEditFromTable = useCallback((index: number) => {
-    setViewMode('card')
-    // Scroll to the card after a short delay
-    setTimeout(() => {
-      const cardElement = document.querySelector(`[data-url-index="${index}"]`)
-      cardElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, 100)
-  }, [])
 
   return (
     <div className={styles.page}>
@@ -280,6 +302,8 @@ export default function TaskFormPage() {
           <Form.List name="urls">
             {(fields, { add, remove }) => {
               const urlCount = fields.length
+              formListAddRef.current = add
+              formListUrlCountRef.current = urlCount
 
               if (viewMode === 'table') {
                 const tableData = fields.map((field) => ({
@@ -291,7 +315,7 @@ export default function TaskFormPage() {
                 const columns: ColumnsType<typeof tableData[0]> = [
                   {
                     title: '#',
-                    width: 50,
+                    width: 56,
                     render: (_, __, i) => (currentPage - 1) * COMPACT_PAGE_SIZE + i + 1,
                   },
                   {
@@ -299,39 +323,39 @@ export default function TaskFormPage() {
                     dataIndex: 'index',
                     ellipsis: true,
                     render: (index: number) => {
-                      const url = form.getFieldValue(['urls', index, 'url']) as string ?? '-'
+                      const currentUrl = form.getFieldValue(['urls', index, 'url']) as string ?? '-'
                       return (
-                        <Tooltip title={url}>
-                          <span className={styles.tableUrlCell}>{url}</span>
+                        <Tooltip title={currentUrl}>
+                          <span className={styles.tableUrlCell}>{currentUrl}</span>
                         </Tooltip>
                       )
                     },
                   },
                   {
                     title: '类型',
-                    width: 100,
+                    width: 150,
                     render: (_, record) => {
-                      const url = form.getFieldValue(['urls', record.index, 'url']) as string ?? ''
-                      const source = url ? detectUrlSource(url) : null
+                      const currentUrl = form.getFieldValue(['urls', record.index, 'url']) as string ?? ''
+                      const source = currentUrl ? detectUrlSource(currentUrl) : null
                       const urlType = form.getFieldValue(['urls', record.index, 'url_type']) as UrlType
                       const sourceLabel = source === 'javbus' ? 'JavBus' : source === 'javdb' ? 'JavDB' : null
-                      const typeLabel = sourceLabel
-                        ? urlType && URL_TYPE_LABELS[urlType]
-                          ? `${sourceLabel} - ${URL_TYPE_LABELS[urlType]}`
-                          : sourceLabel
-                        : urlType
-                          ? URL_TYPE_LABELS[urlType] ?? urlType
-                          : '-'
-                      return urlType || source ? <Tag>{typeLabel}</Tag> : '-'
+                      const typeLabel = sourceLabel && urlType && URL_TYPE_LABELS[urlType]
+                        ? `${sourceLabel} - ${URL_TYPE_LABELS[urlType]}`
+                        : sourceLabel || (urlType ? URL_TYPE_LABELS[urlType] ?? urlType : '-')
+                      return typeLabel !== '-' ? <Tag>{typeLabel}</Tag> : '-'
                     },
                   },
                   {
                     title: '名称',
-                    width: 150,
+                    width: 220,
                     ellipsis: true,
                     render: (_, record) => {
-                      const urlName = form.getFieldValue(['urls', record.index, 'url_name']) as string ?? ''
-                      return urlName || '-'
+                      const urlName = form.getFieldValue(['urls', record.index, 'url_name']) as string ?? '-'
+                      return (
+                        <Tooltip title={urlName}>
+                          <span className={styles.tableUrlCell}>{urlName}</span>
+                        </Tooltip>
+                      )
                     },
                   },
                   {
@@ -354,29 +378,31 @@ export default function TaskFormPage() {
                   },
                   {
                     title: '操作',
-                    width: 100,
+                    width: 104,
+                    align: 'right' as const,
                     render: (_, record) => (
-                      <Space size={4}>
+                      <span className={styles.urlTableActions}>
                         <Tooltip title="编辑">
                           <Button
+                            aria-label={`编辑 URL ${record.index + 1}`}
                             type="text"
                             size="small"
                             icon={<EditOutlined />}
-                            onClick={() => handleEditFromTable(record.index)}
+                            onClick={() => openEditUrlDrawer(record.index)}
                           />
                         </Tooltip>
-                        {fields.length > 1 && (
-                          <Tooltip title="删除">
-                            <Button
-                              type="text"
-                              size="small"
-                              danger
-                              icon={<DeleteOutlined />}
-                              onClick={() => remove(record.index)}
-                            />
-                          </Tooltip>
-                        )}
-                      </Space>
+                        <Tooltip title={fields.length > 1 ? '删除' : '至少保留一个 URL'}>
+                          <Button
+                            aria-label={`删除 URL ${record.index + 1}`}
+                            type="text"
+                            size="small"
+                            danger
+                            disabled={fields.length <= 1}
+                            icon={<DeleteOutlined />}
+                            onClick={() => remove(record.index)}
+                          />
+                        </Tooltip>
+                      </span>
                     ),
                   },
                 ]
@@ -387,7 +413,7 @@ export default function TaskFormPage() {
                       <span className={styles.urlCount}>共 {urlCount} 个 URL</span>
                       <Button
                         type="dashed"
-                        onClick={() => add({ has_magnet: true, has_chinese_sub: false, sort_type: 0 })}
+                        onClick={openCreateUrlDrawer}
                         icon={<PlusOutlined />}
                         size="small"
                       >
@@ -406,7 +432,7 @@ export default function TaskFormPage() {
                         size: 'small',
                       }}
                       size="small"
-                      scroll={{ x: 800 }}
+                      scroll={{ x: 1080 }}
                     />
                   </div>
                 )
@@ -450,6 +476,30 @@ export default function TaskFormPage() {
             <Button onClick={handleCancel}>取消</Button>
           </div>
         </Form>
+        <UrlEntryDrawer
+          open={urlDrawer.open}
+          mode={urlDrawer.mode}
+          initialValue={urlDrawer.mode === 'edit' ? urlDrawer.initialValue : undefined}
+          onCancel={closeUrlDrawer}
+          onSave={({ entry, extractedName }) => {
+            if (urlDrawer.mode === 'edit' && urlDrawer.index !== null) {
+              const urls = form.getFieldValue('urls') ?? []
+              form.setFieldsValue({
+                urls: urls.map((item: TaskUrlEntry, i: number) =>
+                  i === urlDrawer.index ? entry : item,
+                ),
+              })
+            } else {
+              formListAddRef.current?.(entry)
+              setCurrentPage(Math.max(1, Math.ceil((formListUrlCountRef.current + 1) / COMPACT_PAGE_SIZE)))
+            }
+            if (extractedName && !form.getFieldValue('name')) {
+              form.setFieldValue('name', extractedName)
+              if (!storageLocationManuallyEdited) form.setFieldValue('storage_location', extractedName)
+            }
+            closeUrlDrawer()
+          }}
+        />
       </section>
     </div>
   )

@@ -117,7 +117,7 @@ describe('TaskFormPage URL table drawer', () => {
     const drawer = await screen.findByRole('dialog', { name: '添加 URL' })
 
     await userEvent.type(within(drawer).getByLabelText('URL'), 'https://javdb.com/actors/new-person')
-    fireEvent.click(within(drawer).getByRole('button', { name: '保存' }))
+    fireEvent.click(await screen.findByText('保 存'))
 
     await waitFor(() => {
       expect(extractTaskName).toHaveBeenCalledWith('https://javdb.com/actors/new-person', 'actors')
@@ -138,7 +138,7 @@ describe('TaskFormPage URL table drawer', () => {
     const input = within(drawer).getByLabelText('URL')
     await userEvent.clear(input)
     await userEvent.type(input, 'https://javdb.com/series/changed')
-    fireEvent.click(within(drawer).getByRole('button', { name: '保存' }))
+    fireEvent.click(await screen.findByText('保 存'))
 
     expect(await screen.findByText('https://javdb.com/series/changed')).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: '最终 URL' })).toBeInTheDocument()
