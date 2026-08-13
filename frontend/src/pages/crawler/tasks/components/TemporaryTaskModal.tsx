@@ -1,6 +1,6 @@
 import { DeleteOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, Button, Form, Input, Modal, Select, Space, Typography } from 'antd'
-import type { TemporaryCrawlRunCreateParams, TaskDictItem } from '@/api/crawlTask/types'
+import type { TemporaryCrawlRunCreateParams, TaskDictItem } from '@/api/crawler/crawlTask/types'
 
 interface TemporaryTaskModalProps {
   open: boolean

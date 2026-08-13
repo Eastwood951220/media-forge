@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
-import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawlerRun/types'
+import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
 import type {
   CrawlerRunDetailUpdatedPayload,
   CrawlerRunLogAppendedPayload,

@@ -7,8 +7,8 @@ import type {
   RetryCrawlerRunTasksRequest,
   RunLogEntry,
   RunTaskSummary,
-} from './types'
-import type { CountResponse, FastListResponse, PaginatedResponse } from '../crawlTask/types'
+} from './types.ts'
+import type { CountResponse, FastListResponse, PaginatedResponse } from '../crawlTask/types.ts'
 
 const BASE_URL = '/api/crawler/runs'
 

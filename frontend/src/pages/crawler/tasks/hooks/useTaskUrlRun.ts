@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { App } from 'antd'
-import { createTaskUrlRun } from '@/api/crawlTask'
-import type { CrawlTask, TaskUrlRunFormValues } from '@/api/crawlTask/types'
+import { createTaskUrlRun } from '@/api/crawler/crawlTask'
+import type { CrawlTask, TaskUrlRunFormValues } from '@/api/crawler/crawlTask/types'
 
 interface UseTaskUrlRunOptions {
   onSubmitted: () => void | Promise<void>

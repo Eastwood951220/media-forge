@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RunListPage from '../src/pages/crawler/runs/RunListPage'
-import { getCrawlerRunCount, getCrawlerRuns, restartCrawlerRun } from '../src/api/crawlerRun'
+import { getCrawlerRunCount, getCrawlerRuns, restartCrawlerRun } from '@/api/crawler/crawlerRun'
 
 vi.mock('../src/api/crawlerRun', () => ({
   getCrawlerRuns: vi.fn(),

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { App, Button, Drawer, Form } from 'antd'
-import { extractTaskName } from '@/api/crawlTask'
-import type { TaskUrlEntry } from '@/api/crawlTask/types'
+import { extractTaskName } from '@/api/crawler/crawlTask'
+import type { TaskUrlEntry } from '@/api/crawler/crawlTask/types'
 import {
   detectUrlSource,
   detectUrlType,

@@ -2,7 +2,7 @@ import { App as AntApp } from 'antd'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CrawlTask } from '../src/api/crawlTask/types'
+import type { CrawlTask } from '@/api/crawler/crawlTask/types'
 import TaskUrlRunModal from '../src/pages/crawler/tasks/components/TaskUrlRunModal'
 
 const task: CrawlTask = {

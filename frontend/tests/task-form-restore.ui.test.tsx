@@ -4,7 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskFormPage from '../src/pages/crawler/tasks/TaskFormPage'
-import { createCrawlTask, extractTaskName, getCrawlTask, updateCrawlTask } from '../src/api/crawlTask'
+import { createCrawlTask, extractTaskName, getCrawlTask, updateCrawlTask } from '@/api/crawler/crawlTask'
 
 vi.mock('../src/api/crawlTask', () => ({
   createCrawlTask: vi.fn(),

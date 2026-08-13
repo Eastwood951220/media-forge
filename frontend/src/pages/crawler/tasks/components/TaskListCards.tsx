@@ -7,8 +7,8 @@ import {
 } from '@ant-design/icons'
 import { Button, Dropdown, Empty, Pagination, Popover, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import type { CrawlTask, CrawlTaskRuntimeSnapshot, TaskRuntimeStatus } from '@/api/crawlTask/types'
-import type { CrawlMode } from '@/api/crawlerRun/types'
+import type { CrawlTask, CrawlTaskRuntimeSnapshot, TaskRuntimeStatus } from '@/api/crawler/crawlTask/types'
+import type { CrawlMode } from '@/api/crawler/crawlerRun/types'
 import styles from '../TaskPages.module.less'
 import {useNavigate} from "@tanstack/react-router";
 

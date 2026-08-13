@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Card, Table } from 'antd'
-import type { CrawlRunDetailTask, RunTaskSummary } from '@/api/crawlerRun/types'
+import type { CrawlRunDetailTask, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
 import styles from '../RunDetailPage.module.less'
 import RunTaskSummaryMetrics from './RunTaskSummaryMetrics'
 import RunTaskToolbar from './RunTaskToolbar'

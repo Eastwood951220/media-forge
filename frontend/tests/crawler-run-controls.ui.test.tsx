@@ -3,8 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListPage from '../src/pages/crawler/tasks/TaskListPage'
-import { createTemporaryCrawlRun, createTaskUrlRun, getCrawlTaskCount, getCrawlTaskStats, getCrawlTasks, getTaskDict } from '../src/api/crawlTask'
-import { runCrawlTask } from '../src/api/crawlerRun'
+import { createTemporaryCrawlRun, createTaskUrlRun, getCrawlTaskCount, getCrawlTaskStats, getCrawlTasks, getTaskDict } from '@/api/crawler/crawlTask'
+import { runCrawlTask } from '@/api/crawler/crawlerRun'
 import { useTaskListQueryStore } from '../src/pages/crawler/tasks/useTaskListQueryStore'
 
 vi.mock('../src/api/crawlTask', () => ({

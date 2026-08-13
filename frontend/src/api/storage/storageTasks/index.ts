@@ -6,7 +6,7 @@ import type {
   StorageSubTask,
   StorageTaskLog,
 } from './types'
-import type { CountResponse, FastListResponse, PaginatedResponse } from '@/api/crawlTask/types'
+import type { CountResponse, FastListResponse, PaginatedResponse } from '@/api/crawler/crawlTask/types'
 
 const BASE_URL = '/api/storage/tasks'
 

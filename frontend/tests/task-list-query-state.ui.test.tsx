@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListPage from '../src/pages/crawler/tasks/TaskListPage'
 import { useTaskListQueryStore } from '../src/pages/crawler/tasks/useTaskListQueryStore'
-import { getCrawlTaskCount, getCrawlTasks } from '../src/api/crawlTask'
+import { getCrawlTaskCount, getCrawlTasks } from '@/api/crawler/crawlTask'
 
 vi.mock('../src/api/crawlTask', () => ({
   getCrawlTasks: vi.fn(),

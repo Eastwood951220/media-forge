@@ -10,7 +10,7 @@ import {
   fetchMovies,
   updateMovieFilterConfig,
 } from '../src/api/movie'
-import { getTaskDict } from '../src/api/crawlTask'
+import { getTaskDict } from '@/api/crawler/crawlTask'
 import { refreshStorageIndex } from '../src/api/storage/storageIndex'
 
 vi.mock('../src/api/movie', () => ({

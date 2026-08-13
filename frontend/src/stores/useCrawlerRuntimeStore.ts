@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { CrawlTaskRuntimeSnapshot } from '@/api/crawlTask/types'
-import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawlerRun/types'
+import type { CrawlTaskRuntimeSnapshot } from '@/api/crawler/crawlTask/types'
+import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'error'
 

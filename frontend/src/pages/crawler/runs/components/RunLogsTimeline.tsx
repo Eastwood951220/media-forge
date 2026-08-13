@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Empty, Spin, Tag, Typography } from 'antd'
-import type { RunLogEntry } from '@/api/crawlerRun/types'
+import type { RunLogEntry } from '@/api/crawler/crawlerRun/types'
 import styles from '../RunDetailPage.module.less'
 
 const levelColors: Record<string, string> = {

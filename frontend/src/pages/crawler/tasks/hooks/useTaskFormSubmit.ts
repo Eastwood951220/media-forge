@@ -1,8 +1,8 @@
 import { App } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useState } from 'react'
-import { createCrawlTask, updateCrawlTask } from '@/api/crawlTask'
-import type { CrawlTaskCreateParams } from '@/api/crawlTask/types'
+import { createCrawlTask, updateCrawlTask } from '@/api/crawler/crawlTask'
+import type { CrawlTaskCreateParams } from '@/api/crawler/crawlTask/types'
 
 export function useTaskFormSubmit(
   taskId: string | undefined,

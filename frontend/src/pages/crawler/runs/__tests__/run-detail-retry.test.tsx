@@ -7,7 +7,7 @@ import {
   getCrawlerRunTaskSummary,
   getCrawlerRunTasks,
   retryCrawlerRunTasks,
-} from '@/api/crawlerRun'
+} from '@/api/crawler/crawlerRun'
 
 vi.mock('@tanstack/react-router', () => ({
   useParams: vi.fn().mockReturnValue({ id: 'run-1' }),
@@ -28,7 +28,7 @@ vi.mock('@/realtime/eventSourceClient', () => ({
   subscribeRealtime: vi.fn().mockReturnValue(() => {}),
 }))
 
-import type { CrawlRun, CrawlRunDetailTask } from '@/api/crawlerRun/types'
+import type { CrawlRun, CrawlRunDetailTask } from '@/api/crawler/crawlerRun/types'
 
 const endedRun: CrawlRun = {
   id: 'run-1',

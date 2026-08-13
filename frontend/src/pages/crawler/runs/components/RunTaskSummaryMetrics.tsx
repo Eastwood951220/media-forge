@@ -1,5 +1,5 @@
 import AnimatedNumber from '@/components/AnimatedNumber'
-import type { RunTaskSummary } from '@/api/crawlerRun/types'
+import type { RunTaskSummary } from '@/api/crawler/crawlerRun/types'
 import styles from '../RunDetailPage.module.less'
 
 interface RunTaskSummaryMetricsProps {

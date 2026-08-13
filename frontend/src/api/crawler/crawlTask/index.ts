@@ -1,5 +1,5 @@
 import { request } from '@/request'
-import type { CrawlRun } from '@/api/crawlerRun/types'
+import type { CrawlRun } from '@/api/crawler/crawlerRun/types.ts'
 import type {
   CountResponse,
   CrawlTask,
@@ -13,7 +13,7 @@ import type {
   TaskDictItem,
   TaskUrlRunCreateParams,
   TemporaryCrawlRunCreateParams,
-} from './types'
+} from './types.ts'
 
 const BASE_URL = '/api/crawler/tasks'
 

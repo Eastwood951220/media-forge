@@ -1,5 +1,5 @@
 import { Form, Modal, Select, Space, Tag, Typography } from 'antd'
-import type { CrawlTask, TaskUrlEntry, TaskUrlRunFormValues } from '@/api/crawlTask/types'
+import type { CrawlTask, TaskUrlEntry, TaskUrlRunFormValues } from '@/api/crawler/crawlTask/types'
 
 interface TaskUrlRunModalProps {
   open: boolean

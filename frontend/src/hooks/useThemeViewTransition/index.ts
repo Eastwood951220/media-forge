@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import { useThemeStore } from '@/stores/useThemeStore'
 import type { StartViewTransition, UseThemeViewTransitionOptions } from './types'
 
-const DEFAULT_DURATION = 280
+const DEFAULT_DURATION = 5000
 const DEFAULT_EASING = 'cubic-bezier(0.2, 0, 0, 1)'
 const TRANSITION_CLASS = 'theme-transition-active'
 
@@ -61,12 +61,9 @@ export function useThemeViewTransition({
 
       await transition.ready
 
-      const { top, left, width, height } = triggerEl.getBoundingClientRect()
-      const x = left + width / 2
-      const y = top + height / 2
-      const right = window.innerWidth - x
-      const bottom = window.innerHeight - y
-      const maxRadius = Math.hypot(Math.max(x, right), Math.max(y, bottom))
+      const x = window.innerWidth   // 右上角 → 右边缘
+      const y = 0                   // 右上角 → 顶部
+      const maxRadius = Math.hypot(window.innerWidth, window.innerHeight) // 从右上到左下对角距离
 
       const newAnim = root.animate(
         {

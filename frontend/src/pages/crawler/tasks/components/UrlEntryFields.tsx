@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { SearchOutlined } from '@ant-design/icons'
 import { App, Button, Form, Input, Select, Switch } from 'antd'
-import { extractTaskName } from '@/api/crawlTask'
+import { extractTaskName } from '@/api/crawler/crawlTask'
 import {
   buildFinalUrlPreview,
   detectUrlSource,

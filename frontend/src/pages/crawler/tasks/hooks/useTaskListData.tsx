@@ -6,15 +6,15 @@ import {
   getCrawlTaskCount,
   getCrawlTasks,
   updateCrawlTask,
-} from '@/api/crawlTask'
+} from '@/api/crawler/crawlTask'
 import type {
   CrawlTask,
   CrawlTaskRuntimeSnapshot,
   CrawlTaskRuntimeStats,
   DeleteMode,
-} from '@/api/crawlTask/types'
-import { restartCrawlerRun, runCrawlTask, stopCrawlerRun } from '@/api/crawlerRun'
-import type { CrawlMode } from '@/api/crawlerRun/types'
+} from '@/api/crawler/crawlTask/types'
+import { restartCrawlerRun, runCrawlTask, stopCrawlerRun } from '@/api/crawler/crawlerRun'
+import type { CrawlMode } from '@/api/crawler/crawlerRun/types'
 import { queryKeys } from '@/api/queryKeys'
 import { invalidateCrawlerRunLists } from '@/api/queryInvalidation'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'

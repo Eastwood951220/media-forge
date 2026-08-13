@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { App } from 'antd'
 import { fetchFilters } from '@/api/movie'
-import { getTaskDict } from '@/api/crawlTask'
+import { getTaskDict } from '@/api/crawler/crawlTask'
 import { MOVIE_FILTER_OPTION_TYPE } from '../constants'
 import type { MovieFilterConfig, SelectOption } from '@/api/movie/types'
 import { buildMovieFilterParams, type MovieFilterState } from '../utils/movieFilter'

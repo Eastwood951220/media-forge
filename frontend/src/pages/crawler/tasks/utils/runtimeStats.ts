@@ -1,4 +1,4 @@
-import type {CrawlTaskRuntimeSnapshot, CrawlTaskRuntimeStats} from '@/api/crawlTask/types'
+import type {CrawlTaskRuntimeSnapshot, CrawlTaskRuntimeStats} from '@/api/crawler/crawlTask/types'
 
 export const initialStats: CrawlTaskRuntimeStats = {
   total: 0,

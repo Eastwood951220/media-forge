@@ -1,5 +1,5 @@
 import {useEffect} from 'react'
-import type {CrawlTaskRuntimeSnapshot} from '@/api/crawlTask/types'
+import type {CrawlTaskRuntimeSnapshot} from '@/api/crawler/crawlTask/types'
 import {connectRealtime, subscribeRealtime} from '@/realtime/eventSourceClient'
 import type {CrawlerTaskStatusUpdatedPayload} from '@/realtime/types'
 import {recomputeStats} from '../utils/runtimeStats'
@@ -11,7 +11,7 @@ export function useTaskListRealtime({
 }: {
   refreshList: () => void
   setRuntimeByTaskId: React.Dispatch<React.SetStateAction<Record<string, CrawlTaskRuntimeSnapshot>>>
-  setStats: React.Dispatch<React.SetStateAction<import('@/api/crawlTask/types').CrawlTaskRuntimeStats>>
+  setStats: React.Dispatch<React.SetStateAction<import('@/api/crawler/crawlTask/types').CrawlTaskRuntimeStats>>
 }) {
   useEffect(() => {
     connectRealtime()

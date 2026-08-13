@@ -1,6 +1,6 @@
 import { ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { Button, Card, Descriptions, Space, Tag } from 'antd'
-import type { CrawlRun } from '@/api/crawlerRun/types'
+import type { CrawlRun } from '@/api/crawler/crawlerRun/types'
 import { runDetailStatusLabels } from '../utils/status'
 
 interface RunSummaryCardProps {

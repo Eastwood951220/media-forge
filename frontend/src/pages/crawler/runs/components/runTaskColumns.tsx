@@ -1,6 +1,6 @@
 import { Button, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import type { CrawlRunDetailTask } from '@/api/crawlerRun/types'
+import type { CrawlRunDetailTask } from '@/api/crawler/crawlerRun/types'
 import { runDetailStatusLabels } from '../utils/status'
 
 interface CreateRunTaskColumnsArgs {
