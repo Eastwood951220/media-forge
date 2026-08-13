@@ -34,8 +34,8 @@ export function ThemeModeToggle({
           aria-label="切换明暗模式"
           className={clsx('theme-toggle', styles.toggleButton, styles[size])}
           duration={450}
-          onClick={() => {
-            void runTransition()
+          onClick={(event) => {
+            void runTransition(event.currentTarget)
           }}
         />
       </div>
