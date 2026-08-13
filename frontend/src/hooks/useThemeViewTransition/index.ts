@@ -1,10 +1,10 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { useThemeStore } from '@/stores/useThemeStore'
 import type { StartViewTransition, UseThemeViewTransitionOptions } from './types'
 
-const DEFAULT_DURATION = 500
-const DEFAULT_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)'
+const DEFAULT_DURATION = 280
+const DEFAULT_EASING = 'cubic-bezier(0.2, 0, 0, 1)'
 const TRANSITION_CLASS = 'theme-transition-active'
 
 function shouldSkipTransition(): boolean {
@@ -30,7 +30,6 @@ export function useThemeViewTransition({
 }: UseThemeViewTransitionOptions) {
   const transitionLockRef = useRef(false)
   const triggerRef = useRef<HTMLDivElement | null>(null)
-  const [transitioning, setTransitioning] = useState(false)
 
   const runTransition = useCallback(async () => {
     if (transitionLockRef.current) {
@@ -46,7 +45,6 @@ export function useThemeViewTransition({
     }
 
     transitionLockRef.current = true
-    setTransitioning(true)
 
     const root = document.documentElement
 
@@ -85,11 +83,10 @@ export function useThemeViewTransition({
     } finally {
       root.classList.remove(TRANSITION_CLASS)
       transitionLockRef.current = false
-      setTransitioning(false)
     }
   }, [duration, easing, toggleTheme])
 
-  return { runTransition, transitioning, triggerRef }
+  return { runTransition, triggerRef }
 }
 
 export type { UseThemeViewTransitionOptions, ViewTransitionLike, StartViewTransition } from './types'
