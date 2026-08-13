@@ -64,6 +64,11 @@ describe('ThemeModeToggle', () => {
       writable: true,
       value: 1000,
     })
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      writable: true,
+      value: (callback: FrameRequestCallback) => window.setTimeout(() => callback(performance.now()), 0),
+    })
   })
 
   it('renders an accessible animated theme button instead of an Ant Design switch', () => {
@@ -97,18 +102,10 @@ describe('ThemeModeToggle', () => {
     expect(screen.getByRole('button', { name: '切换明暗模式' })).toHaveClass('theme-toggle')
   })
 
-  it('prepares CSS origin from the clicked theme button before the first transition frame', async () => {
-    const animateMock = vi.fn()
+  it('animates from the clicked theme button after mount warmup', async () => {
+    const animateMock = vi.fn().mockReturnValue({ finished: Promise.resolve() })
     document.documentElement.animate = animateMock
-    let cssStatePreparedBeforeCallback = false
-    document.startViewTransition = vi.fn((callback: () => void) => {
-      cssStatePreparedBeforeCallback =
-        document.documentElement.classList.contains('theme-transition-active') &&
-        document.documentElement.style.getPropertyValue('--theme-transition-x') === '1920px' &&
-        document.documentElement.style.getPropertyValue('--theme-transition-y') === '92px' &&
-        document.documentElement.style.getPropertyValue('--theme-transition-radius') === '2123.879469273151px' &&
-        document.documentElement.style.getPropertyValue('--theme-transition-duration') === '280ms' &&
-        document.documentElement.style.getPropertyValue('--theme-transition-easing') === 'linear'
+    const startViewTransition = vi.fn((callback: () => void) => {
       callback()
       return {
         ready: Promise.resolve(),
@@ -117,7 +114,8 @@ describe('ThemeModeToggle', () => {
         skipTransition: () => {},
         types: new Set<string>(),
       }
-    }) as unknown as Document['startViewTransition']
+    })
+    document.startViewTransition = startViewTransition as unknown as Document['startViewTransition']
 
     render(<ThemeModeToggle />)
 
@@ -134,11 +132,29 @@ describe('ThemeModeToggle', () => {
       toJSON: () => ({}),
     })
 
+    await waitFor(() => {
+      expect(startViewTransition).toHaveBeenCalledTimes(1)
+    })
+
     await userEvent.click(button)
 
     await waitFor(() => {
-      expect(cssStatePreparedBeforeCallback).toBe(true)
+      expect(animateMock).toHaveBeenCalledWith(
+        {
+          opacity: [1, 1],
+          clipPath: [
+            'circle(0px at 1920px 92px)',
+            'circle(2123.879469273151px at 1920px 92px)',
+          ],
+        },
+        {
+          duration: 1200,
+          easing: 'linear',
+          fill: 'both',
+          pseudoElement: '::view-transition-new(root)',
+        },
+      )
     })
-    expect(animateMock).not.toHaveBeenCalled()
+    expect(startViewTransition).toHaveBeenCalledTimes(2)
   })
 })

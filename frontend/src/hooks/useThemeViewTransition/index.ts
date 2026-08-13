@@ -1,46 +1,46 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
-import { useThemeStore } from '@/stores/useThemeStore'
-import type { StartViewTransition, UseThemeViewTransitionOptions } from './types'
+import type {
+  StartViewTransition,
+  UseThemeViewTransitionOptions,
+} from './types'
 
-const DEFAULT_DURATION = 280
+const DEFAULT_DURATION = 1200
 const DEFAULT_EASING = 'linear'
-const TRANSITION_CLASS = 'theme-transition-active'
-const TRANSITION_X = '--theme-transition-x'
-const TRANSITION_Y = '--theme-transition-y'
-const TRANSITION_RADIUS = '--theme-transition-radius'
-const TRANSITION_DURATION = '--theme-transition-duration'
-const TRANSITION_EASING = '--theme-transition-easing'
 const TOP_RIGHT_ORIGIN_INSET = 44
+const THEME_TRANSITION_ACTIVE_CLASS = 'theme-transition-active'
 
 function shouldSkipTransition(): boolean {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return true
   }
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+
+  return (
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  )
 }
 
 function getStartViewTransition(): StartViewTransition | null {
   if (typeof document === 'undefined') {
     return null
   }
-  const doc = document as Document & { startViewTransition?: StartViewTransition }
-  const fn = doc.startViewTransition
-  return typeof fn === 'function' ? fn.bind(doc) : null
-}
 
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms)
-  })
+  const doc = document as Document & {
+    startViewTransition?: StartViewTransition
+  }
+
+  const fn = doc.startViewTransition
+
+  return typeof fn === 'function' ? fn.bind(doc) : null
 }
 
 function getTransitionOrigin(originEl?: HTMLElement | null) {
   if (originEl) {
-    const { top, left, width, height } = originEl.getBoundingClientRect()
+    const rect = originEl.getBoundingClientRect()
+
     return {
-      x: left + width / 2,
-      y: top + height / 2,
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
     }
   }
 
@@ -50,34 +50,28 @@ function getTransitionOrigin(originEl?: HTMLElement | null) {
   }
 }
 
-function getCoveringRadius(x: number, y: number) {
-  return Math.max(
-    Math.hypot(x, y),
-    Math.hypot(window.innerWidth - x, y),
-    Math.hypot(x, window.innerHeight - y),
-    Math.hypot(window.innerWidth - x, window.innerHeight - y),
+function getViewTransitionCoordinateScale() {
+  return Math.max(window.devicePixelRatio || 1, 1)
+}
+
+function getCoveringRadius(
+  x: number,
+  y: number,
+  width = window.innerWidth,
+  height = window.innerHeight,
+) {
+  return Math.hypot(
+    Math.max(x, width - x),
+    Math.max(y, height - y),
   )
 }
 
-function prepareTransition(root: HTMLElement, originEl: HTMLElement | null, duration: number, easing: string) {
-  const { x, y } = getTransitionOrigin(originEl)
-  const maxRadius = getCoveringRadius(x, y)
-
-  root.style.setProperty(TRANSITION_X, `${x}px`)
-  root.style.setProperty(TRANSITION_Y, `${y}px`)
-  root.style.setProperty(TRANSITION_RADIUS, `${maxRadius}px`)
-  root.style.setProperty(TRANSITION_DURATION, `${duration}ms`)
-  root.style.setProperty(TRANSITION_EASING, easing)
-  root.classList.add(TRANSITION_CLASS)
-}
-
-function clearPreparedTransition(root: HTMLElement) {
-  root.classList.remove(TRANSITION_CLASS)
-  root.style.removeProperty(TRANSITION_X)
-  root.style.removeProperty(TRANSITION_Y)
-  root.style.removeProperty(TRANSITION_RADIUS)
-  root.style.removeProperty(TRANSITION_DURATION)
-  root.style.removeProperty(TRANSITION_EASING)
+function waitNextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      resolve()
+    })
+  })
 }
 
 export function useThemeViewTransition({
@@ -87,45 +81,135 @@ export function useThemeViewTransition({
 }: UseThemeViewTransitionOptions) {
   const transitionLockRef = useRef(false)
   const triggerRef = useRef<HTMLElement | null>(null)
+  const warmupCompleteRef = useRef(false)
+  const warmupPromiseRef = useRef<Promise<void> | null>(null)
 
-  const runTransition = useCallback(async (originEl?: HTMLElement | null) => {
-    if (transitionLockRef.current) {
-      return
+  const ensureWarmup = useCallback((startViewTransition: StartViewTransition) => {
+    if (warmupCompleteRef.current) {
+      return Promise.resolve()
     }
 
+    if (!warmupPromiseRef.current) {
+      warmupPromiseRef.current = (async () => {
+        const warmupTransition = startViewTransition(() => {
+          // intentionally empty
+        })
+
+        await warmupTransition.finished
+        await waitNextFrame()
+        warmupCompleteRef.current = true
+      })().catch((error) => {
+        warmupPromiseRef.current = null
+        console.warn('[theme transition] warmup failed:', error)
+      })
+    }
+
+    return warmupPromiseRef.current
+  }, [])
+
+  useEffect(() => {
     const startViewTransition = getStartViewTransition()
 
     if (!startViewTransition || shouldSkipTransition()) {
-      toggleTheme()
       return
     }
 
-    transitionLockRef.current = true
+    void ensureWarmup(startViewTransition)
+  }, [ensureWarmup])
 
-    const root = document.documentElement
-    prepareTransition(root, originEl ?? triggerRef.current, duration, easing)
+  const runTransition = useCallback(
+    async (originEl?: HTMLElement | null) => {
+      if (transitionLockRef.current) {
+        return
+      }
 
-    try {
-      const transition = startViewTransition(() => {
-        const nextDark = !useThemeStore.getState().darkMode
-        root.dataset.theme = nextDark ? 'dark' : 'light'
-        root.classList.toggle('dark', nextDark)
-        flushSync(() => {
-          toggleTheme()
+      const startViewTransition = getStartViewTransition()
+
+      if (!startViewTransition || shouldSkipTransition()) {
+        toggleTheme()
+        return
+      }
+
+      transitionLockRef.current = true
+
+      const root = document.documentElement
+
+      /**
+       * 必须在任何 await 之前读取点击元素坐标。
+       *
+       * 避免异步之后 React 更新 / DOM layout 改变导致
+       * event/currentTarget 对应位置失效。
+       */
+      const { x, y } = getTransitionOrigin(
+        originEl ?? triggerRef.current,
+      )
+
+      const coordinateScale = getViewTransitionCoordinateScale()
+      const revealX = x * coordinateScale
+      const revealY = y * coordinateScale
+      const radius = getCoveringRadius(
+        revealX,
+        revealY,
+        window.innerWidth * coordinateScale,
+        window.innerHeight * coordinateScale,
+      )
+
+      try {
+        await ensureWarmup(startViewTransition)
+
+        root.classList.add(THEME_TRANSITION_ACTIVE_CLASS)
+
+        const transition = startViewTransition(() => {
+          flushSync(() => {
+            toggleTheme()
+          })
         })
-      })
 
-      await transition.ready
-      await (transition.finished ?? wait(duration))
-    } catch (error) {
-      console.warn('[theme transition] failed:', error)
-    } finally {
-      clearPreparedTransition(root)
-      transitionLockRef.current = false
-    }
-  }, [duration, easing, toggleTheme])
+        /**
+         * ready 完成后：
+         * ::view-transition-new(root)
+         * 已经真实存在，可以开始 WAAPI 动画。
+         */
+        await transition.ready
 
-  return { runTransition, triggerRef }
+        const animation = root.animate(
+          {
+            opacity: [1, 1],
+            clipPath: [
+              `circle(0px at ${revealX}px ${revealY}px)`,
+              `circle(${radius}px at ${revealX}px ${revealY}px)`,
+            ],
+          },
+          {
+            duration,
+            easing,
+            fill: 'both',
+            pseudoElement: '::view-transition-new(root)',
+          },
+        )
+
+        await Promise.all([
+          animation.finished,
+          transition.finished,
+        ])
+      } catch (error) {
+        console.warn('[theme transition] failed:', error)
+      } finally {
+        root.classList.remove(THEME_TRANSITION_ACTIVE_CLASS)
+        transitionLockRef.current = false
+      }
+    },
+    [duration, easing, toggleTheme],
+  )
+
+  return {
+    runTransition,
+    triggerRef,
+  }
 }
 
-export type { UseThemeViewTransitionOptions, ViewTransitionLike, StartViewTransition } from './types'
+export type {
+  UseThemeViewTransitionOptions,
+  ViewTransitionLike,
+  StartViewTransition,
+} from './types'

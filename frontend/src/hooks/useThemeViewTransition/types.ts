@@ -1,12 +1,15 @@
-export type ViewTransitionLike = {
+export interface ViewTransitionLike {
   ready: Promise<void>
-  finished?: Promise<void>
+  finished: Promise<void>
+  updateCallbackDone?: Promise<void>
   skipTransition?: () => void
 }
 
-export type StartViewTransition = (callback: () => void | Promise<void>) => ViewTransitionLike
+export type StartViewTransition = (
+  updateCallback: () => void | Promise<void>,
+) => ViewTransitionLike
 
-export type UseThemeViewTransitionOptions = {
+export interface UseThemeViewTransitionOptions {
   duration?: number
   easing?: string
   toggleTheme: () => void
