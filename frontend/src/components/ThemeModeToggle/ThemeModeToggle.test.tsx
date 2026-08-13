@@ -77,7 +77,7 @@ describe('ThemeModeToggle', () => {
     expect(screen.getByRole('button', { name: '切换明暗模式' })).toHaveClass('theme-toggle')
   })
 
-  it('uses the actual Classic button as the view-transition origin', async () => {
+  it('uses the wrapper div as the view-transition origin matching button position', async () => {
     const animateMock = vi.fn().mockReturnValue({ finished: Promise.resolve() })
     document.documentElement.animate = animateMock
     document.startViewTransition = vi.fn((callback: () => void) => {
@@ -104,7 +104,8 @@ describe('ThemeModeToggle', () => {
     render(<ThemeModeToggle />)
 
     const button = screen.getByRole('button', { name: '切换明暗模式' })
-    button.getBoundingClientRect = () => ({
+    const wrapper = button.parentElement!
+    wrapper.getBoundingClientRect = () => ({
       x: 1900,
       y: 72,
       top: 72,

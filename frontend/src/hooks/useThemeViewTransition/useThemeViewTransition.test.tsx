@@ -84,7 +84,7 @@ describe('useThemeViewTransition', () => {
       {
         clipPath: [
           'circle(0px at 1920px 92px)',
-          'circle(1922.202902924407px at 1920px 92px)',
+          'circle(2123.879469273151px at 1920px 92px)',
         ],
       },
       {
