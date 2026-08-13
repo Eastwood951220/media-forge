@@ -397,6 +397,38 @@
   padding: 48px 0;
 }
 
+/* ===== URL Entry Drawer ===== */
+.urlEntryDrawer {
+  :global(.ant-drawer-footer) {
+    display: flex;
+    justify-content: flex-end;
+  }
+}
+
+.urlEntryDrawerFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .urlEntryDrawer {
+    :global(.ant-drawer-content-wrapper) {
+      width: 100% !important;
+    }
+  }
+}
+
+/* ===== URL Table Actions ===== */
+.urlTableActions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  width: 100%;
+}
+
 /* ===== Delete Modal ===== */
 .deleteModeRow {
   display: flex;
