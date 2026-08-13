@@ -9,8 +9,8 @@ import {
   extractTaskName,
   getCrawlTask,
   updateCrawlTask,
-} from '@/api/crawlTask'
-import type { CrawlTaskCreateParams, TaskUrlEntry } from '@/api/crawlTask/types'
+} from '@/api/crawler/crawlTask'
+import type { CrawlTaskCreateParams, TaskUrlEntry } from '@/api/crawler/crawlTask/types'
 import { useRouteCacheControl } from '@/layout/routeCache'
 import { invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
 import { useTagsViewStore } from '@/stores/useTagsViewStore'
@@ -32,6 +32,23 @@ type UrlDrawerState =
   | { open: false; mode: 'create'; index: null }
   | { open: true; mode: 'create'; index: null }
   | { open: true; mode: 'edit'; index: number; initialValue: TaskUrlEntry }
+
+function normalizeUrlEntriesForSubmit(entries: TaskUrlEntry[] | undefined): TaskUrlEntry[] {
+  return (entries ?? [])
+    .filter((entry) => Boolean(entry?.url?.trim()))
+    .map((entry) => ({
+      id: entry.id,
+      position: entry.position,
+      url: entry.url.trim(),
+      url_type: entry.url_type,
+      has_magnet: entry.has_magnet ?? false,
+      has_chinese_sub: entry.has_chinese_sub ?? false,
+      sort_type: entry.sort_type ?? 0,
+      source: entry.source,
+      final_url: entry.final_url,
+      url_name: entry.url_name?.trim() ?? '',
+    }))
+}
 
 export default function TaskFormPage() {
   const params = useParams({ strict: false }) as { id?: string }
@@ -81,11 +98,15 @@ export default function TaskFormPage() {
           storage_location: task.storage_location,
           is_skip: task.is_skip,
           urls: task.urls.map((entry) => ({
+            id: entry.id,
+            position: entry.position,
             url: entry.url,
             url_type: entry.url_type,
             has_magnet: entry.has_magnet ?? true,
             has_chinese_sub: entry.has_chinese_sub ?? false,
             sort_type: entry.sort_type ?? 0,
+            source: entry.source,
+            final_url: entry.final_url,
             url_name: entry.url_name ?? '',
           })),
         })
@@ -131,11 +152,15 @@ export default function TaskFormPage() {
         }
 
         enrichedEntries.push({
-          url: entry.url,
+          id: entry.id,
+          position: entry.position,
+          url: entry.url.trim(),
           url_type: urlType,
           has_magnet: entry.has_magnet ?? false,
           has_chinese_sub: entry.has_chinese_sub ?? false,
           sort_type: entry.sort_type ?? 0,
+          source: entry.source,
+          final_url: entry.final_url,
           url_name: urlName,
         })
       }
@@ -146,7 +171,14 @@ export default function TaskFormPage() {
   )
 
   const handleSubmit = async (values: CrawlTaskCreateParams) => {
-    const urlEntries = values.urls ?? []
+    const currentUrlEntries = form.getFieldValue('urls') as TaskUrlEntry[] | undefined
+    const urlEntries = normalizeUrlEntriesForSubmit(currentUrlEntries)
+
+    if (urlEntries.length === 0) {
+      message.error('请至少保留一个 URL')
+      return
+    }
+
     const urlSet = new Set<string>()
     for (const entry of urlEntries) {
       if (entry.url && urlSet.has(entry.url)) {

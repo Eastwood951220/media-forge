@@ -10,7 +10,7 @@ import {
   extractTaskName,
   getCrawlTask,
   updateCrawlTask,
-} from '@/api/crawlTask'
+} from '@/api/crawler/crawlTask'
 
 const navigateMock = vi.fn()
 let paramsMock: { id?: string } = {}
@@ -22,7 +22,7 @@ vi.mock('@tanstack/react-router', () => ({
     select({ location: { pathname: paramsMock.id ? `/crawler/tasks/${paramsMock.id}/edit` : '/crawler/tasks/new', searchStr: '' } }),
 }))
 
-vi.mock('@/api/crawlTask', () => ({
+vi.mock('@/api/crawler/crawlTask', () => ({
   createCrawlTask: vi.fn(),
   extractTaskName: vi.fn(),
   getCrawlTask: vi.fn(),
@@ -92,9 +92,27 @@ const existingTask = {
   ],
 }
 
-async function renderEditPage() {
+const emptyUrlTask = {
+  id: 'task-empty',
+  name: 'Empty URL Task',
+  storage_location: 'Empty URL Task',
+  is_skip: false,
+  status: 'idle',
+  task_id: null,
+  error_message: null,
+  total_found: 0,
+  total_qualified: 0,
+  owner_id: 'owner-1',
+  created_at: '2026-08-01T00:00:00Z',
+  updated_at: null,
+  last_run_at: null,
+  last_run_status: null,
+  urls: [],
+}
+
+async function renderEditPage(task: typeof existingTask = existingTask) {
   paramsMock = { id: 'task-1' }
-  vi.mocked(getCrawlTask).mockResolvedValue(existingTask as any)
+  vi.mocked(getCrawlTask).mockResolvedValue(task as any)
   render(<TaskFormPage />, { wrapper })
   await screen.findByLabelText('任务名称')
 }
@@ -182,5 +200,51 @@ describe('TaskFormPage URL table drawer', () => {
         urls: [expect.objectContaining({ url_name: 'Created Actor' })],
       }))
     })
+  })
+
+  it('submits existing table-mode URLs instead of clearing task URL rows', async () => {
+    await renderEditPage()
+    await switchToTableMode()
+
+    fireEvent.click(await screen.findByText('更 新'))
+
+    await waitFor(() => {
+      expect(updateCrawlTask).toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({
+          urls: [
+            expect.objectContaining({
+              id: 'url-1',
+              url: 'https://javdb.com/actors/alpha',
+              url_type: 'actors',
+              has_magnet: true,
+              has_chinese_sub: false,
+              sort_type: 0,
+              url_name: 'Alpha',
+            }),
+            expect.objectContaining({
+              id: 'url-2',
+              url: 'https://javdb.com/series/beta',
+              url_type: 'series',
+              has_magnet: false,
+              has_chinese_sub: true,
+              sort_type: 0,
+              url_name: 'Beta',
+            }),
+          ],
+        }),
+      )
+    })
+  })
+
+  it('blocks edit submit when normalized URL list is empty', async () => {
+    await renderEditPage(emptyUrlTask)
+
+    fireEvent.click(await screen.findByText('更 新'))
+
+    await waitFor(() => {
+      expect(screen.getByText('请至少保留一个 URL')).toBeInTheDocument()
+    })
+    expect(updateCrawlTask).not.toHaveBeenCalled()
   })
 })
