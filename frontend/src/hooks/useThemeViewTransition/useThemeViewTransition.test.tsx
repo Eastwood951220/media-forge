@@ -42,7 +42,7 @@ describe('useThemeViewTransition', () => {
 
     const toggleTheme = () => useThemeStore.getState().toggleMode()
     const { result } = renderHook(() => useThemeViewTransition({ toggleTheme }))
-    const trigger = document.createElement('button')
+    const trigger = document.createElement('div')
     trigger.getBoundingClientRect = () => ({
       x: 12,
       y: 20,
@@ -100,7 +100,7 @@ describe('useThemeViewTransition', () => {
 
     const toggleTheme = () => useThemeStore.getState().toggleMode()
     const { result } = renderHook(() => useThemeViewTransition({ toggleTheme }))
-    result.current.triggerRef.current = document.createElement('button')
+    result.current.triggerRef.current = document.createElement('div')
 
     await act(async () => {
       await result.current.runTransition()
@@ -117,7 +117,7 @@ describe('useThemeViewTransition', () => {
 
     const toggleTheme = () => useThemeStore.getState().toggleMode()
     const { result } = renderHook(() => useThemeViewTransition({ toggleTheme }))
-    result.current.triggerRef.current = document.createElement('button')
+    result.current.triggerRef.current = document.createElement('div')
 
     await act(async () => {
       await result.current.runTransition()

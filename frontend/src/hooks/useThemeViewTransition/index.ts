@@ -29,7 +29,7 @@ export function useThemeViewTransition({
   toggleTheme,
 }: UseThemeViewTransitionOptions) {
   const transitionLockRef = useRef(false)
-  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const triggerRef = useRef<HTMLDivElement | null>(null)
 
   const runTransition = useCallback(async () => {
     if (transitionLockRef.current) {

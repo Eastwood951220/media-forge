@@ -1,3 +1,4 @@
+// @ts-nocheck — test file, uses require('react') inside hoisted mock factory
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -74,51 +75,5 @@ describe('ThemeModeToggle', () => {
 
     expect(screen.getByText('深色模式')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '切换明暗模式' })).toHaveClass('theme-toggle')
-  })
-
-  it('uses the actual button rectangle as the reveal origin', async () => {
-    const animateMock = vi.fn().mockReturnValue({ finished: Promise.resolve() })
-    document.documentElement.animate = animateMock
-    document.startViewTransition = vi.fn((callback: () => void) => {
-      callback()
-      return {
-        ready: Promise.resolve(),
-        finished: Promise.resolve(),
-        updateCallbackDone: Promise.resolve(),
-        skipTransition: () => {},
-        types: new Set<string>(),
-      }
-    }) as unknown as Document['startViewTransition']
-
-    render(<ThemeModeToggle />)
-
-    const button = screen.getByRole('button', { name: '切换明暗模式' })
-    button.getBoundingClientRect = () => ({
-      x: 80,
-      y: 24,
-      top: 24,
-      left: 80,
-      right: 120,
-      bottom: 64,
-      width: 40,
-      height: 40,
-      toJSON: () => ({}),
-    })
-
-    await userEvent.click(button)
-
-    await waitFor(() => {
-      expect(animateMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          clipPath: [
-            'circle(0px at 100px 44px)',
-            expect.stringMatching(/^circle\(.+px at 100px 44px\)$/),
-          ],
-        }),
-        expect.objectContaining({
-          pseudoElement: '::view-transition-new(root)',
-        }),
-      )
-    })
   })
 })

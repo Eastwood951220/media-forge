@@ -29,15 +29,16 @@ export function ThemeModeToggle({
           {darkMode ? '深色模式' : '浅色模式'}
         </span>
       ) : null}
-      <Classic
-        ref={triggerRef}
-        aria-label="切换明暗模式"
-        className={clsx('theme-toggle', styles.toggleButton, styles[size])}
-        duration={450}
-        onClick={() => {
-          void runTransition()
-        }}
-      />
+      <div ref={triggerRef} className={styles.buttonWrap}>
+        <Classic
+          aria-label="切换明暗模式"
+          className={clsx('theme-toggle', styles.toggleButton, styles[size])}
+          duration={450}
+          onClick={() => {
+            void runTransition()
+          }}
+        />
+      </div>
     </div>
   )
 }
