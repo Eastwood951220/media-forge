@@ -9,11 +9,40 @@
 }
 
 .login {
-  // inherits from parent layout
+  min-height: 44px;
 }
 
 .label {
   font-size: 14px;
   line-height: 1;
   white-space: nowrap;
+}
+
+.toggleButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 8px;
+  color: currentColor;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.toggleButton:hover {
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.toggleButton:focus-visible {
+  outline: 2px solid var(--app-primary-color, #006aff);
+  outline-offset: 2px;
+}
+
+.small {
+  font-size: 18px;
+}
+
+.middle {
+  font-size: 22px;
 }

@@ -6,6 +6,13 @@ export default mergeConfig(viteConfig, defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
-    css: true,
+    css: {
+      include: [/\.less$/],
+    },
+    server: {
+      deps: {
+        inline: ['@theme-toggles/react'],
+      },
+    },
   },
 }))

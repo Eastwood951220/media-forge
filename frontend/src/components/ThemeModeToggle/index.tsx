@@ -1,5 +1,6 @@
-import { BulbOutlined, MoonOutlined } from '@ant-design/icons'
-import { Switch } from 'antd'
+import { Classic } from '@theme-toggles/react'
+import '@theme-toggles/react/styles/classic.css'
+import { clsx } from 'clsx'
 import { useThemeViewTransition } from '@/hooks/useThemeViewTransition'
 import { useThemeStore } from '@/stores/useThemeStore'
 import styles from './index.module.less'
@@ -17,7 +18,7 @@ export function ThemeModeToggle({
 }: ThemeModeToggleProps) {
   const darkMode = useThemeStore((state) => state.darkMode)
   const toggleMode = useThemeStore((state) => state.toggleMode)
-  const { runTransition, transitioning, triggerRef } = useThemeViewTransition({
+  const { runTransition, triggerRef } = useThemeViewTransition({
     toggleTheme: toggleMode,
   })
 
@@ -31,15 +32,18 @@ export function ThemeModeToggle({
           {darkMode ? '深色模式' : '浅色模式'}
         </span>
       ) : null}
-      <Switch
+      <Classic
         aria-label="切换明暗模式"
-        checked={darkMode}
-        checkedChildren={<MoonOutlined />}
-        disabled={transitioning}
-        loading={transitioning}
-        size={size}
-        unCheckedChildren={<BulbOutlined />}
-        onChange={runTransition}
+        className={clsx(
+          'theme-toggle',
+          darkMode && 'theme-toggle--toggled',
+          styles.toggleButton,
+          styles[size],
+        )}
+        duration={450}
+        onClick={() => {
+          void runTransition()
+        }}
       />
     </div>
   )

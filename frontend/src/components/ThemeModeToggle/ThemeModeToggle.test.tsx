@@ -4,6 +4,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeModeToggle } from './index'
 import { useThemeStore } from '@/stores/useThemeStore'
 
+// Mock @theme-toggles/react CSS since it uses Tailwind v4 syntax jsdom can't parse
+vi.mock('@theme-toggles/react/styles/classic.css', () => ({}))
+
+// Mock @theme-toggles/react since it ships raw TSX without React imports
+vi.mock('@theme-toggles/react', () => {
+  const { createElement } = require('react')
+  const Classic = ({ className, 'aria-label': ariaLabel, onClick, ...props }: Record<string, unknown>) =>
+    createElement('button', { className, 'aria-label': ariaLabel, onClick, type: 'button', ...props })
+  return { Classic }
+})
+
 describe('ThemeModeToggle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
