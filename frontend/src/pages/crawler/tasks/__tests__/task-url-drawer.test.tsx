@@ -91,7 +91,7 @@ async function renderEditPage() {
   paramsMock = { id: 'task-1' }
   vi.mocked(getCrawlTask).mockResolvedValue(existingTask as any)
   render(<TaskFormPage />, { wrapper })
-  await screen.findByDisplayValue('Existing Task')
+  await screen.findByLabelText('任务名称')
 }
 
 async function switchToTableMode() {
