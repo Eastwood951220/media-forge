@@ -177,39 +177,41 @@ function TaskCard({
       </div>
 
       <div className={styles.taskCardFooter}>
-        {canRun && (
-          <Dropdown
-            menu={{
-              items: runItems,
-              onClick: ({ key }) => onRun(task, key as CrawlMode),
-            }}
-            trigger={['click']}
+        <div className={styles.taskCardPrimaryActions}>
+          {canRun && (
+            <Dropdown
+              menu={{
+                items: runItems,
+                onClick: ({ key }) => onRun(task, key as CrawlMode),
+              }}
+              trigger={['click']}
+            >
+              <Button type="primary" size="small" icon={<PlayCircleOutlined />}>
+                爬取
+              </Button>
+            </Dropdown>
+          )}
+          <Button
+            size="small"
+            icon={<PlayCircleOutlined />}
+            disabled={!canUrlRun}
+            onClick={() => onUrlRun(task)}
           >
-            <Button type="primary" size="small" icon={<PlayCircleOutlined />}>
-              爬取
+            URL 爬取
+          </Button>
+          {canStop && (
+            <Button size="small" danger icon={<StopOutlined />} onClick={() => onStop(task)}>
+              停止
             </Button>
-          </Dropdown>
-        )}
-        <Button
-          size="small"
-          icon={<PlayCircleOutlined />}
-          disabled={!canUrlRun}
-          onClick={() => onUrlRun(task)}
-        >
-          URL 爬取
-        </Button>
-        {canStop && (
-          <Button size="small" danger icon={<StopOutlined />} onClick={() => onStop(task)}>
-            停止
-          </Button>
-        )}
-        {canRestart && (
-          <Button size="small" type="primary" icon={<ReloadOutlined />} onClick={() => onRestart(task)}>
-            重启
-          </Button>
-        )}
-        {canEditOrDelete && (
-          <Space size={4}>
+          )}
+          {canRestart && (
+            <Button size="small" type="primary" icon={<ReloadOutlined />} onClick={() => onRestart(task)}>
+              重启
+            </Button>
+          )}
+        </div>
+        {canEditOrDelete ? (
+          <div className={styles.taskCardMaintenanceActions}>
             <Tooltip title="编辑">
               <Button
                 aria-label={`编辑 ${task.name}`}
@@ -229,7 +231,9 @@ function TaskCard({
                 onClick={() => onDelete(task)}
               />
             </Tooltip>
-          </Space>
+          </div>
+        ) : (
+          <div className={styles.taskCardMaintenanceActions} aria-hidden="true" />
         )}
       </div>
     </article>

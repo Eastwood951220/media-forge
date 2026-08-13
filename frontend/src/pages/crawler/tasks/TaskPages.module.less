@@ -385,12 +385,30 @@
 }
 
 .taskCardFooter {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
+  min-height: 58px;
   padding: 12px 16px 16px;
   border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.taskCardPrimaryActions,
+.taskCardMaintenanceActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.taskCardPrimaryActions {
+  flex-wrap: wrap;
+}
+
+.taskCardMaintenanceActions {
+  justify-content: flex-end;
+  min-width: 64px;
 }
 
 .emptyState {
