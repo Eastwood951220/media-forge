@@ -1,14 +1,39 @@
 /*
  * Override the browser's default View Transition cross-fade for root.
- * The page reveal is controlled from useThemeViewTransition with clip-path.
+ * The page reveal is controlled by CSS variables prepared before
+ * document.startViewTransition() is called.
  */
 
-::view-transition-old(root),
-::view-transition-new(root) {
+::view-transition,
+::view-transition-group(root),
+::view-transition-image-pair(root),
+::view-transition-old(root) {
   animation: none !important;
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  animation: theme-root-reveal var(--theme-transition-duration, 280ms) var(--theme-transition-easing, linear) both !important;
+}
+
+@keyframes theme-root-reveal {
+  from {
+    clip-path: circle(0px at var(--theme-transition-x, 100vw) var(--theme-transition-y, 0px));
+  }
+
+  to {
+    clip-path: circle(var(--theme-transition-radius, 150vmax) at var(--theme-transition-x, 100vw) var(--theme-transition-y, 0px));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  ::view-transition,
+  ::view-transition-group(root),
+  ::view-transition-image-pair(root),
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation: none !important;
