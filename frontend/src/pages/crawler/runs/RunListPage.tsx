@@ -1,11 +1,11 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
 import { Button, Popconfirm, Space, Table, Tag, message, Card } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { deleteCrawlerRun, getCrawlerRunCount, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawlerRun'
-import type { CrawlRun } from '@/api/crawlerRun/types'
+import { deleteCrawlerRun, getCrawlerRunCount, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawler/crawlerRun'
+import type { CrawlRun } from '@/api/crawler/crawlerRun/types'
 import { queryKeys } from '@/api/queryKeys'
 import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
 import type { CrawlerRunUpdatedPayload } from '@/realtime/types'
@@ -28,15 +28,16 @@ function RunListPage() {
   const [current, setCurrent] = useState(1)
   const [pageSize, setPageSize] = useState(20)
 
-  const listParams = { page: current, size: pageSize }
+  const listParams = useMemo(() => ({ page: current, size: pageSize }), [current, pageSize])
+  const countParams = useMemo(() => ({}), [])
   const listQuery = useQuery({
     queryKey: queryKeys.crawlerRuns.list(listParams),
     queryFn: () => getCrawlerRuns(listParams),
     placeholderData: (previousData) => previousData,
   })
   const countQuery = useQuery({
-    queryKey: queryKeys.crawlerRuns.count({}),
-    queryFn: () => getCrawlerRunCount({}),
+    queryKey: queryKeys.crawlerRuns.count(countParams),
+    queryFn: () => getCrawlerRunCount(countParams),
   })
 
   const runs = listQuery.data?.rows ?? []
@@ -46,8 +47,8 @@ function RunListPage() {
 
   const refreshRuns = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.list(listParams) })
-    void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.count({}) })
-  }, [listParams, queryClient])
+    void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.count(countParams) })
+  }, [countParams, listParams, queryClient])
 
   // Realtime updates
   useEffect(() => {
@@ -107,12 +108,12 @@ function RunListPage() {
         return
       }
       refreshRuns()
-      void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.count({}) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.count(countParams) })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '删除失败'
       message.error(msg)
     }
-  }, [current, refreshRuns, queryClient, runs.length])
+  }, [countParams, current, refreshRuns, queryClient, runs.length])
 
   const columns: ColumnsType<CrawlRun> = [
     {
