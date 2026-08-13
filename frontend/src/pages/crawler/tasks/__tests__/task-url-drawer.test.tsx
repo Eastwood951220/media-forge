@@ -1,3 +1,4 @@
+import { App } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -47,7 +48,11 @@ vi.mock('@/stores/useTagsViewStore', () => ({
 
 function wrapper({ children }: PropsWithChildren) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  return (
+    <App>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    </App>
+  )
 }
 
 const existingTask = {

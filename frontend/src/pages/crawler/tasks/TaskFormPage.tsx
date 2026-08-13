@@ -24,7 +24,6 @@ import {
 import { getRouteViewKey } from '@/routes/tags'
 import UrlEntryCard from './components/UrlEntryCard'
 import UrlEntryDrawer from './components/UrlEntryDrawer'
-import type { UrlEntryDrawerSaveResult } from './components/UrlEntryDrawer'
 import styles from './TaskPages.module.less'
 
 const COMPACT_PAGE_SIZE = 10
