@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 
@@ -7,6 +9,7 @@ from pydantic import ValidationError
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask
 from backend.app.modules.crawler.runtime import service
+from backend.app.modules.crawler.tasks.runtime_status import publish_task_runtime_snapshot
 from backend.app.modules.realtime.bus import event_bus
 from backend.tests.conftest import TestingSessionLocal
 
@@ -341,10 +344,12 @@ def test_crawler_realtime_events_keep_frontend_contract(admin_user) -> None:
     detail_event = next(event for event in events if event.event == "crawler.run.detail.updated")
     log_event = next(event for event in events if event.event == "crawler.run.log.appended")
 
-    assert run_event.payload["id"] == str(run.id)
-    assert run_event.payload["task_id"] == str(task.id)
+    assert run_event.payload["run_id"] == str(run.id)
     assert run_event.payload["status"] == "running"
-    assert run_event.payload["logs"] == []
+    assert run_event.payload["error"] is None
+    assert run_event.payload["started_at"] is None
+    assert run_event.payload["finished_at"] is None
+    assert run_event.payload["state_updated_at"] is not None
 
     assert detail_event.payload["run_id"] == str(run.id)
     assert detail_event.payload["refresh_tasks"] is True
@@ -381,3 +386,82 @@ def test_crawler_realtime_events_keep_frontend_contract(admin_user) -> None:
     assert log_event.payload["run_id"] == str(run.id)
     assert log_event.payload["log"]["message"] == "入库成功: AAA-001"
     assert log_event.payload["log"]["context"]["code"] == "AAA-001"
+
+
+def test_build_task_runtime_snapshot_event_contains_all_owner_tasks(admin_user) -> None:
+    """Each owner task gets a CrawlTaskRuntimeSnapshot with state_updated_at and no latest_run_status."""
+    from backend.app.modules.crawler.tasks.runtime_status import (
+        build_task_runtime_snapshot_event,
+    )
+
+    session = TestingSessionLocal()
+    task_a = CrawlTask(name="任务A", storage_location="A", owner_id=admin_user.id)
+    task_b = CrawlTask(name="任务B", storage_location="B", owner_id=admin_user.id)
+    session.add_all([task_a, task_b])
+    session.commit()
+    session.refresh(task_a)
+    session.refresh(task_b)
+
+    run_a = CrawlRun(
+        task_id=task_a.id, task_name=task_a.name, status="running", crawl_mode="incremental", created_at=datetime.now()
+    )
+    session.add(run_a)
+    session.commit()
+    session.refresh(run_a)
+
+    event = build_task_runtime_snapshot_event(session, admin_user.id)
+
+    assert event.event == "crawler.task.runtime.snapshot"
+    assert len(event.payload["tasks"]) == 2
+    task_ids = {t["task_id"] for t in event.payload["tasks"]}
+    assert str(task_a.id) in task_ids
+    assert str(task_b.id) in task_ids
+
+    for t in event.payload["tasks"]:
+        assert "state_updated_at" in t
+        assert t["state_updated_at"] is not None
+        assert "latest_run_status" not in t
+        if t["task_id"] == str(task_a.id):
+            assert t["runtime_status"] == "running"
+            assert t["latest_run_id"] == str(run_a.id)
+        else:
+            assert t["runtime_status"] == "idle"
+            assert t["latest_run_id"] is None
+
+    session.close()
+
+
+def test_run_status_event_contains_only_dynamic_fields(admin_user) -> None:
+    """publish_run_updated payload contains only run_id, status, error, started_at, finished_at, state_updated_at."""
+    session = TestingSessionLocal()
+    task = CrawlTask(name="任务A", storage_location="A", owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    run = CrawlRun(
+        task_id=task.id,
+        task_name=task.name,
+        status="running",
+        crawl_mode="incremental",
+        created_at=datetime.now(),
+    )
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    queue = event_bus.subscribe(str(admin_user.id))
+
+    service.publish_run_updated(session, run)
+
+    events = [e for e in drain(queue) if e.event == "crawler.run.updated"]
+    event_bus.unsubscribe(str(admin_user.id), queue)
+    session.close()
+
+    assert len(events) == 1
+    payload = events[0].payload
+
+    assert set(payload.keys()) == {"run_id", "status", "error", "started_at", "finished_at", "state_updated_at"}
+    assert payload["run_id"] == str(run.id)
+    assert payload["status"] == "running"
+    assert payload["error"] is None
+    assert payload["started_at"] is None
+    assert payload["finished_at"] is None
+    assert payload["state_updated_at"] is not None

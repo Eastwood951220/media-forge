@@ -7,6 +7,7 @@ Always derive it from the latest CrawlRun row.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from backend.app.schemas.crawl_task import (
 )
 
 TaskRuntimeStatus = Literal["idle", "queued", "running", "stopped"]
+SnapshotReason = Literal["connected", "task_created", "task_deleted"]
 
 ACTIVE_RUN_STATUSES = {"queued", "running", "stopped"}
 
@@ -77,11 +79,12 @@ def build_task_runtime_snapshot(task: CrawlTask, latest_run: CrawlRun | None) ->
     Returns:
         CrawlTaskRuntimeSnapshot with derived status.
     """
+    now = datetime.now()
     return CrawlTaskRuntimeSnapshot(
         task_id=task.id,
         runtime_status=derive_runtime_status(latest_run.status if latest_run else None),
         latest_run_id=latest_run.id if latest_run else None,
-        latest_run_status=latest_run.status if latest_run else None,
+        state_updated_at=now,
         last_run_at=latest_run.created_at if latest_run else None,
     )
 
@@ -217,3 +220,44 @@ def publish_task_status_updated(db: Session, run: CrawlRun) -> None:
             payload=snapshot.model_dump(mode="json"),
         )
     )
+
+
+def build_task_runtime_snapshot_event(db: Session, owner_id: uuid.UUID) -> RealtimeEvent:
+    """Build a snapshot realtime event for all tasks owned by the user.
+
+    Args:
+        db: Database session.
+        owner_id: The owner's UUID.
+
+    Returns:
+        A RealtimeEvent with event="crawler.task.runtime.snapshot" containing
+        one CrawlTaskRuntimeSnapshot per owner task.
+    """
+    from backend.app.modules.realtime.schemas import make_realtime_event
+
+    tasks = (
+        db.query(CrawlTask)
+        .filter(CrawlTask.owner_id == owner_id)
+        .all()
+    )
+    latest_runs = _latest_runs_by_task(db, [task.id for task in tasks])
+    snapshots = [build_task_runtime_snapshot(task, latest_runs.get(task.id)) for task in tasks]
+    return make_realtime_event(
+        event="crawler.task.runtime.snapshot",
+        scope="crawler.task",
+        owner_id=str(owner_id),
+        payload={"tasks": [s.model_dump(mode="json") for s in snapshots]},
+    )
+
+
+def publish_task_runtime_snapshot(db: Session, owner_id: uuid.UUID) -> None:
+    """Build and publish a task runtime snapshot event.
+
+    Args:
+        db: Database session.
+        owner_id: The owner's UUID.
+    """
+    from backend.app.modules.realtime.bus import event_bus as realtime_bus
+
+    event = build_task_runtime_snapshot_event(db, owner_id)
+    realtime_bus.publish(event)

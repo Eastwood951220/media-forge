@@ -1,16 +1,22 @@
+from __future__ import annotations
+
+import asyncio
 import json
 import queue
 import threading
 import time
 from collections import defaultdict
-from datetime import UTC
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
 from backend.app.core.security import create_access_token
-from backend.app.modules.realtime.bus import RealtimeEventBus
+from backend.app.models.crawl_run import CrawlRun
+from backend.app.models.crawl_task import CrawlTask
+from backend.app.modules.realtime.bus import RealtimeEventBus, event_bus
 from backend.app.modules.realtime.schemas import make_realtime_event
 from backend.app.modules.realtime.sse import format_sse_event
+from backend.tests.conftest import TestingSessionLocal
 
 
 def test_make_realtime_event_fills_required_metadata() -> None:
@@ -237,3 +243,40 @@ def test_event_bus_can_be_configured_with_redis_factory() -> None:
     bus.unsubscribe("user-configured", queue_for_owner)
     bus.close()
     worker_bus.close()
+
+
+def test_initial_stream_subscribes_before_building_snapshot(admin_user) -> None:
+    """build_owner_event_stream subscribes to the event bus before emitting the snapshot."""
+    from backend.app.modules.crawler.tasks.runtime_status import (
+        build_task_runtime_snapshot_event,
+    )
+
+    session = TestingSessionLocal()
+    task = CrawlTask(name="任务A", storage_location="A", owner_id=admin_user.id)
+    session.add(task)
+    session.commit()
+    session.refresh(task)
+    owner_id = str(admin_user.id)
+
+    run = CrawlRun(
+        task_id=task.id, task_name=task.name, status="running", crawl_mode="incremental", created_at=datetime.now()
+    )
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+
+    queue = event_bus.subscribe(owner_id)
+
+    snapshot_event = build_task_runtime_snapshot_event(session, admin_user.id)
+    event_bus.publish(snapshot_event)
+
+    events = []
+    while not queue.empty():
+        events.append(queue.get_nowait())
+
+    event_bus.unsubscribe(owner_id, queue)
+    session.close()
+
+    assert len(events) == 1
+    assert events[0].event == "crawler.task.runtime.snapshot"
+    assert events[0].payload["tasks"][0]["task_id"] == str(task.id)

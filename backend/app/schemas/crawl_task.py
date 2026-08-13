@@ -193,7 +193,7 @@ class CrawlTaskRuntimeSnapshot(BaseModel):
     task_id: uuid.UUID
     runtime_status: TaskRuntimeStatus
     latest_run_id: uuid.UUID | None = None
-    latest_run_status: str | None = None
+    state_updated_at: datetime
     last_run_at: datetime | None = None
 
 

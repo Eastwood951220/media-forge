@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask
-from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
 from backend.app.modules.crawler.tasks.runtime_status import publish_task_status_updated
 
 logger = logging.getLogger(__name__)
@@ -43,13 +42,12 @@ def publish_run_updated(db: Session, run: CrawlRun) -> None:
     if owner_id is None:
         return
     payload = {
-        "id": str(run.id),
-        "task_id": str(run.task_id) if run.task_id else None,
-        "task_name": run.task_name,
+        "run_id": str(run.id),
         "status": run.status,
-        "crawl_mode": run.crawl_mode,
         "error": run.error,
-        "logs": [],
+        "started_at": run.started_at.isoformat() if run.started_at else None,
+        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "state_updated_at": run.updated_at.isoformat() if run.updated_at else None,
     }
     realtime_bus.publish(
         make_realtime_event(
@@ -105,22 +103,6 @@ def publish_run_detail_updated(
             owner_id=owner_id,
             resource_id=str(run.id),
             payload=payload,
-        )
-    )
-
-
-def publish_queue_updated(db: Session, runtime: CrawlerRuntimeState, owner_id: str | None = None) -> None:
-    from backend.app.modules.realtime.bus import event_bus as realtime_bus
-    from backend.app.modules.realtime.schemas import make_realtime_event
-
-    if owner_id is None:
-        return
-    realtime_bus.publish(
-        make_realtime_event(
-            event="crawler.queue.updated",
-            scope="crawler.queue",
-            owner_id=owner_id,
-            payload=runtime.queue_status(),
         )
     )
 
