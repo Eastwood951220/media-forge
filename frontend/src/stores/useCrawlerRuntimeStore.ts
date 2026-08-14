@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { CrawlTaskRuntimeSnapshot } from '@/api/crawler/crawlTask/types'
-import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
+import type { CrawlTaskRuntimeSnapshot, CrawlTaskRuntimeStats } from '@/api/crawler/crawlTask/types'
+import type { CrawlRunRuntime } from '@/realtime/types'
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
@@ -8,78 +8,110 @@ type CrawlerRuntimeState = {
   connectionStatus: ConnectionStatus
   lastConnectedAt: string | null
   lastResyncReason: string | null
-  runtimeByTaskId: Record<string, CrawlTaskRuntimeSnapshot>
-  runsById: Record<string, CrawlRun>
-  detailsByRunId: Record<string, Record<string, CrawlRunDetailTask>>
-  logsByRunId: Record<string, RunLogEntry[]>
-  summaryByRunId: Record<string, RunTaskSummary>
+  taskRuntimeById: Record<string, CrawlTaskRuntimeSnapshot>
+  taskStats: CrawlTaskRuntimeStats | null
+  taskSnapshotReady: boolean
+  runRuntimeById: Record<string, CrawlRunRuntime>
+
   setConnectionStatus: (status: ConnectionStatus) => void
   markConnected: () => void
   markResyncRequired: (reason: string) => void
-  hydrateTaskRuntime: (snapshots: CrawlTaskRuntimeSnapshot[]) => void
-  hydrateRun: (run: CrawlRun) => void
-  hydrateRunDetails: (runId: string, tasks: CrawlRunDetailTask[], summary?: RunTaskSummary) => void
-  mergeRunDetails: (runId: string, tasks: CrawlRunDetailTask[]) => void
-  hydrateRunLogs: (runId: string, logs: RunLogEntry[]) => void
-  appendRunLog: (runId: string, log: RunLogEntry) => void
-  clearRun: (runId: string) => void
+  replaceTaskRuntimeSnapshot: (payload: {
+    tasks: CrawlTaskRuntimeSnapshot[]
+    stats: CrawlTaskRuntimeStats
+  }) => void
+  upsertTaskRuntime: (snapshot: CrawlTaskRuntimeSnapshot) => void
+  hydrateRunRuntime: (runtimes: Record<string, CrawlRunRuntime>) => void
+  upsertRunRuntime: (runtime: CrawlRunRuntime) => void
+  removeRunRuntime: (runId: string) => void
   reset: () => void
 }
 
-const initialState = {
-  connectionStatus: 'idle' as ConnectionStatus,
-  lastConnectedAt: null,
-  lastResyncReason: null,
-  runtimeByTaskId: {},
-  runsById: {},
-  detailsByRunId: {},
-  logsByRunId: {},
-  summaryByRunId: {},
+function createInitialState() {
+  return {
+    connectionStatus: 'idle' as ConnectionStatus,
+    lastConnectedAt: null as string | null,
+    lastResyncReason: null as string | null,
+    taskRuntimeById: {} as Record<string, CrawlTaskRuntimeSnapshot>,
+    taskStats: null as CrawlTaskRuntimeStats | null,
+    taskSnapshotReady: false,
+    runRuntimeById: {} as Record<string, CrawlRunRuntime>,
+  }
+}
+
+function recalcStats(
+  snapshots: Record<string, CrawlTaskRuntimeSnapshot>,
+): CrawlTaskRuntimeStats {
+  const counts = { idle: 0, running: 0, queued: 0, stopped: 0 }
+  for (const s of Object.values(snapshots)) {
+    if (counts[s.runtime_status] !== undefined) {
+      counts[s.runtime_status]++
+    }
+  }
+  return {
+    total: Object.keys(snapshots).length,
+    idle: counts.idle,
+    running: counts.running,
+    queued: counts.queued,
+    stopped: counts.stopped,
+  }
 }
 
 export const useCrawlerRuntimeStore = create<CrawlerRuntimeState>()((set) => ({
-  ...initialState,
+  ...createInitialState(),
+
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
-  markConnected: () => set({ connectionStatus: 'connected', lastConnectedAt: new Date().toISOString() }),
-  markResyncRequired: (reason) => set({ lastResyncReason: reason }),
-  hydrateTaskRuntime: (snapshots) =>
+
+  markConnected: () =>
+    set({ connectionStatus: 'connected', lastConnectedAt: new Date().toISOString() }),
+
+  markResyncRequired: (reason) =>
     set({
-      runtimeByTaskId: Object.fromEntries(snapshots.map((snapshot) => [snapshot.task_id, snapshot])),
+      lastResyncReason: reason,
+      taskSnapshotReady: false,
+      runRuntimeById: {},
     }),
-  hydrateRun: (run) => set((state) => ({ runsById: { ...state.runsById, [run.id]: run } })),
-  hydrateRunDetails: (runId, tasks, summary) =>
-    set((state) => ({
-      detailsByRunId: {
-        ...state.detailsByRunId,
-        [runId]: Object.fromEntries(tasks.map((task) => [task.id, task])),
-      },
-      summaryByRunId: summary ? { ...state.summaryByRunId, [runId]: summary } : state.summaryByRunId,
-    })),
-  mergeRunDetails: (runId, tasks) =>
-    set((state) => ({
-      detailsByRunId: {
-        ...state.detailsByRunId,
-        [runId]: {
-          ...(state.detailsByRunId[runId] ?? {}),
-          ...Object.fromEntries(tasks.map((task) => [task.id, task])),
-        },
-      },
-    })),
-  hydrateRunLogs: (runId, logs) =>
-    set((state) => ({
-      logsByRunId: { ...state.logsByRunId, [runId]: logs },
-    })),
-  appendRunLog: (runId, log) =>
-    set((state) => ({
-      logsByRunId: { ...state.logsByRunId, [runId]: [...(state.logsByRunId[runId] ?? []), log] },
-    })),
-  clearRun: (runId) =>
+
+  replaceTaskRuntimeSnapshot: (payload) =>
+    set({
+      taskRuntimeById: Object.fromEntries(
+        payload.tasks.map((s) => [s.task_id, s]),
+      ),
+      taskStats: payload.stats,
+      taskSnapshotReady: true,
+    }),
+
+  upsertTaskRuntime: (snapshot) =>
     set((state) => {
-      const { [runId]: _run, ...runsById } = state.runsById
-      const { [runId]: _details, ...detailsByRunId } = state.detailsByRunId
-      const { [runId]: _logs, ...logsByRunId } = state.logsByRunId
-      const { [runId]: _summary, ...summaryByRunId } = state.summaryByRunId
-      return { runsById, detailsByRunId, logsByRunId, summaryByRunId }
+      const next = { ...state.taskRuntimeById, [snapshot.task_id]: snapshot }
+      return {
+        taskRuntimeById: next,
+        taskStats: recalcStats(next),
+      }
     }),
-  reset: () => set(initialState),
+
+  hydrateRunRuntime: (runtimes) => set({ runRuntimeById: { ...runtimes } }),
+
+  upsertRunRuntime: (runtime) =>
+    set((state) => {
+      const existing = state.runRuntimeById[runtime.run_id]
+      // Reject older events
+      if (existing && existing.state_updated_at >= runtime.state_updated_at) {
+        return state
+      }
+      return {
+        runRuntimeById: {
+          ...state.runRuntimeById,
+          [runtime.run_id]: runtime,
+        },
+      }
+    }),
+
+  removeRunRuntime: (runId) =>
+    set((state) => {
+      const { [runId]: _removed, ...rest } = state.runRuntimeById
+      return { runRuntimeById: rest }
+    }),
+
+  reset: () => set(createInitialState()),
 }))

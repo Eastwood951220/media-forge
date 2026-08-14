@@ -1,9 +1,8 @@
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import type {
-  CrawlerRunDetailUpdatedPayload,
-  CrawlerRunLogAppendedPayload,
-  CrawlerRunUpdatedPayload,
+  CrawlerTaskRuntimeSnapshotPayload,
   CrawlerTaskStatusUpdatedPayload,
+  CrawlRunRuntime,
   RealtimeEvent,
 } from './types'
 
@@ -21,36 +20,27 @@ export function applyRealtimeEvent(event: RealtimeEvent): void {
     return
   }
 
+  if (event.event === 'crawler.task.runtime.snapshot') {
+    const payload = event.payload as unknown as CrawlerTaskRuntimeSnapshotPayload
+    store.replaceTaskRuntimeSnapshot({
+      tasks: payload.tasks,
+      stats: payload.stats,
+    })
+    return
+  }
+
   if (event.event === 'crawler.task.status.updated') {
     const payload = event.payload as unknown as CrawlerTaskStatusUpdatedPayload
-    store.hydrateTaskRuntime([
-      ...Object.values(useCrawlerRuntimeStore.getState().runtimeByTaskId).filter(
-        (item) => item.task_id !== payload.task_id,
-      ),
-      payload,
-    ])
+    store.upsertTaskRuntime(payload)
     return
   }
 
-  if (event.event === 'crawler.run.updated') {
-    store.hydrateRun(event.payload as unknown as CrawlerRunUpdatedPayload)
+  if (event.event === 'crawler.run.status.updated') {
+    const payload = event.payload as unknown as CrawlRunRuntime
+    store.upsertRunRuntime(payload)
     return
   }
 
-  if (event.event === 'crawler.run.detail.updated') {
-    const payload = event.payload as unknown as CrawlerRunDetailUpdatedPayload
-    store.mergeRunDetails(payload.run_id, payload.tasks)
-    if (payload.summary) {
-      const existing = Object.values(
-        useCrawlerRuntimeStore.getState().detailsByRunId[payload.run_id] ?? {},
-      )
-      store.hydrateRunDetails(payload.run_id, existing, payload.summary)
-    }
-    return
-  }
-
-  if (event.event === 'crawler.run.log.appended') {
-    const payload = event.payload as unknown as CrawlerRunLogAppendedPayload
-    store.appendRunLog(payload.run_id, payload.log)
-  }
+  // crawler.run.detail.updated and crawler.run.log.appended are handled
+  // locally by page-level subscribers — not stored in the global store.
 }

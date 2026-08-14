@@ -73,3 +73,51 @@ export interface RunTaskSummary {
   waiting: number
   failed: number
 }
+
+/** Minimal run list item (no logs, no result, no timestamps beyond created_at). */
+export interface CrawlRunListItem {
+  id: string
+  task_name: string
+  status: CrawlRunStatus
+  crawl_mode: CrawlMode
+  created_at: string
+}
+
+/** Minimal run detail read (no logs, no result). */
+export interface CrawlRunDetail {
+  id: string
+  task_name: string
+  status: CrawlRunStatus
+  crawl_mode: CrawlMode
+  queued_at: string | null
+  started_at: string | null
+  finished_at: string | null
+  error: string | null
+  created_at: string
+}
+
+/** Minimal detail task list item (no timestamps, no item_data, no run_id, no task_name, no source_url). */
+export interface CrawlRunDetailTaskListItem {
+  id: string
+  code: string | null
+  source_name: string
+  source_url_name: string | null
+  task_url_type: string | null
+  status: DetailTaskStatus
+  error: string | null
+  display_code: string | null
+  display_source_name: string | null
+}
+
+/** Action response indicating accepted async operation. */
+export interface RunActionAccepted {
+  run_id: string
+  accepted: true
+}
+
+/** Paginated detail tasks with summary. */
+export interface RunTaskPage {
+  rows: CrawlRunDetailTaskListItem[]
+  total: number
+  summary: RunTaskSummary
+}

@@ -95,7 +95,7 @@ export interface CrawlTaskRuntimeSnapshot {
   task_id: string
   runtime_status: TaskRuntimeStatus
   latest_run_id: string | null
-  latest_run_status: string | null
+  state_updated_at: string
   last_run_at: string | null
 }
 
@@ -123,3 +123,31 @@ export interface TaskUrlRunCreateParams {
 }
 
 export type TaskUrlRunFormValues = TaskUrlRunCreateParams
+
+/** Lightweight URL entry for the task list view (no created_at/updated_at). */
+export interface TaskUrlListItem {
+  id: string
+  position: number
+  url: string
+  url_type: string
+  has_magnet: boolean
+  has_chinese_sub: boolean
+  url_name: string | null
+}
+
+/** Task row for the paginated list view (no runtime fields). */
+export interface CrawlTaskListItem {
+  id: string
+  name: string
+  storage_location: string
+  is_skip: boolean
+  urls: TaskUrlListItem[]
+}
+
+/** Standard paginated list wrapper. */
+export interface PagedListResponse<T> {
+  rows: T[]
+  total: number
+  page: number
+  size: number
+}

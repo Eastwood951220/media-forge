@@ -12,11 +12,48 @@ export type RealtimeEvent<TPayload = Record<string, unknown>> = {
   created_at: string
 }
 
-export type CrawlerRunUpdatedPayload = CrawlRun
+/** Minimal run runtime payload — status-only, no full CrawlRun object. */
+export type CrawlRunRuntime = {
+  run_id: string
+  status: string
+  error: string | null
+  started_at: string | null
+  finished_at: string | null
+  state_updated_at: string
+}
+
+/** Snapshot payload containing all task runtimes and aggregate stats. */
+export type CrawlerTaskRuntimeSnapshotPayload = {
+  tasks: CrawlTaskRuntimeSnapshot[]
+  stats: {
+    total: number
+    idle: number
+    running: number
+    queued: number
+    stopped: number
+  }
+  reason?: string
+  generated_at?: string
+}
+
+/** Minimal detail task patch for realtime updates (no timestamps, no full object). */
+export type CrawlRunDetailTaskPatch = {
+  id: string
+  status: string
+  error: string | null
+  code: string | null
+  source_name: string
+  source_url_name: string | null
+  task_url_type: string | null
+  display_code: string | null
+  display_source_name: string | null
+}
+
+export type CrawlerRunStatusUpdatedPayload = CrawlRunRuntime
 
 export type CrawlerRunDetailUpdatedPayload = {
   run_id: string
-  tasks: CrawlRunDetailTask[]
+  tasks: CrawlRunDetailTaskPatch[]
   refresh_tasks?: boolean
   reason?: string
   summary?: RunTaskSummary
@@ -28,6 +65,19 @@ export type CrawlerRunLogAppendedPayload = {
 }
 
 export type CrawlerTaskStatusUpdatedPayload = CrawlTaskRuntimeSnapshot
+
+export type CrawlerTaskRuntimeSnapshotPayloadEvent = {
+  reason?: string
+  generated_at?: string
+  tasks: CrawlTaskRuntimeSnapshot[]
+  stats: {
+    total: number
+    idle: number
+    running: number
+    queued: number
+    stopped: number
+  }
+}
 
 export type StorageMainUpdatedPayload = Pick<
   StorageMainTask,
@@ -57,10 +107,10 @@ export type MovieStorageUpdatedPayload = {
 export type RealtimeEventName =
   | 'system.connected'
   | 'system.resync_required'
-  | 'crawler.run.updated'
+  | 'crawler.run.status.updated'
   | 'crawler.run.detail.updated'
   | 'crawler.run.log.appended'
-  | 'crawler.queue.updated'
+  | 'crawler.task.runtime.snapshot'
   | 'crawler.task.status.updated'
   | 'storage.main.updated'
   | 'storage.main.deleted'
