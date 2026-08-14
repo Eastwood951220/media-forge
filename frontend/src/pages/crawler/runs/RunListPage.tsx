@@ -82,8 +82,11 @@ function RunListPage() {
   const loading = listQuery.isFetching
   const realtimeReady = connectionStatus === 'connected'
 
-  const refreshRuns = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.list(listParams) })
+  const refreshRuns = useCallback((throwOnError = false) => {
+    return queryClient.invalidateQueries(
+      { queryKey: queryKeys.crawlerRuns.list(listParams) },
+      { throwOnError },
+    )
   }, [listParams, queryClient])
 
   // Realtime subscription for individual run status updates
@@ -100,7 +103,7 @@ function RunListPage() {
           if (!refreshTimerRef.current) {
             refreshTimerRef.current = setTimeout(() => {
               refreshTimerRef.current = null
-              refreshRuns()
+              void refreshRuns()
             }, 500)
           }
         }
@@ -120,7 +123,7 @@ function RunListPage() {
   useEffect(() => {
     const unsubscribe = subscribeRealtime('system.resync_required', () => {
       markResyncRequired('run-list')
-      refreshRuns()
+      void refreshRuns()
     })
     return unsubscribe
   }, [markResyncRequired, refreshRuns])
@@ -149,19 +152,25 @@ function RunListPage() {
   const handleDelete = useCallback(async (run: CrawlRun) => {
     try {
       await deleteCrawlerRun(run.id)
-      message.success('已删除运行记录')
-      // Remove from store so it disappears immediately
-      removeRunRuntime(run.id)
-      const nextPage = runs.length === 1 && current > 1 ? current - 1 : current
-      if (nextPage !== current) {
-        setCurrent(nextPage)
-        return
-      }
-      refreshRuns()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '删除失败'
       message.error(msg)
+      return
     }
+
+    const nextPage = runs.length === 1 && current > 1 ? current - 1 : current
+    try {
+      await refreshRuns(true)
+    } catch {
+      message.warning('运行记录已删除，但列表刷新失败，请手动刷新')
+      return
+    }
+
+    removeRunRuntime(run.id)
+    if (nextPage !== current) {
+      setCurrent(nextPage)
+    }
+    message.success('已删除运行记录')
   }, [current, refreshRuns, removeRunRuntime, runs.length])
 
   const columns: ColumnsType<CrawlRun> = [

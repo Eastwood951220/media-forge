@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Modal, Select, Typography, message } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -28,7 +28,10 @@ export function useTaskListData() {
 
   const [current, setCurrent] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const listParams = { page: current, size: pageSize }
+  const listParams = useMemo(
+    () => ({ page: current, size: pageSize }),
+    [current, pageSize],
+  )
 
   const listQuery = useQuery({
     queryKey: queryKeys.crawlerTasks.list(listParams),

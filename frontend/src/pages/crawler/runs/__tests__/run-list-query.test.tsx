@@ -1,8 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { message } from 'antd'
 import type { PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getCrawlerRuns } from '@/api/crawler/crawlerRun'
+import { deleteCrawlerRun, getCrawlerRuns } from '@/api/crawler/crawlerRun'
+import type { RunListResponse } from '@/api/crawler/crawlerRun/types'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import RunListPage from '../RunListPage'
 
@@ -123,5 +125,90 @@ describe('RunListPage', () => {
 
     await findByText('失败')
     expect(getCrawlerRuns).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps delete confirmation pending until the refreshed list arrives', async () => {
+    let resolveRefresh!: (value: RunListResponse) => void
+    const refreshResult = new Promise<RunListResponse>((resolve) => {
+      resolveRefresh = resolve
+    })
+
+    vi.mocked(deleteCrawlerRun).mockResolvedValue(undefined)
+    vi.mocked(getCrawlerRuns)
+      .mockResolvedValueOnce({
+        rows: [buildRun('failed')],
+        total: 1,
+      } as unknown as RunListResponse)
+      .mockImplementationOnce(() => refreshResult)
+
+    render(<RunListPage />, { wrapper })
+
+    await screen.findByText('Run Task')
+    await waitFor(() => expect(useCrawlerRuntimeStore.getState().runRuntimeById['run-1']).toBeDefined())
+    let refreshResolved = false
+    let runtimeRemovedBeforeRefresh = false
+    const unsubscribe = useCrawlerRuntimeStore.subscribe((state) => {
+      if (!refreshResolved && !state.runRuntimeById['run-1']) {
+        runtimeRemovedBeforeRefresh = true
+      }
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /删除/ }))
+    await screen.findByText('删除运行记录')
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }))
+
+    await waitFor(() => expect(deleteCrawlerRun).toHaveBeenCalledWith('run-1'))
+    await waitFor(() => expect(getCrawlerRuns).toHaveBeenCalledTimes(2))
+    expect(screen.getByText('删除运行记录')).toBeInTheDocument()
+    expect(runtimeRemovedBeforeRefresh).toBe(false)
+
+    refreshResolved = true
+    resolveRefresh({
+      rows: [],
+      total: 0,
+    })
+
+    await waitFor(() => expect(screen.queryByText('Run Task')).not.toBeInTheDocument())
+    expect(useCrawlerRuntimeStore.getState().runRuntimeById['run-1']).toBeUndefined()
+    unsubscribe()
+  })
+
+  it('keeps realtime state when the post-delete list refresh fails', async () => {
+    const warningSpy = vi.spyOn(message, 'warning').mockReturnValue({} as ReturnType<typeof message.warning>)
+    const successSpy = vi.spyOn(message, 'success').mockReturnValue({} as ReturnType<typeof message.success>)
+
+    vi.mocked(deleteCrawlerRun).mockResolvedValue(undefined)
+    vi.mocked(getCrawlerRuns)
+      .mockResolvedValueOnce({
+        rows: [buildRun('failed')],
+        total: 1,
+      } as unknown as RunListResponse)
+      .mockRejectedValueOnce(new Error('refresh failed'))
+    useCrawlerRuntimeStore.getState().hydrateRunRuntime({
+      'run-1': {
+        run_id: 'run-1',
+        status: 'failed',
+        error: 'live failure',
+        started_at: null,
+        finished_at: null,
+        state_updated_at: '2026-08-01T00:01:00Z',
+      },
+    })
+
+    render(<RunListPage />, { wrapper })
+
+    await screen.findByText('Run Task')
+    fireEvent.click(screen.getByRole('button', { name: /删除/ }))
+    await screen.findByText('删除运行记录')
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }))
+
+    await waitFor(() => {
+      expect(warningSpy).toHaveBeenCalledWith('运行记录已删除，但列表刷新失败，请手动刷新')
+    })
+    expect(successSpy).not.toHaveBeenCalled()
+    expect(useCrawlerRuntimeStore.getState().runRuntimeById['run-1']?.error).toBe('live failure')
+
+    warningSpy.mockRestore()
+    successSpy.mockRestore()
   })
 })

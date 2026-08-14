@@ -114,7 +114,7 @@ describe('useCrawlerRuntimeStore', () => {
       expect(state.runRuntimeById.r1!.status).toBe('running')
     })
 
-    it('hydrateRunRuntime replaces all run runtimes', () => {
+    it('hydrateRunRuntime preserves existing runtimes when adding REST baselines', () => {
       const store = useCrawlerRuntimeStore.getState()
       store.upsertRunRuntime({
         run_id: 'r1',
@@ -126,6 +126,14 @@ describe('useCrawlerRuntimeStore', () => {
       })
 
       store.hydrateRunRuntime({
+        r1: {
+          run_id: 'r1',
+          status: 'completed',
+          error: null,
+          started_at: null,
+          finished_at: null,
+          state_updated_at: '2024-01-01T00:01:00Z',
+        },
         r2: {
           run_id: 'r2',
           status: 'completed',
@@ -137,7 +145,8 @@ describe('useCrawlerRuntimeStore', () => {
       })
 
       const state = useCrawlerRuntimeStore.getState()
-      expect(state.runRuntimeById.r1).toBeUndefined()
+      expect(state.runRuntimeById.r1!.status).toBe('running')
+      expect(state.runRuntimeById.r1!.state_updated_at).toBe('2024-01-01T00:02:00Z')
       expect(state.runRuntimeById.r2).toBeDefined()
     })
 

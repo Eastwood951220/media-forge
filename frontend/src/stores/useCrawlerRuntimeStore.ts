@@ -90,7 +90,13 @@ export const useCrawlerRuntimeStore = create<CrawlerRuntimeState>()((set) => ({
       }
     }),
 
-  hydrateRunRuntime: (runtimes) => set({ runRuntimeById: { ...runtimes } }),
+  hydrateRunRuntime: (runtimes) =>
+    set((state) => ({
+      runRuntimeById: {
+        ...runtimes,
+        ...state.runRuntimeById,
+      },
+    })),
 
   upsertRunRuntime: (runtime) =>
     set((state) => {

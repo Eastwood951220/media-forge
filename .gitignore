@@ -38,6 +38,15 @@ Thumbs.db
 *.log
 logs/
 
+# Local-only tests and test support
+**/tests/
+**/test/
+**/__tests__/
+**/test_*.py
+**/*_test.py
+**/*.test.*
+**/*.spec.*
+
 # Test coverage
 coverage/
 .pytest_cache/
@@ -45,7 +54,7 @@ htmlcov/
 .coverage
 .playwright-cli
 
-# Superpowers task tracking (ephemeral session data)
+# Superpowers specs, plans, and task tracking (local-only session data)
 .superpowers/
 docs/superpowers/
 

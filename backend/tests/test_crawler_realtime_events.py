@@ -428,6 +428,9 @@ def test_build_task_runtime_snapshot_event_contains_all_owner_tasks(admin_user) 
             assert t["runtime_status"] == "idle"
             assert t["latest_run_id"] is None
 
+    assert "stats" in event.payload
+    assert event.payload["stats"] == {"total": 2, "idle": 1, "running": 1, "queued": 0, "stopped": 0}
+
     session.close()
 
 

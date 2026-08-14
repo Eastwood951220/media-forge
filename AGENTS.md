@@ -27,6 +27,27 @@ This project is a refactor and optimization of
 - Plans should describe only the work needed to migrate, preserve, improve, or
   integrate existing behavior, plus directly necessary tests and documentation.
 
+## Git Workflow and Commit Filtering
+
+- Never create or use a Git worktree for this repository. Work in the current
+  checkout and use ordinary Git branches when isolation is required.
+- Tests are local verification artifacts only. Agents may create, modify, and
+  run tests, but must never stage or commit test files.
+- Treat test directories and conventional test filenames as local-only,
+  including `tests/`, `test/`, `__tests__/`, `test_*.py`, `*_test.py`,
+  `*.test.*`, and `*.spec.*`.
+- Superpowers specs and plans under `docs/superpowers/specs/` and
+  `docs/superpowers/plans/` must remain local-only and must never be staged or
+  committed, even when a Superpowers skill normally requests a commit.
+- Stage intended source files explicitly instead of using broad commands such
+  as `git add .` or `git add -A`, because already tracked files are not excluded
+  by `.gitignore`.
+- Before every commit, inspect `git diff --cached --name-only`. If any test file
+  or Superpowers spec/plan is staged, unstage it while preserving the local
+  working copy.
+- Do not remove existing test files or Superpowers documents from Git tracking
+  unless the user explicitly requests that separate repository cleanup.
+
 ## Directory Structure
 
 ```

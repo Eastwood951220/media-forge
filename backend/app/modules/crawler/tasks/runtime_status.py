@@ -231,7 +231,7 @@ def build_task_runtime_snapshot_event(db: Session, owner_id: uuid.UUID) -> Realt
 
     Returns:
         A RealtimeEvent with event="crawler.task.runtime.snapshot" containing
-        one CrawlTaskRuntimeSnapshot per owner task.
+        one CrawlTaskRuntimeSnapshot per owner task plus aggregate stats.
     """
     from backend.app.modules.realtime.schemas import make_realtime_event
 
@@ -242,11 +242,23 @@ def build_task_runtime_snapshot_event(db: Session, owner_id: uuid.UUID) -> Realt
     )
     latest_runs = _latest_runs_by_task(db, [task.id for task in tasks])
     snapshots = [build_task_runtime_snapshot(task, latest_runs.get(task.id)) for task in tasks]
+    counts = {"idle": 0, "running": 0, "queued": 0, "stopped": 0}
+    for snapshot in snapshots:
+        counts[snapshot.runtime_status] += 1
     return make_realtime_event(
         event="crawler.task.runtime.snapshot",
         scope="crawler.task",
         owner_id=str(owner_id),
-        payload={"tasks": [s.model_dump(mode="json") for s in snapshots]},
+        payload={
+            "tasks": [s.model_dump(mode="json") for s in snapshots],
+            "stats": {
+                "total": len(snapshots),
+                "idle": counts["idle"],
+                "running": counts["running"],
+                "queued": counts["queued"],
+                "stopped": counts["stopped"],
+            },
+        },
     )
 
 
