@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.dependencies import CurrentUser, get_db
-from backend.app.models.crawler_agent import CrawlerAgent, CrawlerAgentSession
+from backend.app.models.crawler_agent import CrawlerAgent, CrawlerAgentSession, CrawlerAgentWorkItem
 from backend.app.modules.crawler.agent.auth import (
     create_agent_session_id,
     create_agent_token,
@@ -202,13 +203,27 @@ async def agent_ws(
                     sync_javdb_cookies(cookies)
                     agent.last_cookie_sync_at = datetime.now(UTC)
                 snapshot = AgentPageSnapshot.model_validate(payload["snapshot"])
-                item = complete_work_item_from_snapshot(
-                    db, work_item_id=str(payload["agent_task_id"]), snapshot=snapshot
-                )
+                agent_task_id = str(payload["agent_task_id"])
+                existing_item = db.get(CrawlerAgentWorkItem, uuid.UUID(agent_task_id))
+                ignored = existing_item is None or existing_item.status not in {"pending", "assigned", "running"}
+                try:
+                    item = complete_work_item_from_snapshot(
+                        db, work_item_id=agent_task_id, snapshot=snapshot
+                    )
+                except Exception as exc:
+                    await websocket.send_json({
+                        "id": f"err_{message.get('id')}",
+                        "type": "server.error",
+                        "payload": {"agent_task_id": agent_task_id, "reason": str(exc)},
+                    })
+                    continue
                 await websocket.send_json({
                     "id": f"ack_{message.get('id')}",
                     "type": "server.ack",
-                    "payload": {"agent_task_id": str(item.id)},
+                    "payload": {
+                        "agent_task_id": str(item.id),
+                        "ignored": ignored,
+                    },
                 })
                 continue
     except WebSocketDisconnect:

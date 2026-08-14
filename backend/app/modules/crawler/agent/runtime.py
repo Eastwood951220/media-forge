@@ -10,6 +10,10 @@ from backend.app.modules.crawler.agent.parser_bridge import (
     parse_agent_detail_snapshot,
     parse_agent_list_snapshot,
 )
+from backend.app.modules.crawler.agent.work_items import (
+    is_work_item_completable,
+    mark_work_item_failed,
+)
 
 
 def complete_work_item_from_snapshot(
@@ -21,12 +25,18 @@ def complete_work_item_from_snapshot(
     item = db.get(CrawlerAgentWorkItem, uuid.UUID(work_item_id))
     if item is None:
         raise ValueError("agent_work_item_not_found")
-    if item.page_kind == "list":
-        item.result_json = {"tasks": parse_agent_list_snapshot(snapshot)}
-    elif item.page_kind == "detail":
-        item.result_json = {"detail": parse_agent_detail_snapshot(snapshot)}
-    else:
-        raise ValueError(f"unsupported_page_kind:{item.page_kind}")
+    if not is_work_item_completable(item):
+        return item
+    try:
+        if item.page_kind == "list":
+            item.result_json = {"tasks": parse_agent_list_snapshot(snapshot)}
+        elif item.page_kind == "detail":
+            item.result_json = {"detail": parse_agent_detail_snapshot(snapshot)}
+        else:
+            raise ValueError(f"unsupported_page_kind:{item.page_kind}")
+    except Exception as exc:
+        mark_work_item_failed(db, item, str(exc))
+        raise
     item.status = "completed"
     item.error_reason = None
     item.claimed_until = None
