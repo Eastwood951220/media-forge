@@ -76,6 +76,8 @@ def test_execute_agent_crawl_fails_fast_when_agent_offline(db_session, tmp_path,
 
     logs = run_logs.load_run_logs(str(run.id))
     assert any("Chrome Agent 未在线" in entry["message"] for entry in logs)
+    error_entries = [entry for entry in logs if entry["level"] == "ERROR"]
+    assert any("Chrome Agent 未在线" in entry["message"] for entry in error_entries)
 
 
 def test_execute_agent_crawl_list_phase_creates_detail_tasks_from_snapshot(db_session, monkeypatch) -> None:
@@ -225,3 +227,14 @@ def test_execute_agent_crawl_stop_while_waiting_returns_stopped(db_session, monk
     result = execute_agent_crawl(db_session, run, task, AgentRuntimeState(stopped=True))
 
     assert result["stopped"] is True
+
+
+def test_agent_unavailable_error_replaces_placeholder_message(db_session, tmp_path, monkeypatch) -> None:
+    task, run = make_agent_task_and_run(db_session)
+    monkeypatch.setattr(run_logs, "RUN_LOG_DIR", str(tmp_path))
+
+    with pytest.raises(AgentUnavailableError) as exc_info:
+        execute_agent_crawl(db_session, run, task, AgentRuntimeState())
+
+    assert "JavDB Agent runtime is configured but Agent work execution is not available" not in str(exc_info.value)
+    assert "Chrome Agent 未在线" in str(exc_info.value)

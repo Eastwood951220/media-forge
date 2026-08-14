@@ -331,4 +331,39 @@ describe('RunDetail realtime event ownership', () => {
     // Run status tag should render
     expect(screen.getByText('已完成')).toBeInTheDocument()
   })
+
+  it('renders Chrome Agent failure reason from run logs', async () => {
+    useCrawlerRuntimeStore.getState().setConnectionStatus('connected')
+    vi.mocked(getCrawlerRun).mockResolvedValue({
+      id: 'run-1',
+      task_id: 'task-agent',
+      task_name: 'Agent Task',
+      status: 'failed',
+      crawl_mode: 'incremental',
+      queued_at: null,
+      started_at: null,
+      finished_at: null,
+      result: null,
+      error: 'Chrome Agent 未在线，无法执行 JavDB Agent 爬取',
+      resumed_from: null,
+      created_at: '2026-08-14T00:00:00Z',
+      updated_at: null,
+      logs: [],
+    })
+    vi.mocked(getCrawlerRunLogs).mockResolvedValue([
+      {
+        timestamp: '2026-08-14T00:00:01Z',
+        level: 'ERROR',
+        component: null,
+        event: null,
+        message: 'Chrome Agent 未在线，无法执行 JavDB Agent 爬取',
+        context: {},
+      },
+    ])
+
+    render(<RunDetailPage />, { wrapper })
+
+    // The Agent failure reason is surfaced from run logs (and run error)
+    expect((await screen.findAllByText('Chrome Agent 未在线，无法执行 JavDB Agent 爬取')).length).toBeGreaterThan(0)
+  })
 })
