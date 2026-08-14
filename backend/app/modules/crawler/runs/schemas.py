@@ -111,18 +111,6 @@ class CrawlRunDetailTaskListItem(BaseModel):
     display_source_name: str | None = None
 
 
-class RunTaskPage(BaseModel):
-    """Paginated task list response."""
-
-    rows: list[CrawlRunDetailTaskListItem]
-    total: int
-
-
-def accepted_run_action(run_id: str | uuid.UUID) -> dict:
-    """Build a RunActionAccepted response dict."""
-    return {"run_id": str(run_id), "accepted": True}
-
-
 class CrawlRunDetailTaskRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -162,6 +150,19 @@ class RunTaskSummary(BaseModel):
     completed: int = 0
     waiting: int = 0
     failed: int = 0
+
+
+class RunTaskPage(BaseModel):
+    """Paginated task list response."""
+
+    rows: list[CrawlRunDetailTaskListItem]
+    total: int
+    summary: RunTaskSummary
+
+
+def accepted_run_action(run_id: str | uuid.UUID) -> dict:
+    """Build a RunActionAccepted response dict."""
+    return {"run_id": str(run_id), "accepted": True}
 
 
 TEMPORARY_SOURCE_NAMES = {"临时详情页", "临时任务", ""}

@@ -143,8 +143,8 @@ describe('RunDetail realtime event ownership', () => {
       id: 'event-1',
       event: 'crawler.run.detail.updated',
       scope: 'crawler.run.detail',
-      resource_id: 'detail-1',
-      owner_id: 'run-1',
+      resource_id: 'run-1',
+      owner_id: 'user-1',
       payload: {
         run_id: 'run-1',
         tasks: [{
@@ -182,8 +182,8 @@ describe('RunDetail realtime event ownership', () => {
       id: 'event-2',
       event: 'crawler.run.log.appended',
       scope: 'crawler.run.log',
-      resource_id: 'log-1',
-      owner_id: 'run-1',
+      resource_id: 'run-1',
+      owner_id: 'user-1',
       payload: {
         run_id: 'run-1',
         log: {
@@ -230,8 +230,8 @@ describe('RunDetail realtime event ownership', () => {
       id: 'event-2',
       event: 'crawler.run.log.appended',
       scope: 'crawler.run.log',
-      resource_id: 'log-1',
-      owner_id: 'run-1',
+      resource_id: 'run-1',
+      owner_id: 'user-1',
       payload: logPayload,
       created_at: '2026-07-08T00:01:00Z',
     })
@@ -240,8 +240,8 @@ describe('RunDetail realtime event ownership', () => {
       id: 'event-3',
       event: 'crawler.run.log.appended',
       scope: 'crawler.run.log',
-      resource_id: 'log-1',
-      owner_id: 'run-1',
+      resource_id: 'run-1',
+      owner_id: 'user-1',
       payload: logPayload,
       created_at: '2026-07-08T00:01:01Z',
     })
@@ -252,6 +252,43 @@ describe('RunDetail realtime event ownership', () => {
     // There should be only one instance of the log message
     const logElements = screen.getAllByText('开始爬取任务')
     expect(logElements).toHaveLength(1)
+  })
+
+  it('does not refetch REST data for normal terminal status events', async () => {
+    useCrawlerRuntimeStore.getState().setConnectionStatus('connected')
+
+    render(<RunDetailPage />, { wrapper })
+
+    expect(await screen.findByText('FAIL-001')).toBeInTheDocument()
+    vi.mocked(getCrawlerRun).mockClear()
+    vi.mocked(getCrawlerRunLogs).mockClear()
+    vi.mocked(getCrawlerRunTasks).mockClear()
+
+    realtimeMock.handlers['crawler.run.status.updated']({
+      id: 'event-terminal',
+      event: 'crawler.run.status.updated',
+      scope: 'crawler.run',
+      resource_id: 'run-1',
+      owner_id: 'user-1',
+      payload: {
+        run_id: 'run-1',
+        task_id: 'task-1',
+        status: 'completed',
+        crawl_mode: 'incremental',
+        error: null,
+        started_at: null,
+        finished_at: '2026-07-08T00:03:00Z',
+        state_updated_at: '2026-07-08T00:03:00Z',
+      },
+      created_at: '2026-07-08T00:03:00Z',
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('已完成')).toBeInTheDocument()
+    })
+    expect(getCrawlerRun).not.toHaveBeenCalled()
+    expect(getCrawlerRunLogs).not.toHaveBeenCalled()
+    expect(getCrawlerRunTasks).not.toHaveBeenCalled()
   })
 
   it('detail/log/summary are not stored in the global store', async () => {

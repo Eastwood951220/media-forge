@@ -158,10 +158,12 @@ def list_run_tasks(
     total = query.count()
     offset = (page - 1) * size
     rows = query.order_by(CrawlRunDetailTask.created_at.asc()).offset(offset).limit(size).all()
-    return paginated(
+    payload = paginated(
         rows=[_serialize_run_detail_task(r) for r in rows],
         total=total,
     )
+    payload["summary"] = _run_task_summary(db, run)
+    return payload
 
 
 @router.post("/{run_id}/tasks/retry", status_code=status.HTTP_201_CREATED)

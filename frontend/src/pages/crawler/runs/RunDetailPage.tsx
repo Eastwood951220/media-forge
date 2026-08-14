@@ -13,8 +13,6 @@ function RunDetailPage() {
 
   useRunDetailRealtime({
     id,
-    fetchLogs: detail.fetchLogs,
-    fetchRun: detail.fetchRun,
     fetchTasks: detail.fetchTasks,
     keyword: detail.keyword,
     resyncSnapshot: detail.resyncSnapshot,

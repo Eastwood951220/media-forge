@@ -851,13 +851,15 @@ def test_incremental_run_tasks_hide_legacy_already_exists_skips(client: TestClie
     payload = response.json()
     assert [row["code"] for row in payload["rows"]] == ["NEW-001"]
     assert payload["total"] == 1
-    assert "summary" not in payload
+    assert payload["summary"]["total"] == 1
+    assert payload["summary"]["waiting"] == 1
+    assert payload["summary"]["completed"] == 0
 
     summary_response = client.get(f"/api/crawler/runs/{run.id}/tasks/summary", headers=auth_headers(client, admin_user))
     assert summary_response.status_code == 404
 
 
-def test_run_tasks_endpoint_returns_paginated_rows_without_summary(client: TestClient, admin_user) -> None:
+def test_run_tasks_endpoint_returns_paginated_rows_with_summary(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
     session = TestingSessionLocal()
     run = CrawlRun(task_name="任务", status="running", crawl_mode="incremental", queued_at=datetime.now())
@@ -879,7 +881,10 @@ def test_run_tasks_endpoint_returns_paginated_rows_without_summary(client: TestC
     body = response.json()
     assert body["total"] == 1
     assert [row["code"] for row in body["rows"]] == ["S"]
-    assert "summary" not in body
+    assert body["summary"]["total"] == 2
+    assert body["summary"]["saved"] == 1
+    assert body["summary"]["waiting"] == 1
+    assert body["summary"]["completed"] == 1
 
 
 def test_run_task_summary_endpoint_returns_404(client: TestClient, admin_user) -> None:

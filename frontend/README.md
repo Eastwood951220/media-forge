@@ -115,8 +115,8 @@ Current API groups:
 - `init/`: initialization config and connection tests.
 - `login/`: login and logout.
 - `dashboard/`: dashboard overview.
-- `crawlTask/`: crawler task CRUD, stats, runtime status, temporary runs.
-- `crawlerRun/`: run list/detail/logs/task summaries, stop/restart/retry.
+- `crawlTask/`: crawler task CRUD, one static paginated task-list API, and run submission actions.
+- `crawlerRun/`: one static paginated run-list API, run detail/log/subtask APIs, and stop/restart/retry actions.
 - `crawler/crawlerConfig/`: crawler config and cookies config.
 - `movie/`: movie list/detail/filter config, delete, storage sync.
 - `storage/storageConfig/`: storage config and connection test.
@@ -149,19 +149,22 @@ Zustand stores:
 - `useAuthStore`: token and authentication state, synchronized with cookies.
 - `useThemeStore`: light/dark mode and primary color.
 - `useTagsViewStore`: visited route tabs and tab close/reset operations.
-- `useCrawlerRuntimeStore`: WebSocket/SSE connection status, task runtime status map, run runtime status map. Never stores task rows, task summaries, or run logs.
+- `useCrawlerRuntimeStore`: EventSource connection status, task runtime snapshots/statistics, and run runtime status map. Never stores task rows, task summaries, run-detail subtask rows, or run logs.
 
 ### Realtime Events
 
 Realtime updates use server-sent events in `src/realtime/eventSourceClient.ts`.
-The EventSource connection lifecycle is managed by the authenticated shell in `src/layout/`.
-Feature pages subscribe to events from their hooks and update local state.
+The authenticated application shell in `src/layout/` owns a single EventSource
+connection for all authenticated pages. Every event first passes through the
+global realtime reducer so task/runtime overlays in `useCrawlerRuntimeStore`
+stay current even when the user is on another page. Feature hooks may subscribe
+only for page-local data that should not enter the global store.
 
 Event ownership:
 
-- **Task list page** (`/crawler/tasks`): subscribes to `crawler.task.runtime.snapshot`, `crawler.task.status.updated`, `crawler.run.status.updated` via `useCrawlerRuntimeStore` reducer.
-- **Run list page** (`/crawler/runs`): overlays runtime status from `useCrawlerRuntimeStore` over TanStack Query data.
-- **Run detail page** (`/crawler/runs/$id`): subscribes to `crawler.run.status.updated`, `crawler.run.detail.updated`, `crawler.run.log.appended` locally via `useRunDetailRealtime` hook. Does not write to any global store.
+- **Task list page** (`/crawler/tasks`): calls only the task-list REST API for static rows. Top statistics and row runtime status come from `useCrawlerRuntimeStore`, populated by `crawler.task.runtime.snapshot`, `crawler.task.status.updated`, and `crawler.run.status.updated`.
+- **Run list page** (`/crawler/runs`): calls only the run-list REST API for static rows, then overlays runtime status from `useCrawlerRuntimeStore`.
+- **Run detail page** (`/crawler/runs/$id`): uses REST for initial run/log/subtask data and keeps subtask rows, summary, and logs in local React state. It consumes `crawler.run.status.updated`, `crawler.run.detail.updated`, and `crawler.run.log.appended` locally via `useRunDetailRealtime`, refetching only for explicit resync, structural subtask refreshes, filter/page changes, or mutation-error recovery.
 
 TanStack Query client defaults are in `src/lib/query-client.ts`: five-minute
 query stale time, one query retry, no refetch on window focus, and no mutation

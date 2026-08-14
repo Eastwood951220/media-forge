@@ -9,8 +9,6 @@ import type {
 
 export function useRunDetailRealtime(args: {
   id: string | undefined
-  fetchLogs: () => Promise<void>
-  fetchRun: () => Promise<void>
   fetchTasks: () => Promise<void>
   keyword: string
   resyncSnapshot: () => void
@@ -23,8 +21,6 @@ export function useRunDetailRealtime(args: {
 }): void {
   const {
     id,
-    fetchLogs,
-    fetchRun,
     fetchTasks,
     keyword,
     resyncSnapshot,
@@ -52,18 +48,13 @@ export function useRunDetailRealtime(args: {
           finished_at,
           logs: currentRun?.logs ?? [],
         } as CrawlRun))
-        if (['completed', 'failed', 'stopped'].includes(status)) {
-          void fetchRun()
-          void fetchLogs()
-          void fetchTasks()
-        }
       },
     )
 
     const unsubscribeDetails = subscribeRealtime<CrawlerRunDetailUpdatedPayload>(
       'crawler.run.detail.updated',
       (event) => {
-        if (event.owner_id !== id || event.payload.run_id !== id) return
+        if (event.resource_id !== id && event.payload.run_id !== id) return
         if (event.payload.summary) {
           setTaskSummary(event.payload.summary)
         }
@@ -106,7 +97,7 @@ export function useRunDetailRealtime(args: {
     const unsubscribeLogs = subscribeRealtime<CrawlerRunLogAppendedPayload>(
       'crawler.run.log.appended',
       (event) => {
-        if (event.owner_id !== id || event.payload.run_id !== id) return
+        if (event.resource_id !== id && event.payload.run_id !== id) return
         setLogs((currentLogs) => {
           const log = event.payload.log
           const key = [log.timestamp, log.component ?? '', log.event ?? '', log.message].join('|')
@@ -135,5 +126,5 @@ export function useRunDetailRealtime(args: {
       unsubscribeLogs()
       unsubscribeResync()
     }
-  }, [id, fetchLogs, fetchRun, fetchTasks, keyword, resyncSnapshot, setLogs, setRun, setTaskSummary, setTaskTotal, setTasks, statusFilter])
+  }, [id, fetchTasks, keyword, resyncSnapshot, setLogs, setRun, setTaskSummary, setTaskTotal, setTasks, statusFilter])
 }
