@@ -1,15 +1,13 @@
 import { request } from '@/request'
 import type { CrawlRun } from '@/api/crawler/crawlerRun/types.ts'
 import type {
-  CountResponse,
   CrawlTask,
   CrawlTaskCreateParams,
-  CrawlTaskRuntimeStatusResponse,
-  CrawlTaskStats,
+  CrawlTaskListItem,
   CrawlTaskUpdateParams,
   DeleteMode,
   DeleteTaskResult,
-  FastListResponse,
+  PagedListResponse,
   TaskDictItem,
   TaskUrlRunCreateParams,
   TemporaryCrawlRunCreateParams,
@@ -21,16 +19,8 @@ export function getCrawlTasks(params: {
   page: number
   size: number
   keyword?: string
-}): Promise<FastListResponse<CrawlTask> & { runtime?: CrawlTaskRuntimeStatusResponse }> {
-  return request.get<FastListResponse<CrawlTask> & { runtime?: CrawlTaskRuntimeStatusResponse }>(BASE_URL, params)
-}
-
-export function getCrawlTaskCount(params?: { keyword?: string }): Promise<CountResponse> {
-  return request.get<CountResponse>(`${BASE_URL}/count`, params)
-}
-
-export function getCrawlTaskStats(): Promise<CrawlTaskStats> {
-  return request.get<CrawlTaskStats>(`${BASE_URL}/stats`)
+}): Promise<PagedListResponse<CrawlTaskListItem>> {
+  return request.get<PagedListResponse<CrawlTaskListItem>>(BASE_URL, params)
 }
 
 export function getTaskDict(): Promise<TaskDictItem[]> {
@@ -61,10 +51,6 @@ export function extractTaskName(url: string, urlType: string): Promise<{ name: s
     url,
     url_type: urlType,
   })
-}
-
-export function getCrawlTaskRuntimeStatuses(): Promise<CrawlTaskRuntimeStatusResponse> {
-  return request.get<CrawlTaskRuntimeStatusResponse>(`${BASE_URL}/statuses`)
 }
 
 export function createTemporaryCrawlRun(data: TemporaryCrawlRunCreateParams): Promise<CrawlRun> {

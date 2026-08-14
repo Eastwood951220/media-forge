@@ -10,6 +10,7 @@ import { useTaskListData } from './hooks/useTaskListData'
 import { useTaskListRealtime } from './hooks/useTaskListRealtime'
 import { useTaskUrlRun } from './hooks/useTaskUrlRun'
 import { useRouteActivationRefresh } from '@/hooks/useRouteActivationRefresh'
+import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import styles from './TaskPages.module.less'
 
 function TaskListPage() {
@@ -19,12 +20,9 @@ function TaskListPage() {
   const {
     current,
     pageSize,
-    hasMore,
     total,
-    countLoading,
     setCurrent,
     setPageSize,
-    fetchRuntimeStatuses,
     handleDelete,
     handleRestart,
     handleRun,
@@ -34,13 +32,11 @@ function TaskListPage() {
     loading,
     refreshList,
     runtimeByTaskId,
-    setRuntimeByTaskId,
-    setStats,
-    stats,
+    taskSnapshotReady,
     tasks,
   } = useTaskListData()
 
-  useTaskListRealtime({ refreshList, setRuntimeByTaskId, setStats })
+  useTaskListRealtime()
   useRouteActivationRefresh(refreshList)
 
   const taskUrlRun = useTaskUrlRun({ onSubmitted: handleRunSubmitted })
@@ -80,30 +76,32 @@ function TaskListPage() {
     } finally {
       setTemporarySubmitting(false)
     }
-  }, [fetchRuntimeStatuses, message])
+  }, [handleRunSubmitted, message])
+
+  const taskStats = useCrawlerRuntimeStore((state) => state.taskStats)
 
   return (
     <div className={styles.page}>
       <section className={styles.statsBar} aria-label="任务统计">
         <div className={styles.statCard}>
           <span className={styles.statLabel}>总数</span>
-          <span className={styles.statValue}>{stats.total}</span>
+          <span className={styles.statValue}>{taskStats?.total ?? 0}</span>
         </div>
         <div className={styles.statCard}>
           <span className={styles.statLabel}>空闲中</span>
-          <span className={styles.statValue}>{stats.idle}</span>
+          <span className={styles.statValue}>{taskStats?.idle ?? 0}</span>
         </div>
         <div className={styles.statCard}>
           <span className={styles.statLabel}>运行中</span>
-          <span className={styles.statValue}>{stats.running}</span>
+          <span className={styles.statValue}>{taskStats?.running ?? 0}</span>
         </div>
         <div className={styles.statCard}>
           <span className={styles.statLabel}>排队中</span>
-          <span className={styles.statValue}>{stats.queued}</span>
+          <span className={styles.statValue}>{taskStats?.queued ?? 0}</span>
         </div>
         <div className={styles.statCard}>
           <span className={styles.statLabel}>停止中</span>
-          <span className={styles.statValue}>{stats.stopped}</span>
+          <span className={styles.statValue}>{taskStats?.stopped ?? 0}</span>
         </div>
       </section>
 
@@ -113,6 +111,7 @@ function TaskListPage() {
           loading={loading}
           total={total}
           runtimeByTaskId={runtimeByTaskId}
+          runtimeReady={taskSnapshotReady}
           onEdit={(task) => navigate({ to: '/crawler/tasks/$id/edit', params: { id: task.id } })}
           onDelete={handleDelete}
           onToggleSkip={handleToggleSkip}
@@ -123,8 +122,6 @@ function TaskListPage() {
           onTemporaryTaskClick={openTemporaryModal}
           current={current}
           pageSize={pageSize}
-          hasMore={hasMore}
-          countLoading={countLoading}
           onPageChange={setCurrent}
           onPageSizeChange={setPageSize}
         />

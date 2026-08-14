@@ -1,38 +1,27 @@
-import {useEffect} from 'react'
-import type {CrawlTaskRuntimeSnapshot} from '@/api/crawler/crawlTask/types'
-import {subscribeRealtime} from '@/realtime/eventSourceClient'
-import type {CrawlerTaskStatusUpdatedPayload} from '@/realtime/types'
-import {recomputeStats} from '../utils/runtimeStats'
+import { useEffect } from 'react'
+import { subscribeRealtime } from '@/realtime/eventSourceClient'
+import type { CrawlerTaskStatusUpdatedPayload } from '@/realtime/types'
+import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 
-export function useTaskListRealtime({
-  refreshList,
-  setRuntimeByTaskId,
-  setStats,
-}: {
-  refreshList: () => void
-  setRuntimeByTaskId: React.Dispatch<React.SetStateAction<Record<string, CrawlTaskRuntimeSnapshot>>>
-  setStats: React.Dispatch<React.SetStateAction<import('@/api/crawler/crawlTask/types').CrawlTaskRuntimeStats>>
-}) {
+export function useTaskListRealtime() {
+  const upsertTaskRuntime = useCrawlerRuntimeStore((state) => state.upsertTaskRuntime)
+  const markResyncRequired = useCrawlerRuntimeStore((state) => state.markResyncRequired)
+
   useEffect(() => {
     const unsubscribeTaskStatus = subscribeRealtime<CrawlerTaskStatusUpdatedPayload>(
       'crawler.task.status.updated',
       (event) => {
-        const payload = event.payload
-        setRuntimeByTaskId((current) => {
-          const next = {...current, [payload.task_id]: payload}
-          setStats(recomputeStats(next))
-          return next
-        })
+        upsertTaskRuntime(event.payload)
       },
     )
 
-    const unsubscribeResync = subscribeRealtime('system.resync_required', () => {
-      refreshList()
+    const unsubscribeResync = subscribeRealtime('system.resync_required', (event) => {
+      markResyncRequired(event.payload?.reason ?? 'unknown')
     })
 
     return () => {
       unsubscribeTaskStatus()
       unsubscribeResync()
     }
-  }, [refreshList, setRuntimeByTaskId, setStats])
+  }, [upsertTaskRuntime, markResyncRequired])
 }

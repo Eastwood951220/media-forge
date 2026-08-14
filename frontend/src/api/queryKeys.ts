@@ -13,9 +13,6 @@ export const queryKeys = {
     all: () => ['crawlerTasks'] as const,
     list: (params: { page: number; size: number; keyword?: string }) =>
       ['crawlerTasks', params] as const,
-    count: (params: { keyword?: string }) =>
-      ['crawlerTasks', 'count', params] as const,
-    runtimeStatuses: () => ['crawlerTaskRuntimeStatuses'] as const,
   },
   movies: {
     list: (params: Record<string, unknown>) => ['movies', params] as const,

@@ -17,6 +17,7 @@ type TaskListCardsProps = {
   loading: boolean
   total: number
   runtimeByTaskId: Record<string, CrawlTaskRuntimeSnapshot>
+  runtimeReady: boolean
   onEdit: (task: CrawlTask) => void
   onDelete: (task: CrawlTask) => void
   onToggleSkip: (task: CrawlTask) => void
@@ -27,8 +28,6 @@ type TaskListCardsProps = {
   onTemporaryTaskClick: () => void
   current: number
   pageSize: number
-  hasMore: boolean
-  countLoading: boolean
   onPageChange: (page: number) => void
   onPageSizeChange: (size: number) => void
 }
@@ -103,6 +102,7 @@ function UrlNameTags({ urlNames }: { urlNames: string[] }) {
 function TaskCard({
   task,
   runtime,
+  runtimeReady,
   onEdit,
   onDelete,
   onToggleSkip,
@@ -113,6 +113,7 @@ function TaskCard({
 }: {
   task: CrawlTask
   runtime: CrawlTaskRuntimeSnapshot | undefined
+  runtimeReady: boolean
   onEdit: (task: CrawlTask) => void
   onDelete: (task: CrawlTask) => void
   onToggleSkip: (task: CrawlTask) => void
@@ -124,13 +125,13 @@ function TaskCard({
   const urlNames = getUrlNames(task)
   const runtimeStatus = runtime?.runtime_status ?? 'idle'
   const isIdle = runtimeStatus === 'idle'
-  const canRun = isIdle && !task.is_skip
+  const canRun = runtimeReady && isIdle && !task.is_skip
   const hasUrls = task.urls.length > 0
-  const canUrlRun = canRun && hasUrls
-  const canEditOrDelete = isIdle
-  const canToggle = isIdle
-  const canStop = (runtimeStatus === 'queued' || runtimeStatus === 'running') && Boolean(runtime?.latest_run_id)
-  const canRestart = runtimeStatus === 'stopped' && Boolean(runtime?.latest_run_id)
+  const canUrlRun = runtimeReady && canRun && hasUrls
+  const canEditOrDelete = runtimeReady && isIdle
+  const canToggle = runtimeReady && isIdle
+  const canStop = runtimeReady && (runtimeStatus === 'queued' || runtimeStatus === 'running') && Boolean(runtime?.latest_run_id)
+  const canRestart = runtimeReady && runtimeStatus === 'stopped' && Boolean(runtime?.latest_run_id)
 
   const runItems: MenuProps['items'] = [
     { key: 'incremental', label: '增量爬取', icon: <PlayCircleOutlined /> },
@@ -191,14 +192,16 @@ function TaskCard({
               </Button>
             </Dropdown>
           )}
-          <Button
-            size="small"
-            icon={<PlayCircleOutlined />}
-            disabled={!canUrlRun}
-            onClick={() => onUrlRun(task)}
-          >
-            URL 爬取
-          </Button>
+          {runtimeReady && (
+            <Button
+              size="small"
+              icon={<PlayCircleOutlined />}
+              disabled={!canUrlRun}
+              onClick={() => onUrlRun(task)}
+            >
+              URL 爬取
+            </Button>
+          )}
           {canStop && (
             <Button size="small" danger icon={<StopOutlined />} onClick={() => onStop(task)}>
               停止
@@ -245,6 +248,7 @@ function TaskListCards({
   loading,
   total,
   runtimeByTaskId,
+  runtimeReady,
   onEdit,
   onDelete,
   onToggleSkip,
@@ -255,18 +259,14 @@ function TaskListCards({
   onTemporaryTaskClick,
   current,
   pageSize,
-  hasMore,
-  countLoading,
   onPageChange,
   onPageSizeChange,
 }: TaskListCardsProps) {
-  const navigate = useNavigate()
-  const displayTotal = countLoading ? 0 : total
   return (
     <div className={styles.taskListShell}>
       <div className={styles.taskListToolbar}>
         <Typography.Text type="secondary">
-          {countLoading ? '统计中' : `共 ${total} 条`}
+          {runtimeReady ? `共 ${total} 条` : '同步中'}
         </Typography.Text>
         <Space>
           <Button onClick={onTemporaryTaskClick}>
@@ -290,6 +290,7 @@ function TaskListCards({
                 key={task.id}
                 task={task}
                 runtime={runtimeByTaskId[task.id]}
+                runtimeReady={runtimeReady}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onToggleSkip={onToggleSkip}
@@ -305,15 +306,15 @@ function TaskListCards({
         )}
       </Spin>
 
-      {(displayTotal > 0 || hasMore) && (
+      {total > 0 && (
         <div className={styles.paginationBar}>
           <Pagination
             current={current}
             pageSize={pageSize}
-            total={hasMore && !countLoading ? undefined : displayTotal}
+            total={total}
             showSizeChanger
             pageSizeOptions={['10', '20', '50', '100']}
-            showTotal={(count) => count !== undefined ? `共 ${count} 条` : '统计中'}
+            showTotal={(count) => `共 ${count} 条`}
             onChange={(page, size) => {
               onPageChange(page)
               if (size !== pageSize) {

@@ -1,16 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Modal, Select, Typography, message } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   deleteCrawlTask,
-  getCrawlTaskCount,
   getCrawlTasks,
   updateCrawlTask,
 } from '@/api/crawler/crawlTask'
 import type {
   CrawlTask,
-  CrawlTaskRuntimeSnapshot,
-  CrawlTaskRuntimeStats,
   DeleteMode,
 } from '@/api/crawler/crawlTask/types'
 import { restartCrawlerRun, runCrawlTask, stopCrawlerRun } from '@/api/crawler/crawlerRun'
@@ -19,7 +16,6 @@ import { queryKeys } from '@/api/queryKeys'
 import { invalidateCrawlerRunLists } from '@/api/queryInvalidation'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import styles from '../TaskPages.module.less'
-import { initialStats } from '../utils/runtimeStats'
 
 const deleteModeOptions: Array<{ value: DeleteMode; label: string }> = [
   { value: 'task_only', label: '仅删除任务' },
@@ -29,13 +25,10 @@ const deleteModeOptions: Array<{ value: DeleteMode; label: string }> = [
 
 export function useTaskListData() {
   const queryClient = useQueryClient()
-  const [runtimeByTaskId, setRuntimeByTaskId] = useState<Record<string, CrawlTaskRuntimeSnapshot>>({})
-  const [stats, setStats] = useState<CrawlTaskRuntimeStats>(initialStats)
 
   const [current, setCurrent] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const listParams = { page: current, size: pageSize }
-  const countParams = {}
 
   const listQuery = useQuery({
     queryKey: queryKeys.crawlerTasks.list(listParams),
@@ -43,49 +36,20 @@ export function useTaskListData() {
     placeholderData: (previousData) => previousData,
   })
 
-  const countQuery = useQuery({
-    queryKey: queryKeys.crawlerTasks.count(countParams),
-    queryFn: () => getCrawlTaskCount(countParams),
-  })
-
   const tasks = listQuery.data?.rows ?? []
-  const total = countQuery.data?.total ?? 0
+  const total = listQuery.data?.total ?? 0
   const loading = listQuery.isLoading
-  const hasMore = listQuery.data?.has_more ?? false
 
-  const hydrateTaskRuntime = useCrawlerRuntimeStore((state) => state.hydrateTaskRuntime)
-
-  // Hydrate crawler runtime store from HTTP list response
-  useEffect(() => {
-    if (listQuery.data?.runtime) {
-      hydrateTaskRuntime(listQuery.data.runtime.tasks)
-    }
-  }, [hydrateTaskRuntime, listQuery.data?.runtime])
-
-  // Initialize runtime stats from list response
-  const fetchRuntimeStatuses = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.crawlerTasks.list(listParams) })
-  }, [queryClient, listParams])
+  const runtimeByTaskId = useCrawlerRuntimeStore((state) => state.taskRuntimeById)
+  const taskSnapshotReady = useCrawlerRuntimeStore((state) => state.taskSnapshotReady)
 
   const refreshList = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerTasks.list(listParams) })
-    void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerTasks.count(countParams) })
-  }, [queryClient, listParams, countParams])
+  }, [queryClient, listParams])
 
   const handleRunSubmitted = useCallback(() => {
     void invalidateCrawlerRunLists(queryClient)
-    void fetchRuntimeStatuses()
-  }, [fetchRuntimeStatuses, queryClient])
-
-  // Update runtime stats when list data changes
-  if (listQuery.data?.runtime) {
-    const runtime = listQuery.data.runtime
-    const currentRuntimeByTaskId = Object.fromEntries(runtime.tasks.map((item) => [item.task_id, item]))
-    if (JSON.stringify(currentRuntimeByTaskId) !== JSON.stringify(runtimeByTaskId)) {
-      setRuntimeByTaskId(currentRuntimeByTaskId)
-      setStats(runtime.stats)
-    }
-  }
+  }, [queryClient])
 
   const handleDelete = useCallback(
     (task: CrawlTask) => {
@@ -166,10 +130,9 @@ export function useTaskListData() {
       } catch (error) {
         const msg = error instanceof Error ? error.message : '停止失败'
         message.error(msg)
-        void fetchRuntimeStatuses()
       }
     },
-    [fetchRuntimeStatuses, refreshList, runtimeByTaskId],
+    [refreshList, runtimeByTaskId],
   )
 
   const handleRestart = useCallback(
@@ -183,21 +146,17 @@ export function useTaskListData() {
       } catch (error) {
         const msg = error instanceof Error ? error.message : '重启失败'
         message.error(msg)
-        void fetchRuntimeStatuses()
       }
     },
-    [fetchRuntimeStatuses, refreshList, runtimeByTaskId],
+    [refreshList, runtimeByTaskId],
   )
 
   return {
     current,
     pageSize,
-    hasMore,
     total,
-    countLoading: countQuery.isLoading,
     setCurrent,
     setPageSize,
-    fetchRuntimeStatuses,
     handleDelete,
     handleRestart,
     handleRun,
@@ -207,9 +166,7 @@ export function useTaskListData() {
     loading,
     refreshList,
     runtimeByTaskId,
-    setRuntimeByTaskId,
-    setStats,
-    stats,
+    taskSnapshotReady,
     tasks,
   }
 }
