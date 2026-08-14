@@ -1,5 +1,5 @@
 import type { CrawlTaskRuntimeSnapshot } from '@/api/crawler/crawlTask/types'
-import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
+import type { RunLogEntry, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
 import type { StorageMainTask, StorageTaskLog } from '@/api/storage/storageTasks/types'
 
 export type RealtimeEvent<TPayload = Record<string, unknown>> = {

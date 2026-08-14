@@ -262,6 +262,7 @@ function TaskListCards({
   onPageChange,
   onPageSizeChange,
 }: TaskListCardsProps) {
+  const navigate = useNavigate()
   return (
     <div className={styles.taskListShell}>
       <div className={styles.taskListToolbar}>

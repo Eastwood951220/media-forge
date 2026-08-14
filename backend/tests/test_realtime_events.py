@@ -21,14 +21,14 @@ from backend.tests.conftest import TestingSessionLocal
 
 def test_make_realtime_event_fills_required_metadata() -> None:
     event = make_realtime_event(
-        event="crawler.run.updated",
+        event="crawler.run.status.updated",
         scope="crawler.run",
         owner_id="user-1",
         resource_id="run-1",
         payload={"status": "running"},
     )
 
-    assert event.event == "crawler.run.updated"
+    assert event.event == "crawler.run.status.updated"
     assert event.scope == "crawler.run"
     assert event.owner_id == "user-1"
     assert event.resource_id == "run-1"
@@ -40,7 +40,7 @@ def test_make_realtime_event_fills_required_metadata() -> None:
 
 def test_format_sse_event_outputs_standard_event_frame() -> None:
     event = make_realtime_event(
-        event="crawler.run.updated",
+        event="crawler.run.status.updated",
         scope="crawler.run",
         owner_id="user-1",
         resource_id="run-1",
@@ -50,11 +50,11 @@ def test_format_sse_event_outputs_standard_event_frame() -> None:
     frame = format_sse_event(event)
 
     assert frame.startswith(f"id: {event.id}\n")
-    assert "\nevent: crawler.run.updated\n" in frame
+    assert "\nevent: crawler.run.status.updated\n" in frame
     assert frame.endswith("\n\n")
     data_line = next(line for line in frame.splitlines() if line.startswith("data: "))
     data = json.loads(data_line.removeprefix("data: "))
-    assert data["event"] == "crawler.run.updated"
+    assert data["event"] == "crawler.run.status.updated"
     assert data["payload"] == {"status": "running"}
 
 
@@ -64,7 +64,7 @@ def test_realtime_bus_routes_events_by_owner() -> None:
     user_b_queue = bus.subscribe("user-b")
 
     event = make_realtime_event(
-        event="crawler.run.updated",
+        event="crawler.run.status.updated",
         scope="crawler.run",
         owner_id="user-a",
         resource_id="run-1",
@@ -180,7 +180,7 @@ def test_realtime_bus_delivers_events_between_process_local_bus_instances() -> N
     api_queue = api_bus.subscribe("user-a")
 
     event = make_realtime_event(
-        event="crawler.run.updated",
+        event="crawler.run.status.updated",
         scope="crawler.run",
         owner_id="user-a",
         resource_id="run-1",
@@ -190,7 +190,7 @@ def test_realtime_bus_delivers_events_between_process_local_bus_instances() -> N
 
     received = wait_for_queue_item(api_queue)
     assert received.id == event.id
-    assert received.event == "crawler.run.updated"
+    assert received.event == "crawler.run.status.updated"
     assert received.payload == {"status": "running"}
 
     api_bus.unsubscribe("user-a", api_queue)
@@ -206,7 +206,7 @@ def test_realtime_bus_redis_transport_keeps_owner_scope() -> None:
     user_b_queue = api_bus.subscribe("user-b")
 
     worker_bus.publish(make_realtime_event(
-        event="crawler.run.updated",
+        event="crawler.run.status.updated",
         scope="crawler.run",
         owner_id="user-a",
         resource_id="run-1",
@@ -231,7 +231,7 @@ def test_event_bus_can_be_configured_with_redis_factory() -> None:
 
     worker_bus = RealtimeEventBus(queue_size=10, redis_client_factory=lambda: broker)
     worker_bus.publish(make_realtime_event(
-        event="crawler.run.updated",
+        event="crawler.run.status.updated",
         scope="crawler.run",
         owner_id="user-configured",
         resource_id="run-1",

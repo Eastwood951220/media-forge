@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getCrawlTasks } from '@/api/crawler/crawlTask'
 import { useTaskListData } from '../hooks/useTaskListData'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'

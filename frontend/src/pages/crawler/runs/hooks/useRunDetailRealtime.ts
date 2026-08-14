@@ -83,7 +83,7 @@ export function useRunDetailRealtime(args: {
               || task.source_name.toLowerCase().includes(normalizedKeyword)
               || (task.source_url_name ?? '').toLowerCase().includes(normalizedKeyword)
             if (wasPresent && matchesStatus && matchesKeyword) {
-              byId.set(task.id, task)
+              byId.set(task.id, task as CrawlRunDetailTask)
             } else if (wasPresent) {
               byId.delete(task.id)
               needsRefresh = true

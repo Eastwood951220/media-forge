@@ -61,6 +61,9 @@ def _run_task_summary(db: Session, run: CrawlRun) -> dict:
     for status, count in counts:
         if hasattr(summary, status):
             setattr(summary, status, count)
+    summary.completed = summary.saved + summary.skipped
+    summary.waiting = summary.pending_crawl
+    summary.failed = summary.crawl_failed + summary.save_failed
     return summary.model_dump(mode="json")
 
 

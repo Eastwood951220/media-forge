@@ -102,13 +102,15 @@ function emit(eventName: RealtimeEventName, payload: Record<string, unknown>, re
   }
 }
 
-function descriptionValue(label: string): HTMLElement {
+function statisticValue(label: string): HTMLElement {
   const labelNodes = screen.getAllByText(label)
-  const labelNode = labelNodes.find((node) => (node as HTMLElement).closest('.ant-descriptions-item'))
-  if (!labelNode) throw new Error(`Missing description item for ${label}`)
-  const item = (labelNode as HTMLElement).closest('.ant-descriptions-item')
-  if (!item) throw new Error(`Missing description item for ${label}`)
-  return item as HTMLElement
+  const labelNode = labelNodes.find((node) => (node as HTMLElement).closest('.ant-statistic'))
+  if (!labelNode) throw new Error(`Missing statistic for ${label}`)
+  const item = (labelNode as HTMLElement).closest('.ant-statistic')
+  if (!item) throw new Error(`Missing statistic for ${label}`)
+  const value = item.querySelector('.ant-statistic-content-value')
+  if (!value) throw new Error(`Missing statistic value for ${label}`)
+  return value as HTMLElement
 }
 
 describe('StorageTaskDetailPage realtime updates', () => {
@@ -119,7 +121,7 @@ describe('StorageTaskDetailPage realtime updates', () => {
   it('updates header counts and subtask row from realtime events', async () => {
     render(<StorageTaskDetailPage />)
 
-    expect(await screen.findByText('存储任务详情 - task-alias')).toBeInTheDocument()
+    expect(await screen.findByText('task-alias')).toBeInTheDocument()
     expect(screen.getByText('ABC-001')).toBeInTheDocument()
 
     emit('storage.main.updated', {
@@ -141,9 +143,9 @@ describe('StorageTaskDetailPage realtime updates', () => {
     }, 'sub-1')
 
     await waitFor(() => {
-      expect(within(descriptionValue('状态')).getByText('运行中')).toBeInTheDocument()
-      expect(within(descriptionValue('成功')).getByText('1')).toBeInTheDocument()
-      expect(within(descriptionValue('跳过')).getByText('1')).toBeInTheDocument()
+      expect(screen.getByText('运行中')).toBeInTheDocument()
+      expect(statisticValue('成功')).toHaveTextContent('1')
+      expect(statisticValue('跳过')).toHaveTextContent('1')
       const row = screen.getByText('ABC-001').closest('tr')
       if (!row) throw new Error('Missing ABC-001 row')
       expect(within(row).getByText('已完成')).toBeInTheDocument()

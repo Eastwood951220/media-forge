@@ -7,9 +7,6 @@ import {
   getCrawlerRun,
   getCrawlerRunLogs,
   getCrawlerRunTasks,
-  restartCrawlerRun,
-  retryCrawlerRunTasks,
-  stopCrawlerRun,
 } from '@/api/crawler/crawlerRun'
 import type { CrawlRunDetailTask, CrawlRun } from '@/api/crawler/crawlerRun/types'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'

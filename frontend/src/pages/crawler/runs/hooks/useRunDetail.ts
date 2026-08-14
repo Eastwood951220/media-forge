@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { message } from 'antd'
 import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks, restartCrawlerRun, retryCrawlerRunTasks, stopCrawlerRun } from '@/api/crawler/crawlerRun'
-import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
+import type { CrawlRun, CrawlRunDetailTask, CrawlRunStatus, RunLogEntry, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 
 const emptyTaskSummary: RunTaskSummary = {
@@ -90,7 +90,7 @@ export function useRunDetail(id: string | undefined) {
     if (!runtime) return run
     return {
       ...run,
-      status: runtime.status,
+      status: runtime.status as CrawlRunStatus,
       error: runtime.error ?? run.error,
       started_at: runtime.started_at ?? run.started_at,
       finished_at: runtime.finished_at ?? run.finished_at,

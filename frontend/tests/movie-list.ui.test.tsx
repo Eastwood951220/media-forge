@@ -21,7 +21,7 @@ vi.mock('../src/api/movie', () => ({
   updateMovieFilterConfig: vi.fn(),
 }))
 
-vi.mock('../src/api/crawlTask', () => ({
+vi.mock('@/api/crawler/crawlTask', () => ({
   getTaskDict: vi.fn(),
 }))
 

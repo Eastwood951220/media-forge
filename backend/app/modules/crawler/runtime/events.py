@@ -51,7 +51,7 @@ def publish_run_updated(db: Session, run: CrawlRun) -> None:
     }
     realtime_bus.publish(
         make_realtime_event(
-            event="crawler.run.updated",
+            event="crawler.run.status.updated",
             scope="crawler.run",
             owner_id=owner_id,
             resource_id=str(run.id),

@@ -4,6 +4,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { createTemporaryCrawlRun, getTaskDict } from '@/api/crawler/crawlTask'
 import type { TaskDictItem, TemporaryCrawlRunCreateParams } from '@/api/crawler/crawlTask/types'
 import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
+import type { CrawlTask } from '@/api/crawler/crawlTask/types'
 import TaskUrlRunModal from './components/TaskUrlRunModal'
 import TemporaryTaskModal from './components/TemporaryTaskModal'
 import { useTaskListData } from './hooks/useTaskListData'
@@ -107,7 +108,7 @@ function TaskListPage() {
 
       <section className={styles.panel}>
         <TaskListCards
-          tasks={tasks}
+          tasks={tasks as CrawlTask[]}
           loading={loading}
           total={total}
           runtimeByTaskId={runtimeByTaskId}

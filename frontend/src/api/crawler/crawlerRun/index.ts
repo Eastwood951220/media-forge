@@ -1,13 +1,12 @@
 import { request } from '@/request'
 import type {
   CrawlRun,
-  CrawlRunDetailTask,
   CrawlMode,
   RetryCrawlerRunTasksRequest,
+  RunListResponse,
   RunLogEntry,
-  RunTaskSummary,
+  RunTaskPageWithSummary,
 } from './types.ts'
-import type { FastListResponse, PaginatedResponse } from '../crawlTask/types.ts'
 
 const BASE_URL = '/api/crawler/runs'
 
@@ -16,8 +15,8 @@ export function getCrawlerRuns(params: {
   size: number
   task_id?: string
   status?: string
-}): Promise<FastListResponse<CrawlRun>> {
-  return request.get<FastListResponse<CrawlRun>>(BASE_URL, params)
+}): Promise<RunListResponse> {
+  return request.get<RunListResponse>(BASE_URL, params)
 }
 
 export function getCrawlerRun(runId: string): Promise<CrawlRun> {
@@ -36,12 +35,8 @@ export function getCrawlerRunTasks(
     status?: string
     keyword?: string
   },
-): Promise<PaginatedResponse<CrawlRunDetailTask>> {
-  return request.get<PaginatedResponse<CrawlRunDetailTask>>(`${BASE_URL}/${runId}/tasks`, params)
-}
-
-export function getCrawlerRunTaskSummary(runId: string): Promise<RunTaskSummary> {
-  return request.get<RunTaskSummary>(`${BASE_URL}/${runId}/tasks/summary`)
+): Promise<RunTaskPageWithSummary> {
+  return request.get<RunTaskPageWithSummary>(`${BASE_URL}/${runId}/tasks`, params)
 }
 
 export function stopCrawlerRun(runId: string): Promise<void> {

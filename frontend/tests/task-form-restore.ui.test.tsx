@@ -1,12 +1,13 @@
 import { App as AntApp } from 'antd'
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskFormPage from '../src/pages/crawler/tasks/TaskFormPage'
 import { createCrawlTask, extractTaskName, getCrawlTask, updateCrawlTask } from '@/api/crawler/crawlTask'
 
-vi.mock('../src/api/crawlTask', () => ({
+vi.mock('@/api/crawler/crawlTask', () => ({
   createCrawlTask: vi.fn(),
   extractTaskName: vi.fn(),
   getCrawlTask: vi.fn(),
@@ -14,10 +15,13 @@ vi.mock('../src/api/crawlTask', () => ({
 }))
 
 function renderForm() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const rootRoute = createRootRoute({
     component: () => (
       <AntApp>
-        <TaskFormPage />
+        <QueryClientProvider client={queryClient}>
+          <TaskFormPage />
+        </QueryClientProvider>
       </AntApp>
     ),
   })

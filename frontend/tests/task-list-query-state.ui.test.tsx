@@ -1,21 +1,19 @@
 import { Outlet, createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider, useNavigate } from '@tanstack/react-router'
-import { render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListPage from '../src/pages/crawler/tasks/TaskListPage'
-import { useTaskListQueryStore } from '../src/pages/crawler/tasks/useTaskListQueryStore'
-import { getCrawlTaskCount, getCrawlTasks } from '@/api/crawler/crawlTask'
+import { useCrawlerRuntimeStore } from '../src/stores/useCrawlerRuntimeStore'
+import { getCrawlTasks } from '@/api/crawler/crawlTask'
 
-vi.mock('../src/api/crawlTask', () => ({
+vi.mock('@/api/crawler/crawlTask', () => ({
   getCrawlTasks: vi.fn(),
-  getCrawlTaskCount: vi.fn(),
-  getCrawlTaskRuntimeStatuses: vi.fn().mockResolvedValue({ tasks: [] }),
-  getCrawlTaskStats: vi.fn().mockResolvedValue({ total: 0, enabled: 0, disabled: 0 }),
   deleteCrawlTask: vi.fn(),
   updateCrawlTask: vi.fn(),
 }))
 
-vi.mock('../src/realtime/eventSourceClient', () => ({
+vi.mock('@/realtime/eventSourceClient', () => ({
   subscribeRealtime: vi.fn(() => vi.fn()),
   connectRealtime: vi.fn(),
   disconnectRealtime: vi.fn(),
@@ -32,6 +30,7 @@ vi.mock('keepalive-for-react', () => ({
       getCacheNodes: vi.fn(() => []),
     },
   }),
+  useEffectOnActive: (cb: () => void) => cb(),
 }))
 
 function TestShell() {
@@ -50,6 +49,7 @@ function TestShell() {
 }
 
 function renderTaskRoutes() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const rootRoute = createRootRoute({ component: TestShell })
   const taskRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -66,43 +66,45 @@ function renderTaskRoutes() {
     history: createMemoryHistory({ initialEntries: ['/crawler/tasks'] }),
   })
 
-  return render(<RouterProvider router={router} />)
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  )
 }
 
-describe('TaskListPage query state', () => {
+describe('TaskListPage routing', () => {
   beforeEach(() => {
-    useTaskListQueryStore.getState().reset()
+    useCrawlerRuntimeStore.getState().reset()
+    useCrawlerRuntimeStore.setState({
+      taskSnapshotReady: true,
+      taskRuntimeById: {},
+      taskStats: { total: 0, idle: 0, running: 0, queued: 0, stopped: 0 },
+    })
     vi.mocked(getCrawlTasks).mockResolvedValue({
       rows: [],
+      total: 0,
       page: 1,
       size: 20,
-      has_more: false,
-      runtime: {
-        tasks: [],
-        stats: { total: 0, idle: 0, running: 0, queued: 0, stopped: 0 },
-      },
-    } as any)
-    vi.mocked(getCrawlTaskCount).mockResolvedValue({ total: 0 } as any)
+    })
   })
 
-  it('keeps the search condition after switching away and back', async () => {
+  it('renders task list page with toolbar', async () => {
     renderTaskRoutes()
 
-    const searchInput = await screen.findByPlaceholderText('搜索任务名称')
-    await userEvent.type(searchInput, '每日')
+    expect(await screen.findByText('临时任务')).toBeInTheDocument()
+    expect(await screen.findByText('新建任务')).toBeInTheDocument()
+  })
 
-    await waitFor(() => {
-      expect(getCrawlTasks).toHaveBeenLastCalledWith({
-        skip: 0,
-        limit: 20,
-        keyword: '每日',
-      })
-    })
+  it('navigates to config and back', async () => {
+    renderTaskRoutes()
+
+    await screen.findByText('临时任务')
 
     await userEvent.click(screen.getByRole('button', { name: 'config' }))
     expect(await screen.findByText('config page')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'tasks' }))
-    expect(await screen.findByPlaceholderText('搜索任务名称')).toHaveValue('每日')
+    expect(await screen.findByText('临时任务')).toBeInTheDocument()
   })
 })

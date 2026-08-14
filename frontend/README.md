@@ -130,19 +130,42 @@ or the base `request(config)` helper from API modules.
 
 ## State And Realtime
 
+### Data Ownership
+
+State is split across three layers by ownership boundary:
+
+| Layer | Owns | Store |
+|-------|------|-------|
+| TanStack Query | Static/paginated data — task lists, run lists, run detail pages, task detail rows, logs | Query cache, invalidated on mutation success |
+| Zustand (runtime) | Ephemeral overlay — connection status, task runtime status, run runtime status by ID | `useCrawlerRuntimeStore` |
+| React state (page-local) | Screen-level mutable state — run-detail subtask rows, task summaries, log entries | `useState` in `useRunDetail` |
+
+**Rule:** Zustand never stores page-level detail data. The run-detail page owns its subtask list, summary, and logs locally. Global events update it via `setState` callbacks passed through `useRunDetailRealtime`.
+
+### Stores
+
 Zustand stores:
 
 - `useAuthStore`: token and authentication state, synchronized with cookies.
 - `useThemeStore`: light/dark mode and primary color.
 - `useTagsViewStore`: visited route tabs and tab close/reset operations.
+- `useCrawlerRuntimeStore`: WebSocket/SSE connection status, task runtime status map, run runtime status map. Never stores task rows, task summaries, or run logs.
+
+### Realtime Events
+
+Realtime updates use server-sent events in `src/realtime/eventSourceClient.ts`.
+The EventSource connection lifecycle is managed by the authenticated shell in `src/layout/`.
+Feature pages subscribe to events from their hooks and update local state.
+
+Event ownership:
+
+- **Task list page** (`/crawler/tasks`): subscribes to `crawler.task.runtime.snapshot`, `crawler.task.status.updated`, `crawler.run.status.updated` via `useCrawlerRuntimeStore` reducer.
+- **Run list page** (`/crawler/runs`): overlays runtime status from `useCrawlerRuntimeStore` over TanStack Query data.
+- **Run detail page** (`/crawler/runs/$id`): subscribes to `crawler.run.status.updated`, `crawler.run.detail.updated`, `crawler.run.log.appended` locally via `useRunDetailRealtime` hook. Does not write to any global store.
 
 TanStack Query client defaults are in `src/lib/query-client.ts`: five-minute
 query stale time, one query retry, no refetch on window focus, and no mutation
 retry.
-
-Realtime updates use server-sent events in `src/realtime/eventSourceClient.ts`.
-Feature pages subscribe to events from their hooks and should trigger local
-query invalidation or targeted state refresh when receiving update events.
 
 ## Page Module Pattern
 

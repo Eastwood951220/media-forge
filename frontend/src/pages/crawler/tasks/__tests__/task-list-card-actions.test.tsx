@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListCards from '../components/TaskListCards'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 
@@ -77,8 +77,6 @@ describe('TaskListCards action alignment', () => {
         onTemporaryTaskClick={vi.fn()}
         current={1}
         pageSize={20}
-        hasMore={false}
-        countLoading={false}
         onPageChange={vi.fn()}
         onPageSizeChange={vi.fn()}
       />,

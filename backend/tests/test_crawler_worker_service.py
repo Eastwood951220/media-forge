@@ -338,7 +338,7 @@ def test_execute_run_publishes_run_detail_events_to_realtime_bus(monkeypatch) ->
     event_names = [event.event for event in events]
     assert "crawler.run.detail.updated" in event_names
     assert "crawler.run.log.appended" in event_names
-    assert "crawler.run.updated" in event_names
+    assert "crawler.run.status.updated" in event_names
 
     log_events = [event for event in events if event.event == "crawler.run.log.appended"]
     assert any(event.payload["run_id"] == str(run.id) and "入库成功" in event.payload["log"]["message"] for event in log_events)

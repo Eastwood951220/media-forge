@@ -10,6 +10,7 @@ import { queryKeys } from '@/api/queryKeys'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import { subscribeRealtime } from '@/realtime/eventSourceClient'
 import { useRouteActivationRefresh } from '@/hooks/useRouteActivationRefresh'
+import type { CrawlRunStatus } from '@/api/crawler/crawlerRun/types'
 
 const statusLabels: Record<string, { text: string; color: string }> = {
   queued: { text: '排队中', color: 'default' },
@@ -71,7 +72,7 @@ function RunListPage() {
     () =>
       (listQuery.data?.rows ?? []).map((run) => ({
         ...run,
-        status: runRuntimeById[run.id]?.status ?? run.status,
+        status: (runRuntimeById[run.id]?.status ?? run.status) as CrawlRunStatus,
         error: runRuntimeById[run.id]?.error ?? run.error,
       })),
     [listQuery.data?.rows, runRuntimeById],

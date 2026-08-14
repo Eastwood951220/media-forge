@@ -1,17 +1,17 @@
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntApp } from 'antd'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListPage from '../src/pages/crawler/tasks/TaskListPage'
-import { createTemporaryCrawlRun, createTaskUrlRun, getCrawlTaskCount, getCrawlTaskStats, getCrawlTasks, getTaskDict } from '@/api/crawler/crawlTask'
+import { createTemporaryCrawlRun, createTaskUrlRun, getCrawlTasks, getTaskDict } from '@/api/crawler/crawlTask'
 import { runCrawlTask } from '@/api/crawler/crawlerRun'
 import { useTaskListQueryStore } from '../src/pages/crawler/tasks/useTaskListQueryStore'
+import { useCrawlerRuntimeStore } from '../src/stores/useCrawlerRuntimeStore'
 
-vi.mock('../src/api/crawlTask', () => ({
+vi.mock('@/api/crawler/crawlTask', () => ({
   getCrawlTasks: vi.fn(),
-  getCrawlTaskCount: vi.fn(),
-  getCrawlTaskStats: vi.fn(),
-  getCrawlTaskRuntimeStatuses: vi.fn().mockResolvedValue({ tasks: [], stats: { total: 1, idle: 1, running: 0, queued: 0, stopped: 0 } }),
   getTaskDict: vi.fn(),
   createTemporaryCrawlRun: vi.fn(),
   createTaskUrlRun: vi.fn(),
@@ -19,36 +19,62 @@ vi.mock('../src/api/crawlTask', () => ({
   updateCrawlTask: vi.fn(),
 }))
 
-vi.mock('../src/api/crawlerRun', () => ({
+vi.mock('@/api/crawler/crawlerRun', () => ({
   runCrawlTask: vi.fn(),
   stopCrawlerRun: vi.fn(),
 }))
 
-vi.mock('../src/realtime/eventSourceClient', () => ({
+vi.mock('@/realtime/eventSourceClient', () => ({
   subscribeRealtime: vi.fn(() => vi.fn()),
   connectRealtime: vi.fn(),
   disconnectRealtime: vi.fn(),
 }))
 
+vi.mock('keepalive-for-react', () => ({
+  useEffectOnActive: (cb: () => void) => cb(),
+}))
+
 function renderPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const rootRoute = createRootRoute({ component: () => <TaskListPage /> })
   const runsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/crawler/runs', component: () => <div>runs page</div> })
   const router = createRouter({
     routeTree: rootRoute.addChildren([runsRoute]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })
-  return render(<RouterProvider router={router} />)
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AntApp>
+        <RouterProvider router={router} />
+      </AntApp>
+    </QueryClientProvider>,
+  )
 }
 
 describe('crawler task run controls', () => {
   beforeEach(() => {
     useTaskListQueryStore.getState().reset()
-    vi.mocked(getCrawlTaskStats).mockResolvedValue({ total: 1, enabled: 1, disabled: 0 })
+    // Pre-populate the runtime store so taskSnapshotReady is true and tasks have idle runtime
+    useCrawlerRuntimeStore.getState().reset()
+    useCrawlerRuntimeStore.setState({
+      taskSnapshotReady: true,
+      taskRuntimeById: {
+        'task-1': {
+          task_id: 'task-1',
+          runtime_status: 'idle',
+          latest_run_id: null,
+          state_updated_at: '2026-07-02T00:00:00',
+          last_run_at: null,
+        },
+      },
+      taskStats: { total: 1, idle: 1, running: 0, queued: 0, stopped: 0 },
+    })
     vi.mocked(getCrawlTasks).mockResolvedValue({
       rows: [{
         id: 'task-1',
         name: '任务A',
         storage_location: 'A',
+        is_skip: false,
         urls: [{
           id: 'url-1',
           position: 0,
@@ -56,32 +82,13 @@ describe('crawler task run controls', () => {
           url_type: 'actors',
           has_magnet: true,
           has_chinese_sub: false,
-          sort_type: 0,
-          source: 'javdb',
-          final_url: 'https://javdb.com/actors/a',
           url_name: '演员A',
         }],
-        is_skip: false,
-        status: 'pending',
-        task_id: null,
-        error_message: null,
-        total_found: 0,
-        total_qualified: 0,
-        owner_id: 'user-1',
-        created_at: '2026-07-02T00:00:00',
-        updated_at: null,
-        last_run_at: null,
-        last_run_status: null,
       }],
+      total: 1,
       page: 1,
       size: 20,
-      has_more: false,
-      runtime: {
-        tasks: [],
-        stats: { total: 1, idle: 1, running: 0, queued: 0, stopped: 0 },
-      },
-    } as any)
-    vi.mocked(getCrawlTaskCount).mockResolvedValue({ total: 1 } as any)
+    })
     vi.mocked(runCrawlTask).mockResolvedValue({ id: 'run-1' } as never)
     vi.mocked(getTaskDict).mockResolvedValue([{ id: 'task-1', name: '任务A' }])
     vi.mocked(createTemporaryCrawlRun).mockResolvedValue({

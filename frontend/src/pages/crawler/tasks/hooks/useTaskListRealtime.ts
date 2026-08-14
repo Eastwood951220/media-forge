@@ -16,7 +16,7 @@ export function useTaskListRealtime() {
     )
 
     const unsubscribeResync = subscribeRealtime('system.resync_required', (event) => {
-      markResyncRequired(event.payload?.reason ?? 'unknown')
+      markResyncRequired(event.payload?.reason as string ?? 'unknown')
     })
 
     return () => {

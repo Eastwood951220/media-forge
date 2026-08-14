@@ -2,12 +2,11 @@ import { createMemoryHistory, createRootRoute, createRoute, createRouter, Router
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RunDetailPage from '../src/pages/crawler/runs/RunDetailPage'
-import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTaskSummary, getCrawlerRunTasks } from '@/api/crawler/crawlerRun'
+import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks } from '@/api/crawler/crawlerRun'
 
-vi.mock('../src/api/crawlerRun', () => ({
+vi.mock('@/api/crawler/crawlerRun', () => ({
   getCrawlerRun: vi.fn(),
   getCrawlerRunLogs: vi.fn(),
-  getCrawlerRunTaskSummary: vi.fn(),
   getCrawlerRunTasks: vi.fn(),
 }))
 
@@ -65,18 +64,18 @@ describe('RunDetailPage logs', () => {
     vi.mocked(getCrawlerRunTasks).mockResolvedValue({
       rows: [],
       total: 0,
-    })
-    vi.mocked(getCrawlerRunTaskSummary).mockResolvedValue({
-      total: 6,
-      pending_crawl: 1,
-      crawling: 1,
-      saved: 1,
-      skipped: 1,
-      crawl_failed: 1,
-      save_failed: 1,
-      completed: 2,
-      waiting: 2,
-      failed: 2,
+      summary: {
+        total: 0,
+        pending_crawl: 0,
+        crawling: 0,
+        saved: 0,
+        skipped: 0,
+        crawl_failed: 0,
+        save_failed: 0,
+        completed: 0,
+        waiting: 0,
+        failed: 0,
+      },
     })
   })
 

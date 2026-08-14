@@ -27,12 +27,42 @@ vi.mock('@theme-toggles/react', () => {
   return { Classic }
 })
 
-vi.mock('@/api/crawlTask', () => ({
+vi.mock('@/api/crawler/crawlTask', () => ({
   getCrawlTasks: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
-  getCrawlTaskRuntimeStatuses: vi.fn().mockResolvedValue({ tasks: [] }),
-  getCrawlTaskStats: vi.fn().mockResolvedValue({ total: 0, enabled: 0, disabled: 0 }),
+  getTaskDict: vi.fn().mockResolvedValue([]),
+  createTemporaryCrawlRun: vi.fn().mockResolvedValue({ run_id: 'run-1', accepted: true }),
+  createTaskUrlRun: vi.fn().mockResolvedValue({ run_id: 'run-1', accepted: true }),
   deleteCrawlTask: vi.fn().mockResolvedValue(undefined),
   updateCrawlTask: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/api/dashboard', () => ({
+  getDashboardOverview: vi.fn().mockResolvedValue({
+    system_status: 'healthy',
+    refreshed_at: '2026-07-14T00:00:00Z',
+    crawler: {
+      task_stats: { total: 0, enabled: 0, disabled: 0 },
+      runtime_stats: { total: 0, idle: 0, running: 0, queued: 0, stopped: 0 },
+      queue: { queue_size: 0, is_running: false, current_run_id: null, stop_requested: false },
+    },
+    runs: { status_distribution: [], daily_trend: [], recent: [] },
+    content: { movie_total: 0, storage_status: { stored: 0, storing: 0, not_stored: 0 } },
+    storage: {
+      task_status_distribution: [],
+      recent_tasks: [],
+      index: {
+        target_folder: '',
+        status: 'idle',
+        category_count: 0,
+        code_folder_count: 0,
+        video_count: 0,
+        completed_at: null,
+        errors: [],
+      },
+    },
+    alerts: [],
+    partial_errors: [],
+  }),
 }))
 
 vi.mock('@/realtime/eventSourceClient', () => ({
@@ -41,7 +71,7 @@ vi.mock('@/realtime/eventSourceClient', () => ({
   disconnectRealtime: vi.fn(),
 }))
 
-vi.mock('@/api/crawlerConfig', () => ({
+vi.mock('@/api/crawler/crawlerConfig', () => ({
   fetchConfig: vi.fn().mockResolvedValue({
     MAX_LIST_PAGES: 50,
     LIST_PAGE_DELAY_MIN: 1,
@@ -53,6 +83,17 @@ vi.mock('@/api/crawlerConfig', () => ({
     INCREMENTAL_EXIST_THRESHOLD: 10,
   }),
   fetchCookiesConfig: vi.fn().mockResolvedValue({ cookies: [] }),
+  fetchAgentStatus: vi.fn().mockResolvedValue({ status: 'not_configured' }),
+  rotateAgentToken: vi.fn().mockResolvedValue({ token: 'agent-token', status: { status: 'offline' } }),
+  testCookiesConfig: vi.fn().mockResolvedValue({
+    ok: true,
+    status_code: 200,
+    reason: 'OK',
+    message: 'ok',
+    url: 'https://javdb.com',
+    logged_in_detected: true,
+    fetch_mode: 'static',
+  }),
   updateConfig: vi.fn(),
   updateCookiesConfig: vi.fn(),
 }))
@@ -135,8 +176,8 @@ describe('App auth routing', () => {
     renderApp('/')
 
     await waitFor(() => {
-      expect(screen.getAllByText('Operations Console').length).toBeGreaterThanOrEqual(2)
-      expect(screen.getByText(/Media Forge/i)).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: '运行态总览' })).toBeInTheDocument()
+      expect(screen.getAllByText(/Media Forge/i).length).toBeGreaterThanOrEqual(1)
     })
   })
 
@@ -147,8 +188,8 @@ describe('App auth routing', () => {
     renderApp('/crawler/tasks')
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: '爬取任务' })).toBeInTheDocument()
-      expect(screen.getAllByText('任务列表').length).toBeGreaterThanOrEqual(2)
+      expect(screen.getByRole('button', { name: '临时任务' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /新建任务/ })).toBeInTheDocument()
     })
   })
 

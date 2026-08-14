@@ -1,3 +1,5 @@
+import type { PaginatedResponse } from '../crawlTask/types.ts'
+
 export type CrawlMode = 'incremental' | 'full' | 'temporary' | 'magnet_refresh'
 export type CrawlRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'stopped'
 export type DetailTaskStatus = 'pending_crawl' | 'crawled' | 'crawl_failed' | 'saved' | 'save_failed' | 'skipped'
@@ -120,4 +122,15 @@ export interface RunTaskPage {
   rows: CrawlRunDetailTaskListItem[]
   total: number
   summary: RunTaskSummary
+}
+
+/** Full detail tasks response with summary (from REST endpoint). */
+export interface RunTaskPageWithSummary extends PaginatedResponse<CrawlRunDetailTask> {
+  summary: RunTaskSummary
+}
+
+/** Runs list response (from REST endpoint). */
+export interface RunListResponse {
+  rows: CrawlRun[]
+  total: number
 }

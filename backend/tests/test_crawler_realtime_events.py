@@ -44,7 +44,7 @@ def test_publish_run_updated_event_for_owner(admin_user) -> None:
     event_bus.unsubscribe(str(admin_user.id), queue)
     session.close()
 
-    assert [event.event for event in events] == ["crawler.run.updated", "crawler.task.status.updated"]
+    assert [event.event for event in events] == ["crawler.run.status.updated", "crawler.task.status.updated"]
     assert events[0].resource_id == str(run.id)
     assert events[0].payload["status"] == "running"
     assert events[1].resource_id == str(task.id)
@@ -340,7 +340,7 @@ def test_crawler_realtime_events_keep_frontend_contract(admin_user) -> None:
     event_bus.unsubscribe(str(admin_user.id), queue)
     session.close()
 
-    run_event = next(event for event in events if event.event == "crawler.run.updated")
+    run_event = next(event for event in events if event.event == "crawler.run.status.updated")
     detail_event = next(event for event in events if event.event == "crawler.run.detail.updated")
     log_event = next(event for event in events if event.event == "crawler.run.log.appended")
 
@@ -451,7 +451,7 @@ def test_run_status_event_contains_only_dynamic_fields(admin_user) -> None:
 
     service.publish_run_updated(session, run)
 
-    events = [e for e in drain(queue) if e.event == "crawler.run.updated"]
+    events = [e for e in drain(queue) if e.event == "crawler.run.status.updated"]
     event_bus.unsubscribe(str(admin_user.id), queue)
     session.close()
 
