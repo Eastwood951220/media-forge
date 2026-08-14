@@ -12,7 +12,6 @@ export function useRunDetailRealtime(args: {
   fetchLogs: () => Promise<void>
   fetchRun: () => Promise<void>
   fetchTasks: () => Promise<void>
-  fetchTaskSummary: () => Promise<void>
   keyword: string
   resyncSnapshot: () => void
   setLogs: React.Dispatch<React.SetStateAction<RunLogEntry[]>>
@@ -27,7 +26,6 @@ export function useRunDetailRealtime(args: {
     fetchLogs,
     fetchRun,
     fetchTasks,
-    fetchTaskSummary,
     keyword,
     resyncSnapshot,
     setLogs,
@@ -58,7 +56,6 @@ export function useRunDetailRealtime(args: {
           void fetchRun()
           void fetchLogs()
           void fetchTasks()
-          void fetchTaskSummary()
         }
       },
     )
@@ -66,11 +63,9 @@ export function useRunDetailRealtime(args: {
     const unsubscribeDetails = subscribeRealtime<CrawlerRunDetailUpdatedPayload>(
       'crawler.run.detail.updated',
       (event) => {
-        if (event.resource_id !== id || event.payload.run_id !== id) return
+        if (event.owner_id !== id || event.payload.run_id !== id) return
         if (event.payload.summary) {
           setTaskSummary(event.payload.summary)
-        } else {
-          void fetchTaskSummary()
         }
         if (event.payload.refresh_tasks) {
           void fetchTasks()
@@ -111,8 +106,19 @@ export function useRunDetailRealtime(args: {
     const unsubscribeLogs = subscribeRealtime<CrawlerRunLogAppendedPayload>(
       'crawler.run.log.appended',
       (event) => {
-        if (event.resource_id !== id || event.payload.run_id !== id) return
-        setLogs((currentLogs) => [...currentLogs, event.payload.log])
+        if (event.owner_id !== id || event.payload.run_id !== id) return
+        setLogs((currentLogs) => {
+          const log = event.payload.log
+          const key = [log.timestamp, log.component ?? '', log.event ?? '', log.message].join('|')
+          // Deduplicate: skip if an entry with the same key already exists
+          if (currentLogs.some((existing) => {
+            const existingKey = [existing.timestamp, existing.component ?? '', existing.event ?? '', existing.message].join('|')
+            return existingKey === key
+          })) {
+            return currentLogs
+          }
+          return [...currentLogs, log]
+        })
       },
     )
 
@@ -129,5 +135,5 @@ export function useRunDetailRealtime(args: {
       unsubscribeLogs()
       unsubscribeResync()
     }
-  }, [id, fetchLogs, fetchRun, fetchTasks, fetchTaskSummary, keyword, resyncSnapshot, setLogs, setRun, setTaskSummary, setTaskTotal, setTasks, statusFilter])
+  }, [id, fetchLogs, fetchRun, fetchTasks, keyword, resyncSnapshot, setLogs, setRun, setTaskSummary, setTaskTotal, setTasks, statusFilter])
 }

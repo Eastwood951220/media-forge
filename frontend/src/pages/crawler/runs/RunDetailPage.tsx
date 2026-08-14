@@ -16,7 +16,6 @@ function RunDetailPage() {
     fetchLogs: detail.fetchLogs,
     fetchRun: detail.fetchRun,
     fetchTasks: detail.fetchTasks,
-    fetchTaskSummary: detail.fetchTaskSummary,
     keyword: detail.keyword,
     resyncSnapshot: detail.resyncSnapshot,
     setLogs: detail.setLogs,
@@ -33,7 +32,7 @@ function RunDetailPage() {
         actionLoading={detail.actionLoading}
         onRestart={detail.handleRestart}
         onStop={detail.handleStop}
-        run={detail.run}
+        run={detail.displayedRun}
       />
       <RunTaskTable
         actionLoading={detail.actionLoading}
@@ -47,13 +46,14 @@ function RunDetailPage() {
         onRetryTask={detail.handleRetryTask}
         onStatusChange={detail.handleStatusChange}
         pageSize={detail.pageSize}
-        runStatus={detail.run?.status}
+        realtimeReady={detail.realtimeReady}
+        runStatus={detail.displayedRun?.status}
         statusFilter={detail.statusFilter}
         summary={detail.taskSummary}
         tasks={detail.tasks}
         total={detail.taskTotal}
       />
-      {detail.run && (
+      {detail.displayedRun && (
         <Card
           title="运行日志"
           style={{
@@ -63,7 +63,7 @@ function RunDetailPage() {
         >
           <RunLogsTimeline
             logs={detail.logs}
-            isActive={detail.run.status === 'queued' || detail.run.status === 'running'}
+            isActive={detail.displayedRun.status === 'queued' || detail.displayedRun.status === 'running'}
             loading={detail.loading}
           />
         </Card>

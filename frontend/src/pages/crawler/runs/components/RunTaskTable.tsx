@@ -17,6 +17,7 @@ interface RunTaskTableProps {
   total: number
   summary: RunTaskSummary
   actionLoading: 'stop' | 'restart' | 'retry' | null
+  realtimeReady: boolean
   runStatus: string | undefined
   onStatusChange: (value: string | undefined) => void
   onKeywordSearch: (value: string) => void
@@ -36,6 +37,7 @@ function RunTaskTable({
   total,
   summary,
   actionLoading,
+  realtimeReady,
   runStatus,
   onStatusChange,
   onKeywordSearch,
@@ -52,10 +54,11 @@ function RunTaskTable({
   const columns = useMemo(
     () => createRunTaskColumns({
       retryEnabled,
+      realtimeReady,
       actionLoading,
       onRetryTask: (detailId) => confirmRetryTask(detailId, onRetryTask, clearSelection),
     }),
-    [retryEnabled, actionLoading, onRetryTask],
+    [retryEnabled, realtimeReady, actionLoading, onRetryTask],
   )
 
   return (

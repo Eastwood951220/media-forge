@@ -6,12 +6,14 @@ import { runDetailStatusLabels } from '../utils/status'
 interface CreateRunTaskColumnsArgs {
   retryEnabled: boolean
   actionLoading: 'stop' | 'restart' | 'retry' | null
+  realtimeReady: boolean
   onRetryTask: (detailId: string) => void
 }
 
 export function createRunTaskColumns({
   retryEnabled,
   actionLoading,
+  realtimeReady,
   onRetryTask,
 }: CreateRunTaskColumnsArgs): ColumnsType<CrawlRunDetailTask> {
   return [
@@ -57,6 +59,7 @@ export function createRunTaskColumns({
           <Button
             type="link"
             size="small"
+            disabled={!realtimeReady}
             loading={actionLoading === 'retry'}
             onClick={() => onRetryTask(record.id)}
           >

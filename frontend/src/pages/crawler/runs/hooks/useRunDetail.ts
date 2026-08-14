@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { message } from 'antd'
-import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTaskSummary, getCrawlerRunTasks, restartCrawlerRun, retryCrawlerRunTasks, stopCrawlerRun } from '@/api/crawler/crawlerRun'
+import { getCrawlerRun, getCrawlerRunLogs, getCrawlerRunTasks, restartCrawlerRun, retryCrawlerRunTasks, stopCrawlerRun } from '@/api/crawler/crawlerRun'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
+import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 
 const emptyTaskSummary: RunTaskSummary = {
   total: 0,
@@ -28,6 +29,9 @@ export function useRunDetail(id: string | undefined) {
   const [taskTotal, setTaskTotal] = useState(0)
   const [taskSummary, setTaskSummary] = useState<RunTaskSummary>(emptyTaskSummary)
   const [actionLoading, setActionLoading] = useState<'stop' | 'restart' | 'retry' | null>(null)
+
+  const runRuntimeById = useCrawlerRuntimeStore((state) => state.runRuntimeById)
+  const connectionStatus = useCrawlerRuntimeStore((state) => state.connectionStatus)
 
   // Reset state when run ID changes
   useEffect(() => {
@@ -66,68 +70,76 @@ export function useRunDetail(id: string | undefined) {
       })
       setTasks(data.rows)
       setTaskTotal(data.total)
+      setTaskSummary(data.summary)
     } finally {
       setLoading(false)
     }
   }, [id, keyword, pageSize, statusFilter, taskPage])
 
-  const fetchTaskSummary = useCallback(async () => {
-    if (!id) return
-    const data = await getCrawlerRunTaskSummary(id)
-    setTaskSummary(data)
-  }, [id])
-
   const resyncSnapshot = useCallback(() => {
     void fetchRun()
     void fetchLogs()
     void fetchTasks()
-    void fetchTaskSummary()
-  }, [fetchLogs, fetchRun, fetchTaskSummary, fetchTasks])
+  }, [fetchLogs, fetchRun, fetchTasks])
 
+  // Runtime overlay: merge store runtime onto the REST run object
+  const displayedRun = useMemo(() => {
+    if (!run) return null
+    if (!id) return run
+    const runtime = runRuntimeById[id]
+    if (!runtime) return run
+    return {
+      ...run,
+      status: runtime.status,
+      error: runtime.error ?? run.error,
+      started_at: runtime.started_at ?? run.started_at,
+      finished_at: runtime.finished_at ?? run.finished_at,
+    }
+  }, [run, runRuntimeById, id])
+
+  const realtimeReady = connectionStatus === 'connected'
+
+  // Action handlers — these no longer set the returned run or call resyncSnapshot
+  // on success. The UI relies on realtime events to reflect the new state.
   const handleStop = useCallback(async () => {
     if (!id) return
     setActionLoading('stop')
     try {
-      const stoppedRun = await stopCrawlerRun(id)
-      setRun(stoppedRun)
+      await stopCrawlerRun(id)
       message.success('已停止运行')
-      resyncSnapshot()
     } catch (error) {
       const msg = error instanceof Error ? error.message : '停止失败'
       message.error(msg)
     } finally {
       setActionLoading(null)
     }
-  }, [id, resyncSnapshot])
+  }, [id])
 
   const handleRestart = useCallback(async () => {
     if (!id) return
     setActionLoading('restart')
     try {
-      const restartedRun = await restartCrawlerRun(id)
-      setRun(restartedRun)
+      await restartCrawlerRun(id)
       message.success('已重启运行')
-      resyncSnapshot()
     } catch (error) {
       const msg = error instanceof Error ? error.message : '重启失败'
       message.error(msg)
     } finally {
       setActionLoading(null)
     }
-  }, [id, resyncSnapshot])
+  }, [id])
 
   const runRetryRequest = useCallback(
     async (payload: { detail_ids?: string[]; retry_all?: boolean }, successText: string) => {
       if (!id) return
       setActionLoading('retry')
       try {
-        const retriedRun = await retryCrawlerRunTasks(id, payload)
-        setRun(retriedRun)
+        await retryCrawlerRunTasks(id, payload)
         message.success(successText)
-        resyncSnapshot()
       } catch (error) {
         const msg = error instanceof Error ? error.message : '重新爬取失败'
         message.error(msg)
+        // On error, resync to recover from any partial state
         resyncSnapshot()
       } finally {
         setActionLoading(null)
@@ -182,16 +194,12 @@ export function useRunDetail(id: string | undefined) {
     void fetchTasks()
   }, [fetchTasks])
 
-  useEffect(() => {
-    void fetchTaskSummary()
-  }, [fetchTaskSummary])
-
   return {
     actionLoading,
+    displayedRun,
     fetchLogs,
     fetchRun,
     fetchTasks,
-    fetchTaskSummary,
     handleKeywordSearch,
     handleRestart,
     handleRetryAllFailedTasks,
@@ -204,6 +212,7 @@ export function useRunDetail(id: string | undefined) {
     loading,
     logs,
     pageSize,
+    realtimeReady,
     resyncSnapshot,
     run,
     setLogs,

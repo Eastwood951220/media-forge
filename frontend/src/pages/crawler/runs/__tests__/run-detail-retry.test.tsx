@@ -4,19 +4,25 @@ import RunDetailPage from '../RunDetailPage'
 import {
   getCrawlerRun,
   getCrawlerRunLogs,
-  getCrawlerRunTaskSummary,
   getCrawlerRunTasks,
   retryCrawlerRunTasks,
 } from '@/api/crawler/crawlerRun'
+
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: vi.fn(() => ({
+    getVirtualItems: vi.fn(() => []),
+    getTotalSize: vi.fn(() => 0),
+    measureElement: vi.fn(),
+  })),
+}))
 
 vi.mock('@tanstack/react-router', () => ({
   useParams: vi.fn().mockReturnValue({ id: 'run-1' }),
 }))
 
-vi.mock('@/api/crawlerRun', () => ({
+vi.mock('@/api/crawler/crawlerRun', () => ({
   getCrawlerRun: vi.fn(),
   getCrawlerRunLogs: vi.fn().mockResolvedValue([]),
-  getCrawlerRunTaskSummary: vi.fn(),
   getCrawlerRunTasks: vi.fn(),
   restartCrawlerRun: vi.fn(),
   stopCrawlerRun: vi.fn(),
@@ -29,6 +35,7 @@ vi.mock('@/realtime/eventSourceClient', () => ({
 }))
 
 import type { CrawlRun, CrawlRunDetailTask } from '@/api/crawler/crawlerRun/types'
+import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 
 const endedRun: CrawlRun = {
   id: 'run-1',
@@ -75,16 +82,32 @@ const savedTask: CrawlRunDetailTask = {
   error: null,
 }
 
+const defaultSummary = {
+  total: 2,
+  pending_crawl: 0,
+  crawling: 0,
+  saved: 1,
+  skipped: 0,
+  crawl_failed: 1,
+  save_failed: 0,
+  completed: 1,
+  waiting: 0,
+  failed: 1,
+}
+
 describe('RunDetail retry controls', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useCrawlerRuntimeStore.getState().reset()
+    useCrawlerRuntimeStore.getState().setConnectionStatus('connected')
+
     vi.mocked(getCrawlerRun).mockResolvedValue(endedRun)
     vi.mocked(getCrawlerRunLogs).mockResolvedValue([])
     vi.mocked(getCrawlerRunTasks).mockResolvedValue({
       rows: [failedTask, savedTask],
       total: 2,
+      summary: defaultSummary,
     })
-    vi.mocked(getCrawlerRunTaskSummary).mockResolvedValue({ total: 2, pending_crawl: 0, crawling: 0, saved: 1, skipped: 0, crawl_failed: 1, save_failed: 0, completed: 1, waiting: 0, failed: 1 })
     vi.mocked(retryCrawlerRunTasks).mockResolvedValue({ ...endedRun, status: 'queued' })
   })
 
@@ -167,6 +190,18 @@ describe('RunDetail retry controls', () => {
         item_data: { code: 'AVSA-257', source_name: '真实电影名' },
       } as any],
       total: 1,
+      summary: {
+        total: 1,
+        pending_crawl: 0,
+        crawling: 0,
+        saved: 1,
+        skipped: 0,
+        crawl_failed: 0,
+        save_failed: 0,
+        completed: 1,
+        waiting: 0,
+        failed: 0,
+      },
     })
 
     render(<RunDetailPage />)
