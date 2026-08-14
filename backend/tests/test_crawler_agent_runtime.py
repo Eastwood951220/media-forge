@@ -7,9 +7,10 @@ from sqlalchemy import select
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.models.crawler_agent import CrawlerAgent, CrawlerAgentWorkItem
-from backend.app.modules.crawler.agent.errors import AgentUnavailableError
+from backend.app.modules.crawler.agent.errors import AgentUnavailableError, AgentWorkTimeoutError
 from backend.app.modules.crawler.agent.runtime import execute_agent_crawl
 from backend.app.modules.crawler.runs import logs as run_logs
+from shared.database.models.content import Movie
 
 
 class AgentRuntimeState:
@@ -116,3 +117,111 @@ def test_execute_agent_crawl_list_phase_creates_detail_tasks_from_snapshot(db_se
     assert rows[0].status == "pending_crawl"
     assert rows[0].source_url_name == "Actor A"
     assert result["total_tasks"] == 1
+
+
+class FakePipeline:
+    def process_item(self, item, task_name=None, task_id=None):
+        return {**item, "source_task_id": task_id}
+
+
+def seed_pending_detail(db_session, run, task, code: str | None = None) -> CrawlRunDetailTask:
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=code,
+        source_url="https://javdb.com/v/abc001",
+        source_name="ABC title",
+        source_url_name="Actor A",
+        task_url="https://javdb.com/actors/a",
+        task_final_url="https://javdb.com/actors/a",
+        task_url_type="actors",
+        status="pending_crawl",
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+    db_session.refresh(detail)
+    return detail
+
+
+def test_execute_agent_crawl_detail_phase_saves_movie(db_session, monkeypatch) -> None:
+    task, run = make_agent_task_and_run(db_session)
+    create_online_agent(db_session, task.owner_id)
+    detail = seed_pending_detail(db_session, run, task)
+
+    def fake_wait(db, item, **kwargs):
+        item.status = "completed"
+        item.result_json = {
+            "detail": {
+                "code": "ABC-001",
+                "source_name": "ABC title",
+                "source_url": "https://javdb.com/v/abc001",
+            }
+        }
+        db.commit()
+        db.refresh(item)
+        return item
+
+    monkeypatch.setattr("backend.app.modules.crawler.agent.runtime.wait_for_work_item_result", fake_wait)
+    monkeypatch.setattr("backend.app.modules.crawler.agent.runtime.build_pipeline", lambda: FakePipeline())
+
+    result = execute_agent_crawl(db_session, run, task, AgentRuntimeState(), detail_only=True)
+
+    db_session.refresh(detail)
+    movie = db_session.scalar(select(Movie).where(Movie.code == "ABC-001"))
+    assert result["saved"] == 1
+    assert detail.status == "saved"
+    assert detail.item_data["code"] == "ABC-001"
+    assert movie is not None
+    assert str(task.id) in [str(value) for value in movie.source_task_ids]
+
+
+def test_execute_agent_crawl_detail_parse_failure_marks_detail_failed(db_session, monkeypatch) -> None:
+    task, run = make_agent_task_and_run(db_session)
+    create_online_agent(db_session, task.owner_id)
+    detail = seed_pending_detail(db_session, run, task)
+
+    def fake_wait(db, item, **kwargs):
+        item.status = "failed"
+        item.error_reason = "missing_required_fragments:title"
+        db.commit()
+        db.refresh(item)
+        raise AgentWorkFailedError(item.error_reason)
+
+    from backend.app.modules.crawler.agent.errors import AgentWorkFailedError
+    monkeypatch.setattr("backend.app.modules.crawler.agent.runtime.wait_for_work_item_result", fake_wait)
+
+    result = execute_agent_crawl(db_session, run, task, AgentRuntimeState(), detail_only=True)
+
+    db_session.refresh(detail)
+    assert result["failed"] == 1
+    assert detail.status == "crawl_failed"
+    assert "missing_required_fragments:title" in detail.error
+
+
+def test_execute_agent_crawl_timeout_fails_list_run(db_session, monkeypatch) -> None:
+    task, run = make_agent_task_and_run(db_session)
+    create_online_agent(db_session, task.owner_id)
+
+    def fake_wait(db, item, **kwargs):
+        raise AgentWorkTimeoutError()
+
+    monkeypatch.setattr("backend.app.modules.crawler.agent.runtime.wait_for_work_item_result", fake_wait)
+
+    with pytest.raises(AgentWorkTimeoutError, match="Chrome Agent 执行超时"):
+        execute_agent_crawl(db_session, run, task, AgentRuntimeState())
+
+
+def test_execute_agent_crawl_stop_while_waiting_returns_stopped(db_session, monkeypatch) -> None:
+    task, run = make_agent_task_and_run(db_session)
+    create_online_agent(db_session, task.owner_id)
+
+    def fake_wait(db, item, **kwargs):
+        from backend.app.modules.crawler.agent.errors import AgentWorkStopped
+        raise AgentWorkStopped()
+
+    monkeypatch.setattr("backend.app.modules.crawler.agent.runtime.wait_for_work_item_result", fake_wait)
+
+    result = execute_agent_crawl(db_session, run, task, AgentRuntimeState(stopped=True))
+
+    assert result["stopped"] is True

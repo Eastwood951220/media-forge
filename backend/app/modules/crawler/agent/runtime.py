@@ -12,6 +12,7 @@ from backend.app.models.crawler_agent import CrawlerAgent, CrawlerAgentWorkItem
 from backend.app.modules.crawler.agent.errors import (
     AgentRuntimeError,
     AgentUnavailableError,
+    AgentWorkFailedError,
     AgentWorkStopped,
 )
 from backend.app.modules.crawler.agent.parser_bridge import (
@@ -26,9 +27,11 @@ from backend.app.modules.crawler.agent.work_items import (
     wait_for_work_item_result,
 )
 from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
-from backend.app.modules.crawler.runtime.detail_queue import upsert_detail_task
+from backend.app.modules.crawler.runtime.detail_queue import claim_next_pending_detail, upsert_detail_task
 from backend.app.modules.crawler.runtime.events import append_run_log_for_run, publish_run_detail_updated
 from backend.app.modules.crawler.runtime.source_task_names import find_existing_movie_codes
+from backend.app.modules.crawler.runtime.threaded import build_pipeline
+from backend.app.modules.content.movies.persistence import upsert_movie_with_magnets
 
 
 def complete_work_item_from_snapshot(
@@ -167,8 +170,89 @@ def _build_agent_result(db: Session, run: CrawlRun) -> dict[str, Any]:
     }
 
 
+def _process_agent_detail_result(
+    db: Session,
+    run: CrawlRun,
+    task: CrawlTask,
+    detail,
+    detail_data: dict[str, Any],
+) -> None:
+    pipeline = build_pipeline()
+    item = {
+        **detail_data,
+        "source_url": detail_data.get("source_url") or detail.source_url,
+        "source_name": detail_data.get("source_name") or detail.source_name,
+        "code": detail_data.get("code") or detail.code,
+    }
+    code = item.get("code")
+    if code:
+        detail.code = code
+    cleaned = pipeline.process_item(item, task_name=task.name, task_id=str(task.id))
+    if cleaned:
+        upsert_movie_with_magnets(db, {**cleaned, "source_task_ids": [task.id]})
+        detail.status = "saved"
+        detail.item_data = cleaned
+        detail.crawled_at = datetime.now()
+        detail.saved_at = datetime.now()
+        detail.error = None
+    else:
+        detail.status = "save_failed"
+        detail.error = "pipeline returned None"
+
+
 def _run_agent_detail_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime, config) -> None:
-    return None
+    while True:
+        if runtime.is_stop_requested(str(run.id)):
+            raise AgentWorkStopped()
+        detail = claim_next_pending_detail(db, run.id)
+        if detail is None:
+            break
+        append_run_log_for_run(
+            db,
+            run,
+            f"[{task.name}][URL: {detail.source_url_name or detail.task_url_type or '-'}] Chrome Agent 详情开始: code={detail.code} name={detail.source_name}",
+            "INFO",
+            detail_id=str(detail.id),
+            code=detail.code,
+            source_url=detail.source_url,
+            detail_status="crawling",
+        )
+        item = create_work_item(
+            db,
+            owner_id=task.owner_id,
+            run_id=run.id,
+            task_id=task.id,
+            detail_task_id=detail.id,
+            page_kind="detail",
+            url=detail.source_url,
+        )
+        try:
+            completed = wait_for_work_item_result(
+                db,
+                item,
+                runtime=runtime,
+                run_id=str(run.id),
+                timeout_seconds=float(config.SECURITY_WAIT_SECONDS),
+            )
+            detail_data = dict((completed.result_json or {}).get("detail") or {})
+            if not detail_data:
+                raise AgentWorkFailedError("agent_detail_result_empty")
+            _process_agent_detail_result(db, run, task, detail, detail_data)
+        except AgentWorkStopped:
+            raise
+        except Exception as exc:
+            detail.status = "crawl_failed"
+            detail.error = str(exc)[:500]
+            append_run_log_for_run(
+                db,
+                run,
+                f"Chrome Agent 详情失败: {detail.error}",
+                "ERROR",
+                detail_id=str(detail.id),
+                source_url=detail.source_url,
+            )
+        db.commit()
+        publish_run_detail_updated(db, run, [detail])
 
 
 def execute_agent_crawl(
