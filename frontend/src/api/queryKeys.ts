@@ -6,8 +6,6 @@ export const queryKeys = {
     all: () => ['crawlerRuns'] as const,
     list: (params: { page: number; size: number; task_id?: string; status?: string }) =>
       ['crawlerRuns', params] as const,
-    count: (params: { task_id?: string; status?: string }) =>
-      ['crawlerRuns', 'count', params] as const,
   },
   crawlerTasks: {
     all: () => ['crawlerTasks'] as const,

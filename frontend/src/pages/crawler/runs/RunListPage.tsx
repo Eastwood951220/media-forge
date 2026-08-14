@@ -1,15 +1,14 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
 import { Button, Popconfirm, Space, Table, Tag, message, Card } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { deleteCrawlerRun, getCrawlerRunCount, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawler/crawlerRun'
+import { deleteCrawlerRun, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawler/crawlerRun'
 import type { CrawlRun } from '@/api/crawler/crawlerRun/types'
 import { queryKeys } from '@/api/queryKeys'
+import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import { subscribeRealtime } from '@/realtime/eventSourceClient'
-import type { CrawlerRunStatusUpdatedPayload } from '@/realtime/types'
-import { useEffect } from 'react'
 import { useRouteActivationRefresh } from '@/hooks/useRouteActivationRefresh'
 
 const statusLabels: Record<string, { text: string; color: string }> = {
@@ -29,47 +28,101 @@ function RunListPage() {
   const [pageSize, setPageSize] = useState(20)
 
   const listParams = useMemo(() => ({ page: current, size: pageSize }), [current, pageSize])
-  const countParams = useMemo(() => ({}), [])
   const listQuery = useQuery({
     queryKey: queryKeys.crawlerRuns.list(listParams),
     queryFn: () => getCrawlerRuns(listParams),
     placeholderData: (previousData) => previousData,
   })
-  const countQuery = useQuery({
-    queryKey: queryKeys.crawlerRuns.count(countParams),
-    queryFn: () => getCrawlerRunCount(countParams),
-  })
 
-  const runs = listQuery.data?.rows ?? []
-  const total = countQuery.data?.total ?? 0
+  const runRuntimeById = useCrawlerRuntimeStore((state) => state.runRuntimeById)
+  const hydrateRunRuntime = useCrawlerRuntimeStore((state) => state.hydrateRunRuntime)
+  const upsertRunRuntime = useCrawlerRuntimeStore((state) => state.upsertRunRuntime)
+  const removeRunRuntime = useCrawlerRuntimeStore((state) => state.removeRunRuntime)
+  const connectionStatus = useCrawlerRuntimeStore((state) => state.connectionStatus)
+  const markResyncRequired = useCrawlerRuntimeStore((state) => state.markResyncRequired)
+
+  // Hydrate baseline run runtimes from REST data (only for rows not yet in store)
+  useEffect(() => {
+    const rows = listQuery.data?.rows ?? []
+    if (rows.length === 0) return
+    const entries: Array<[string, import('@/realtime/types').CrawlRunRuntime]> = []
+    for (const run of rows) {
+      if (!runRuntimeById[run.id]) {
+        entries.push([
+          run.id,
+          {
+            run_id: run.id,
+            status: run.status,
+            error: null,
+            started_at: null,
+            finished_at: null,
+            state_updated_at: run.created_at,
+          },
+        ])
+      }
+    }
+    if (entries.length > 0) {
+      hydrateRunRuntime(Object.fromEntries(entries))
+    }
+  }, [listQuery.data?.rows, hydrateRunRuntime, runRuntimeById])
+
+  // Overlay store status onto REST rows
+  const runs = useMemo(
+    () =>
+      (listQuery.data?.rows ?? []).map((run) => ({
+        ...run,
+        status: runRuntimeById[run.id]?.status ?? run.status,
+        error: runRuntimeById[run.id]?.error ?? run.error,
+      })),
+    [listQuery.data?.rows, runRuntimeById],
+  )
+
+  const total = listQuery.data?.total ?? 0
   const loading = listQuery.isFetching
-  const countLoading = countQuery.isLoading
+  const realtimeReady = connectionStatus === 'connected'
 
   const refreshRuns = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.list(listParams) })
-    void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.count(countParams) })
-  }, [countParams, listParams, queryClient])
+  }, [listParams, queryClient])
 
-  // Realtime updates
+  // Realtime subscription for individual run status updates
+  // Coalescing refresh: if a run_id is unknown in the current REST rows, schedule
+  // a single debounced list refresh instead of refetching on every event.
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    const unsubscribe = subscribeRealtime<CrawlerRunStatusUpdatedPayload>(
+    const unsubscribe = subscribeRealtime<import('@/realtime/types').CrawlerRunStatusUpdatedPayload>(
       'crawler.run.status.updated',
       (event) => {
-        const { run_id, status, error } = event.payload
-        queryClient.setQueryData(queryKeys.crawlerRuns.list(listParams), (prev: { rows: CrawlRun[]; total: number } | undefined) => {
-          if (!prev) return prev
-          return {
-            ...prev,
-            rows: prev.rows.map((run) =>
-              run.id === run_id ? { ...run, status, error } : run,
-            ),
+        const runId = event.payload.run_id
+        // Only schedule refresh for unknown run IDs
+        if (!runRuntimeById[runId] && !listQuery.data?.rows.find((r) => r.id === runId)) {
+          if (!refreshTimerRef.current) {
+            refreshTimerRef.current = setTimeout(() => {
+              refreshTimerRef.current = null
+              refreshRuns()
+            }, 500)
           }
-        })
+        }
+        upsertRunRuntime(event.payload)
       },
     )
+    return () => {
+      unsubscribe()
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current)
+        refreshTimerRef.current = null
+      }
+    }
+  }, [upsertRunRuntime, runRuntimeById, listQuery.data?.rows, refreshRuns])
 
+  // Realtime subscription for resync — refresh the list once so cleared store is rehydrated
+  useEffect(() => {
+    const unsubscribe = subscribeRealtime('system.resync_required', () => {
+      markResyncRequired('run-list')
+      refreshRuns()
+    })
     return unsubscribe
-  }, [queryClient, listParams])
+  }, [markResyncRequired, refreshRuns])
 
   useRouteActivationRefresh(refreshRuns)
 
@@ -77,39 +130,38 @@ function RunListPage() {
     try {
       await stopCrawlerRun(run.id)
       message.success('已停止运行')
-      refreshRuns()
     } catch {
       message.error('停止失败')
     }
-  }, [refreshRuns])
+  }, [])
 
   const handleRestart = useCallback(async (run: CrawlRun) => {
     try {
       await restartCrawlerRun(run.id)
       message.success('已重启运行')
-      refreshRuns()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '重启失败'
       message.error(msg)
     }
-  }, [refreshRuns])
+  }, [])
 
   const handleDelete = useCallback(async (run: CrawlRun) => {
     try {
       await deleteCrawlerRun(run.id)
       message.success('已删除运行记录')
+      // Remove from store so it disappears immediately
+      removeRunRuntime(run.id)
       const nextPage = runs.length === 1 && current > 1 ? current - 1 : current
       if (nextPage !== current) {
         setCurrent(nextPage)
         return
       }
       refreshRuns()
-      void queryClient.invalidateQueries({ queryKey: queryKeys.crawlerRuns.count(countParams) })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '删除失败'
       message.error(msg)
     }
-  }, [countParams, current, refreshRuns, queryClient, runs.length])
+  }, [current, refreshRuns, removeRunRuntime, runs.length])
 
   const columns: ColumnsType<CrawlRun> = [
     {
@@ -236,11 +288,11 @@ function RunListPage() {
         loading={loading}
         pagination={{
           current,
-          total: countLoading ? 0 : total,
+          total,
           pageSize,
           pageSizeOptions: PAGE_SIZE_OPTIONS,
           showSizeChanger: true,
-          showTotal: (count) => countLoading ? '统计中' : `共 ${count} 条`,
+          showTotal: (count) => (realtimeReady ? `共 ${count} 条` : '同步中'),
           onChange: (page, size) => {
             setCurrent(page)
             setPageSize(size)

@@ -2,7 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getCrawlerRunCount, getCrawlerRuns } from '@/api/crawler/crawlerRun'
+import { getCrawlerRuns } from '@/api/crawler/crawlerRun'
+import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import RunListPage from '../RunListPage'
 
 const realtimeMock = vi.hoisted(() => ({
@@ -11,7 +12,6 @@ const realtimeMock = vi.hoisted(() => ({
 
 vi.mock('@/api/crawler/crawlerRun', () => ({
   deleteCrawlerRun: vi.fn(),
-  getCrawlerRunCount: vi.fn(),
   getCrawlerRuns: vi.fn(),
   restartCrawlerRun: vi.fn(),
   stopCrawlerRun: vi.fn(),
@@ -32,19 +32,10 @@ vi.mock('@tanstack/react-router', () => ({
 function buildRun(status: 'queued' | 'running' | 'completed' | 'failed' | 'stopped' = 'running') {
   return {
     id: 'run-1',
-    task_id: 'task-1',
     task_name: 'Run Task',
     status,
     crawl_mode: 'incremental' as const,
-    queued_at: null,
-    started_at: null,
-    finished_at: null,
-    result: null,
-    error: null,
-    resumed_from: null,
     created_at: '2026-08-01T00:00:00Z',
-    updated_at: null,
-    logs: [],
   }
 }
 
@@ -57,36 +48,56 @@ describe('RunListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     realtimeMock.handlers = {}
+    useCrawlerRuntimeStore.getState().reset()
   })
 
-  it('loads runs with page and size before count is required', async () => {
+  it('loads static run rows with one list request', async () => {
     vi.mocked(getCrawlerRuns).mockResolvedValue({
       rows: [buildRun()],
       page: 1,
       size: 20,
       has_more: false,
-    })
-    vi.mocked(getCrawlerRunCount).mockResolvedValue({ total: 1 })
+    } as any)
 
     render(<RunListPage />, { wrapper })
 
     await waitFor(() => expect(getCrawlerRuns).toHaveBeenCalledWith({ page: 1, size: 20 }))
-    await waitFor(() => expect(getCrawlerRunCount).toHaveBeenCalledWith({}))
-
-    await new Promise((resolve) => setTimeout(resolve, 50))
-
     expect(getCrawlerRuns).toHaveBeenCalledTimes(1)
-    expect(getCrawlerRunCount).toHaveBeenCalledTimes(1)
   })
 
-  it('updates the current row from realtime without refetching the list', async () => {
+  it('hydrates baseline run status from the store on mount', async () => {
     vi.mocked(getCrawlerRuns).mockResolvedValue({
       rows: [buildRun('running')],
       page: 1,
       size: 20,
       has_more: false,
+    } as any)
+
+    useCrawlerRuntimeStore.getState().hydrateRunRuntime({
+      'run-1': {
+        run_id: 'run-1',
+        status: 'failed',
+        error: 'network error',
+        started_at: null,
+        finished_at: null,
+        state_updated_at: '2026-08-01T00:01:00Z',
+      },
     })
-    vi.mocked(getCrawlerRunCount).mockResolvedValue({ total: 1 })
+
+    render(<RunListPage />, { wrapper })
+
+    await waitFor(() => {
+      expect(getCrawlerRuns).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('updates run status from realtime via the store without refetching', async () => {
+    vi.mocked(getCrawlerRuns).mockResolvedValue({
+      rows: [buildRun('running')],
+      page: 1,
+      size: 20,
+      has_more: false,
+    } as any)
 
     const { findByText } = render(<RunListPage />, { wrapper })
 

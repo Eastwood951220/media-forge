@@ -3,12 +3,11 @@ import type {
   CrawlRun,
   CrawlRunDetailTask,
   CrawlMode,
-  QueueStatus,
   RetryCrawlerRunTasksRequest,
   RunLogEntry,
   RunTaskSummary,
 } from './types.ts'
-import type { CountResponse, FastListResponse, PaginatedResponse } from '../crawlTask/types.ts'
+import type { FastListResponse, PaginatedResponse } from '../crawlTask/types.ts'
 
 const BASE_URL = '/api/crawler/runs'
 
@@ -19,13 +18,6 @@ export function getCrawlerRuns(params: {
   status?: string
 }): Promise<FastListResponse<CrawlRun>> {
   return request.get<FastListResponse<CrawlRun>>(BASE_URL, params)
-}
-
-export function getCrawlerRunCount(params?: {
-  task_id?: string
-  status?: string
-}): Promise<CountResponse> {
-  return request.get<CountResponse>(`${BASE_URL}/count`, params)
 }
 
 export function getCrawlerRun(runId: string): Promise<CrawlRun> {
@@ -52,16 +44,16 @@ export function getCrawlerRunTaskSummary(runId: string): Promise<RunTaskSummary>
   return request.get<RunTaskSummary>(`${BASE_URL}/${runId}/tasks/summary`)
 }
 
-export function stopCrawlerRun(runId: string): Promise<CrawlRun> {
-  return request.post<CrawlRun>(`${BASE_URL}/${runId}/stop`)
+export function stopCrawlerRun(runId: string): Promise<void> {
+  return request.post<void>(`${BASE_URL}/${runId}/stop`)
 }
 
 export function deleteCrawlerRun(runId: string): Promise<void> {
   return request.delete<void>(`${BASE_URL}/${runId}`)
 }
 
-export function restartCrawlerRun(runId: string): Promise<CrawlRun> {
-  return request.post<CrawlRun>(`${BASE_URL}/${runId}/restart`)
+export function restartCrawlerRun(runId: string): Promise<void> {
+  return request.post<void>(`${BASE_URL}/${runId}/restart`)
 }
 
 export function retryCrawlerRunTasks(
@@ -69,10 +61,6 @@ export function retryCrawlerRunTasks(
   payload: RetryCrawlerRunTasksRequest,
 ): Promise<CrawlRun> {
   return request.post<CrawlRun>(`${BASE_URL}/${runId}/tasks/retry`, payload)
-}
-
-export function getCrawlerQueueStatus(): Promise<QueueStatus> {
-  return request.get<QueueStatus>(`${BASE_URL}/queue-status`)
 }
 
 export function runCrawlTask(taskId: string, crawlMode: CrawlMode): Promise<CrawlRun> {
