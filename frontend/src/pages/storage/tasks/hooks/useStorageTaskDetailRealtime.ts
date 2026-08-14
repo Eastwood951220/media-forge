@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { StorageMainTask, StorageSubTask } from '@/api/storage/storageTasks/types'
-import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
+import { subscribeRealtime } from '@/realtime/eventSourceClient'
 import type { RealtimeEvent, StorageMainUpdatedPayload, StorageSubUpdatedPayload } from '@/realtime/types'
 import { mergeSubtaskUpdate } from '../utils/status'
 
@@ -15,7 +15,6 @@ export function useStorageTaskDetailRealtime(args: {
 
   useEffect(() => {
     if (!id) return
-    connectRealtime()
 
     const unsubscribeTask = subscribeRealtime<StorageMainUpdatedPayload>(
       'storage.main.updated',

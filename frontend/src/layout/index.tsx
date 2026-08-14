@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Layout } from 'antd'
 import { useThemeStore } from '@/stores/useThemeStore'
+import { useRealtimeLifecycle } from '@/realtime/useRealtimeLifecycle'
 import { LayoutHeader } from './Header'
 import { RouteKeepAliveOutlet, RouteKeepAliveProvider } from './routeCache'
 import { SideMenu } from './Sidebar'
@@ -10,6 +11,7 @@ import styles from './index.module.less'
 const { Content } = Layout
 
 export default function AppLayout() {
+  useRealtimeLifecycle()
   const darkMode = useThemeStore((state) => state.darkMode)
   const [collapsed, setCollapsed] = useState(false)
 

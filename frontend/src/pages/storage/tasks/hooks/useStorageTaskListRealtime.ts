@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { StorageMainTask } from '@/api/storage/storageTasks/types'
-import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
+import { subscribeRealtime } from '@/realtime/eventSourceClient'
 import type { RealtimeEvent, StorageMainDeletedPayload } from '@/realtime/types'
 
 export function useStorageTaskListRealtime(args: {
@@ -10,8 +10,6 @@ export function useStorageTaskListRealtime(args: {
   const { setTasks, setTotal } = args
 
   useEffect(() => {
-    connectRealtime()
-
     const unsubscribeUpdated = subscribeRealtime<StorageMainTask>(
       'storage.main.updated',
       (event: RealtimeEvent<StorageMainTask>) => {

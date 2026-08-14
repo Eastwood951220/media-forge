@@ -91,29 +91,21 @@ describe('RunListPage', () => {
     const { findByText } = render(<RunListPage />, { wrapper })
 
     await findByText('Run Task')
-    await waitFor(() => expect(realtimeMock.handlers['crawler.run.updated']).toBeTruthy())
+    await waitFor(() => expect(realtimeMock.handlers['crawler.run.status.updated']).toBeTruthy())
 
-    realtimeMock.handlers['crawler.run.updated']({
+    realtimeMock.handlers['crawler.run.status.updated']({
       id: 'event-1',
-      event: 'crawler.run.updated',
-      scope: 'crawler',
+      event: 'crawler.run.status.updated',
+      scope: 'crawler.run',
       resource_id: 'run-1',
       owner_id: 'owner-1',
       payload: {
-        id: 'run-1',
-        task_id: 'task-1',
-        task_name: 'Run Task',
+        run_id: 'run-1',
         status: 'failed',
-        crawl_mode: 'incremental' as const,
-        queued_at: null,
+        error: 'network error',
         started_at: null,
         finished_at: null,
-        result: null,
-        error: 'network error',
-        resumed_from: null,
-        created_at: '2026-08-01T00:00:00Z',
-        updated_at: '2026-08-01T00:01:00Z',
-        logs: [],
+        state_updated_at: '2026-08-01T00:01:00Z',
       },
       created_at: '2026-08-01T00:01:00Z',
     })

@@ -7,8 +7,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { deleteCrawlerRun, getCrawlerRunCount, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawler/crawlerRun'
 import type { CrawlRun } from '@/api/crawler/crawlerRun/types'
 import { queryKeys } from '@/api/queryKeys'
-import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
-import type { CrawlerRunUpdatedPayload } from '@/realtime/types'
+import { subscribeRealtime } from '@/realtime/eventSourceClient'
+import type { CrawlerRunStatusUpdatedPayload } from '@/realtime/types'
 import { useEffect } from 'react'
 import { useRouteActivationRefresh } from '@/hooks/useRouteActivationRefresh'
 
@@ -52,20 +52,16 @@ function RunListPage() {
 
   // Realtime updates
   useEffect(() => {
-    connectRealtime()
-
-    const unsubscribe = subscribeRealtime<CrawlerRunUpdatedPayload>(
-      'crawler.run.updated',
+    const unsubscribe = subscribeRealtime<CrawlerRunStatusUpdatedPayload>(
+      'crawler.run.status.updated',
       (event) => {
-        const updatedRun = event.payload
+        const { run_id, status, error } = event.payload
         queryClient.setQueryData(queryKeys.crawlerRuns.list(listParams), (prev: { rows: CrawlRun[]; total: number } | undefined) => {
           if (!prev) return prev
           return {
             ...prev,
             rows: prev.rows.map((run) =>
-              run.id === updatedRun.id
-                ? { ...run, status: updatedRun.status, error: updatedRun.error }
-                : run,
+              run.id === run_id ? { ...run, status, error } : run,
             ),
           }
         })

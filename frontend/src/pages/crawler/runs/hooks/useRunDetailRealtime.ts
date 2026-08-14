@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
-import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
+import { subscribeRealtime } from '@/realtime/eventSourceClient'
 import type { CrawlRun, CrawlRunDetailTask, RunLogEntry, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
 import type {
   CrawlerRunDetailUpdatedPayload,
   CrawlerRunLogAppendedPayload,
-  CrawlerRunUpdatedPayload,
+  CrawlerRunStatusUpdatedPayload,
 } from '@/realtime/types'
 
 export function useRunDetailRealtime(args: {
@@ -40,17 +40,21 @@ export function useRunDetailRealtime(args: {
 
   useEffect(() => {
     if (!id) return
-    connectRealtime()
 
-    const unsubscribeRun = subscribeRealtime<CrawlerRunUpdatedPayload>(
-      'crawler.run.updated',
+    const unsubscribeRun = subscribeRealtime<CrawlerRunStatusUpdatedPayload>(
+      'crawler.run.status.updated',
       (event) => {
         if (event.resource_id !== id) return
+        const { status, error, started_at, finished_at } = event.payload
         setRun((currentRun) => ({
-          ...event.payload,
+          ...currentRun,
+          status,
+          error,
+          started_at,
+          finished_at,
           logs: currentRun?.logs ?? [],
-        }))
-        if (['completed', 'failed', 'stopped'].includes(event.payload.status)) {
+        } as CrawlRun))
+        if (['completed', 'failed', 'stopped'].includes(status)) {
           void fetchRun()
           void fetchLogs()
           void fetchTasks()

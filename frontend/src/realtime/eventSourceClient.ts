@@ -6,12 +6,13 @@ import type { RealtimeEvent, RealtimeEventName, RealtimeHandler } from './types'
 const EVENT_NAMES: RealtimeEventName[] = [
   'system.connected',
   'system.resync_required',
-  'crawler.run.updated',
+  'crawler.task.runtime.snapshot',
+  'crawler.task.status.updated',
+  'crawler.run.status.updated',
   'crawler.run.detail.updated',
   'crawler.run.log.appended',
-  'crawler.queue.updated',
-  'crawler.task.status.updated',
   'storage.main.updated',
+  'storage.main.deleted',
   'storage.sub.updated',
   'storage.sub.log.appended',
   'storage.queue.updated',
@@ -78,6 +79,15 @@ export function disconnectRealtime() {
   source?.close()
   source = null
   handlers.clear()
+  useCrawlerRuntimeStore.getState().reset()
+}
+
+export function restartRealtime(reason: string) {
+  handlers.clear()
+  source?.close()
+  source = null
+  useCrawlerRuntimeStore.getState().markResyncRequired(reason)
+  connectRealtime()
 }
 
 export function subscribeRealtime<TPayload = Record<string, unknown>>(

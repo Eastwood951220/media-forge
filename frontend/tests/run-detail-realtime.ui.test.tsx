@@ -7,7 +7,7 @@ import type { RealtimeEventName, RealtimeHandler } from '../src/realtime/types'
 
 const realtimeHandlers = new Map<string, Set<RealtimeHandler>>()
 
-vi.mock('../src/api/crawlerRun', () => ({
+vi.mock('../src/api/crawler/crawlerRun', () => ({
   getCrawlerRun: vi.fn(),
   getCrawlerRunLogs: vi.fn(),
   getCrawlerRunTaskSummary: vi.fn(),
@@ -199,21 +199,13 @@ describe('RunDetailPage realtime events', () => {
 
     expect(await screen.findByText('详情 53/53 跳过')).toBeInTheDocument()
 
-    emit('crawler.run.updated', {
-      id: 'run-1',
-      task_id: 'task-1',
-      task_name: '任务A',
+    emit('crawler.run.status.updated', {
+      run_id: 'run-1',
       status: 'completed',
-      crawl_mode: 'incremental',
-      queued_at: null,
+      error: null,
       started_at: null,
       finished_at: '2026-07-03T00:10:00Z',
-      result: { skipped_tasks: 54 },
-      error: null,
-      resumed_from: null,
-      created_at: '2026-07-03T00:00:00Z',
-      updated_at: null,
-      logs: [],
+      state_updated_at: '2026-07-03T00:10:00Z',
     })
 
     await waitFor(() => {
@@ -267,21 +259,13 @@ describe('RunDetailPage realtime events', () => {
     const initialTasksCalls = vi.mocked(getCrawlerRunTasks).mock.calls.length as number
     const initialSummaryCalls = vi.mocked(getCrawlerRunTaskSummary).mock.calls.length as number
 
-    emit('crawler.run.updated', {
-      id: 'run-1',
-      task_id: 'task-1',
-      task_name: '任务A',
+    emit('crawler.run.status.updated', {
+      run_id: 'run-1',
       status: 'completed',
-      crawl_mode: 'incremental',
-      queued_at: null,
+      error: null,
       started_at: null,
       finished_at: '2026-07-03T00:10:00Z',
-      result: { skipped_tasks: 54 },
-      error: null,
-      resumed_from: null,
-      created_at: '2026-07-03T00:00:00Z',
-      updated_at: null,
-      logs: [],
+      state_updated_at: '2026-07-03T00:10:00Z',
     })
 
     await waitFor(() => {
@@ -352,21 +336,13 @@ describe('RunDetailPage realtime events', () => {
 
     const initialRunCalls = vi.mocked(getCrawlerRun).mock.calls.length
 
-    emit('crawler.run.updated', {
-      id: 'run-1',
-      task_id: 'task-1',
-      task_name: '任务A',
+    emit('crawler.run.status.updated', {
+      run_id: 'run-1',
       status: 'completed',
-      crawl_mode: 'incremental',
-      queued_at: null,
+      error: null,
       started_at: null,
       finished_at: '2026-07-03T00:10:00Z',
-      result: {},
-      error: null,
-      resumed_from: null,
-      created_at: '2026-07-03T00:00:00Z',
-      updated_at: null,
-      logs: [],
+      state_updated_at: '2026-07-03T00:10:00Z',
     })
 
     await waitFor(() => {

@@ -60,38 +60,38 @@ describe('eventSourceClient', () => {
 
   it('delivers parsed realtime events to subscribers', () => {
     const handler = vi.fn()
-    subscribeRealtime('crawler.run.updated', handler)
+    subscribeRealtime('crawler.run.status.updated', handler)
     connectRealtime()
 
-    FakeEventSource.instances[0].emit('crawler.run.updated', {
+    FakeEventSource.instances[0].emit('crawler.run.status.updated', {
       id: 'event-1',
-      event: 'crawler.run.updated',
+      event: 'crawler.run.status.updated',
       scope: 'crawler.run',
       resource_id: 'run-1',
       owner_id: 'user-1',
-      payload: { status: 'running' },
+      payload: { run_id: 'run-1', status: 'running', error: null, started_at: null, finished_at: null, state_updated_at: '2026-07-03T00:00:00Z' },
       created_at: '2026-07-03T00:00:00Z',
     })
 
     expect(handler).toHaveBeenCalledWith(expect.objectContaining({
-      event: 'crawler.run.updated',
-      payload: { status: 'running' },
+      event: 'crawler.run.status.updated',
+      payload: { run_id: 'run-1', status: 'running', error: null, started_at: null, finished_at: null, state_updated_at: '2026-07-03T00:00:00Z' },
     }))
   })
 
   it('unsubscribes handlers', () => {
     const handler = vi.fn()
-    const unsubscribe = subscribeRealtime('crawler.run.updated', handler)
+    const unsubscribe = subscribeRealtime('crawler.run.status.updated', handler)
     connectRealtime()
 
     unsubscribe()
-    FakeEventSource.instances[0].emit('crawler.run.updated', {
+    FakeEventSource.instances[0].emit('crawler.run.status.updated', {
       id: 'event-1',
-      event: 'crawler.run.updated',
+      event: 'crawler.run.status.updated',
       scope: 'crawler.run',
       resource_id: 'run-1',
       owner_id: 'user-1',
-      payload: { status: 'running' },
+      payload: { run_id: 'run-1', status: 'running', error: null, started_at: null, finished_at: null, state_updated_at: '2026-07-03T00:00:00Z' },
       created_at: '2026-07-03T00:00:00Z',
     })
 

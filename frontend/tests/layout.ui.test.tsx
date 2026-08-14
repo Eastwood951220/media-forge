@@ -21,6 +21,10 @@ vi.mock('keepalive-for-react', () => ({
   }),
 }))
 
+vi.mock('@/realtime/useRealtimeLifecycle', () => ({
+  useRealtimeLifecycle: vi.fn(),
+}))
+
 function renderLayout(initialPath = '/') {
   const rootRoute = createRootRoute({ component: AppLayout })
   const indexRoute = createRoute({

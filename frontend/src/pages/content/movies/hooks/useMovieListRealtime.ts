@@ -1,13 +1,12 @@
 import { useEffect } from 'react'
 import type { Movie } from '@/api/movie/types'
-import { connectRealtime, subscribeRealtime } from '@/realtime/eventSourceClient'
+import { subscribeRealtime } from '@/realtime/eventSourceClient'
 import type { MovieStorageUpdatedPayload, RealtimeEvent } from '@/realtime/types'
 
 export function useMovieListRealtime(
   updateMovie: (movieId: string, updater: (movie: Movie) => Movie) => void,
 ) {
   useEffect(() => {
-    connectRealtime()
     const unsubscribe = subscribeRealtime<MovieStorageUpdatedPayload>(
       'movie.storage.updated',
       (event: RealtimeEvent<MovieStorageUpdatedPayload>) => {
