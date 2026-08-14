@@ -489,3 +489,33 @@ def test_detail_page_code_replaces_existing_list_stage_code(db_session, monkeypa
     assert row.code == "TIMD-036"
     assert row.source_name == "Detail Stage Title"
     assert row.item_data["code"] == "TIMD-036"
+
+
+def test_agent_mode_routes_to_agent_runtime_without_placeholder_error(db_session, monkeypatch) -> None:
+    task, run = make_task_and_run(db_session)
+
+    class Config:
+        JAVDB_FETCH_MODE = "agent"
+        SECURITY_WAIT_SECONDS = 1
+
+    called = {}
+
+    def fake_agent_crawl(db, run_arg, task_arg, runtime, *, detail_only=False, selected_task_url_ids=None):
+        called["run_id"] = run_arg.id
+        return {
+            "total_tasks": 0,
+            "completed_tasks": 0,
+            "failed_tasks": 0,
+            "skipped_tasks": 0,
+            "saved": 0,
+            "failed": 0,
+            "skipped": 0,
+        }
+
+    monkeypatch.setattr("backend.app.modules.crawler.runtime.threaded.read_crawler_runtime_config", lambda: Config())
+    monkeypatch.setattr("backend.app.modules.crawler.agent.runtime.execute_agent_crawl", fake_agent_crawl)
+
+    result = execute_threaded_crawl(db_session, run, task, Runtime())
+
+    assert called["run_id"] == run.id
+    assert result["total_tasks"] == 0
