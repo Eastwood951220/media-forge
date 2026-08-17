@@ -24,9 +24,15 @@ from backend.app.modules.crawler.agent.constants import (
     AGENT_TASK_POLL_INTERVAL_MS,
 )
 from backend.app.modules.crawler.agent.registry import agent_registry
+from backend.app.modules.crawler.agent.diagnostics import (
+    delete_operational_events,
+    list_agent_events,
+    serialize_agent_event,
+)
 from backend.app.modules.crawler.agent.errors import agent_error_message
 from backend.app.modules.crawler.agent.protocol import AgentProtocolContext, dispatch_agent_message, handle_agent_hello
 from backend.app.modules.crawler.agent.schemas import (
+    AgentEventPageResponse,
     AgentSessionCreateRequest,
     AgentSessionCreateResponse,
     AgentStatusResponse,
@@ -38,17 +44,85 @@ from shared.schemas.common import success
 router = APIRouter(prefix="/api/crawler/agent", tags=["crawler-agent"])
 
 
-def _status(agent: CrawlerAgent | None) -> AgentStatusResponse:
+def _serialize_work_item(item: CrawlerAgentWorkItem) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "run_id": str(item.run_id),
+        "task_id": str(item.task_id) if item.task_id else None,
+        "detail_task_id": str(item.detail_task_id) if item.detail_task_id else None,
+        "url_entry_id": str(item.url_entry_id) if item.url_entry_id else None,
+        "page_kind": item.page_kind,
+        "url": item.url,
+        "status": item.status,
+        "attempt": item.attempt,
+        "error_reason": item.error_reason,
+        "queued_at": item.queued_at.isoformat() if item.queued_at else None,
+        "assigned_at": item.assigned_at.isoformat() if item.assigned_at else None,
+        "started_at": item.started_at.isoformat() if item.started_at else None,
+        "finished_at": item.finished_at.isoformat() if item.finished_at else None,
+        "assigned_agent_id": str(item.assigned_agent_id) if item.assigned_agent_id else None,
+    }
+
+
+def _status(agent: CrawlerAgent | None, db: Session) -> dict[str, Any]:
     if agent is None:
-        return AgentStatusResponse(status="not_configured")
+        return AgentStatusResponse(status="not_configured").model_dump(mode="json")
+
+    fresh_after = datetime.now(UTC) - timedelta(seconds=AGENT_HEARTBEAT_FRESH_SECONDS)
+    last_seen = agent.last_seen_at or datetime.min.replace(tzinfo=UTC)
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=UTC)
+
+    current_item = (
+        db.query(CrawlerAgentWorkItem)
+        .filter(
+            CrawlerAgentWorkItem.assigned_agent_id == agent.id,
+            CrawlerAgentWorkItem.status.in_(["assigned", "running"]),
+        )
+        .order_by(CrawlerAgentWorkItem.created_at.desc())
+        .first()
+    )
+
+    pending_count = (
+        db.query(CrawlerAgentWorkItem)
+        .filter(
+            CrawlerAgentWorkItem.owner_id == agent.owner_id,
+            CrawlerAgentWorkItem.status == "pending",
+        )
+        .count()
+    )
+    active_count = (
+        db.query(CrawlerAgentWorkItem)
+        .filter(
+            CrawlerAgentWorkItem.owner_id == agent.owner_id,
+            CrawlerAgentWorkItem.status.in_(["assigned", "running"]),
+        )
+        .count()
+    )
+
+    derived_status = agent.status
+    if agent.status in ("online", "busy") and last_seen < fresh_after:
+        derived_status = "offline"
+    if not agent_registry.has_ready_owner(str(agent.owner_id)):
+        derived_status = "offline"
+
+    if derived_status == "offline" and agent.status in ("online", "busy"):
+        agent.status = "offline"
+        db.commit()
+
     return AgentStatusResponse(
-        status=agent.status,
+        status=derived_status,
         agent_id=str(agent.id),
         name=agent.name,
+        protocol_version=agent.protocol_version,
+        connected_at=agent.connected_at,
         last_seen_at=agent.last_seen_at,
         last_cookie_sync_at=agent.last_cookie_sync_at,
         version=agent.version,
-    )
+        current_work_item=_serialize_work_item(current_item) if current_item else None,
+        pending_count=pending_count,
+        active_count=active_count,
+    ).model_dump(mode="json")
 
 
 @router.get("/status")
@@ -59,7 +133,7 @@ def get_agent_status(current_user: CurrentUser, db: Session = Depends(get_db)) -
         .order_by(CrawlerAgent.created_at.desc())
         .first()
     )
-    return success(data=_status(agent).model_dump(mode="json"))
+    return success(data=_status(agent, db))
 
 
 @router.post("/token/rotate")
@@ -79,7 +153,7 @@ def rotate_agent_token(current_user: CurrentUser, db: Session = Depends(get_db))
         agent.status = "offline"
     db.commit()
     db.refresh(agent)
-    payload = AgentTokenRotateResponse(token=raw_token, status=_status(agent))
+    payload = AgentTokenRotateResponse(token=raw_token, status=AgentStatusResponse(**_status(agent, db)))
     return success(data=payload.model_dump(mode="json"))
 
 
@@ -99,6 +173,43 @@ def create_agent_session(body: AgentSessionCreateRequest, db: Session = Depends(
     db.add(session)
     db.commit()
     return success(data=AgentSessionCreateResponse(session=session_id, expires_at=expires_at).model_dump(mode="json"))
+
+
+@router.get("/events")
+def list_agent_event_history(
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+    cursor: str | None = Query(default=None),
+    size: int = Query(default=50, ge=1, le=100),
+    level: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    phase: str | None = Query(default=None),
+    work_item_id: uuid.UUID | None = Query(default=None),
+    from_time: datetime | None = Query(default=None),
+    to_time: datetime | None = Query(default=None),
+) -> dict:
+    page = list_agent_events(
+        db,
+        owner_id=current_user.id,
+        cursor=cursor,
+        size=size,
+        level=level,
+        source=source,
+        phase=phase,
+        work_item_id=work_item_id,
+    )
+    return success(data={
+        "rows": [serialize_agent_event(event) for event in page.rows],
+        "next_cursor": page.next_cursor,
+        "has_more": page.has_more,
+    })
+
+
+@router.delete("/events/operational")
+def clear_operational_agent_events(current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+    deleted = delete_operational_events(db, owner_id=current_user.id)
+    db.commit()
+    return success(data={"deleted": deleted})
 
 
 @router.websocket("/ws")

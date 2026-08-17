@@ -139,6 +139,41 @@ class RunDetailRetryRequest(BaseModel):
     retry_all: bool = False
 
 
+class AgentWorkItemRead(BaseModel):
+    """Run-scoped agent work item without result_json."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    run_id: uuid.UUID
+    task_id: uuid.UUID | None = None
+    detail_task_id: uuid.UUID | None = None
+    url_entry_id: uuid.UUID | None = None
+    page_kind: str
+    url: str
+    status: str
+    attempt: int
+    error_reason: str | None = None
+    queued_at: datetime | None = None
+    assigned_at: datetime | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    assigned_agent_id: uuid.UUID | None = None
+
+
+class AgentWorkSummary(BaseModel):
+    pending: int = 0
+    active: int = 0
+    completed: int = 0
+    failed: int = 0
+    total: int = 0
+
+
+class AgentWorkItemPage(BaseModel):
+    rows: list[AgentWorkItemRead]
+    summary: AgentWorkSummary
+
+
 class RunTaskSummary(BaseModel):
     total: int = 0
     pending_crawl: int = 0

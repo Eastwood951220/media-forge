@@ -9,7 +9,12 @@ from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask
 from backend.app.modules.crawler.runs.logs import load_run_logs
+from backend.app.models.crawler_agent import CrawlerAgentWorkItem
+from backend.app.modules.crawler.agent.diagnostics import list_agent_events, serialize_agent_event
 from backend.app.modules.crawler.runs.schemas import (
+    AgentWorkItemPage,
+    AgentWorkItemRead,
+    AgentWorkSummary,
     CrawlRunDetailRead,
     CrawlRunDetailTaskListItem,
     CrawlRunListItem,
@@ -64,6 +69,30 @@ def _run_task_summary(db: Session, run: CrawlRun) -> dict:
     summary.completed = summary.saved + summary.skipped
     summary.waiting = summary.pending_crawl
     summary.failed = summary.crawl_failed + summary.save_failed
+    return summary.model_dump(mode="json")
+
+
+def _owned_agent_work_items(db: Session, run_id: uuid.UUID):
+    return (
+        db.query(CrawlerAgentWorkItem)
+        .filter(CrawlerAgentWorkItem.run_id == run_id)
+        .order_by(CrawlerAgentWorkItem.created_at.asc(), CrawlerAgentWorkItem.id.asc())
+        .all()
+    )
+
+
+def _agent_work_summary(items: list[CrawlerAgentWorkItem]) -> dict:
+    summary = AgentWorkSummary()
+    for item in items:
+        summary.total += 1
+        if item.status == "pending":
+            summary.pending += 1
+        elif item.status in {"assigned", "running"}:
+            summary.active += 1
+        elif item.status == "completed":
+            summary.completed += 1
+        elif item.status == "failed":
+            summary.failed += 1
     return summary.model_dump(mode="json")
 
 
@@ -164,6 +193,55 @@ def list_run_tasks(
     )
     payload["summary"] = _run_task_summary(db, run)
     return payload
+
+
+@router.get("/{run_id}/agent-work-items")
+def list_run_agent_work_items(
+    run_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    run = _owned_run_query(db, current_user.id).filter(CrawlRun.id == run_id).first()
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    items = _owned_agent_work_items(db, run_id)
+    return success(data=AgentWorkItemPage(
+        rows=[AgentWorkItemRead.model_validate(item) for item in items],
+        summary=AgentWorkSummary(**_agent_work_summary(items)),
+    ).model_dump(mode="json"))
+
+
+@router.get("/{run_id}/agent-events")
+def list_run_agent_events(
+    run_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+    cursor: str | None = Query(default=None),
+    size: int = Query(default=50, ge=1, le=100),
+    level: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    phase: str | None = Query(default=None),
+    work_item_id: uuid.UUID | None = Query(default=None),
+) -> dict:
+    run = _owned_run_query(db, current_user.id).filter(CrawlRun.id == run_id).first()
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    page = list_agent_events(
+        db,
+        owner_id=current_user.id,
+        run_id=run.id,
+        cursor=cursor,
+        size=size,
+        level=level,
+        source=source,
+        phase=phase,
+        work_item_id=work_item_id,
+    )
+    return success(data={
+        "rows": [serialize_agent_event(event) for event in page.rows],
+        "next_cursor": page.next_cursor,
+        "has_more": page.has_more,
+    })
 
 
 @router.post("/{run_id}/tasks/retry", status_code=status.HTTP_201_CREATED)

@@ -36,9 +36,14 @@ class AgentStatusResponse(BaseModel):
     status: Literal["not_configured", "offline", "online", "busy", "error", "upgrade_required"]
     agent_id: str | None = None
     name: str | None = None
+    protocol_version: int | None = None
+    connected_at: datetime | None = None
     last_seen_at: datetime | None = None
     last_cookie_sync_at: datetime | None = None
     version: str | None = None
+    current_work_item: dict[str, Any] | None = None
+    pending_count: int = 0
+    active_count: int = 0
 
 
 class AgentTokenRotateResponse(BaseModel):
