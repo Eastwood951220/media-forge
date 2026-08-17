@@ -38,13 +38,29 @@ def complete_work_item_from_snapshot(
     db: Session,
     *,
     work_item_id: str,
+    agent_id: str,
+    attempt: int,
     snapshot: AgentPageSnapshot,
-) -> CrawlerAgentWorkItem:
+) -> tuple[CrawlerAgentWorkItem | None, bool]:
+    """Complete a work item from an agent page snapshot.
+
+    Returns ``(item, ignored)`` where ``ignored`` is ``True`` when the
+    item does not exist, is not in a completable state, or the calling
+    agent's id/attempt do not match the item's assignment.
+
+    When ``ignored`` is ``False`` the item is parsed and marked completed.
+    Raises on parse failure (the item is also marked failed).
+    """
     item = db.get(CrawlerAgentWorkItem, uuid.UUID(work_item_id))
     if item is None:
-        raise ValueError("agent_work_item_not_found")
+        return None, True
     if not is_work_item_completable(item):
-        return item
+        return item, True
+    if (
+        item.assigned_agent_id != uuid.UUID(agent_id)
+        or item.attempt != attempt
+    ):
+        return item, True
     try:
         if item.page_kind == "list":
             item.result_json = {"tasks": parse_agent_list_snapshot(snapshot)}
@@ -53,14 +69,17 @@ def complete_work_item_from_snapshot(
         else:
             raise ValueError(f"unsupported_page_kind:{item.page_kind}")
     except Exception as exc:
-        mark_work_item_failed(db, work_item_id=item.id, reason=str(exc))
+        mark_work_item_failed(
+            db, work_item_id=item.id, reason=str(exc),
+            agent_id=uuid.UUID(agent_id), attempt=attempt,
+        )
         raise
     item.status = "completed"
     item.error_reason = None
     item.claimed_until = None
     db.commit()
     db.refresh(item)
-    return item
+    return item, False
 
 
 def _ensure_online_agent(db: Session, owner_id: uuid.UUID) -> CrawlerAgent:

@@ -15,7 +15,6 @@ from backend.app.modules.crawler.agent.auth import (
     session_is_expired,
     verify_agent_token,
 )
-from backend.app.modules.crawler.agent.cookie_sync import AgentCookie, sync_javdb_cookies
 from backend.app.modules.crawler.agent.constants import (
     AGENT_HEARTBEAT_FRESH_SECONDS,
     AGENT_HEARTBEAT_INTERVAL_SECONDS,
@@ -25,16 +24,15 @@ from backend.app.modules.crawler.agent.constants import (
     AGENT_TASK_POLL_INTERVAL_MS,
 )
 from backend.app.modules.crawler.agent.registry import agent_registry
-from backend.app.modules.crawler.agent.protocol import AgentProtocolContext, handle_agent_hello
-from backend.app.modules.crawler.agent.runtime import complete_work_item_from_snapshot
-from backend.app.modules.crawler.agent.work_items import claim_next_work_item
-from backend.app.modules.crawler.agent.parser_bridge import AgentPageSnapshot
+from backend.app.modules.crawler.agent.errors import agent_error_message
+from backend.app.modules.crawler.agent.protocol import AgentProtocolContext, dispatch_agent_message, handle_agent_hello
 from backend.app.modules.crawler.agent.schemas import (
     AgentSessionCreateRequest,
     AgentSessionCreateResponse,
     AgentStatusResponse,
     AgentTokenRotateResponse,
 )
+from backend.app.modules.crawler.agent.work_items import release_agent_work_items
 from shared.schemas.common import success
 
 router = APIRouter(prefix="/api/crawler/agent", tags=["crawler-agent"])
@@ -178,100 +176,23 @@ async def agent_ws(
                 })
                 continue
 
-            # ── Normal message handling ─────────────────────────────────
-            if message.get("type") == "agent.cookie_sync":
-                payload = message.get("payload") or {}
-                cookies = [
-                    AgentCookie.model_validate(cookie)
-                    for cookie in payload.get("cookies", [])
-                ]
-                result = sync_javdb_cookies(cookies)
-                agent.last_cookie_sync_at = datetime.now(UTC)
-                agent.last_seen_at = datetime.now(UTC)
-                db.commit()
+            # ── All post-handshake messages go through dispatch ────────
+            try:
+                await dispatch_agent_message(ctx, message)
+            except Exception as exc:
                 await websocket.send_json({
-                    "id": f"ack_{message.get('id')}",
-                    "type": "server.ack",
-                    "payload": {
-                        "message_id": message.get("id"),
-                        "accepted": result.accepted,
-                        "rejected": result.rejected,
-                        "cookie_names": result.cookie_names,
-                    },
+                    "id": f"err_{message.get('id')}",
+                    "type": "server.error",
+                    "payload": {"reason": agent_error_message(str(exc))},
                 })
-                continue
-            if message.get("type") == "agent.heartbeat":
-                agent_registry.touch(str(agent.id))
-                agent.last_seen_at = datetime.now(UTC)
-                db.commit()
-                await websocket.send_json({
-                    "id": f"ack_{message.get('id')}",
-                    "type": "server.ack",
-                    "payload": {"message_id": message.get("id")},
-                })
-                continue
-            if message.get("type") == "agent.task_request":
-                item = claim_next_work_item(
-                    db, owner_id=str(agent.owner_id), agent_id=str(agent.id),
-                    execution_timeout_seconds=120,
-                )
-                if item is None:
-                    await websocket.send_json({
-                        "id": f"none_{message.get('id')}",
-                        "type": "task.none",
-                        "payload": {},
-                    })
-                else:
-                    await websocket.send_json({
-                        "id": f"task_{item.id}",
-                        "type": "task.assigned",
-                        "payload": {
-                            "agent_task_id": str(item.id),
-                            "run_id": str(item.run_id),
-                            "detail_task_id": str(item.detail_task_id) if item.detail_task_id else None,
-                            "url_entry_id": str(item.url_entry_id) if item.url_entry_id else None,
-                            "page_kind": item.page_kind,
-                            "url": item.url,
-                            "attempt": item.attempt,
-                        },
-                    })
-                continue
-            if message.get("type") == "agent.page_snapshot":
-                payload = message.get("payload") or {}
-                if payload.get("cookies"):
-                    cookies = [
-                        AgentCookie.model_validate(cookie)
-                        for cookie in payload.get("cookies", [])
-                    ]
-                    sync_javdb_cookies(cookies)
-                    agent.last_cookie_sync_at = datetime.now(UTC)
-                snapshot = AgentPageSnapshot.model_validate(payload["snapshot"])
-                agent_task_id = str(payload["agent_task_id"])
-                existing_item = db.get(CrawlerAgentWorkItem, uuid.UUID(agent_task_id))
-                ignored = existing_item is None or existing_item.status not in {"pending", "assigned", "running"}
-                try:
-                    item = complete_work_item_from_snapshot(
-                        db, work_item_id=agent_task_id, snapshot=snapshot
-                    )
-                except Exception as exc:
-                    await websocket.send_json({
-                        "id": f"err_{message.get('id')}",
-                        "type": "server.error",
-                        "payload": {"agent_task_id": agent_task_id, "reason": str(exc)},
-                    })
-                    continue
-                await websocket.send_json({
-                    "id": f"ack_{message.get('id')}",
-                    "type": "server.ack",
-                    "payload": {
-                        "agent_task_id": str(item.id),
-                        "ignored": ignored,
-                    },
-                })
-                continue
+
     except WebSocketDisconnect:
         pass
     finally:
+        # Disconnect cleanup: release this agent's active work items
+        release_agent_work_items(
+            db, agent_id=str(agent.id), now=datetime.now(UTC)
+        )
         agent_registry.disconnect_if_current(str(agent.id), connection.generation)
         if agent.status not in ("upgrade_required",):
             agent.status = "offline"
