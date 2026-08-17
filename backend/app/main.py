@@ -18,6 +18,7 @@ from backend.app.modules.content.movies.router import router as content_movies_r
 from backend.app.modules.crawler.agent.router import router as crawler_agent_router
 from backend.app.modules.crawler.config.router import router as crawler_config_router
 from backend.app.modules.crawler.runs.router import router as crawler_runs_router
+from backend.app.modules.crawler.agent.startup import normalize_agent_state_on_startup
 from backend.app.modules.crawler.runtime.service import cleanup_interrupted_runs, get_runtime_state
 from backend.app.modules.storage.worker.runner import cleanup_interrupted_storage_tasks
 from backend.app.startup_database import connect_or_repair_postgres
@@ -80,6 +81,12 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         # Cleanup interrupted crawler runs on startup
         factory = get_session_factory()
         with factory() as session:
+            offline_agents, failed_items = normalize_agent_state_on_startup(session)
+            if offline_agents:
+                logger.info("Marked %d crawler agents offline after restart.", offline_agents)
+            if failed_items:
+                logger.info("Terminalized %d active crawler work items after restart.", failed_items)
+
             stopped = cleanup_interrupted_runs(session, get_runtime_state())
             if stopped:
                 logger.info("Stopped %d interrupted crawler runs.", stopped)

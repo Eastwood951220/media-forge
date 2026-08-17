@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -9,9 +9,14 @@ from sqlalchemy.orm import Session
 from backend.app.models.crawl_run import CrawlRun
 from backend.app.models.crawl_task import CrawlTask
 from backend.app.models.crawler_agent import CrawlerAgent, CrawlerAgentWorkItem
+from backend.app.modules.crawler.agent.constants import (
+    AGENT_HEARTBEAT_FRESH_SECONDS,
+    AGENT_PROTOCOL_VERSION,
+)
 from backend.app.modules.crawler.agent.errors import (
     AgentRuntimeError,
     AgentUnavailableError,
+    AgentUpgradeRequiredError,
     AgentWorkFailedError,
     AgentWorkStopped,
 )
@@ -20,6 +25,7 @@ from backend.app.modules.crawler.agent.parser_bridge import (
     parse_agent_detail_snapshot,
     parse_agent_list_snapshot,
 )
+from backend.app.modules.crawler.agent.registry import agent_registry
 from backend.app.modules.crawler.agent.work_items import (
     create_work_item,
     is_work_item_completable,
@@ -82,16 +88,32 @@ def complete_work_item_from_snapshot(
     return item, False
 
 
-def _ensure_online_agent(db: Session, owner_id: uuid.UUID) -> CrawlerAgent:
+def _as_utc(value: datetime | None) -> datetime | None:
+    """Normalize a possibly-naive datetime to a UTC-aware datetime."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _ensure_ready_agent(db: Session, owner_id: uuid.UUID) -> CrawlerAgent:
     agent = (
         db.query(CrawlerAgent)
         .filter(CrawlerAgent.owner_id == owner_id)
-        .filter(CrawlerAgent.status == "online")
         .order_by(CrawlerAgent.last_seen_at.desc(), CrawlerAgent.created_at.desc())
         .first()
     )
-    if agent is None:
+    if agent is None or agent.status == "offline":
         raise AgentUnavailableError()
+    if agent.status == "upgrade_required" or agent.protocol_version != AGENT_PROTOCOL_VERSION:
+        raise AgentUpgradeRequiredError()
+    fresh_after = datetime.now(UTC) - timedelta(seconds=AGENT_HEARTBEAT_FRESH_SECONDS)
+    last_seen = _as_utc(agent.last_seen_at)
+    if last_seen is None or last_seen < fresh_after:
+        raise AgentUnavailableError("Chrome Agent 心跳已过期，请检查扩展连接")
+    if not agent_registry.has_ready_owner(str(owner_id)):
+        raise AgentUnavailableError("Chrome Agent WebSocket 未就绪")
     return agent
 
 
@@ -286,7 +308,7 @@ def execute_agent_crawl(
     selected_task_url_ids: list | None = None,
 ) -> dict:
     try:
-        _ensure_online_agent(db, task.owner_id)
+        _ensure_ready_agent(db, task.owner_id)
         if not detail_only:
             _run_agent_list_phase(
                 db,
