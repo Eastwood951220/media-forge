@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from backend.app.models.crawler_agent import CrawlerAgentWorkItem
+from backend.app.models.crawler_agent import CrawlerAgent, CrawlerAgentWorkItem
 from backend.tests.conftest import TestingSessionLocal
 
 
@@ -37,6 +37,16 @@ def test_agent_websocket_cookie_sync_updates_status(client, auth_headers, monkey
 
     with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
         assert websocket.receive_json()["type"] == "server.hello"
+        websocket.send_json({
+            "id": "hello-1",
+            "type": "agent.hello",
+            "payload": {
+                "protocol_version": 2,
+                "version": "Chrome 0.1.0",
+                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+            },
+        })
+        assert websocket.receive_json()["type"] == "server.ack"
         websocket.send_json({
             "id": "msg_cookie_sync",
             "type": "agent.cookie_sync",
@@ -90,6 +100,16 @@ def test_agent_page_snapshot_ignores_late_completed_work_item(client, auth_heade
 
     with client.websocket_connect(f"/api/crawler/agent/ws?session={agent_session}") as websocket:
         assert websocket.receive_json()["type"] == "server.hello"
+        websocket.send_json({
+            "id": "hello-1",
+            "type": "agent.hello",
+            "payload": {
+                "protocol_version": 98615,
+                "version": "Chrome 0.1.0",
+                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+            },
+        })
+        assert websocket.receive_json()["type"] == "server.ack"
         websocket.send_json({
             "id": "late_snapshot",
             "type": "agent.page_snapshot",
@@ -146,6 +166,12 @@ def test_agent_page_snapshot_marks_parse_error_failed(client, auth_headers) -> N
     with client.websocket_connect(f"/api/crawler/agent/ws?session={agent_session}") as websocket:
         assert websocket.receive_json()["type"] == "server.hello"
         websocket.send_json({
+            "id": "hello1",
+            "type": "agent.hello",
+            "payload": {"protocol_version": 2, "version": "1.0", "capabilities": ["task_events", "attempt_guard", "execution_deadline"]},
+        })
+        assert websocket.receive_json()["type"] == "server.ack"
+        websocket.send_json({
             "id": "bad_snapshot",
             "type": "agent.page_snapshot",
             "payload": {
@@ -169,3 +195,120 @@ def test_agent_page_snapshot_marks_parse_error_failed(client, auth_headers) -> N
         assert "missing_required_fragments" in refreshed.error_reason
     finally:
         db.close()
+
+
+def _make_agent_session(client, auth_headers) -> str:
+    """Helper: rotate token, create session, return session string."""
+    token_resp = client.post("/api/crawler/agent/token/rotate", headers=auth_headers)
+    token = token_resp.json()["data"]["token"]
+    session_resp = client.post("/api/crawler/agent/sessions", json={"token": token})
+    return session_resp.json()["data"]["session"]
+
+
+def test_agent_stays_offline_before_hello(client, auth_headers) -> None:
+    """Agent DB status remains offline until the extension sends agent.hello.
+
+    This test will fail under the current implementation (which sets status
+    to 'online' immediately) and should pass after the protocol handshake
+    gate is added in Task 4, Step 5.
+    """
+    session = _make_agent_session(client, auth_headers)
+
+    with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
+        hello = websocket.receive_json()
+        assert hello["type"] == "server.hello"
+        # Assert the agent is still offline in the DB
+        status_resp = client.get("/api/crawler/agent/status", headers=auth_headers)
+        assert status_resp.json()["data"]["status"] == "offline"
+        # Do NOT send agent.hello — just disconnect
+        # (connection close implicitly tests cleanup)
+
+
+def test_agent_hello_protocol_2_sets_online(client, auth_headers) -> None:
+    """A compatible protocol 2 handshake transitions the agent to online."""
+    session = _make_agent_session(client, auth_headers)
+
+    with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
+        hello = websocket.receive_json()
+        assert hello["type"] == "server.hello"
+
+        websocket.send_json({
+            "id": "hello-1",
+            "type": "agent.hello",
+            "payload": {
+                "protocol_version": 98615,
+                "version": "Chrome 0.1.0",
+                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+            },
+        })
+        ack = websocket.receive_json()
+        assert ack["type"] == "server.ack"
+
+        status_resp = client.get("/api/crawler/agent/status", headers=auth_headers)
+        assert status_resp.json()["data"]["status"] == "online"
+
+
+def test_agent_hello_protocol_1_gets_upgrade_required(client, auth_headers) -> None:
+    """A protocol 1 hello (below minimum 2) receives upgrade_required error."""
+    session = _make_agent_session(client, auth_headers)
+
+    with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
+        hello = websocket.receive_json()
+        assert hello["type"] == "server.hello"
+
+        websocket.send_json({
+            "id": "hello-low",
+            "type": "agent.hello",
+            "payload": {
+                "protocol_version": 1,
+                "version": "Old Extension 0.0.1",
+                "capabilities": [],
+            },
+        })
+        err = websocket.receive_json()
+        assert err["type"] == "server.error"
+        assert err["payload"]["reason"] == "upgrade_required"
+        assert err["payload"]["minimum_protocol_version"] == 2
+
+        status_resp = client.get("/api/crawler/agent/status", headers=auth_headers)
+        assert status_resp.json()["data"]["status"] == "upgrade_required"
+
+
+def test_agent_hello_missing_capabilities_gets_upgrade_required(client, auth_headers) -> None:
+    """An agent.hello with protocol 2 but missing capabilities gets rejected."""
+    session = _make_agent_session(client, auth_headers)
+
+    with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
+        hello = websocket.receive_json()
+        assert hello["type"] == "server.hello"
+
+        websocket.send_json({
+            "id": "hello-incomplete",
+            "type": "agent.hello",
+            "payload": {
+                "protocol_version": 98615,
+                "version": "Chrome 0.1.0",
+                "capabilities": ["task_events"],
+            },
+        })
+        err = websocket.receive_json()
+        assert err["type"] == "server.error"
+        assert err["payload"]["reason"] == "upgrade_required"
+
+
+def test_agent_message_before_hello_gets_handshake_required(client, auth_headers) -> None:
+    """Messages sent before the handshake completes are rejected."""
+    session = _make_agent_session(client, auth_headers)
+
+    with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
+        hello = websocket.receive_json()
+        assert hello["type"] == "server.hello"
+
+        websocket.send_json({
+            "id": "premature",
+            "type": "agent.page_snapshot",
+            "payload": {},
+        })
+        err = websocket.receive_json()
+        assert err["type"] == "server.error"
+        assert err["payload"]["reason"] == "handshake_required"

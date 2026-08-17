@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any, Literal
 
@@ -32,7 +33,7 @@ class AgentEventPageResponse(BaseModel):
 
 
 class AgentStatusResponse(BaseModel):
-    status: Literal["not_configured", "offline", "online", "busy", "error"]
+    status: Literal["not_configured", "offline", "online", "busy", "error", "upgrade_required"]
     agent_id: str | None = None
     name: str | None = None
     last_seen_at: datetime | None = None
@@ -67,3 +68,51 @@ class ServerMessage(BaseModel):
     id: str
     type: str
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+# ── Protocol 2 message schemas ──────────────────────────────────────────────
+
+class AgentHelloPayload(BaseModel):
+    protocol_version: int
+    version: str = Field(max_length=50)
+    capabilities: set[str] = Field(default_factory=set)
+
+
+class AgentEnvelope(BaseModel):
+    id: str = Field(min_length=1, max_length=100)
+    type: str = Field(min_length=1, max_length=100)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentTaskEventPayload(BaseModel):
+    agent_task_id: uuid.UUID
+    attempt: int = Field(ge=1)
+    phase: str = Field(min_length=1, max_length=100)
+    level: Literal["info", "warning", "error"] = "info"
+    code: str = Field(min_length=1, max_length=100)
+    message: str = Field(min_length=1, max_length=500)
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentTaskFailedPayload(BaseModel):
+    agent_task_id: uuid.UUID
+    attempt: int = Field(ge=1)
+    phase: str = Field(min_length=1, max_length=100)
+    code: Literal[
+        "agent_tab_create_failed",
+        "agent_page_load_failed",
+        "agent_content_script_unavailable",
+        "agent_snapshot_failed",
+    ]
+    message: str = Field(min_length=1, max_length=500)
+
+
+class AgentPageSnapshotPayload(BaseModel):
+    agent_task_id: uuid.UUID
+    attempt: int = Field(ge=1)
+    snapshot: dict[str, Any]
+    cookies: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class AgentDiagnosticBatchPayload(BaseModel):
+    events: list[dict[str, Any]] = Field(default_factory=list, max_length=100)

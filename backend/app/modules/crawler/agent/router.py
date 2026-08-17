@@ -16,7 +16,16 @@ from backend.app.modules.crawler.agent.auth import (
     verify_agent_token,
 )
 from backend.app.modules.crawler.agent.cookie_sync import AgentCookie, sync_javdb_cookies
+from backend.app.modules.crawler.agent.constants import (
+    AGENT_HEARTBEAT_FRESH_SECONDS,
+    AGENT_HEARTBEAT_INTERVAL_SECONDS,
+    AGENT_MAX_ATTEMPTS,
+    AGENT_MINIMUM_PROTOCOL_VERSION,
+    AGENT_PROTOCOL_VERSION,
+    AGENT_TASK_POLL_INTERVAL_MS,
+)
 from backend.app.modules.crawler.agent.registry import agent_registry
+from backend.app.modules.crawler.agent.protocol import AgentProtocolContext, handle_agent_hello
 from backend.app.modules.crawler.agent.runtime import complete_work_item_from_snapshot
 from backend.app.modules.crawler.agent.work_items import claim_next_work_item
 from backend.app.modules.crawler.agent.parser_bridge import AgentPageSnapshot
@@ -123,20 +132,53 @@ async def agent_ws(
         })
         await websocket.close()
         return
-    agent.status = "online"
-    agent.last_seen_at = datetime.now(UTC)
-    db.commit()
-    await agent_registry.connect(
+    # Register connection but stay offline until handshake
+    connection, _replaced = agent_registry.connect(
         agent_id=str(agent.id), owner_id=str(agent.owner_id), websocket=websocket
     )
+    ctx = AgentProtocolContext(
+        websocket=websocket,
+        db=db,
+        agent=agent,
+        connection=connection,
+        registry=agent_registry,
+    )
+    handshake_complete = False
     await websocket.send_json({
         "id": "server_hello",
         "type": "server.hello",
-        "payload": {"agent_id": str(agent.id)},
+        "payload": {
+            "agent_id": str(agent.id),
+            "protocol_version": AGENT_PROTOCOL_VERSION,
+            "minimum_protocol_version": AGENT_MINIMUM_PROTOCOL_VERSION,
+            "heartbeat_interval_seconds": AGENT_HEARTBEAT_INTERVAL_SECONDS,
+            "heartbeat_fresh_seconds": AGENT_HEARTBEAT_FRESH_SECONDS,
+            "task_poll_interval_ms": AGENT_TASK_POLL_INTERVAL_MS,
+            "max_attempts": AGENT_MAX_ATTEMPTS,
+        },
     })
     try:
         while True:
             message = await websocket.receive_json()
+
+            # ── Handshake gate ──────────────────────────────────────────
+            if message.get("type") == "agent.hello":
+                ok = await handle_agent_hello(ctx, message)
+                if ok:
+                    handshake_complete = True
+                else:
+                    break  # connection closed by handler
+                continue
+
+            if not handshake_complete:
+                await websocket.send_json({
+                    "id": f"err_{message.get('id')}",
+                    "type": "server.error",
+                    "payload": {"reason": "handshake_required"},
+                })
+                continue
+
+            # ── Normal message handling ─────────────────────────────────
             if message.get("type") == "agent.cookie_sync":
                 payload = message.get("payload") or {}
                 cookies = [
@@ -159,7 +201,7 @@ async def agent_ws(
                 })
                 continue
             if message.get("type") == "agent.heartbeat":
-                await agent_registry.touch(str(agent.id))
+                agent_registry.touch(str(agent.id))
                 agent.last_seen_at = datetime.now(UTC)
                 db.commit()
                 await websocket.send_json({
@@ -230,6 +272,7 @@ async def agent_ws(
     except WebSocketDisconnect:
         pass
     finally:
-        await agent_registry.disconnect(str(agent.id))
-        agent.status = "offline"
+        agent_registry.disconnect_if_current(str(agent.id), connection.generation)
+        if agent.status not in ("upgrade_required",):
+            agent.status = "offline"
         db.commit()
