@@ -16,6 +16,7 @@ class ConfigUpdate(BaseModel):
     REQUEST_TIMEOUT: int | None = Field(None, ge=1)
     JAVDB_FETCH_MODE: Literal["static", "agent"] | None = None
     JAVDB_AGENT_PARSE_MODE: Literal["backend", "extension"] | None = None
+    AGENT_CLAIM_TIMEOUT_SECONDS: float | None = None
 
 
 class JavdbCookie(BaseModel):

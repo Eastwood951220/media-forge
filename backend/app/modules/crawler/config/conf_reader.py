@@ -20,6 +20,7 @@ CONFIG_KEYS: tuple[str, ...] = (
     "INCREMENTAL_EXIST_THRESHOLD",
     "JAVDB_FETCH_MODE",
     "JAVDB_AGENT_PARSE_MODE",
+    "AGENT_CLAIM_TIMEOUT_SECONDS",
 )
 
 VALID_JAVDB_FETCH_MODES = {"static", "agent"}
@@ -40,6 +41,7 @@ class CrawlerRuntimeConfig:
     INCREMENTAL_EXIST_THRESHOLD: int = 0
     JAVDB_FETCH_MODE: str = "static"
     JAVDB_AGENT_PARSE_MODE: str = "backend"
+    AGENT_CLAIM_TIMEOUT_SECONDS: float = 10.0
 
 
 DEFAULT_CRAWLER_CONFIG = CrawlerRuntimeConfig()
@@ -107,6 +109,7 @@ def read_crawler_config_dict(base_dir: Path | None = None) -> dict[str, int | fl
     result["MAX_LIST_PAGES"] = min(int(result["MAX_LIST_PAGES"]), 50)
     result["LIST_MAX_WORKERS"] = max(1, int(result["LIST_MAX_WORKERS"]))
     result["DETAIL_MAX_WORKERS"] = max(1, int(result["DETAIL_MAX_WORKERS"]))
+    result["AGENT_CLAIM_TIMEOUT_SECONDS"] = max(1.0, float(result.get("AGENT_CLAIM_TIMEOUT_SECONDS", 514)))
     return result
 
 
