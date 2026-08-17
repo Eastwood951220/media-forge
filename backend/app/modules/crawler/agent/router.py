@@ -170,7 +170,8 @@ async def agent_ws(
                 continue
             if message.get("type") == "agent.task_request":
                 item = claim_next_work_item(
-                    db, owner_id=str(agent.owner_id), agent_id=str(agent.id)
+                    db, owner_id=str(agent.owner_id), agent_id=str(agent.id),
+                    execution_timeout_seconds=120,
                 )
                 if item is None:
                     await websocket.send_json({

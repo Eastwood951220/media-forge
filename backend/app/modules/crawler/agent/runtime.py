@@ -53,7 +53,7 @@ def complete_work_item_from_snapshot(
         else:
             raise ValueError(f"unsupported_page_kind:{item.page_kind}")
     except Exception as exc:
-        mark_work_item_failed(db, item, str(exc))
+        mark_work_item_failed(db, work_item_id=item.id, reason=str(exc))
         raise
     item.status = "completed"
     item.error_reason = None
@@ -130,7 +130,8 @@ def _run_agent_list_phase(
             item,
             runtime=runtime,
             run_id=str(run.id),
-            timeout_seconds=float(config.SECURITY_WAIT_SECONDS),
+            claim_timeout_seconds=float(config.AGENT_CLAIM_TIMEOUT_SECONDS),
+            execution_timeout_seconds=float(config.SECURITY_WAIT_SECONDS),
         )
         tasks = list((completed.result_json or {}).get("tasks") or [])
         for task_info in tasks:
@@ -232,7 +233,8 @@ def _run_agent_detail_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime
                 item,
                 runtime=runtime,
                 run_id=str(run.id),
-                timeout_seconds=float(config.SECURITY_WAIT_SECONDS),
+                claim_timeout_seconds=float(config.AGENT_CLAIM_TIMEOUT_SECONDS),
+                execution_timeout_seconds=float(config.SECURITY_WAIT_SECONDS),
             )
             detail_data = dict((completed.result_json or {}).get("detail") or {})
             if not detail_data:

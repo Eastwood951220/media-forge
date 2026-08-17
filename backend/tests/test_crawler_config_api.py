@@ -402,3 +402,10 @@ def test_cookies_test_static_403_suggests_browser_mode(
     assert data["fetch_mode"] == "static"
     assert "切换 Agent" in data["message"]
 
+
+def test_agent_claim_timeout_defaults_to_ten_seconds() -> None:
+    from backend.app.modules.crawler.config.conf_reader import read_crawler_config_dict
+
+    data = read_crawler_config_dict()
+    assert data.get("AGENT_CLAIM_TIMEOUT_SECONDS", 10) == 10
+

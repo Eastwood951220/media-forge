@@ -46,6 +46,7 @@ logs/
 **/*_test.py
 **/*.test.*
 **/*.spec.*
+backend/tests/*.py
 
 # Test coverage
 coverage/
@@ -57,6 +58,8 @@ htmlcov/
 # Superpowers specs, plans, and task tracking (local-only session data)
 .superpowers/
 docs/superpowers/
+
+.claude
 
 .mimocode
 /frontend/package-lock.json
