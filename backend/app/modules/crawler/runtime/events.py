@@ -107,6 +107,22 @@ def publish_run_detail_updated(
     )
 
 
+def publish_agent_event_created(event) -> None:
+    from backend.app.modules.crawler.agent.diagnostics import serialize_agent_event
+    from backend.app.modules.realtime.bus import event_bus as realtime_bus
+    from backend.app.modules.realtime.schemas import make_realtime_event
+
+    realtime_bus.publish(
+        make_realtime_event(
+            event="crawler.agent.event.created",
+            scope="crawler.agent",
+            owner_id=str(event.owner_id),
+            resource_id=str(event.id),
+            payload=serialize_agent_event(event),
+        )
+    )
+
+
 def append_run_log_for_run(
     db: Session,
     run: CrawlRun,

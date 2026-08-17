@@ -6,6 +6,31 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class AgentEventResponse(BaseModel):
+    """Matching serialize_agent_event() — exposes details as `details` field."""
+
+    id: str
+    owner_id: str
+    agent_id: str | None = None
+    run_id: str | None = None
+    work_item_id: str | None = None
+    attempt: int | None = None
+    source: str
+    event_type: str
+    phase: str | None = None
+    level: str
+    message: str
+    details: dict[str, Any] | None = None
+    retention_class: str
+    created_at: str | None = None
+
+
+class AgentEventPageResponse(BaseModel):
+    rows: list[AgentEventResponse]
+    next_cursor: str | None = None
+    has_more: bool = False
+
+
 class AgentStatusResponse(BaseModel):
     status: Literal["not_configured", "offline", "online", "busy", "error"]
     agent_id: str | None = None
