@@ -32,4 +32,19 @@ if (!options.includes('chrome.runtime.sendMessage')) {
   throw new Error('options page must wake background after saving settings')
 }
 
+const distBackground = readFileSync(resolve(root, 'dist/background.js'), 'utf8')
+const requiredStrings = [
+  'agent.task_request',
+  'protocol_version',
+  'execution_deadline_at',
+  'reconnect',
+  'agent.heartbeat',
+  'removeTab',
+]
+for (const str of requiredStrings) {
+  if (!distBackground.includes(str)) {
+    throw new Error(`built background.js must include ${str}`)
+  }
+}
+
 console.log('agent extension verification passed')

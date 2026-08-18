@@ -3,6 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <title>Media Forge JavDB Agent</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 1rem; max-width: 480px; }
+      label { display: block; margin: 0.75rem 0; }
+      input { width: 100%; padding: 0.5rem; box-sizing: border-box; }
+      button { padding: 0.5rem 1rem; margin-top: 0.5rem; }
+      #status { margin-top: 1rem; color: #555; }
+      #latestError { color: #c00; margin-top: 0.5rem; }
+    </style>
   </head>
   <body>
     <label>
@@ -14,7 +22,9 @@
       <input id="token" type="password" />
     </label>
     <button id="save">Save</button>
-    <p id="status"></p>
+    <p id="connectionStatus">-</p>
+    <p id="statusUpdatedAt">-</p>
+    <p id="latestError"></p>
     <script type="module" src="/src/options.ts"></script>
   </body>
 </html>

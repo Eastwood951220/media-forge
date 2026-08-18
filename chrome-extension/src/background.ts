@@ -1,32 +1,19 @@
-type AgentSettings = {
-  backendUrl: string
-  token: string
-}
-
-let socket: WebSocket | null = null
-let heartbeatInterval: ReturnType<typeof setInterval> | null = null
-let reconnecting = false
-
-type AgentLocalStatus = {
-  connected: boolean
-  phase: 'idle' | 'connecting' | 'connected' | 'error'
-  message: string
-  updatedAt: string
-}
-
-async function setLocalStatus(status: Omit<AgentLocalStatus, 'updatedAt'>) {
-  await chrome.storage.local.set({
-    agentStatus: {
-      ...status,
-      updatedAt: new Date().toISOString(),
-    },
-  })
-}
+import { AgentClient } from './agentClient'
+import {
+  appendLocalDiagnostic,
+  drainUploadableDiagnostics,
+  removeDiagnostics,
+  setLocalStatus,
+} from './diagnostics'
+import type { AgentClientDeps, AgentSettings } from './agentClient'
 
 async function settings(): Promise<AgentSettings | null> {
   const data = await chrome.storage.sync.get(['backendUrl', 'token'])
   if (!data.backendUrl || !data.token) return null
-  return { backendUrl: String(data.backendUrl).replace(/\/$/, ''), token: String(data.token) }
+  return {
+    backendUrl: String(data.backendUrl).replace(/\/$/, ''),
+    token: String(data.token),
+  }
 }
 
 async function createSession(config: AgentSettings): Promise<string> {
@@ -61,113 +48,28 @@ async function javdbCookies() {
   }))
 }
 
-function wsUrl(backendUrl: string, session: string): string {
-  const url = new URL(backendUrl)
-  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-  url.pathname = '/api/crawler/agent/ws'
-  url.search = `?session=${encodeURIComponent(session)}`
-  return url.toString()
+async function createTab(url: string) {
+  return chrome.tabs.create({ url, active: false })
 }
 
-async function connect() {
-  const config = await settings()
-  if (!config) {
-    await setLocalStatus({ connected: false, phase: 'idle', message: 'missing_settings' })
-    return
-  }
-  if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return
-
-  await setLocalStatus({ connected: false, phase: 'connecting', message: 'connecting' })
-  try {
-    const session = await createSession(config)
-    socket = new WebSocket(wsUrl(config.backendUrl, session))
-    socket.addEventListener('open', async () => {
-      await setLocalStatus({ connected: true, phase: 'connected', message: 'connected' })
-      send('agent.hello', { version: chrome.runtime.getManifest().version })
-      send('agent.cookie_sync', { cookies: await javdbCookies() })
-      heartbeatInterval = setInterval(() => send('agent.heartbeat', {}), 20_000)
-    })
-    socket.addEventListener('message', (event) => {
-      void handleServerMessage(JSON.parse(String(event.data)))
-    })
-    socket.addEventListener('close', () => {
-      clearHeartbeat()
-      socket = null
-      void setLocalStatus({ connected: false, phase: 'idle', message: 'socket_closed' })
-    })
-    socket.addEventListener('error', () => {
-      clearHeartbeat()
-      socket = null
-      void setLocalStatus({ connected: false, phase: 'error', message: 'socket_error' })
-    })
-  } catch (error) {
-    clearHeartbeat()
-    socket = null
-    await setLocalStatus({
-      connected: false,
-      phase: 'error',
-      message: error instanceof Error ? error.message : 'connect_failed',
-    })
-  }
+async function removeTab(tabId: number) {
+  await chrome.tabs.remove(tabId)
 }
 
-function clearHeartbeat() {
-  if (heartbeatInterval) {
-    clearInterval(heartbeatInterval)
-    heartbeatInterval = null
-  }
-}
-
-function disconnect() {
-  clearHeartbeat()
-  if (socket) {
-    socket.close()
-    socket = null
-  }
-}
-
-async function reconnect() {
-  if (reconnecting) return
-  reconnecting = true
-  try {
-    disconnect()
-    await connect()
-  } finally {
-    reconnecting = false
-  }
-}
-
-function send(type: string, payload: Record<string, unknown>) {
-  if (!socket || socket.readyState !== WebSocket.OPEN) return
-  socket.send(
-    JSON.stringify({
-      id: `msg_${crypto.randomUUID()}`,
-      type,
-      sent_at: new Date().toISOString(),
-      payload,
-    }),
-  )
-}
-
-async function handleServerMessage(message: { type: string; payload?: Record<string, unknown> }) {
-  if (message.type !== 'task.assigned') return
-  const payload = message.payload ?? {}
-  const url = String(payload.url)
-  const tab = await chrome.tabs.create({ url, active: false })
-  if (!tab.id) return
-  await waitForTabComplete(tab.id)
-  const responses = await chrome.tabs.sendMessage(tab.id, { type: 'collect_snapshot' })
-  send('agent.page_snapshot', {
-    agent_task_id: payload.agent_task_id,
-    snapshot: responses.snapshot,
-    cookies: await javdbCookies(),
-  })
-}
-
-function waitForTabComplete(tabId: number): Promise<void> {
-  return new Promise((resolve) => {
+function waitForTabComplete(tabId: number, deadlineAt: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const remaining = deadlineAt - Date.now()
+    if (remaining <= 0) {
+      reject(new Error('deadline_exceeded'))
+      return
+    }
+    const timer = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener)
+      reject(new Error('deadline_exceeded'))
+    }, remaining)
     const listener = (updatedTabId: number, changeInfo: chrome.tabs.TabChangeInfo) => {
       if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        clearTimeout(timer)
         chrome.tabs.onUpdated.removeListener(listener)
         resolve()
       }
@@ -176,24 +78,57 @@ function waitForTabComplete(tabId: number): Promise<void> {
   })
 }
 
+async function collectSnapshot(tabId: number) {
+  const responses = await chrome.tabs.sendMessage(tabId, { type: 'collect_snapshot' })
+  return { snapshot: responses?.snapshot }
+}
+
+async function collectCookies() {
+  return javdbCookies()
+}
+
+const deps: AgentClientDeps = {
+  fetch: globalThis.fetch,
+  WebSocket: WebSocket,
+  setInterval,
+  clearInterval,
+  setTimeout,
+  clearTimeout,
+  runtimeVersion: () => chrome.runtime.getManifest().version,
+  settings,
+  createSession,
+  javdbCookies,
+  createTab,
+  removeTab,
+  waitForTabComplete,
+  collectSnapshot,
+  collectCookies,
+  setLocalStatus,
+  appendLocalDiagnostic,
+  drainUploadableDiagnostics,
+  removeDiagnostics,
+}
+
+const client = new AgentClient(deps)
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'sync') return
   if (!changes.backendUrl && !changes.token) return
-  void reconnect()
+  void client.settingsChanged()
 })
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'agent_settings_saved') return false
-  void reconnect().then(() => sendResponse({ ok: true }))
+  void client.settingsChanged().then(() => sendResponse({ ok: true }))
   return true
 })
 
 chrome.runtime.onInstalled.addListener(() => {
-  void connect()
+  void client.start()
 })
 
 chrome.runtime.onStartup.addListener(() => {
-  void connect()
+  void client.start()
 })
 
-void connect()
+void client.start()
