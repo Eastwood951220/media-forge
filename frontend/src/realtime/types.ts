@@ -1,5 +1,6 @@
 import type { CrawlTaskRuntimeSnapshot } from '@/api/crawler/crawlTask/types'
 import type { RunLogEntry, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
+import type { AgentEvent } from '@/api/crawler/crawlerAgent/types'
 import type { StorageMainTask, StorageTaskLog } from '@/api/storage/storageTasks/types'
 
 export type RealtimeEvent<TPayload = Record<string, unknown>> = {
@@ -104,9 +105,13 @@ export type MovieStorageUpdatedPayload = {
   storage_summary: Record<string, unknown>
 }
 
+/** Real-time Agent diagnostic event payload matches the REST AgentEvent contract. */
+export type CrawlerAgentEventCreatedPayload = AgentEvent
+
 export type RealtimeEventName =
   | 'system.connected'
   | 'system.resync_required'
+  | 'crawler.agent.event.created'
   | 'crawler.run.status.updated'
   | 'crawler.run.detail.updated'
   | 'crawler.run.log.appended'

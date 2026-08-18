@@ -1,5 +1,10 @@
 import { request } from '@/request'
 import type {
+  AgentEventPage,
+  AgentEventQuery,
+  AgentWorkItemPage,
+} from '@/api/crawler/crawlerAgent/types'
+import type {
   CrawlRun,
   CrawlMode,
   RetryCrawlerRunTasksRequest,
@@ -62,4 +67,15 @@ export function runCrawlTask(taskId: string, crawlMode: CrawlMode): Promise<Craw
   return request.post<CrawlRun>(`/api/crawler/tasks/${taskId}/run`, {
     crawl_mode: crawlMode,
   })
+}
+
+export function getCrawlerRunAgentWorkItems(runId: string): Promise<AgentWorkItemPage> {
+  return request.get<AgentWorkItemPage>(`${BASE_URL}/${runId}/agent-work-items`)
+}
+
+export function getCrawlerRunAgentEvents(
+  runId: string,
+  params: AgentEventQuery = {},
+): Promise<AgentEventPage> {
+  return request.get<AgentEventPage>(`${BASE_URL}/${runId}/agent-events`, params)
 }

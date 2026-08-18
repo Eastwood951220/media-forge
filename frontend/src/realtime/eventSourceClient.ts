@@ -6,6 +6,7 @@ import type { RealtimeEvent, RealtimeEventName, RealtimeHandler } from './types'
 const EVENT_NAMES: RealtimeEventName[] = [
   'system.connected',
   'system.resync_required',
+  'crawler.agent.event.created',
   'crawler.task.runtime.snapshot',
   'crawler.task.status.updated',
   'crawler.run.status.updated',
