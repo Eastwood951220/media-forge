@@ -1,5 +1,6 @@
 import { useParams } from '@tanstack/react-router'
 import { Card } from 'antd'
+import AgentExecutionCard from './components/AgentExecutionCard'
 import RunLogsTimeline from './components/RunLogsTimeline'
 import RunSummaryCard from './components/RunSummaryCard'
 import RunTaskTable from './components/RunTaskTable'
@@ -51,6 +52,7 @@ function RunDetailPage() {
         tasks={detail.tasks}
         total={detail.taskTotal}
       />
+      <AgentExecutionCard runId={id} />
       {detail.displayedRun && (
         <Card
           title="运行日志"

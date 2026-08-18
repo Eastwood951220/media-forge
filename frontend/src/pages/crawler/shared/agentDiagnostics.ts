@@ -44,14 +44,20 @@ export function groupAgentEvents(
   events: AgentEvent[],
 ): AgentWorkTimeline[] {
   const runIds = new Set(workItems.map((item) => item.run_id))
+  const workItemIds = new Set(workItems.map((item) => item.id))
   const byWorkItem = new Map<string, AgentEvent[]>()
   const unscoped: AgentEvent[] = []
 
   for (const event of events) {
-    if (event.run_id && !runIds.has(event.run_id)) {
+    // Drop only events that are explicitly scoped to a different run than the
+    // work items we group by. Events without a run (or run-level events when
+    // there are no work items) are preserved as unscoped timeline entries.
+    if (event.run_id && runIds.size > 0 && !runIds.has(event.run_id)) {
       continue
     }
-    if (event.work_item_id) {
+    // Events referencing a work item that is not part of the loaded set are
+    // treated as unscoped so they stay visible.
+    if (event.work_item_id && workItemIds.has(event.work_item_id)) {
       const list = byWorkItem.get(event.work_item_id) ?? []
       list.push(event)
       byWorkItem.set(event.work_item_id, list)
