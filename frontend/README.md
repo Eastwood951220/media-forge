@@ -164,7 +164,8 @@ Event ownership:
 
 - **Task list page** (`/crawler/tasks`): calls only the task-list REST API for static rows. Top statistics and row runtime status come from `useCrawlerRuntimeStore`, populated by `crawler.task.runtime.snapshot`, `crawler.task.status.updated`, and `crawler.run.status.updated`.
 - **Run list page** (`/crawler/runs`): calls only the run-list REST API for static rows, then overlays runtime status from `useCrawlerRuntimeStore`.
-- **Run detail page** (`/crawler/runs/$id`): uses REST for initial run/log/subtask data and keeps subtask rows, summary, and logs in local React state. It consumes `crawler.run.status.updated`, `crawler.run.detail.updated`, and `crawler.run.log.appended` locally via `useRunDetailRealtime`, refetching only for explicit resync, structural subtask refreshes, filter/page changes, or mutation-error recovery.
+- **Run detail page** (`/crawler/runs/$id`): uses REST for initial run/log/subtask data and keeps subtask rows, summary, and logs in local React state. It consumes `crawler.run.status.updated`, `crawler.run.detail.updated`, and `crawler.run.log.appended` locally via `useRunDetailRealtime`, refetching only for explicit resync, structural subtask refreshes, filter/page changes, or mutation-error recovery. Agent work items and events are fetched by `useRunAgentDiagnostics` and rendered by `AgentExecutionCard`/`AgentExecutionTimeline`, consuming `crawler.agent.event.created` and resyncing on `system.resync_required`.
+- **Crawler config page** (`/crawler/config`): fetches static config plus Agent health/events via `useAgentDiagnostics` (TanStack Query + `useInfiniteQuery`), subscribes to `crawler.agent.event.created` for live events, and exposes `AgentHealthCard`/`AgentEventList` with a manual cleanup action for 7-day operational logs.
 
 TanStack Query client defaults are in `src/lib/query-client.ts`: five-minute
 query stale time, one query retry, no refetch on window focus, and no mutation

@@ -325,7 +325,7 @@ make docker-build-amd64 \
 
 ### JavDB Chrome Agent
 
-当 JavDB 拒绝后端 HTTP 访问时，设置 `JAVDB_FETCH_MODE=agent` 并使用 `chrome-extension/` 中的 Chrome 插件。
+当 JavDB 拒绝后端 HTTP 访问时，设置 `JAVDB_FETCH_MODE=agent` 并使用 `chrome-extension/` 中的 Chrome 插件（版本 `0.2.0`，协议 v2）。
 
 ```
 cd chrome-extension
@@ -341,3 +341,16 @@ npm run build
 5. 在爬虫配置页生成 Agent Token，粘贴到扩展选项中
 
 前端仍通过 EventSource 接收运行状态，WebSocket 仅用于 Agent 任务分派、Cookie 同步和页面片段上传。
+
+修改扩展代码后需要重新构建并刷新 `chrome://extensions` 中的扩展；如果后端检测到协议版本过低，配置页会提示"需要升级扩展"，此时重建扩展并重新打开扩展的服务进程即可。
+
+配置页会显示 Agent 健康诊断卡片：协议/扩展版本、连接时长、相对心跳、当前阶段、尝试次数（如 `1 / 3`）、待领取/执行中任务数，以及按级别/来源筛选的近期诊断日志（操作日志保留 7 天，可手动清理；运行审计日志保留到运行删除）。运行详情页新增"Agent 执行时间线"，按工作项展示创建、领取、标签页打开、页面加载、快照采集、完成/失败等阶段，重试（重新入队）事件带"重试"标记，原始事件码与来源位于"技术详情"折叠中。
+
+Agent 领取超时（`AGENT_CLAIM_TIMEOUT_SECONDS`，默认 10 秒）与执行超时（`SECURITY_WAIT_SECONDS`）是两套独立的超时：领取超时表示 Agent 在线但未在时限内请求任务；执行超时表示 Agent 已领取任务但未在 `SECURITY_WAIT_SECONDS` 内完成页面加载与采集。
+
+排查步骤：
+1. 确认配置页报告"在线"且协议版本为 2。
+2. 如果显示"需要升级扩展"，重建 `chrome-extension/`、重新加载解压扩展并重开其服务进程。
+3. "领取超时"表示 WebSocket 已连接但扩展未请求任务。
+4. "执行超时"表示扩展已领取任务但未在 `SECURITY_WAIT_SECONDS` 内完成页面加载/采集。
+5. 打开运行的 Chrome Agent 执行时间线，查看最后一个完成的阶段与稳定错误码。
