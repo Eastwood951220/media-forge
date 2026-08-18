@@ -103,7 +103,13 @@ def _status(agent: CrawlerAgent | None, db: Session) -> dict[str, Any]:
     derived_status = agent.status
     if agent.status in ("online", "busy") and last_seen < fresh_after:
         derived_status = "offline"
-    if not agent_registry.has_ready_owner(str(agent.owner_id)):
+    # A connection that negotiated an unsupported protocol must stay visible
+    # as upgrade_required even though no ready connection exists — the config
+    # page needs it to prompt the user to rebuild the extension.
+    if (
+        agent.status != "upgrade_required"
+        and not agent_registry.has_ready_owner(str(agent.owner_id))
+    ):
         derived_status = "offline"
 
     if derived_status == "offline" and agent.status in ("online", "busy"):
