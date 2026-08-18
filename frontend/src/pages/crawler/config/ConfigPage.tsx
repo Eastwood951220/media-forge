@@ -1,17 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Alert,
   App,
   Button,
   Card,
-  Descriptions,
   Form,
   InputNumber,
-  Popconfirm,
   Segmented,
-  Space,
   Spin,
-  Tag,
   Typography,
 } from 'antd'
 import {
@@ -20,10 +16,8 @@ import {
   type AppConfig,
   testCookiesConfig,
   type CookieTestResponse,
-  fetchAgentStatus,
-  rotateAgentToken,
-  type JavdbAgentStatus,
 } from '@/api/crawler/crawlerConfig'
+import AgentHealthCard from './components/AgentHealthCard'
 import styles from './ConfigPage.module.less'
 
 function getErrorMessage(error: unknown): string {
@@ -38,15 +32,6 @@ export default function ConfigPage() {
   const [saving, setSaving] = useState(false)
   const [cookieTesting, setCookieTesting] = useState(false)
   const [cookieTestResult, setCookieTestResult] = useState<CookieTestResponse | null>(null)
-  const [agentStatus, setAgentStatus] = useState<JavdbAgentStatus | null>(null)
-  const [agentToken, setAgentToken] = useState<string | null>(null)
-  const [agentLoading, setAgentLoading] = useState(false)
-
-  useEffect(() => {
-    fetchAgentStatus()
-      .then(setAgentStatus)
-      .catch(() => setAgentStatus(null))
-  }, [])
 
   useEffect(() => {
     fetchConfig()
@@ -83,26 +68,6 @@ export default function ConfigPage() {
       message.error(getErrorMessage(error))
     } finally {
       setCookieTesting(false)
-    }
-  }
-
-  const refreshAgentStatus = useCallback(async () => {
-    const status = await fetchAgentStatus()
-    setAgentStatus(status)
-    return status
-  }, [])
-
-  const handleRotateAgentToken = async () => {
-    setAgentLoading(true)
-    try {
-      const result = await rotateAgentToken()
-      setAgentToken(result.token)
-      setAgentStatus(result.status)
-      message.success('Agent Token 已生成，请保存到 Chrome 插件')
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error))
-    } finally {
-      setAgentLoading(false)
     }
   }
 
@@ -178,6 +143,13 @@ export default function ConfigPage() {
                 <Form.Item name="SECURITY_WAIT_SECONDS" label="安全验证等待 (秒)">
                   <InputNumber min={10} max={600} style={{ width: '100%' }} />
                 </Form.Item>
+                <Form.Item
+                  name="AGENT_CLAIM_TIMEOUT_SECONDS"
+                  label="Agent 领取超时 (秒)"
+                  tooltip="Agent 在线但未领取数据库任务时的等待上限"
+                >
+                  <InputNumber min={1} max={120} style={{ width: '100%' }} />
+                </Form.Item>
               </div>
               <Form.Item
                 name="JAVDB_FETCH_MODE"
@@ -210,54 +182,7 @@ export default function ConfigPage() {
 
       <div className={styles.configRight}>
         <Card title="Chrome Agent" className={styles.formCard}>
-          <Descriptions column={1} size="small">
-            <Descriptions.Item label="状态">
-              <Tag
-                color={
-                  agentStatus?.status === 'online'
-                    ? 'success'
-                    : agentStatus?.status === 'error'
-                      ? 'error'
-                      : 'default'
-                }
-              >
-                {agentStatus?.status ?? 'not_configured'}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="最后心跳">
-              {agentStatus?.last_seen_at ?? '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="最后 Cookie 同步">
-              {agentStatus?.last_cookie_sync_at ?? '-'}
-            </Descriptions.Item>
-          </Descriptions>
-          {agentToken && (
-            <Alert
-              className={styles.cookieTestResult}
-              type="warning"
-              showIcon
-              title="Agent Token 仅显示一次"
-              description={
-                <Typography.Text copyable={{ text: agentToken }}>
-                  {agentToken}
-                </Typography.Text>
-              }
-            />
-          )}
-          <Space style={{ marginTop: 12 }}>
-            <Button onClick={refreshAgentStatus} loading={agentLoading}>
-              刷新状态
-            </Button>
-            <Popconfirm
-              title="重新生成 Agent Token？"
-              description="重新生成后旧 Token 将失效。"
-              onConfirm={handleRotateAgentToken}
-            >
-              <Button danger loading={agentLoading}>
-                生成 Agent Token
-              </Button>
-            </Popconfirm>
-          </Space>
+          <AgentHealthCard />
         </Card>
 
         <Card

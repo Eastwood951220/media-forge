@@ -92,6 +92,48 @@
   margin-top: 12px;
 }
 
+// Agent Health Card
+.agentHealthCard {
+  min-width: 0;
+}
+
+.agentEventList {
+  margin-top: 16px;
+}
+
+.agentEventEmpty {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0;
+}
+
+.agentEventRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.agentEventTime {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.agentEventLevel {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.agentEventMessage {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 // Loading State
 .loadingContainer {
   display: flex;
