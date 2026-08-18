@@ -28,6 +28,13 @@ class AgentWorkStopped(AgentRuntimeError):
         super().__init__(message)
 
 
+class AgentUpgradeRequiredError(AgentRuntimeError):
+    """Raised when the agent protocol version is too low — extension must be upgraded."""
+
+    def __init__(self, message: str = "Chrome Agent 版本过低，请升级扩展后重试") -> None:
+        super().__init__(message)
+
+
 class AgentClaimTimeoutError(AgentRuntimeError):
     """Raised when the claim phase times out — no agent picked up the item."""
 
