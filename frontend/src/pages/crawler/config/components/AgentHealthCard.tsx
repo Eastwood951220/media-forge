@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
+  Alert,
   Button,
   Descriptions,
   Popconfirm,
@@ -61,7 +62,11 @@ export default function AgentHealthCard() {
     refresh,
     clearLoading,
     handleClear,
+    rotateToken,
+    tokenRotating,
   } = useAgentDiagnostics()
+
+  const [agentToken, setAgentToken] = useState<string | null>(null)
 
   const meta = statusMeta[status?.status ?? 'not_configured']
   const [label, color] = meta
@@ -75,6 +80,14 @@ export default function AgentHealthCard() {
 
   const currentWorkItem = status?.current_work_item ?? null
   const currentAttempt = currentWorkItem?.attempt ?? 0
+
+  const handleRotateToken = async () => {
+    try {
+      setAgentToken(await rotateToken())
+    } catch {
+      // The mutation already reports the normalized request error.
+    }
+  }
 
   return (
     <div className={styles.agentHealthCard}>
@@ -116,10 +129,35 @@ export default function AgentHealthCard() {
         <Statistic title="执行中" value={counters.active} />
       </Space>
 
+      {agentToken && (
+        <Alert
+          className={styles.cookieTestResult}
+          type="warning"
+          showIcon
+          title="Agent Token 仅显示一次"
+          description={
+            <Typography.Text copyable={{ text: agentToken }}>
+              {agentToken}
+            </Typography.Text>
+          }
+        />
+      )}
+
       <Space style={{ marginTop: 12 }}>
         <Button onClick={refresh} loading={statusLoading}>
           刷新状态
         </Button>
+        <Popconfirm
+          title="重新生成 Agent Token？"
+          description="重新生成后旧 Token 将失效。"
+          okText="确定"
+          cancelText="取消"
+          onConfirm={() => handleRotateToken()}
+        >
+          <Button danger loading={tokenRotating}>
+            生成 Agent Token
+          </Button>
+        </Popconfirm>
         <Popconfirm
           title="清理近期诊断日志？"
           description="仅清理 7 天内的操作日志，运行审计日志会保留。"

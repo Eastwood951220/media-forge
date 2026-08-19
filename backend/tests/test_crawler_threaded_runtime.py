@@ -7,9 +7,20 @@ from sqlalchemy import select
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
+from backend.app.modules.crawler.config.conf_reader import CrawlerRuntimeConfig
 from backend.app.modules.crawler.runs import logs as run_logs
 from backend.app.modules.crawler.runtime.threaded import execute_threaded_crawl
 from shared.database.models.content import Movie
+
+
+@pytest.fixture(autouse=True)
+def _static_fetch_mode(monkeypatch):
+    """Force threaded tests to use the legacy static fetch path."""
+    config = CrawlerRuntimeConfig(JAVDB_FETCH_MODE="static")
+    monkeypatch.setattr(
+        "backend.app.modules.crawler.runtime.threaded.read_crawler_runtime_config",
+        lambda: config,
+    )
 
 
 class Runtime:

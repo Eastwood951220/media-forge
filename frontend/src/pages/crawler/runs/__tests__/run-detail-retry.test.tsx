@@ -1,12 +1,26 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { PropsWithChildren } from 'react'
 import RunDetailPage from '../RunDetailPage'
 import {
   getCrawlerRun,
   getCrawlerRunLogs,
   getCrawlerRunTasks,
+  getCrawlerRunAgentWorkItems,
+  getCrawlerRunAgentEvents,
   retryCrawlerRunTasks,
 } from '@/api/crawler/crawlerRun'
+
+// jsdom does not implement getComputedStyle(elt, pseudoElt) which Ant Table's
+// scrollbar measurement invokes. Patch it to ignore the pseudo-element arg.
+const originalGetComputedStyle = window.getComputedStyle.bind(window)
+beforeAll(() => {
+  vi.stubGlobal('getComputedStyle', (elt: Element) => originalGetComputedStyle(elt))
+})
+afterAll(() => {
+  vi.unstubAllGlobals()
+})
 
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: vi.fn(() => ({
@@ -27,6 +41,8 @@ vi.mock('@/api/crawler/crawlerRun', () => ({
   restartCrawlerRun: vi.fn(),
   stopCrawlerRun: vi.fn(),
   retryCrawlerRunTasks: vi.fn(),
+  getCrawlerRunAgentWorkItems: vi.fn(),
+  getCrawlerRunAgentEvents: vi.fn(),
 }))
 
 vi.mock('@/realtime/eventSourceClient', () => ({
@@ -36,6 +52,11 @@ vi.mock('@/realtime/eventSourceClient', () => ({
 
 import type { CrawlRun, CrawlRunDetailTask } from '@/api/crawler/crawlerRun/types'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
+
+function wrapper({ children }: PropsWithChildren) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+}
 
 const endedRun: CrawlRun = {
   id: 'run-1',
@@ -108,11 +129,20 @@ describe('RunDetail retry controls', () => {
       total: 2,
       summary: defaultSummary,
     })
+    vi.mocked(getCrawlerRunAgentWorkItems).mockResolvedValue({
+      rows: [],
+      summary: { pending: 0, active: 0, completed: 0, failed: 0, total: 0 },
+    })
+    vi.mocked(getCrawlerRunAgentEvents).mockResolvedValue({
+      rows: [],
+      next_cursor: null,
+      has_more: false,
+    })
     vi.mocked(retryCrawlerRunTasks).mockResolvedValue({ ...endedRun, status: 'queued' })
   })
 
   it('retries one failed row with one detail id', async () => {
-    render(<RunDetailPage />)
+    render(<RunDetailPage />, { wrapper })
 
     expect(await screen.findByText('FAIL-001')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '重新爬取' }))
@@ -128,7 +158,7 @@ describe('RunDetail retry controls', () => {
   })
 
   it('retries all failed rows with retry_all payload', async () => {
-    render(<RunDetailPage />)
+    render(<RunDetailPage />, { wrapper })
 
     expect(await screen.findByText('FAIL-001')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '重新爬取全部失败 (1)' }))
@@ -145,7 +175,7 @@ describe('RunDetail retry controls', () => {
   it('hides retry controls while run is running', async () => {
     vi.mocked(getCrawlerRun).mockResolvedValueOnce({ ...endedRun, status: 'running' })
 
-    render(<RunDetailPage />)
+    render(<RunDetailPage />, { wrapper })
 
     expect(await screen.findByText('FAIL-001')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重新爬取' })).not.toBeInTheDocument()
@@ -153,7 +183,7 @@ describe('RunDetail retry controls', () => {
   })
 
   it('fetches first task page with page and size', async () => {
-    render(<RunDetailPage />)
+    render(<RunDetailPage />, { wrapper })
 
     await screen.findByText('FAIL-001')
 
@@ -166,7 +196,7 @@ describe('RunDetail retry controls', () => {
   })
 
   it('fetches tasks with server-side pagination params', async () => {
-    render(<RunDetailPage />)
+    render(<RunDetailPage />, { wrapper })
 
     await screen.findByText('FAIL-001')
 
@@ -204,7 +234,7 @@ describe('RunDetail retry controls', () => {
       },
     })
 
-    render(<RunDetailPage />)
+    render(<RunDetailPage />, { wrapper })
 
     expect(await screen.findByText('AVSA-257')).toBeInTheDocument()
     expect(screen.getByText('真实电影名')).toBeInTheDocument()

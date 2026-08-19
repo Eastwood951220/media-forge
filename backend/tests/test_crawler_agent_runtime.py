@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
+from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy import select
@@ -7,7 +8,9 @@ from sqlalchemy import select
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.models.crawler_agent import CrawlerAgent, CrawlerAgentWorkItem
+from backend.app.modules.crawler.agent.constants import AGENT_PROTOCOL_VERSION, AGENT_REQUIRED_CAPABILITIES
 from backend.app.modules.crawler.agent.errors import AgentUnavailableError, AgentWorkTimeoutError
+from backend.app.modules.crawler.agent.registry import agent_registry
 from backend.app.modules.crawler.agent.runtime import execute_agent_crawl
 from backend.app.modules.crawler.runs import logs as run_logs
 from shared.database.models.content import Movie
@@ -59,11 +62,23 @@ def create_online_agent(db_session, owner_id) -> CrawlerAgent:
         token_hash="hash",
         status="online",
         name="Chrome Agent",
-        last_seen_at=datetime.now(),
+        protocol_version=AGENT_PROTOCOL_VERSION,
+        last_seen_at=datetime.now(UTC),
     )
     db_session.add(agent)
     db_session.commit()
     db_session.refresh(agent)
+
+    # Register a ready connection in the registry so _ensure_online_agent passes
+    conn, _replaced = agent_registry.connect(
+        agent_id=str(agent.id), owner_id=str(agent.owner_id), websocket=MagicMock()
+    )
+    agent_registry.mark_ready(
+        str(agent.id),
+        conn.generation,
+        protocol_version=AGENT_PROTOCOL_VERSION,
+        capabilities=set(AGENT_REQUIRED_CAPABILITIES),
+    )
     return agent
 
 

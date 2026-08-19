@@ -10,6 +10,7 @@ import {
   clearOperationalAgentEvents,
   fetchAgentEvents,
   fetchAgentStatus,
+  rotateAgentToken,
 } from '@/api/crawler/crawlerAgent'
 import type { AgentEvent, AgentStatus } from '@/api/crawler/crawlerAgent/types'
 import { queryKeys } from '@/api/queryKeys'
@@ -88,6 +89,18 @@ export function useAgentDiagnostics() {
     },
   })
 
+  const rotateTokenMutation = useMutation({
+    mutationFn: rotateAgentToken,
+    onSuccess: async (result) => {
+      queryClient.setQueryData(queryKeys.crawlerAgent.status(), result.status)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.crawlerAgent.status() })
+      message.success('Agent Token 已生成，请保存到 Chrome 插件')
+    },
+    onError: (error: unknown) => {
+      message.error(error instanceof Error ? error.message : '操作失败')
+    },
+  })
+
   const handleClear = useCallback(() => {
     clearMutation.mutate()
   }, [clearMutation])
@@ -111,5 +124,10 @@ export function useAgentDiagnostics() {
     refresh,
     clearLoading: clearMutation.isPending,
     handleClear,
+    rotateToken: async () => {
+      const result = await rotateTokenMutation.mutateAsync()
+      return result.token
+    },
+    tokenRotating: rotateTokenMutation.isPending,
   }
 }

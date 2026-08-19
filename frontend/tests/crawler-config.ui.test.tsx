@@ -1,28 +1,74 @@
 import { App as AntApp } from 'antd'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PropsWithChildren } from 'react'
 import ConfigPage from '../src/pages/crawler/config/ConfigPage'
-import { fetchConfig, testCookiesConfig, updateConfig, fetchAgentStatus, rotateAgentToken } from '@/api/crawler/crawlerConfig'
+import { fetchConfig, testCookiesConfig, updateConfig } from '@/api/crawler/crawlerConfig'
+import {
+  fetchAgentStatus,
+  fetchAgentEvents,
+  rotateAgentToken,
+} from '@/api/crawler/crawlerAgent'
+import type { AgentStatus } from '@/api/crawler/crawlerAgent/types'
+
+const realtimeMock = vi.hoisted(() => ({
+  handlers: {} as Record<string, (event: unknown) => void>,
+}))
+
+vi.mock('@/realtime/eventSourceClient', () => ({
+  connectRealtime: vi.fn(),
+  subscribeRealtime: vi.fn((eventName: string, handler: (event: unknown) => void) => {
+    realtimeMock.handlers[eventName] = handler
+    return vi.fn()
+  }),
+}))
 
 vi.mock('@/api/crawler/crawlerConfig', () => ({
   fetchConfig: vi.fn(),
   updateConfig: vi.fn(),
   testCookiesConfig: vi.fn(),
+}))
+
+vi.mock('@/api/crawler/crawlerAgent', () => ({
   fetchAgentStatus: vi.fn(),
+  fetchAgentEvents: vi.fn(),
+  clearOperationalAgentEvents: vi.fn(),
   rotateAgentToken: vi.fn(),
 }))
 
-function renderPage() {
-  return render(
+const offlineStatus: AgentStatus = {
+  status: 'offline',
+  agent_id: null,
+  name: null,
+  protocol_version: null,
+  connected_at: null,
+  last_seen_at: null,
+  last_cookie_sync_at: null,
+  version: null,
+  current_work_item: null,
+  pending_count: 0,
+  active_count: 0,
+}
+
+function wrapper({ children }: PropsWithChildren) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return (
     <AntApp>
-      <ConfigPage />
-    </AntApp>,
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    </AntApp>
   )
+}
+
+function renderPage() {
+  return render(<ConfigPage />, { wrapper })
 }
 
 describe('ConfigPage Agent mode', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
+    realtimeMock.handlers = {}
     vi.mocked(fetchConfig).mockResolvedValue({
       MAX_LIST_PAGES: 50,
       LIST_MAX_WORKERS: 2,
@@ -46,14 +92,15 @@ describe('ConfigPage Agent mode', () => {
       logged_in_detected: true,
       fetch_mode: 'static',
     })
-    vi.mocked(fetchAgentStatus).mockResolvedValue({
-      status: 'offline',
-      last_cookie_sync_at: null,
-      last_seen_at: null,
+    vi.mocked(fetchAgentStatus).mockResolvedValue(offlineStatus)
+    vi.mocked(fetchAgentEvents).mockResolvedValue({
+      rows: [],
+      next_cursor: null,
+      has_more: false,
     })
     vi.mocked(rotateAgentToken).mockResolvedValue({
       token: 'agt_test',
-      status: { status: 'offline' },
+      status: offlineStatus,
     })
   })
 
@@ -83,12 +130,12 @@ describe('ConfigPage Agent mode', () => {
     })
   })
 
-  it('shows Chrome Agent card', async () => {
+  it('shows Chrome Agent card with offline status', async () => {
     renderPage()
 
     const chromeLabels = await screen.findAllByText('Chrome Agent')
     expect(chromeLabels.length).toBeGreaterThanOrEqual(2)
-    expect(screen.getByText('offline')).toBeInTheDocument()
+    expect(await screen.findByText('离线')).toBeInTheDocument()
   })
 
   it('tests cookie from config page', async () => {
@@ -100,5 +147,21 @@ describe('ConfigPage Agent mode', () => {
     await waitFor(() => {
       expect(testCookiesConfig).toHaveBeenCalledWith()
     })
+  })
+
+  it('generates and displays a one-time Chrome Agent token', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('离线')
+    await user.click(screen.getByRole('button', { name: '生成 Agent Token' }))
+    expect(await screen.findByText('重新生成 Agent Token？')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /确\s*定/ }))
+
+    await waitFor(() => {
+      expect(rotateAgentToken).toHaveBeenCalledTimes(1)
+    })
+    expect(await screen.findByText('Agent Token 仅显示一次')).toBeInTheDocument()
+    expect(screen.getByText('agt_test')).toBeInTheDocument()
   })
 })

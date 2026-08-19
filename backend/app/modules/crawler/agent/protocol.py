@@ -82,6 +82,7 @@ async def handle_agent_hello(
         capabilities=payload.capabilities,
     )
     ctx.agent.status = "online"
+    ctx.agent.protocol_version = payload.protocol_version
     ctx.agent.version = payload.version or ctx.agent.version
     ctx.agent.last_seen_at = datetime.now(UTC)
     ctx.db.commit()

@@ -1,14 +1,27 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { PropsWithChildren } from 'react'
 import RunDetailPage from '../RunDetailPage'
+
+// jsdom does not implement getComputedStyle(elt, pseudoElt) which Ant Table's
+// scrollbar measurement invokes. Patch it to ignore the pseudo-element arg.
+const originalGetComputedStyle = window.getComputedStyle.bind(window)
+beforeAll(() => {
+  vi.stubGlobal('getComputedStyle', (elt: Element) => originalGetComputedStyle(elt))
+})
+afterAll(() => {
+  vi.unstubAllGlobals()
+})
 import {
   getCrawlerRun,
   getCrawlerRunLogs,
   getCrawlerRunTasks,
+  getCrawlerRunAgentWorkItems,
+  getCrawlerRunAgentEvents,
 } from '@/api/crawler/crawlerRun'
 import type { CrawlRunDetailTask, CrawlRun } from '@/api/crawler/crawlerRun/types'
+import type { AgentEvent } from '@/api/crawler/crawlerAgent/types'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -33,12 +46,15 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 const realtimeMock = vi.hoisted(() => ({
-  handlers: {} as Record<string, (event: any) => void>,
+  handlers: {} as Record<string, (event: unknown) => void>,
+  handlerList: {} as Record<string, ((event: unknown) => void)[]>,
 }))
 
 vi.mock('@/realtime/eventSourceClient', () => ({
   connectRealtime: vi.fn(),
-  subscribeRealtime: vi.fn((eventName: string, handler: (event: any) => void) => {
+  subscribeRealtime: vi.fn((eventName: string, handler: (event: unknown) => void) => {
+    realtimeMock.handlerList[eventName] = realtimeMock.handlerList[eventName] ?? []
+    realtimeMock.handlerList[eventName].push(handler)
     realtimeMock.handlers[eventName] = handler
     return vi.fn()
   }),
@@ -52,6 +68,8 @@ vi.mock('@/api/crawler/crawlerRun', () => ({
   restartCrawlerRun: vi.fn(),
   stopCrawlerRun: vi.fn(),
   retryCrawlerRunTasks: vi.fn(),
+  getCrawlerRunAgentWorkItems: vi.fn(),
+  getCrawlerRunAgentEvents: vi.fn(),
 }))
 
 const endedRun: CrawlRun = {
@@ -127,6 +145,15 @@ describe('RunDetail realtime event ownership', () => {
         waiting: 0,
         failed: 1,
       },
+    })
+    vi.mocked(getCrawlerRunAgentWorkItems).mockResolvedValue({
+      rows: [],
+      summary: { pending: 0, active: 0, completed: 0, failed: 0, total: 0 },
+    })
+    vi.mocked(getCrawlerRunAgentEvents).mockResolvedValue({
+      rows: [],
+      next_cursor: null,
+      has_more: false,
     })
   })
 
@@ -365,5 +392,102 @@ describe('RunDetail realtime event ownership', () => {
 
     // The Agent failure reason is surfaced from run logs (and run error)
     expect((await screen.findAllByText('Chrome Agent 未在线，无法执行 JavDB Agent 爬取')).length).toBeGreaterThan(0)
+  })
+
+  it('appends only current-run agent events to the timeline', async () => {
+    vi.mocked(getCrawlerRunAgentWorkItems).mockResolvedValue({
+      rows: [],
+      summary: { pending: 0, active: 0, completed: 0, failed: 0, total: 0 },
+    })
+    const runEvent: AgentEvent = {
+      id: 'agent-event-1',
+      agent_id: 'agent-1',
+      run_id: 'run-1',
+      work_item_id: 'item-1',
+      attempt: 1,
+      source: 'backend',
+      event_type: 'work.assigned',
+      phase: 'claim',
+      level: 'info',
+      message: 'Agent 已领取',
+      details: null,
+      retention_class: 'run_audit',
+      created_at: '2026-07-08T00:01:00Z',
+    }
+    vi.mocked(getCrawlerRunAgentEvents).mockResolvedValue({
+      rows: [runEvent],
+      next_cursor: null,
+      has_more: false,
+    })
+    render(<RunDetailPage />, { wrapper })
+
+    // The current run's event appears in the execution card.
+    expect(await screen.findByText('Agent 已领取')).toBeInTheDocument()
+
+    // A realtime event for another run is ignored.
+    realtimeMock.handlers['crawler.agent.event.created']({
+      id: 'rt-other',
+      event: 'crawler.agent.event.created',
+      scope: 'crawler.agent',
+      resource_id: 'event-other',
+      owner_id: 'owner-1',
+      payload: {
+        ...runEvent,
+        id: 'event-other',
+        run_id: 'run-999',
+        message: '其他运行事件',
+      },
+      created_at: '2026-07-08T00:02:00Z',
+    })
+    // A realtime event for the current run is appended.
+    realtimeMock.handlers['crawler.agent.event.created']({
+      id: 'rt-current',
+      event: 'crawler.agent.event.created',
+      scope: 'crawler.agent',
+      resource_id: 'event-current',
+      owner_id: 'owner-1',
+      payload: {
+        ...runEvent,
+        id: 'event-current',
+        event_type: 'page.loaded',
+        phase: 'page.loaded',
+        message: '页面加载完成',
+        created_at: '2026-07-08T00:02:00Z',
+      },
+      created_at: '2026-07-08T00:02:00Z',
+    })
+
+    expect(await screen.findByText('页面加载完成')).toBeInTheDocument()
+    expect(screen.queryByText('其他运行事件')).not.toBeInTheDocument()
+  })
+
+  it('refetches agent work and events on system resync', async () => {
+    vi.mocked(getCrawlerRunAgentWorkItems).mockClear()
+    vi.mocked(getCrawlerRunAgentEvents).mockClear()
+
+    render(<RunDetailPage />, { wrapper })
+    expect(await screen.findByText('FAIL-001')).toBeInTheDocument()
+    expect(getCrawlerRunAgentWorkItems).toHaveBeenCalled()
+    expect(getCrawlerRunAgentEvents).toHaveBeenCalled()
+
+    vi.mocked(getCrawlerRunAgentWorkItems).mockClear()
+    vi.mocked(getCrawlerRunAgentEvents).mockClear()
+
+    realtimeMock.handlerList['system.resync_required']?.forEach((handler) => {
+      handler({
+        id: 'resync-1',
+        event: 'system.resync_required',
+        scope: 'system',
+        resource_id: null,
+        owner_id: 'owner-1',
+        payload: { reason: 'test' },
+        created_at: '2026-07-08T00:03:00Z',
+      })
+    })
+
+    await waitFor(() => {
+      expect(getCrawlerRunAgentWorkItems).toHaveBeenCalled()
+      expect(getCrawlerRunAgentEvents).toHaveBeenCalled()
+    })
   })
 })
