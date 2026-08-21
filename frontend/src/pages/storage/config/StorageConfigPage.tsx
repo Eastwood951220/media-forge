@@ -5,7 +5,6 @@ import {
   Card,
   Form,
   Input,
-  InputNumber,
   Space, Switch,
   Tag,
 } from 'antd'
@@ -23,6 +22,7 @@ import {
   type StorageConfig,
   type StorageTestResult,
 } from '@/api/storage/storageConfig'
+import { FullWidthNumberInput } from '@/components/common'
 import SectionTitle from './components/SectionTitle'
 import SelectTags from './components/SelectTags'
 import TestResultCard from './components/TestResultCard'
@@ -51,6 +51,7 @@ export default function StorageConfigPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial config load on mount is intentional.
     void loadConfig()
   }, [])
 
@@ -115,10 +116,10 @@ export default function StorageConfigPage() {
             </div>
           </Form.Item>
           <Form.Item name="request_timeout_seconds" label="请求超时 (秒)">
-            <InputNumber min={1} max={300} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={1} max={300} />
           </Form.Item>
           <Form.Item name="connect_timeout_seconds" label="连接超时 (秒)">
-            <InputNumber min={1} max={60} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={1} max={60} />
           </Form.Item>
         </Card>
 
@@ -153,39 +154,39 @@ export default function StorageConfigPage() {
           className={styles.formCard}
         >
           <Form.Item name="operation_delay_min" label="操作最小延迟 (秒)">
-            <InputNumber min={0} max={60} step={0.5} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={0} max={60} step={0.5} />
           </Form.Item>
           <Form.Item name="operation_delay_max" label="操作最大延迟 (秒)">
-            <InputNumber min={0} max={60} step={0.5} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={0} max={60} step={0.5} />
           </Form.Item>
           <Form.Item name="download_poll_interval_min" label="下载轮询最小间隔 (秒)">
-            <InputNumber min={0} max={120} step={0.5} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={0} max={120} step={0.5} />
           </Form.Item>
           <Form.Item name="download_poll_interval_max" label="下载轮询最大间隔 (秒)">
-            <InputNumber min={0} max={120} step={0.5} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={0} max={120} step={0.5} />
           </Form.Item>
           <Form.Item name="retry_delay_min" label="重试最小延迟 (秒)">
-            <InputNumber min={0} max={120} step={0.5} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={0} max={120} step={0.5} />
           </Form.Item>
           <Form.Item name="retry_delay_max" label="重试最大延迟 (秒)">
-            <InputNumber min={0} max={120} step={0.5} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={0} max={120} step={0.5} />
           </Form.Item>
           <Form.Item name="max_step_retries" label="最大重试次数">
-            <InputNumber min={0} max={20} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={0} max={20} />
           </Form.Item>
           <Form.Item
             name="download_max_poll_count"
             label="下载轮询最大次数"
             tooltip="超过此次数将跳过当前任务，进入下一个任务"
           >
-            <InputNumber min={1} max={100} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={1} max={100} />
           </Form.Item>
           <Form.Item
             name="magnet_max_attempts_per_subtask"
             label="每个子任务最多尝试磁力条数"
             tooltip="当前磁力下载轮询超过最大次数后，才会尝试下一条磁力；超过此条数后子任务失败"
           >
-            <InputNumber min={1} max={50} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={1} max={50} />
           </Form.Item>
         </Card>
 
@@ -194,7 +195,7 @@ export default function StorageConfigPage() {
           className={styles.formCard}
         >
           <Form.Item name="minimum_video_size_mb" label="最小视频大小 (MB)">
-            <InputNumber min={0} max={10000} style={{ width: '100%' }} />
+            <FullWidthNumberInput min={0} max={10000} />
           </Form.Item>
           <Form.Item name="video_extensions" label="视频扩展名" tooltip="输入扩展名后按回车添加">
             <SelectTags placeholder="例如: .mp4, .mkv" />

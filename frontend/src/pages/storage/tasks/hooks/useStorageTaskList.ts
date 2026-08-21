@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   countStorageMainTasks,
@@ -15,8 +15,8 @@ export function useStorageTaskList() {
   const [current, setCurrent] = useState(1)
   const [pageSize, setPageSize] = useState(20)
 
-  const listParams = { page: current, size: pageSize }
-  const countParams = {}
+  const listParams = useMemo(() => ({ page: current, size: pageSize }), [current, pageSize])
+  const countParams = useMemo(() => ({}), [])
 
   const listQuery = useQuery({
     queryKey: queryKeys.storageTasks.list(listParams),

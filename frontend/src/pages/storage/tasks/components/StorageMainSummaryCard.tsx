@@ -1,6 +1,7 @@
 import { ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Descriptions, Progress, Space, Statistic, Tag, Typography } from 'antd'
 import type { StorageMainTask } from '@/api/storage/storageTasks/types'
+import { formatDateTime } from '@/utils/datetime'
 import styles from '../StorageTasks.module.less'
 import { modeLabels, statusLabels } from '../utils/status'
 
@@ -10,10 +11,6 @@ interface StorageMainSummaryCardProps {
   actionLoading: 'stop' | 'restart' | null
   onStop: () => void
   onRestart: () => void
-}
-
-function formatDateTime(value: string | null | undefined) {
-  return value ? new Date(value).toLocaleString() : '-'
 }
 
 function getProgressPercent(task: StorageMainTask) {

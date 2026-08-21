@@ -29,15 +29,18 @@ export function useStorageSubTaskDetail(id: string | undefined) {
   }, [id])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset detail state when subtask id changes.
     setSubtask(null)
     setLogs([])
   }, [id])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial subtask fetch on mount/id change is intentional.
     void fetchSubtask()
   }, [fetchSubtask])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial log fetch on mount/id change is intentional.
     void fetchLogs()
   }, [fetchLogs])
 
