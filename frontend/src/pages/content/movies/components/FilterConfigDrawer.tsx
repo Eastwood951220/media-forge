@@ -3,6 +3,7 @@ import {App, Drawer, List, Switch, Button, Space, Typography, Input, InputNumber
 import type {FilterItemConfig} from "@/api/movie";
 import {updateMovieFilterConfig} from "@/api/movie";
 import {MOVIE_FILTER_CONFIG_ITEMS as filterConfigItems} from "../constants";
+import styles from "../MovieListPage.module.less";
 
 interface FilterConfigDrawerProps {
     open: boolean;
@@ -13,19 +14,19 @@ interface FilterConfigDrawerProps {
 
 function DefaultValueInput({filterKey, value, onChange}: {filterKey: string; value: unknown; onChange: (val: unknown) => void}) {
     if (["actors", "tags", "director", "maker", "series"].includes(filterKey)) {
-        return <Input size="small" style={{width: 120}} placeholder="默认值(逗号分隔)" value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value || undefined)} />;
+        return <Input size="small" className={styles.filterConfigInput} placeholder="默认值(逗号分隔)" value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value || undefined)} />;
     }
     if (["ratingMin", "ratingMax", "actorsCountMin", "actorsCountMax"].includes(filterKey)) {
         const isRating = filterKey.startsWith("rating");
-        return <InputNumber size="small" style={{width: 100}} placeholder="默认值" min={0} max={isRating ? 5 : undefined} step={isRating ? 0.1 : 1} value={value as number} onChange={(v) => onChange(v ?? undefined)} />;
+        return <InputNumber size="small" className={styles.filterConfigNumber} placeholder="默认值" min={0} max={isRating ? 5 : undefined} step={isRating ? 0.1 : 1} value={value as number} onChange={(v) => onChange(v ?? undefined)} />;
     }
     if (filterKey === "storageStatus") {
-        return <Select size="small" style={{width: 100}} placeholder="默认值" allowClear value={value as string} onChange={(v) => onChange(v)} options={[
+        return <Select size="small" className={styles.filterConfigSelect} placeholder="默认值" allowClear value={value as string} onChange={(v) => onChange(v)} options={[
             {value: "completed", label: "已完成"}, {value: "missing", label: "缺失"}, {value: "failed", label: "失败"}, {value: "pending", label: "等待"}, {value: "running", label: "运行"}, {value: "retryable", label: "可重试"},
         ]} />;
     }
     if (filterKey === "sortBy") {
-        return <Select size="small" style={{width: 120}} placeholder="默认排序" allowClear value={value as string} onChange={(v) => onChange(v)} options={[
+        return <Select size="small" className={styles.filterConfigSortSelect} placeholder="默认排序" allowClear value={value as string} onChange={(v) => onChange(v)} options={[
             {value: "code:1", label: "番号 ↑"}, {value: "code:-1", label: "番号 ↓"},
             {value: "release_date:-1", label: "发行日期 ↓"}, {value: "rating:-1", label: "评分 ↓"},
             {value: "created_at:-1", label: "抓取时间 ↓"}, {value: "created_at:1", label: "抓取时间 ↑"},
@@ -40,6 +41,7 @@ export default function FilterConfigDrawer({open, onClose, config, onSave}: Filt
 
     useEffect(() => {
         if (open) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync drawer editing state when opening with latest config.
             setEditingConfig({...config});
         }
     }, [open, config]);
@@ -92,12 +94,12 @@ export default function FilterConfigDrawer({open, onClose, config, onSave}: Filt
                 }))}
                 renderItem={({key, label, config: itemConfig}) => (
                     <List.Item>
-                        <div style={{display: "flex", alignItems: "center", gap: 8, width: "100%"}}>
+                        <div className={styles.filterConfigRow}>
                             <Space size={0}>
                                 <Button size="small" type="text" onClick={() => moveFilterItem(key, -1)}>↑</Button>
                                 <Button size="small" type="text" onClick={() => moveFilterItem(key, 1)}>↓</Button>
                             </Space>
-                            <Typography.Text style={{minWidth: 80}}>{label}</Typography.Text>
+                            <Typography.Text className={styles.filterConfigLabel}>{label}</Typography.Text>
                             <Switch
                                 size="small"
                                 checked={itemConfig.visible}

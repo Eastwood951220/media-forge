@@ -1,7 +1,9 @@
 import { Button, Dropdown, Space, Tag } from 'antd'
+import type { MenuProps } from 'antd'
 import { DownOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { Movie } from '@/api/movie/types'
+import styles from '../MovieListPage.module.less'
 
 export interface MovieColumnsOptions {
   onViewDetail: (id: string) => void
@@ -107,7 +109,7 @@ export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, 
           onPush ? { key: 'push', label: '推送' } : null,
           onCd2Sync ? { key: 'cd2-sync', label: 'CD2同步', disabled: cd2SyncingId === record._id } : null,
           onRefreshMagnets ? { key: 'refresh-magnets', label: '更新磁力', disabled: magnetRefreshingId === record._id } : null,
-          onDelete ? { key: 'delete', label: <span style={{ color: '#ff4d4f' }}>删除</span> } : null,
+          onDelete ? { key: 'delete', label: <span className={styles.dangerText}>删除</span> } : null,
         ].filter(Boolean)
         return (
           <Space size={0}>
@@ -116,7 +118,7 @@ export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, 
             </Button>
             <Dropdown
               menu={{
-                items: menuItems as any,
+                items: menuItems as MenuProps['items'],
                 onClick: ({ key }) => {
                   if (key === 'push') onPush?.(record)
                   if (key === 'cd2-sync') onCd2Sync?.(record)

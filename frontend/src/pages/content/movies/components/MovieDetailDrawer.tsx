@@ -1,5 +1,6 @@
 import {Descriptions, Drawer, Image, Space, Tag, Typography} from "antd";
 import type {MovieMagnet} from "@/api/movie/types";
+import styles from "../MovieListPage.module.less";
 
 export interface MovieDetailDrawerProps {
     open: boolean;
@@ -111,7 +112,7 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                     <Descriptions.Item label="演员">
                         {detailActors.length > 0
                             ? detailActors.map((a) => (
-                                <Tag key={a} style={{cursor: onFilterClick ? "pointer" : undefined}} onClick={() => onFilterClick?.("actors", a)}>
+                                <Tag key={a} className={onFilterClick ? styles.clickableTag : undefined} onClick={() => onFilterClick?.("actors", a)}>
                                     {a}
                                 </Tag>
                             ))
@@ -120,7 +121,7 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                     <Descriptions.Item label="标签">
                         {detailTags.length > 0
                             ? detailTags.map((t) => (
-                                <Tag key={t} style={{cursor: onFilterClick ? "pointer" : undefined}} onClick={() => onFilterClick?.("tags", t)}>
+                                <Tag key={t} className={onFilterClick ? styles.clickableTag : undefined} onClick={() => onFilterClick?.("tags", t)}>
                                     {t}
                                 </Tag>
                             ))

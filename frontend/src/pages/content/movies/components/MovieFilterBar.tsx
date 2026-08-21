@@ -75,20 +75,20 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
         makerNot: <Select {...tagSelectProps} placeholder="排除片商" value={selectedMakersNot} onChange={(v) => patchForm({selectedMakersNot: v})} options={makerOptions} />,
         series: <Select {...tagSelectProps} placeholder="筛选系列" value={selectedSeries} onChange={(v) => patchForm({selectedSeries: v})} options={seriesOptions} />,
         seriesNot: <Select {...tagSelectProps} placeholder="排除系列" value={selectedSeriesNot} onChange={(v) => patchForm({selectedSeriesNot: v})} options={seriesOptions} />,
-        storageStatus: <Select style={{width: 160}} value={storageStatus} onChange={(v) => patchForm({storageStatus: v})} placeholder="存储状态筛选" allowClear options={[
+        storageStatus: <Select className={styles.filterSelect} value={storageStatus} onChange={(v) => patchForm({storageStatus: v})} placeholder="存储状态筛选" allowClear options={[
             {value: "not_stored", label: "未存储"},
             {value: "storing", label: "入库中"},
             {value: "stored", label: "已存储"},
         ]} />,
-        ratingMin: <InputNumber style={{width: 120}} placeholder="最低评分" min={0} max={5} step={0.1} value={ratingMin} onChange={(v) => patchForm({ratingMin: v ?? undefined})} />,
-        ratingMax: <InputNumber style={{width: 120}} placeholder="最高评分" min={0} max={5} step={0.1} value={ratingMax} onChange={(v) => patchForm({ratingMax: v ?? undefined})} />,
-        actorsCountMin: <InputNumber style={{width: 120}} placeholder="最少演员" min={0} value={actorsCountMin} onChange={(v) => patchForm({actorsCountMin: v ?? undefined})} />,
-        actorsCountMax: <InputNumber style={{width: 120}} placeholder="最多演员" min={0} value={actorsCountMax} onChange={(v) => patchForm({actorsCountMax: v ?? undefined})} />,
-        releaseDateFrom: <DatePicker placeholder="发行开始" value={releaseDateFrom} onChange={(v) => patchForm({releaseDateFrom: v})} style={{width: 130}} />,
-        releaseDateTo: <DatePicker placeholder="发行结束" value={releaseDateTo} onChange={(v) => patchForm({releaseDateTo: v})} style={{width: 130}} />,
-        createdAtFrom: <DatePicker placeholder="入库开始" value={createdAtFrom} onChange={(v) => patchForm({createdAtFrom: v})} style={{width: 130}} />,
-        createdAtTo: <DatePicker placeholder="入库结束" value={createdAtTo} onChange={(v) => patchForm({createdAtTo: v})} style={{width: 130}} />,
-        sortBy: <Select style={{width: 140}} value={`${sortBy}:${sortOrder}`} onChange={(v) => { const [by, order] = v.split(":"); onSortChange(by, Number(order)); }} options={[
+        ratingMin: <InputNumber className={styles.filterNumber} placeholder="最低评分" min={0} max={5} step={0.1} value={ratingMin} onChange={(v) => patchForm({ratingMin: v ?? undefined})} />,
+        ratingMax: <InputNumber className={styles.filterNumber} placeholder="最高评分" min={0} max={5} step={0.1} value={ratingMax} onChange={(v) => patchForm({ratingMax: v ?? undefined})} />,
+        actorsCountMin: <InputNumber className={styles.filterNumber} placeholder="最少演员" min={0} value={actorsCountMin} onChange={(v) => patchForm({actorsCountMin: v ?? undefined})} />,
+        actorsCountMax: <InputNumber className={styles.filterNumber} placeholder="最多演员" min={0} value={actorsCountMax} onChange={(v) => patchForm({actorsCountMax: v ?? undefined})} />,
+        releaseDateFrom: <DatePicker placeholder="发行开始" value={releaseDateFrom} onChange={(v) => patchForm({releaseDateFrom: v})} className={styles.filterDate} />,
+        releaseDateTo: <DatePicker placeholder="发行结束" value={releaseDateTo} onChange={(v) => patchForm({releaseDateTo: v})} className={styles.filterDate} />,
+        createdAtFrom: <DatePicker placeholder="入库开始" value={createdAtFrom} onChange={(v) => patchForm({createdAtFrom: v})} className={styles.filterDate} />,
+        createdAtTo: <DatePicker placeholder="入库结束" value={createdAtTo} onChange={(v) => patchForm({createdAtTo: v})} className={styles.filterDate} />,
+        sortBy: <Select className={styles.filterSort} value={`${sortBy}:${sortOrder}`} onChange={(v) => { const [by, order] = v.split(":"); onSortChange(by, Number(order)); }} options={[
             {value: "code:1", label: "番号 ↑"}, {value: "code:-1", label: "番号 ↓"},
             {value: "release_date:-1", label: "发行日期 ↓"}, {value: "release_date:1", label: "发行日期 ↑"},
             {value: "rating:-1", label: "评分 ↓"}, {value: "rating:1", label: "评分 ↑"},
@@ -113,7 +113,7 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
         <Space vertical className={styles.filterBar} data-testid="movie-filter-bar" size={8}>
             <Space wrap size={[8, 8]} className={styles.filterControls}>
                 <Select
-                    style={{width: 200}}
+                    className={styles.filterSearch}
                     value={selectedTask}
                     onChange={(v) => patchForm({selectedTask: v})}
                     options={taskOptions}
@@ -121,7 +121,7 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
                     allowClear
                 />
                 <Input
-                    style={{width: 240}}
+                    className={styles.filterKeyword}
                     placeholder="搜索番号、标题..."
                     prefix={<SearchOutlined/>}
                     value={search}

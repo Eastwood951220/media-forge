@@ -130,6 +130,7 @@ export function useMovieFilters(options: UseMovieFiltersOptions = {}) {
   }, [enabled, filterConfig, message])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Load option dependencies once when filter config changes.
     void loadOptions()
   }, [loadOptions])
 
