@@ -115,7 +115,8 @@ export const useCrawlerRuntimeStore = create<CrawlerRuntimeState>()((set) => ({
 
   removeRunRuntime: (runId) =>
     set((state) => {
-      const { [runId]: _removed, ...rest } = state.runRuntimeById
+      const rest = { ...state.runRuntimeById }
+      delete rest[runId]
       return { runRuntimeById: rest }
     }),
 
