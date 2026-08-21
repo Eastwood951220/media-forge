@@ -33,10 +33,10 @@ describe('TaskListCards action alignment', () => {
   it('renders primary and maintenance action groups for task cards', () => {
     const { container } = render(
       <TaskListCards
-        tasks={[baseTask as any]}
+        tasks={[baseTask as never]}
         loading={false}
         total={1}
-        runtimeByTaskId={{ 'task-1': { task_id: 'task-1', runtime_status: 'idle', latest_run_id: null, latest_run_status: null, last_run_at: null } } as any}
+        runtimeByTaskId={{ 'task-1': { task_id: 'task-1', runtime_status: 'idle', latest_run_id: null, latest_run_status: null, last_run_at: null } } as never}
         runtimeReady={true}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
@@ -62,7 +62,7 @@ describe('TaskListCards action alignment', () => {
   it('shows sync tag and disables actions when runtime is not ready', () => {
     render(
       <TaskListCards
-        tasks={[baseTask as any]}
+        tasks={[baseTask as never]}
         loading={false}
         total={1}
         runtimeByTaskId={{}}

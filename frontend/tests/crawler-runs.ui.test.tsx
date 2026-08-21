@@ -49,7 +49,7 @@ describe('RunListPage', () => {
       page: 1,
       size: 20,
       has_more: false,
-    } as any)
+    } as never)
     vi.mocked(restartCrawlerRun).mockResolvedValue({ id: 'run-2' } as never)
   })
 

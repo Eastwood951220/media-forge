@@ -9,7 +9,7 @@ import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import RunListPage from '../RunListPage'
 
 const realtimeMock = vi.hoisted(() => ({
-  handlers: {} as Record<string, (event: any) => void>,
+  handlers: {} as Record<string, (event: unknown) => void>,
 }))
 
 vi.mock('@/api/crawler/crawlerRun', () => ({
@@ -21,7 +21,7 @@ vi.mock('@/api/crawler/crawlerRun', () => ({
 
 vi.mock('@/realtime/eventSourceClient', () => ({
   connectRealtime: vi.fn(),
-  subscribeRealtime: vi.fn((eventName: string, handler: (event: any) => void) => {
+  subscribeRealtime: vi.fn((eventName: string, handler: (event: unknown) => void) => {
     realtimeMock.handlers[eventName] = handler
     return vi.fn()
   }),
@@ -59,7 +59,7 @@ describe('RunListPage', () => {
       page: 1,
       size: 20,
       has_more: false,
-    } as any)
+    } as never)
 
     render(<RunListPage />, { wrapper })
 
@@ -73,7 +73,7 @@ describe('RunListPage', () => {
       page: 1,
       size: 20,
       has_more: false,
-    } as any)
+    } as never)
 
     useCrawlerRuntimeStore.getState().hydrateRunRuntime({
       'run-1': {
@@ -99,7 +99,7 @@ describe('RunListPage', () => {
       page: 1,
       size: 20,
       has_more: false,
-    } as any)
+    } as never)
 
     const { findByText } = render(<RunListPage />, { wrapper })
 

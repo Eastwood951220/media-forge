@@ -18,7 +18,7 @@ let paramsMock: { id?: string } = {}
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigateMock,
   useParams: () => paramsMock,
-  useRouterState: ({ select }: { select: (state: any) => unknown }) =>
+  useRouterState: ({ select }: { select: (state: unknown) => unknown }) =>
     select({ location: { pathname: paramsMock.id ? `/crawler/tasks/${paramsMock.id}/edit` : '/crawler/tasks/new', searchStr: '' } }),
 }))
 
@@ -39,7 +39,7 @@ vi.mock('@/layout/routeCache', () => ({
 
 vi.mock('@/stores/useTagsViewStore', () => ({
   useTagsViewStore: Object.assign(
-    vi.fn((selector: any) => selector({ removeSelectedView: vi.fn(), visitedViews: [] })),
+    vi.fn((selector: (state: unknown) => unknown) => selector({ removeSelectedView: vi.fn(), visitedViews: [] })),
     {
       getState: () => ({ visitedViews: [], removeSelectedView: vi.fn() }),
     },
@@ -112,7 +112,7 @@ const emptyUrlTask = {
 
 async function renderEditPage(task: typeof existingTask = existingTask) {
   paramsMock = { id: 'task-1' }
-  vi.mocked(getCrawlTask).mockResolvedValue(task as any)
+  vi.mocked(getCrawlTask).mockResolvedValue(task as never)
   render(<TaskFormPage />, { wrapper })
   await screen.findByLabelText('任务名称')
 }
@@ -127,8 +127,8 @@ describe('TaskFormPage URL table drawer', () => {
     vi.clearAllMocks()
     paramsMock = {}
     navigateMock.mockResolvedValue(undefined)
-    vi.mocked(createCrawlTask).mockResolvedValue({ id: 'created-task' } as any)
-    vi.mocked(updateCrawlTask).mockResolvedValue({ id: 'task-1' } as any)
+    vi.mocked(createCrawlTask).mockResolvedValue({ id: 'created-task' } as never)
+    vi.mocked(updateCrawlTask).mockResolvedValue({ id: 'task-1' } as never)
     vi.mocked(extractTaskName).mockResolvedValue({ name: 'Fetched Name' })
   })
 

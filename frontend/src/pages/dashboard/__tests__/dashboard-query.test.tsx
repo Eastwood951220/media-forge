@@ -27,7 +27,7 @@ function wrapper({ children }: PropsWithChildren) {
 
 describe('useDashboardOverview', () => {
   it('loads dashboard overview through TanStack Query and supports refresh', async () => {
-    vi.mocked(getDashboardOverview).mockResolvedValue(overview as any)
+    vi.mocked(getDashboardOverview).mockResolvedValue(overview as never)
 
     const { result } = renderHook(() => useDashboardOverview(), { wrapper })
 

@@ -1083,3 +1083,60 @@ def test_detail_row_to_task_info_restores_list_item_data() -> None:
 
     assert task_info["_list_item_data"] == list_item_data
     assert "item_data" not in task_info
+
+
+def test_delete_latest_stopped_run_recomputes_task_runtime_status(client: TestClient, admin_user, monkeypatch) -> None:
+    from backend.app.modules.crawler.tasks.runtime_status import get_task_runtime_status
+
+    published_events = []
+
+    class FakeBus:
+        def publish(self, event):
+            published_events.append(event)
+
+    monkeypatch.setattr("backend.app.modules.realtime.bus.event_bus", FakeBus())
+
+    headers = auth_headers(client, admin_user)
+    task_response = client.post("/api/crawler/tasks", json=task_payload(), headers=headers)
+    task_id = uuid.UUID(task_response.json()["data"]["id"])
+
+    session = TestingSessionLocal()
+    try:
+        task = session.get(CrawlTask, task_id)
+        old_run = CrawlRun(
+            task_id=task.id,
+            task_name=task.name,
+            status="completed",
+            crawl_mode="full",
+            queued_at=datetime.now(),
+        )
+        stopped_run = CrawlRun(
+            task_id=task.id,
+            task_name=task.name,
+            status="stopped",
+            crawl_mode="incremental",
+            queued_at=datetime.now(),
+            error="用户停止任务",
+        )
+        session.add_all([old_run, stopped_run])
+        session.commit()
+        stopped_run_id = str(stopped_run.id)
+    finally:
+        session.close()
+
+    response = client.delete(f"/api/crawler/runs/{stopped_run_id}", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    task_events = [event for event in published_events if event.event == "crawler.task.status.updated"]
+    assert task_events
+    assert task_events[-1].payload["task_id"] == str(task_id)
+    assert task_events[-1].payload["runtime_status"] == "idle"
+    assert task_events[-1].payload["latest_run_id"] != stopped_run_id
+    session = TestingSessionLocal()
+    try:
+        snapshot = get_task_runtime_status(session, task_id, admin_user.id)
+        assert snapshot is not None
+        assert snapshot.runtime_status == "idle"
+        assert str(snapshot.latest_run_id) != stopped_run_id
+    finally:
+        session.close()

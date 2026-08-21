@@ -218,7 +218,7 @@ describe('RunDetail retry controls', () => {
         display_code: 'AVSA-257',
         display_source_name: '真实电影名',
         item_data: { code: 'AVSA-257', source_name: '真实电影名' },
-      } as any],
+      } as never],
       total: 1,
       summary: {
         total: 1,

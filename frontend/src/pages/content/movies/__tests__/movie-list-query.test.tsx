@@ -22,9 +22,9 @@ function wrapper({ children }: PropsWithChildren) {
 
 describe('useMovieList', () => {
   it('loads movie list through a query keyed by filters and pagination', async () => {
-    vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0 } as any)
+    vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0 } as never)
 
-    const { result } = renderHook(() => useMovieList({ search: 'abc' } as any), { wrapper })
+    const { result } = renderHook(() => useMovieList({ search: 'abc' } as never), { wrapper })
 
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.data).toEqual({ items: [], total: 0 })

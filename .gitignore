@@ -47,6 +47,7 @@ logs/
 **/*.test.*
 **/*.spec.*
 backend/tests/*.py
+frontend/tests
 
 # Test coverage
 coverage/

@@ -1,14 +1,13 @@
-// @ts-nocheck - test file, uses require('react') inside hoisted mock factory
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as React from 'react'
 import { ThemeModeToggle } from './index'
 import { useThemeStore } from '@/stores/useThemeStore'
 
 vi.mock('@theme-toggles/react/styles/classic.css', () => ({}))
 
 vi.mock('@theme-toggles/react', () => {
-  const React = require('react')
   const Classic = React.forwardRef<HTMLButtonElement, Record<string, unknown>>(
     (props, ref) => {
       const className = props.className

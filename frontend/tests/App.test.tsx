@@ -1,9 +1,9 @@
-// @ts-nocheck — test file, router types are complex; functionality is what matters
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { createMemoryHistory } from '@tanstack/react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
+import * as React from 'react'
 import { router as baseRouter } from '../src/routes'
 import { queryClient } from '../src/lib/query-client'
 import App from '../src/App'
@@ -21,9 +21,8 @@ vi.mock('@/api/init', () => ({
 vi.mock('@theme-toggles/react/styles/classic.css', () => ({}))
 
 vi.mock('@theme-toggles/react', () => {
-  const { createElement } = require('react')
   const Classic = ({ className, 'aria-label': ariaLabel, onClick, ...props }: Record<string, unknown>) =>
-    createElement('button', { className, 'aria-label': ariaLabel, onClick, type: 'button', ...props })
+    React.createElement('button', { className, 'aria-label': ariaLabel, onClick, type: 'button', ...props })
   return { Classic }
 })
 

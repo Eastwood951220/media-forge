@@ -47,7 +47,7 @@ vi.mock('@tanstack/react-router', () => ({
 describe('StorageTaskListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(listStorageMainTasks).mockResolvedValue({ rows: [], page: 1, size: 20, has_more: false } as any)
+    vi.mocked(listStorageMainTasks).mockResolvedValue({ rows: [], page: 1, size: 20, has_more: false } as never)
   })
 
   it('renders storage task list heading', () => {
@@ -76,8 +76,8 @@ describe('StorageTaskListPage', () => {
         page: 1,
         size: 20,
         has_more: false,
-      } as any)
-      .mockResolvedValueOnce({ rows: [], page: 1, size: 20, has_more: false } as any)
+      } as never)
+      .mockResolvedValueOnce({ rows: [], page: 1, size: 20, has_more: false } as never)
 
     render(<StorageTaskListPage />, { wrapper })
 
@@ -133,7 +133,7 @@ describe('StorageTaskListPage', () => {
       page: 1,
       size: 20,
       has_more: false,
-    } as any)
+    } as never)
 
     render(<StorageTaskListPage />, { wrapper })
 

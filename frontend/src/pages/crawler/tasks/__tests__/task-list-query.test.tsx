@@ -37,7 +37,7 @@ describe('useTaskListData', () => {
   })
 
   it('loads static task rows with one list request and reads runtime from the store', async () => {
-    vi.mocked(getCrawlTasks).mockResolvedValue({ rows: [taskRow], total: 1, page: 1, size: 20 } as any)
+    vi.mocked(getCrawlTasks).mockResolvedValue({ rows: [taskRow], total: 1, page: 1, size: 20 } as never)
     useCrawlerRuntimeStore.getState().replaceTaskRuntimeSnapshot({
       tasks: [{ task_id: taskRow.id, runtime_status: 'running', latest_run_id: 'run-1', last_run_at: null, state_updated_at: '2026-08-13T09:00:00Z' }],
       stats: { total: 1, idle: 0, running: 1, queued: 0, stopped: 0 },
