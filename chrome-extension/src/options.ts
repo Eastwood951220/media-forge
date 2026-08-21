@@ -3,6 +3,7 @@ import type { AgentLocalDiagnostic, AgentLocalStatus } from './protocol'
 const backendUrl = document.querySelector<HTMLInputElement>('#backendUrl')
 const token = document.querySelector<HTMLInputElement>('#token')
 const save = document.querySelector<HTMLButtonElement>('#save')
+const reconnect = document.querySelector<HTMLButtonElement>('#reconnect')
 const connectionStatus = document.querySelector<HTMLElement>('#connectionStatus')
 const statusUpdatedAt = document.querySelector<HTMLElement>('#statusUpdatedAt')
 const latestError = document.querySelector<HTMLElement>('#latestError')
@@ -40,17 +41,28 @@ chrome.storage.sync.get(['backendUrl', 'token']).then((data) => {
 
 load()
 
+async function requestReconnect(successMessage: string) {
+  if (connectionStatus) connectionStatus.textContent = 'Reconnecting...'
+  try {
+    await chrome.runtime.sendMessage({ type: 'agent_reconnect_requested' })
+    if (connectionStatus) connectionStatus.textContent = successMessage
+  } catch (error) {
+    if (connectionStatus) {
+      connectionStatus.textContent = error instanceof Error
+        ? error.message
+        : 'Reconnect requested. Reload extension if needed.'
+    }
+  }
+}
+
 save?.addEventListener('click', async () => {
   await chrome.storage.sync.set({
     backendUrl: backendUrl?.value ?? '',
     token: token?.value ?? '',
   })
-  try {
-    await chrome.runtime.sendMessage({ type: 'agent_settings_saved' })
-    if (connectionStatus) connectionStatus.textContent = 'Saved. Agent is reconnecting.'
-  } catch (error) {
-    if (connectionStatus) {
-      connectionStatus.textContent = error instanceof Error ? error.message : 'Saved. Reload extension if needed.'
-    }
-  }
+  await requestReconnect('Saved. Agent is reconnecting.')
+})
+
+reconnect?.addEventListener('click', async () => {
+  await requestReconnect('Reconnect requested.')
 })

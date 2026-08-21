@@ -4,6 +4,10 @@
   "version": "0.2.0",
   "permissions": ["storage", "cookies", "tabs", "scripting"],
   "host_permissions": ["https://javdb.com/*", "https://*.javdb.com/*", "http://*/*", "https://*/*"],
+  "action": {
+    "default_title": "Media Forge Agent",
+    "default_popup": "popup.html"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

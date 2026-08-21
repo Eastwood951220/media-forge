@@ -118,7 +118,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 })
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type !== 'agent_settings_saved') return false
+  if (message?.type !== 'agent_settings_saved' && message?.type !== 'agent_reconnect_requested') {
+    return false
+  }
   void client.settingsChanged().then(() => sendResponse({ ok: true }))
   return true
 })
