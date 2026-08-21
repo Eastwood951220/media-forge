@@ -89,6 +89,7 @@ export default function TaskFormPage() {
   useEffect(() => {
     if (!isEdit || !taskId) return
     form.resetFields()
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset edit flags before loading the task row.
     setStorageLocationManuallyEdited(false)
     setLoading(true)
     getCrawlTask(taskId)

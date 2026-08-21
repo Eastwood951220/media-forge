@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Collapse, Tag, Typography } from 'antd'
 import type { AgentEvent } from '@/api/crawler/crawlerAgent/types'
+import styles from '../RunDetailPage.module.less'
 
 const eventLabels: Record<string, string> = {
   'work.created': '创建列表任务',
@@ -46,6 +47,26 @@ function eventLabel(event: AgentEvent): string {
   return eventLabels[event.event_type] ?? event.message
 }
 
+function eventTone(event: AgentEvent): string {
+  if (event.level === 'error' || event.event_type.includes('failed') || event.event_type.includes('timeout')) {
+    return styles.timelineItemError
+  }
+  if (event.level === 'warning' || event.event_type.includes('requeued')) {
+    return styles.timelineItemWarning
+  }
+  if (event.event_type.includes('completed') || event.event_type.includes('loaded') || event.event_type.includes('collected')) {
+    return styles.timelineItemSuccess
+  }
+  return styles.timelineItemInfo
+}
+
+function statusColor(status: string): string {
+  if (status === 'failed') return 'red'
+  if (status === 'completed') return 'green'
+  if (!status) return 'default'
+  return 'processing'
+}
+
 interface AgentExecutionTimelineProps {
   events: AgentEvent[]
   workItemId: string
@@ -81,18 +102,22 @@ export default function AgentExecutionTimeline({
     return errorMessages[errorReason] ?? errorReason
   }, [errorReason])
 
+  const title = pageKind === 'list' ? '列表页' : pageKind === 'detail' ? '详情页' : '运行级事件'
+
   return (
-    <div>
-      <div style={{ marginBottom: 8 }}>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {pageKind === 'list' ? '列表页' : '详情页'} ·{' '}
-          <Typography.Text code>{url}</Typography.Text>
-        </Typography.Text>
-        <div style={{ marginTop: 4 }}>
-          <Tag color="blue">尝试 {attempt} / {maxAttempts}</Tag>
-          <Tag color={status === 'failed' ? 'red' : status === 'completed' ? 'green' : 'processing'}>
+    <div className={styles.agentTimeline}>
+      <div className={styles.agentTimelineHeader}>
+        <div className={styles.agentTimelineTitleRow}>
+          <Typography.Text strong>{title}</Typography.Text>
+          {url && <Typography.Text code className={styles.agentTimelineUrl}>{url}</Typography.Text>}
+        </div>
+        <div className={styles.agentTimelineTags}>
+          {attempt > 0 && <Tag color="blue">尝试 {attempt} / {maxAttempts}</Tag>}
+          {status && (
+            <Tag color={statusColor(status)}>
             {status}
-          </Tag>
+            </Tag>
+          )}
           {terminalError && <Tag color="red">{terminalError}</Tag>}
         </div>
       </div>
@@ -104,13 +129,13 @@ export default function AgentExecutionTimeline({
             key: 'tech',
             label: '技术详情',
             children: (
-              <div>
-                <p style={{ margin: 0 }}>
+              <div className={styles.agentTechDetails}>
+                <p>
                   work_item_id: <Typography.Text code>{workItemId}</Typography.Text>
                 </p>
-                <p style={{ margin: 0 }}>耗时: {formatElapsed(startedAt, finishedAt)}</p>
+                <p>耗时: {formatElapsed(startedAt, finishedAt) || '-'}</p>
                 {ordered.map((event) => (
-                  <div key={event.id} style={{ marginTop: 8, fontSize: 12 }}>
+                  <div key={event.id} className={styles.agentTechEvent}>
                     <div>
                       {event.event_type} · {event.source} · attempt {event.attempt ?? '-'}
                     </div>
@@ -129,19 +154,31 @@ export default function AgentExecutionTimeline({
         ]}
       />
 
-      <ul style={{ paddingLeft: 20, marginTop: 12, marginBottom: 0 }}>
+      <ol className={styles.timelineList}>
         {ordered.map((event) => (
-          <li key={event.id} style={{ marginBottom: 8 }}>
-            <div>
-              <Typography.Text>{eventLabel(event)}</Typography.Text>
-              <Typography.Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
-                {formatTime(event.created_at)}
-              </Typography.Text>
+          <li key={event.id} className={`${styles.timelineItem} ${eventTone(event)}`}>
+            <span className={styles.timelineRail} aria-hidden="true" />
+            <div className={styles.timelineContent}>
+              <div className={styles.timelineMain}>
+                <Typography.Text strong className={styles.timelineEventLabel}>
+                  {eventLabel(event)}
+                </Typography.Text>
+                <Typography.Text type="secondary" className={styles.timelineTime}>
+                  {formatTime(event.created_at)}
+                </Typography.Text>
+              </div>
+              <div className={styles.timelineMeta}>
+                <Tag className={styles.timelineTag}>{event.source}</Tag>
+                <Tag className={styles.timelineTag}>
+                  {event.level === 'error' ? '错误' : event.level === 'warning' ? '警告' : '信息'}
+                </Tag>
+                {event.attempt != null && <Tag className={styles.timelineTag}>attempt {event.attempt}</Tag>}
+                {event.level === 'warning' && <Tag color="orange" className={styles.timelineTag}>重试</Tag>}
+              </div>
             </div>
-            {event.level === 'warning' && <Tag color="orange" style={{ marginTop: 4 }}>重试</Tag>}
           </li>
         ))}
-      </ul>
+      </ol>
     </div>
   )
 }

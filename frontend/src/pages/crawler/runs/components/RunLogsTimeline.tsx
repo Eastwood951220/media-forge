@@ -26,6 +26,7 @@ function formatTime(value: string) {
 function RunLogsTimeline({ logs, isActive, loading = false }: RunLogsTimelineProps) {
   const parentRef = useRef<HTMLDivElement | null>(null)
   const orderedLogs = useMemo(() => logs.slice().reverse(), [logs])
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual returns non-memoizable functions by design.
   const virtualizer = useVirtualizer({
     count: orderedLogs.length,
     getScrollElement: () => parentRef.current,

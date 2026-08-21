@@ -1,9 +1,8 @@
 .configLayout {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) 800px;
-  gap: 24px;
-  align-items: start;
-  padding: 24px;
+  grid-template-columns: minmax(0, 2fr) minmax(420px, 1fr);
+  gap: 20px;
+  align-items: stretch;
 }
 
 .configLeft,
@@ -11,15 +10,49 @@
   min-width: 0;
 }
 
+.configLeft {
+  display: flex;
+
+  :global(.ant-form) {
+    display: flex;
+    width: 100%;
+  }
+}
+
+.configRight {
+  display: flex;
+}
+
 .formCard {
   width: 100%;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.configLeft .formCard,
+.agentCard {
+  height: 100%;
+}
+
+.agentCard {
+  display: flex;
+  flex-direction: column;
+
+  :global(.ant-card-body) {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+.cookieCard {
+  grid-column: 2;
 }
 
 // Form Sections
 .formSection {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 
   &:last-child {
     margin-bottom: 0;
@@ -52,8 +85,8 @@
 
 .formGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 4px 18px;
 }
 
 // Cookie Actions
@@ -94,11 +127,67 @@
 
 // Agent Health Card
 .agentHealthCard {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.agentStatsActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 20px;
+  margin-top: 16px;
+}
+
+.agentStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+}
+
+.agentActions {
+  display: flex;
+  flex: 1 1 260px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
   min-width: 0;
 }
 
 .agentEventList {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   margin-top: 16px;
+  min-height: 0;
+}
+
+.agentEventFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.agentEventFilterSelect {
+  width: 120px;
+}
+
+.agentEventViewport {
+  flex: 1;
+  max-height: 360px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.agentEventLoadMore {
+  margin-top: 8px;
 }
 
 .agentEventEmpty {
@@ -181,11 +270,22 @@
 @media (max-width: 960px) {
   .configLayout {
     grid-template-columns: 1fr;
-    padding: 16px;
+  }
+
+  .cookieCard {
+    grid-column: auto;
   }
 }
 
 @media (max-width: 640px) {
+  .agentStatsActions {
+    align-items: stretch;
+  }
+
+  .agentActions {
+    justify-content: flex-start;
+  }
+
   .formGrid {
     grid-template-columns: 1fr;
   }

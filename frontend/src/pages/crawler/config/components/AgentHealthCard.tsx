@@ -4,7 +4,6 @@ import {
   Button,
   Descriptions,
   Popconfirm,
-  Space,
   Statistic,
   Tag,
   Typography,
@@ -124,10 +123,38 @@ export default function AgentHealthCard() {
         </Descriptions.Item>
       </Descriptions>
 
-      <Space style={{ marginTop: 12 }} size={16}>
-        <Statistic title="待领取" value={counters.pending} />
-        <Statistic title="执行中" value={counters.active} />
-      </Space>
+      <div className={styles.agentStatsActions}>
+        <div className={styles.agentStats}>
+          <Statistic title="待领取" value={counters.pending} />
+          <Statistic title="执行中" value={counters.active} />
+        </div>
+
+        <div className={styles.agentActions}>
+          <Button onClick={refresh} loading={statusLoading}>
+            刷新状态
+          </Button>
+          <Popconfirm
+            title="重新生成 Agent Token？"
+            description="重新生成后旧 Token 将失效。"
+            okText="确定"
+            cancelText="取消"
+            onConfirm={() => handleRotateToken()}
+          >
+            <Button danger loading={tokenRotating}>
+              生成 Agent Token
+            </Button>
+          </Popconfirm>
+          <Popconfirm
+            title="清理近期诊断日志？"
+            description="仅清理 7 天内的操作日志，运行审计日志会保留。"
+            onConfirm={handleClear}
+          >
+            <Button danger loading={clearLoading}>
+              清理近期日志
+            </Button>
+          </Popconfirm>
+        </div>
+      </div>
 
       {agentToken && (
         <Alert
@@ -142,32 +169,6 @@ export default function AgentHealthCard() {
           }
         />
       )}
-
-      <Space style={{ marginTop: 12 }}>
-        <Button onClick={refresh} loading={statusLoading}>
-          刷新状态
-        </Button>
-        <Popconfirm
-          title="重新生成 Agent Token？"
-          description="重新生成后旧 Token 将失效。"
-          okText="确定"
-          cancelText="取消"
-          onConfirm={() => handleRotateToken()}
-        >
-          <Button danger loading={tokenRotating}>
-            生成 Agent Token
-          </Button>
-        </Popconfirm>
-        <Popconfirm
-          title="清理近期诊断日志？"
-          description="仅清理 7 天内的操作日志，运行审计日志会保留。"
-          onConfirm={handleClear}
-        >
-          <Button danger loading={clearLoading}>
-            清理近期日志
-          </Button>
-        </Popconfirm>
-      </Space>
 
       <AgentEventList
         events={events}

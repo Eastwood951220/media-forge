@@ -1,5 +1,6 @@
-import { Button, Empty, List, Select, Space, Spin } from 'antd'
+import { Button, Empty, List, Select, Spin } from 'antd'
 import type { AgentEvent } from '@/api/crawler/crawlerAgent/types'
+import { formatDateTime } from '@/utils/datetime'
 import styles from '../ConfigPage.module.less'
 
 interface AgentEventListProps {
@@ -12,11 +13,6 @@ interface AgentEventListProps {
   hasNextPage: boolean
   fetchNextPage: () => void
   loadingMore: boolean
-}
-
-function formatTime(iso: string): string {
-  const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString()
 }
 
 export default function AgentEventList({
@@ -32,11 +28,11 @@ export default function AgentEventList({
 }: AgentEventListProps) {
   return (
     <div className={styles.agentEventList}>
-      <Space style={{ marginBottom: 8 }} wrap>
+      <div className={styles.agentEventFilters}>
         <Select
           allowClear
           placeholder="日志级别"
-          style={{ width: 120 }}
+          className={styles.agentEventFilterSelect}
           value={levelFilter}
           onChange={(value) => onLevelFilterChange(value ?? undefined)}
           options={[
@@ -48,7 +44,7 @@ export default function AgentEventList({
         <Select
           allowClear
           placeholder="来源"
-          style={{ width: 120 }}
+          className={styles.agentEventFilterSelect}
           value={sourceFilter}
           onChange={(value) => onSourceFilterChange(value ?? undefined)}
           options={[
@@ -56,37 +52,39 @@ export default function AgentEventList({
             { value: 'extension', label: '扩展' },
           ]}
         />
-      </Space>
+      </div>
 
-      {loading && events.length === 0 ? (
-        <div className={styles.agentEventEmpty}>
-          <Spin size="small" />
-        </div>
-      ) : events.length === 0 ? (
-        <Empty description="暂无诊断日志" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-      ) : (
-        <List
-          size="small"
-          dataSource={events}
-          renderItem={(item) => (
-            <List.Item>
-              <div className={styles.agentEventRow}>
-                <span className={styles.agentEventTime}>{formatTime(item.created_at)}</span>
-                <span className={styles.agentEventLevel}>
-                  {item.level === 'error' ? '错误' : item.level === 'warning' ? '警告' : '信息'}
-                </span>
-                <span className={styles.agentEventMessage}>{item.message}</span>
-              </div>
-            </List.Item>
-          )}
-        />
-      )}
+      <div className={styles.agentEventViewport}>
+        {loading && events.length === 0 ? (
+          <div className={styles.agentEventEmpty}>
+            <Spin size="small" />
+          </div>
+        ) : events.length === 0 ? (
+          <Empty description="暂无诊断日志" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : (
+          <List
+            size="small"
+            dataSource={events}
+            renderItem={(item) => (
+              <List.Item>
+                <div className={styles.agentEventRow}>
+                  <span className={styles.agentEventTime}>{formatDateTime(item.created_at)}</span>
+                  <span className={styles.agentEventLevel}>
+                    {item.level === 'error' ? '错误' : item.level === 'warning' ? '警告' : '信息'}
+                  </span>
+                  <span className={styles.agentEventMessage}>{item.message}</span>
+                </div>
+              </List.Item>
+            )}
+          />
+        )}
 
-      {hasNextPage && (
-        <Button block onClick={fetchNextPage} loading={loadingMore} style={{ marginTop: 8 }}>
-          查看更多
-        </Button>
-      )}
+        {hasNextPage && (
+          <Button block onClick={fetchNextPage} loading={loadingMore} className={styles.agentEventLoadMore}>
+            查看更多
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

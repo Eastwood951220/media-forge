@@ -7,10 +7,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { deleteCrawlerRun, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawler/crawlerRun'
 import type { CrawlRun } from '@/api/crawler/crawlerRun/types'
 import { queryKeys } from '@/api/queryKeys'
+import { invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
+import { StatusTag } from '@/components/common'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import { subscribeRealtime } from '@/realtime/eventSourceClient'
 import { useRouteActivationRefresh } from '@/hooks/useRouteActivationRefresh'
 import type { CrawlRunStatus } from '@/api/crawler/crawlerRun/types'
+import styles from './RunListPage.module.less'
 
 const statusLabels: Record<string, { text: string; color: string }> = {
   queued: { text: '排队中', color: 'default' },
@@ -173,11 +176,12 @@ function RunListPage() {
     }
 
     removeRunRuntime(run.id)
+    await invalidateCrawlerTaskLists(queryClient)
     if (nextPage !== current) {
       setCurrent(nextPage)
     }
     message.success('已删除运行记录')
-  }, [current, refreshRuns, removeRunRuntime, runs.length])
+  }, [current, queryClient, refreshRuns, removeRunRuntime, runs.length])
 
   const columns: ColumnsType<CrawlRun> = [
     {
@@ -198,19 +202,13 @@ function RunListPage() {
       dataIndex: 'status',
       key: 'status',
       width: 120,
-      render: (status: string) => {
-        const { text, color } = statusLabels[status] || { text: status, color: 'default' }
-        return (
-          <Tag
-            color={color}
-            style={{
-              animation: status === 'running' ? 'statusPulse 2s ease-in-out infinite' : undefined,
-            }}
-          >
-            {text}
-          </Tag>
-        )
-      },
+      render: (status: string) => (
+        <StatusTag
+          status={status}
+          labels={statusLabels}
+          className={status === 'running' ? styles.statusRunning : undefined}
+        />
+      ),
     },
     {
       title: '模式',
@@ -296,12 +294,7 @@ function RunListPage() {
   ]
 
   return (
-    <Card
-      style={{
-        borderRadius: 12,
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-      }}
-    >
+    <Card className={styles.runListCard}>
       <Table
         rowKey="id"
         columns={columns}

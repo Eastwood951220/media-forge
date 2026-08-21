@@ -1,6 +1,6 @@
 import AnimatedNumber from '@/components/AnimatedNumber'
+import { MetricGrid } from '@/components/common'
 import type { RunTaskSummary } from '@/api/crawler/crawlerRun/types'
-import styles from '../RunDetailPage.module.less'
 
 interface RunTaskSummaryMetricsProps {
   summary: RunTaskSummary
@@ -8,22 +8,40 @@ interface RunTaskSummaryMetricsProps {
 
 function RunTaskSummaryMetrics({ summary }: RunTaskSummaryMetricsProps) {
   return (
-    <div className={styles.summaryMetrics}>
-      {[
-        ['总数', summary.total, styles.metricTotal],
-        ['完成', summary.completed, styles.metricCompleted],
-        ['等待', summary.waiting, styles.metricWaiting],
-        ['跳过', summary.skipped, styles.metricSkipped],
-        ['失败', summary.failed, styles.metricFailed],
-      ].map(([label, value, className]) => (
-        <div key={label} className={`${styles.metricTile} ${className}`}>
-          <div className={styles.metricLabel}>{label}</div>
-          <div className={styles.metricValue}>
-            <AnimatedNumber value={Number(value)} duration={1.5} separator="," />
-          </div>
-        </div>
-      ))}
-    </div>
+    <MetricGrid
+      items={[
+        {
+          key: 'total',
+          label: '总数',
+          value: <AnimatedNumber value={Number(summary.total)} duration={1.5} separator="," />,
+          tone: 'default',
+        },
+        {
+          key: 'completed',
+          label: '完成',
+          value: <AnimatedNumber value={Number(summary.completed)} duration={1.5} separator="," />,
+          tone: 'success',
+        },
+        {
+          key: 'waiting',
+          label: '等待',
+          value: <AnimatedNumber value={Number(summary.waiting)} duration={1.5} separator="," />,
+          tone: 'info',
+        },
+        {
+          key: 'skipped',
+          label: '跳过',
+          value: <AnimatedNumber value={Number(summary.skipped)} duration={1.5} separator="," />,
+          tone: 'warning',
+        },
+        {
+          key: 'failed',
+          label: '失败',
+          value: <AnimatedNumber value={Number(summary.failed)} duration={1.5} separator="," />,
+          tone: 'danger',
+        },
+      ]}
+    />
   )
 }
 

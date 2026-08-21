@@ -1,4 +1,6 @@
-import { Button, Card, Empty, Space, Tag, Typography } from 'antd'
+import { useState } from 'react'
+import { DownOutlined, UpOutlined } from '@ant-design/icons'
+import { Button, Card, Empty } from 'antd'
 import { useRunAgentDiagnostics } from '../hooks/useRunAgentDiagnostics'
 import AgentExecutionTimeline from './AgentExecutionTimeline'
 import styles from '../RunDetailPage.module.less'
@@ -6,6 +8,7 @@ import styles from '../RunDetailPage.module.less'
 const MAX_ATTEMPTS = 3
 
 export default function AgentExecutionCard({ runId }: { runId: string | undefined }) {
+  const [expanded, setExpanded] = useState(true)
   const {
     summary,
     timelines,
@@ -25,60 +28,81 @@ export default function AgentExecutionCard({ runId }: { runId: string | undefine
       title="Agent 执行时间线"
       className={styles.agentExecutionCard}
       loading={loading}
+      extra={
+        <Button
+          type="text"
+          size="small"
+          icon={expanded ? <UpOutlined /> : <DownOutlined />}
+          aria-label={expanded ? '收起 Agent 执行时间线' : '展开 Agent 执行时间线'}
+          onClick={() => setExpanded((value) => !value)}
+        />
+      }
     >
-      <Space style={{ marginBottom: 16 }} size={12} wrap>
-        <Tag color="default">待领取 {summary.pending}</Tag>
-        <Tag color="processing">执行中 {summary.active}</Tag>
-        <Tag color="success">已完成 {summary.completed}</Tag>
-        <Tag color="error">失败 {summary.failed}</Tag>
-      </Space>
+      <div className={styles.agentTimelineSummary}>
+        <div className={`${styles.agentTimelineMetric} ${styles.agentTimelineMetricPending}`}>
+          <span className={styles.agentTimelineMetricLabel}>待领取</span>
+          <span className={styles.agentTimelineMetricValue}>{summary.pending}</span>
+        </div>
+        <div className={`${styles.agentTimelineMetric} ${styles.agentTimelineMetricActive}`}>
+          <span className={styles.agentTimelineMetricLabel}>执行中</span>
+          <span className={styles.agentTimelineMetricValue}>{summary.active}</span>
+        </div>
+        <div className={`${styles.agentTimelineMetric} ${styles.agentTimelineMetricCompleted}`}>
+          <span className={styles.agentTimelineMetricLabel}>已完成</span>
+          <span className={styles.agentTimelineMetricValue}>{summary.completed}</span>
+        </div>
+        <div className={`${styles.agentTimelineMetric} ${styles.agentTimelineMetricFailed}`}>
+          <span className={styles.agentTimelineMetricLabel}>失败</span>
+          <span className={styles.agentTimelineMetricValue}>{summary.failed}</span>
+        </div>
+      </div>
 
-      {timelines.length === 0 ? (
-        <Empty description="暂无 Agent 执行记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-      ) : (
-        timelines.map((timeline) =>
-          timeline.workItem ? (
-            <AgentExecutionTimeline
-              key={timeline.workItem.id}
-              events={timeline.events}
-              workItemId={timeline.workItem.id}
-              url={timeline.workItem.url}
-              pageKind={timeline.workItem.page_kind}
-              status={timeline.workItem.status}
-              attempt={timeline.workItem.attempt}
-              maxAttempts={MAX_ATTEMPTS}
-              errorReason={timeline.workItem.error_reason}
-              startedAt={timeline.workItem.started_at}
-              finishedAt={timeline.workItem.finished_at}
-            />
-          ) : (
-            <div key="unscoped" style={{ marginBottom: 16 }}>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                运行级事件
-              </Typography.Text>
-              <AgentExecutionTimeline
-                events={timeline.events}
-                workItemId="-"
-                url=""
-                pageKind=""
-                status=""
-                attempt={0}
-                maxAttempts={MAX_ATTEMPTS}
-                errorReason={null}
-                startedAt={null}
-                finishedAt={null}
-              />
-            </div>
-          ),
+      {expanded && (
+        timelines.length === 0 ? (
+          <Empty description="暂无 Agent 执行记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : (
+          <div className={styles.agentTimelineGroup}>
+            {timelines.map((timeline) =>
+              timeline.workItem ? (
+                <AgentExecutionTimeline
+                  key={timeline.workItem.id}
+                  events={timeline.events}
+                  workItemId={timeline.workItem.id}
+                  url={timeline.workItem.url}
+                  pageKind={timeline.workItem.page_kind}
+                  status={timeline.workItem.status}
+                  attempt={timeline.workItem.attempt}
+                  maxAttempts={MAX_ATTEMPTS}
+                  errorReason={timeline.workItem.error_reason}
+                  startedAt={timeline.workItem.started_at}
+                  finishedAt={timeline.workItem.finished_at}
+                />
+              ) : (
+                <AgentExecutionTimeline
+                  key="unscoped"
+                  events={timeline.events}
+                  workItemId="-"
+                  url=""
+                  pageKind=""
+                  status=""
+                  attempt={0}
+                  maxAttempts={MAX_ATTEMPTS}
+                  errorReason={null}
+                  startedAt={null}
+                  finishedAt={null}
+                />
+              ),
+            )}
+          </div>
         )
       )}
 
-      {hasNextPage && (
+      {expanded && hasNextPage && (
         <Button
           block
           onClick={() => void fetchNextPage()}
           loading={loadingMore}
-          style={{ marginTop: 12 }}
+          className={styles.agentTimelineLoadMore}
         >
           加载更多
         </Button>

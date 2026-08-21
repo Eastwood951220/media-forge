@@ -1,30 +1,273 @@
 .page {
-  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sectionCard {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.agentExecutionCard {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.agentTimelineSummary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.agentTimelineMetric {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  border: 1px solid var(--agent-metric-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--agent-metric-bg, #fff);
+  padding: 14px 16px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--agent-metric-accent, #94a3b8);
+  }
+}
+
+.agentTimelineMetricLabel {
+  display: block;
+  color: var(--agent-metric-label, #64748b);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.agentTimelineMetricValue {
+  display: block;
+  margin-top: 6px;
+  color: var(--agent-metric-value, #0f172a);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 36px;
+  font-variant-numeric: tabular-nums;
+}
+
+.agentTimelineMetricPending {
+  --agent-metric-bg: #f8fafc;
+  --agent-metric-border: #e2e8f0;
+  --agent-metric-accent: #94a3b8;
+}
+
+.agentTimelineMetricActive {
+  --agent-metric-bg: #eff6ff;
+  --agent-metric-border: #bfdbfe;
+  --agent-metric-accent: #3b82f6;
+}
+
+.agentTimelineMetricCompleted {
+  --agent-metric-bg: #f0fdf4;
+  --agent-metric-border: #bbf7d0;
+  --agent-metric-accent: #22c55e;
+}
+
+.agentTimelineMetricFailed {
+  --agent-metric-bg: #fef2f2;
+  --agent-metric-border: #fecaca;
+  --agent-metric-accent: #ef4444;
+}
+
+.agentTimelineGroup {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.agentExecutionCard {
-  width: 100%;
+.agentTimeline {
+  border: 1px solid var(--agent-timeline-border, rgba(148, 163, 184, 0.24));
+  border-radius: 14px;
+  background: var(--agent-timeline-bg, linear-gradient(180deg, #fff 0%, #f8fafc 100%));
+  padding: 16px;
+}
+
+.agentTimelineHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.agentTimelineTitleRow {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agentTimelineUrl {
+  max-width: min(720px, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentTimelineTags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.agentTechDetails {
+  font-size: 12px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.agentTechEvent {
+  margin-top: 8px;
+}
+
+.timelineList {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timelineItem {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.timelineRail {
+  position: relative;
+  display: block;
+  min-height: 100%;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    bottom: -14px;
+    left: 8px;
+    width: 2px;
+    background: var(--timeline-line, #e5e7eb);
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--timeline-dot, #3b82f6);
+    box-shadow: 0 0 0 4px var(--timeline-dot-ring, #dbeafe);
+  }
+}
+
+.timelineItem:last-child .timelineRail::before {
+  display: none;
+}
+
+.timelineContent {
+  min-width: 0;
+  border: 1px solid var(--timeline-card-border, rgba(148, 163, 184, 0.22));
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: var(--timeline-card-bg, #fff);
+  padding: 10px 12px;
+}
+
+.timelineMain {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.timelineEventLabel {
+  min-width: 0;
+}
+
+.timelineTime {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timelineMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.timelineTag {
+  margin-inline-end: 0;
+}
+
+.timelineItemInfo {
+  --timeline-dot: #3b82f6;
+  --timeline-dot-ring: #dbeafe;
+}
+
+.timelineItemSuccess {
+  --timeline-dot: #16a34a;
+  --timeline-dot-ring: #dcfce7;
+}
+
+.timelineItemWarning {
+  --timeline-dot: #d97706;
+  --timeline-dot-ring: #fef3c7;
+}
+
+.timelineItemError {
+  --timeline-dot: #dc2626;
+  --timeline-dot-ring: #fee2e2;
+  --timeline-card-border: rgba(248, 113, 113, 0.34);
+}
+
+.agentTimelineLoadMore {
+  margin-top: 14px;
 }
 
 // Summary Metrics Section
-.taskTableHeader {
+.taskTableToolbarRow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 16px;
 }
 
 .summaryMetrics {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
   gap: 12px;
+  width: 100%;
 }
 
 .metricTile {
@@ -129,8 +372,10 @@
 .filterSection {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .filterControls {
@@ -232,6 +477,66 @@
 
 // Dark Mode Support
 :global([data-theme='dark']) {
+  .agentTimeline {
+    --agent-timeline-border: rgba(148, 163, 184, 0.2);
+    --agent-timeline-bg: linear-gradient(180deg, #111827 0%, #0f172a 100%);
+  }
+
+  .agentTimelineMetric {
+    --agent-metric-label: #cbd5e1;
+    --agent-metric-value: #f8fafc;
+  }
+
+  .agentTimelineMetricPending {
+    --agent-metric-bg: #111827;
+    --agent-metric-border: #334155;
+    --agent-metric-accent: #94a3b8;
+  }
+
+  .agentTimelineMetricActive {
+    --agent-metric-bg: #172554;
+    --agent-metric-border: #1e40af;
+    --agent-metric-accent: #3b82f6;
+  }
+
+  .agentTimelineMetricCompleted {
+    --agent-metric-bg: #052e16;
+    --agent-metric-border: #166534;
+    --agent-metric-accent: #22c55e;
+  }
+
+  .agentTimelineMetricFailed {
+    --agent-metric-bg: #450a0a;
+    --agent-metric-border: #991b1b;
+    --agent-metric-accent: #ef4444;
+  }
+
+  .timelineRail {
+    --timeline-line: #374151;
+  }
+
+  .timelineContent {
+    --timeline-card-bg: #111827;
+    --timeline-card-border: rgba(148, 163, 184, 0.2);
+  }
+
+  .timelineItemInfo {
+    --timeline-dot-ring: rgba(59, 130, 246, 0.18);
+  }
+
+  .timelineItemSuccess {
+    --timeline-dot-ring: rgba(34, 197, 94, 0.18);
+  }
+
+  .timelineItemWarning {
+    --timeline-dot-ring: rgba(245, 158, 11, 0.2);
+  }
+
+  .timelineItemError {
+    --timeline-dot-ring: rgba(239, 68, 68, 0.2);
+    --timeline-card-border: rgba(248, 113, 113, 0.3);
+  }
+
   .metricTotal {
     --metric-bg: #1f2937;
     --metric-border: #374151;
@@ -297,16 +602,30 @@
 // Responsive
 @media (max-width: 768px) {
   .page {
-    padding: 16px;
+    gap: 16px;
   }
 
-  .taskTableHeader {
+  .agentTimelineHeader,
+  .timelineMain {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .agentTimelineTags {
+    justify-content: flex-start;
+  }
+
+  .agentTimelineSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .taskTableToolbarRow {
     flex-direction: column;
     align-items: flex-start;
   }
 
   .summaryMetrics {
-    width: 100%;
+    grid-template-columns: repeat(5, minmax(96px, 1fr));
     overflow-x: auto;
     padding-bottom: 8px;
   }
@@ -328,6 +647,11 @@
 
   .filterControls {
     width: 100%;
+  }
+
+  .filterControls :global(.ant-select),
+  .filterControls :global(.ant-input-search) {
+    flex: 1 1 180px;
   }
 
   .filterActions {

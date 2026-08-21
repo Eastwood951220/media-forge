@@ -35,6 +35,7 @@ export function useRunDetail(id: string | undefined) {
 
   // Reset state when run ID changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset all detail state when the run id changes.
     setRun(null)
     setLogs([])
     setTasks([])
@@ -183,14 +184,17 @@ export function useRunDetail(id: string | undefined) {
 
   // Initial fetch effects
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial run fetch on mount/param change is intentional.
     void fetchRun()
   }, [fetchRun])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial log fetch on mount/param change is intentional.
     void fetchLogs()
   }, [fetchLogs])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial task fetch on mount/param change is intentional.
     void fetchTasks()
   }, [fetchTasks])
 

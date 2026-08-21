@@ -12,6 +12,7 @@ import { useTaskListRealtime } from './hooks/useTaskListRealtime'
 import { useTaskUrlRun } from './hooks/useTaskUrlRun'
 import { useRouteActivationRefresh } from '@/hooks/useRouteActivationRefresh'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
+import { MetricGrid } from '@/components/common'
 import styles from './TaskPages.module.less'
 
 function TaskListPage() {
@@ -83,27 +84,16 @@ function TaskListPage() {
 
   return (
     <div className={styles.page}>
-      <section className={styles.statsBar} aria-label="任务统计">
-        <div className={styles.statCard}>
-          <span className={styles.statLabel}>总数</span>
-          <span className={styles.statValue}>{taskStats?.total ?? 0}</span>
-        </div>
-        <div className={styles.statCard}>
-          <span className={styles.statLabel}>空闲中</span>
-          <span className={styles.statValue}>{taskStats?.idle ?? 0}</span>
-        </div>
-        <div className={styles.statCard}>
-          <span className={styles.statLabel}>运行中</span>
-          <span className={styles.statValue}>{taskStats?.running ?? 0}</span>
-        </div>
-        <div className={styles.statCard}>
-          <span className={styles.statLabel}>排队中</span>
-          <span className={styles.statValue}>{taskStats?.queued ?? 0}</span>
-        </div>
-        <div className={styles.statCard}>
-          <span className={styles.statLabel}>停止中</span>
-          <span className={styles.statValue}>{taskStats?.stopped ?? 0}</span>
-        </div>
+      <section aria-label="任务统计">
+        <MetricGrid
+          items={[
+            { key: 'total', label: '总数', value: taskStats?.total ?? 0, tone: 'default' },
+            { key: 'idle', label: '空闲中', value: taskStats?.idle ?? 0, tone: 'success' },
+            { key: 'running', label: '运行中', value: taskStats?.running ?? 0, tone: 'info' },
+            { key: 'queued', label: '排队中', value: taskStats?.queued ?? 0, tone: 'warning' },
+            { key: 'stopped', label: '停止中', value: taskStats?.stopped ?? 0, tone: 'danger' },
+          ]}
+        />
       </section>
 
       <section className={styles.panel}>

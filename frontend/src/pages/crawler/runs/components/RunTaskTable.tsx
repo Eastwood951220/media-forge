@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Card, Table } from 'antd'
-import type { CrawlRunDetailTask, RunTaskSummary } from '@/api/crawler/crawlerRun/types'
+import { DownOutlined, UpOutlined } from '@ant-design/icons'
+import { Button, Card, Table } from 'antd'
+import type { CrawlRunDetailTask } from '@/api/crawler/crawlerRun/types'
 import styles from '../RunDetailPage.module.less'
-import RunTaskSummaryMetrics from './RunTaskSummaryMetrics'
 import RunTaskToolbar from './RunTaskToolbar'
 import { createRunTaskColumns } from './runTaskColumns'
 import { confirmRetryAllFailed, confirmRetrySelected, confirmRetryTask } from '../utils/retryConfirm'
@@ -15,7 +15,6 @@ interface RunTaskTableProps {
   pageSize: number
   current: number
   total: number
-  summary: RunTaskSummary
   actionLoading: 'stop' | 'restart' | 'retry' | null
   realtimeReady: boolean
   runStatus: string | undefined
@@ -35,7 +34,6 @@ function RunTaskTable({
   pageSize,
   current,
   total,
-  summary,
   actionLoading,
   realtimeReady,
   runStatus,
@@ -47,6 +45,7 @@ function RunTaskTable({
   onRetryAllFailed,
 }: RunTaskTableProps) {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const [expanded, setExpanded] = useState(true)
   const retryEnabled = runStatus === 'completed' || runStatus === 'failed' || runStatus === 'stopped'
   const failedTasks = useMemo(() => tasks.filter((task) => task.status === 'crawl_failed'), [tasks])
   const selectedFailedIds = selectedRowKeys.map(String)
@@ -64,52 +63,65 @@ function RunTaskTable({
   return (
     <Card
       title="子任务列表"
-      style={{
-        borderRadius: 12,
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-      }}
-    >
-      <div className={styles.taskTableHeader}>
-        <RunTaskSummaryMetrics summary={summary} />
-        <RunTaskToolbar
-          statusFilter={statusFilter}
-          keyword={keyword}
-          retryEnabled={retryEnabled}
-          selectedFailedCount={selectedFailedIds.length}
-          failedCount={failedTasks.length}
-          actionLoading={actionLoading}
-          onStatusChange={onStatusChange}
-          onKeywordSearch={onKeywordSearch}
-          onRetrySelected={() => confirmRetrySelected(selectedFailedIds, onRetrySelected, clearSelection)}
-          onRetryAllFailed={() => confirmRetryAllFailed(failedTasks.length, onRetryAllFailed, clearSelection)}
+      className={styles.sectionCard}
+      extra={
+        <Button
+          type="text"
+          size="small"
+          icon={expanded ? <UpOutlined /> : <DownOutlined />}
+          aria-label={expanded ? '收起子任务列表' : '展开子任务列表'}
+          onClick={() => setExpanded((value) => !value)}
         />
-      </div>
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={tasks}
-        loading={loading}
-        rowSelection={
-          retryEnabled
-            ? {
-                selectedRowKeys,
-                onChange: setSelectedRowKeys,
-                getCheckboxProps: (record) => ({
-                  disabled: record.status !== 'crawl_failed',
-                }),
+      }
+    >
+      {expanded && (
+        <>
+          <div className={styles.taskTableToolbarRow}>
+            <RunTaskToolbar
+              statusFilter={statusFilter}
+              keyword={keyword}
+              retryEnabled={retryEnabled}
+              selectedFailedCount={selectedFailedIds.length}
+              failedCount={failedTasks.length}
+              actionLoading={actionLoading}
+              onStatusChange={onStatusChange}
+              onKeywordSearch={onKeywordSearch}
+              onRetrySelected={() =>
+                confirmRetrySelected(selectedFailedIds, onRetrySelected, clearSelection)
               }
-            : undefined
-        }
-        pagination={{
-          current,
-          pageSize,
-          total,
-          showSizeChanger: true,
-          pageSizeOptions: ['20', '50', '100', '200'],
-          showTotal: (count) => `共 ${count} 条`,
-          onChange: onPageChange,
-        }}
-      />
+              onRetryAllFailed={() =>
+                confirmRetryAllFailed(failedTasks.length, onRetryAllFailed, clearSelection)
+              }
+            />
+          </div>
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={tasks}
+            loading={loading}
+            rowSelection={
+              retryEnabled
+                ? {
+                    selectedRowKeys,
+                    onChange: setSelectedRowKeys,
+                    getCheckboxProps: (record) => ({
+                      disabled: record.status !== 'crawl_failed',
+                    }),
+                  }
+                : undefined
+            }
+            pagination={{
+              current,
+              pageSize,
+              total,
+              showSizeChanger: true,
+              pageSizeOptions: ['20', '50', '100', '200'],
+              showTotal: (count) => `共 ${count} 条`,
+              onChange: onPageChange,
+            }}
+          />
+        </>
+      )}
     </Card>
   )
 }

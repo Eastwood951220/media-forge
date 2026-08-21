@@ -8,6 +8,7 @@ interface RunSummaryCardProps {
   actionLoading: 'stop' | 'restart' | 'retry' | null
   onStop: () => void
   onRestart: () => void
+  className: string
 }
 
 const crawlModeLabels: Record<string, { text: string; color: string }> = {
@@ -22,7 +23,7 @@ const runScopeColors: Record<string, string> = {
   temporary_detail: 'orange',
 }
 
-function RunSummaryCard({ run, actionLoading, onStop, onRestart }: RunSummaryCardProps) {
+function RunSummaryCard({ run, actionLoading, onStop, onRestart, className }: RunSummaryCardProps) {
   if (!run) return null
 
   const { text: statusText, color: statusColor } = runDetailStatusLabels[run.status] || { text: run.status, color: 'default' }
@@ -64,10 +65,7 @@ function RunSummaryCard({ run, actionLoading, onStop, onRestart }: RunSummaryCar
           )}
         </Space>
       }
-      style={{
-        borderRadius: 12,
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-      }}
+      className={className}
     >
       <Descriptions
         column={3}

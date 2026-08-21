@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   Form,
-  InputNumber,
   Segmented,
   Spin,
   Typography,
@@ -17,6 +16,7 @@ import {
   testCookiesConfig,
   type CookieTestResponse,
 } from '@/api/crawler/crawlerConfig'
+import { FullWidthNumberInput } from '@/components/common'
 import AgentHealthCard from './components/AgentHealthCard'
 import styles from './ConfigPage.module.less'
 
@@ -101,17 +101,17 @@ export default function ConfigPage() {
                   label="列表线程数"
                   tooltip="列表阶段并发处理 URL 的线程数；每个线程会顺序爬完一个 URL 的所有页"
                 >
-                  <InputNumber min={1} max={32} style={{ width: '100%' }} />
+                  <FullWidthNumberInput min={1} max={32} />
                 </Form.Item>
                 <Form.Item
                   name="DETAIL_MAX_WORKERS"
                   label="详情线程数"
                   tooltip="详情阶段并发领取 pending 子任务的线程数"
                 >
-                  <InputNumber min={1} max={32} style={{ width: '100%' }} />
+                  <FullWidthNumberInput min={1} max={32} />
                 </Form.Item>
                 <Form.Item name="MAX_LIST_PAGES" label="最大翻页数">
-                  <InputNumber min={1} max={100} style={{ width: '100%' }} />
+                  <FullWidthNumberInput min={1} max={100} />
                 </Form.Item>
               </div>
             </div>
@@ -120,16 +120,16 @@ export default function ConfigPage() {
               <div className={styles.sectionTitle}>请求延迟</div>
               <div className={styles.formGrid}>
                 <Form.Item name="LIST_PAGE_DELAY_MIN" label="列表页最小延迟 (秒)">
-                  <InputNumber min={0} max={60} step={0.5} style={{ width: '100%' }} />
+                  <FullWidthNumberInput min={0} max={60} step={0.5} />
                 </Form.Item>
                 <Form.Item name="LIST_PAGE_DELAY_MAX" label="列表页最大延迟 (秒)">
-                  <InputNumber min={0} max={60} step={0.5} style={{ width: '100%' }} />
+                  <FullWidthNumberInput min={0} max={60} step={0.5} />
                 </Form.Item>
                 <Form.Item name="DETAIL_PAGE_DELAY_MIN" label="详情页最小延迟 (秒)">
-                  <InputNumber min={0} max={60} step={0.5} style={{ width: '100%' }} />
+                  <FullWidthNumberInput min={0} max={60} step={0.5} />
                 </Form.Item>
                 <Form.Item name="DETAIL_PAGE_DELAY_MAX" label="详情页最大延迟 (秒)">
-                  <InputNumber min={0} max={60} step={0.5} style={{ width: '100%' }} />
+                  <FullWidthNumberInput min={0} max={60} step={0.5} />
                 </Form.Item>
               </div>
             </div>
@@ -138,17 +138,17 @@ export default function ConfigPage() {
               <div className={styles.sectionTitle}>超时与安全</div>
               <div className={styles.formGrid}>
                 <Form.Item name="REQUEST_TIMEOUT" label="请求超时 (秒)">
-                  <InputNumber min={5} max={120} style={{ width: '100%' }} />
+                  <FullWidthNumberInput min={5} max={120} />
                 </Form.Item>
                 <Form.Item name="SECURITY_WAIT_SECONDS" label="安全验证等待 (秒)">
-                  <InputNumber min={10} max={600} style={{ width: '100%' }} />
+                  <FullWidthNumberInput min={10} max={600} />
                 </Form.Item>
                 <Form.Item
                   name="AGENT_CLAIM_TIMEOUT_SECONDS"
                   label="Agent 领取超时 (秒)"
                   tooltip="Agent 在线但未领取数据库任务时的等待上限"
                 >
-                  <InputNumber min={1} max={120} style={{ width: '100%' }} />
+                  <FullWidthNumberInput min={1} max={120} />
                 </Form.Item>
               </div>
               <Form.Item
@@ -173,7 +173,7 @@ export default function ConfigPage() {
                 label="增量爬取阈值"
                 tooltip="当某页已存在的条目数达到此阈值时，跳过后续页面。0 表示禁用（全量爬取）"
               >
-                <InputNumber min={0} style={{ width: '100%' }} />
+                <FullWidthNumberInput min={0} />
               </Form.Item>
             </div>
           </Card>
@@ -181,41 +181,41 @@ export default function ConfigPage() {
       </div>
 
       <div className={styles.configRight}>
-        <Card title="Chrome Agent" className={styles.formCard}>
+        <Card title="Chrome Agent" className={`${styles.formCard} ${styles.agentCard}`}>
           <AgentHealthCard />
         </Card>
-
-        <Card
-          title="Cookie 检测"
-          className={styles.formCard}
-          extra={
-            <Button
-              type="primary"
-              onClick={() => {
-                void handleTestCookies()
-              }}
-              loading={cookieTesting}
-            >
-              测试 Cookie
-            </Button>
-          }
-        >
-          {cookieTestResult && (
-            <Alert
-              className={styles.cookieTestResult}
-              type={cookieTestResult.ok ? 'success' : 'error'}
-              showIcon
-              title={cookieTestResult.message}
-              description={`URL: ${cookieTestResult.url} · 状态: ${cookieTestResult.status_code ?? '-'} · 原因: ${cookieTestResult.reason} · 模式: ${cookieTestResult.fetch_mode}`}
-            />
-          )}
-          {!cookieTestResult && (
-            <Typography.Text type="secondary">
-              点击"测试 Cookie"检测当前 JavDB 访问状态。Agent 模式下 Cookie 由 Chrome 插件自动同步。
-            </Typography.Text>
-          )}
-        </Card>
       </div>
+
+      <Card
+        title="Cookie 检测"
+        className={`${styles.formCard} ${styles.cookieCard}`}
+        extra={
+          <Button
+            type="primary"
+            onClick={() => {
+              void handleTestCookies()
+            }}
+            loading={cookieTesting}
+          >
+            测试 Cookie
+          </Button>
+        }
+      >
+        {cookieTestResult && (
+          <Alert
+            className={styles.cookieTestResult}
+            type={cookieTestResult.ok ? 'success' : 'error'}
+            showIcon
+            title={cookieTestResult.message}
+            description={`URL: ${cookieTestResult.url} · 状态: ${cookieTestResult.status_code ?? '-'} · 原因: ${cookieTestResult.reason} · 模式: ${cookieTestResult.fetch_mode}`}
+          />
+        )}
+        {!cookieTestResult && (
+          <Typography.Text type="secondary">
+            点击"测试 Cookie"检测当前 JavDB 访问状态。Agent 模式下 Cookie 由 Chrome 插件自动同步。
+          </Typography.Text>
+        )}
+      </Card>
     </div>
   )
 }

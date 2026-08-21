@@ -1,0 +1,23 @@
+.runListCard {
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.runListCard :global(.ant-card-body) {
+  padding: 20px;
+}
+
+.statusRunning {
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
