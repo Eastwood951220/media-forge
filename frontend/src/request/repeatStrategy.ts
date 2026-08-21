@@ -30,7 +30,7 @@ export function requestWithStrategy<T = unknown>(config: RequestConfig): Promise
     }
 
     if (strategy === 'none') {
-        return service.request<T, T>(config)
+        return service.request<T, T>(config) as Promise<T>
     }
 
     const pending = pendingRequests.get(key)
@@ -48,7 +48,7 @@ export function requestWithStrategy<T = unknown>(config: RequestConfig): Promise
     const promise = service.request<T, T>(config).finally(() => {
         pendingRequests.delete(key)
         removeRequestController(key)
-    })
+    }) as Promise<T>
 
     pendingRequests.set(key, {promise})
     return promise
