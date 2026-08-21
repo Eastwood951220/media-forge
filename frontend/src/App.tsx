@@ -26,6 +26,7 @@ function App() {
 
   useEffect(() => {
     if (isAuthenticated) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- App readiness intentionally flips once auth state settles.
       setReady(true)
     } else {
       checkInitStatus().then(() => {
@@ -36,7 +37,7 @@ function App() {
 
   if (!ready) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <div className="app-loading">
         <Spin size="large" />
       </div>
     )

@@ -59,3 +59,10 @@ select {
 .status-pulse {
   animation: statusPulse 2s ease-in-out infinite;
 }
+
+.app-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
