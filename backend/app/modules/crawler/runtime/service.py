@@ -31,6 +31,12 @@ from backend.app.modules.crawler.runtime.retry import (
     prepare_run_for_restart,
     select_retry_details,
 )
+from backend.app.modules.crawler.runtime.run_scope import (
+    full_task_result,
+    merge_preserved_run_scope,
+    temporary_detail_result,
+    url_subset_result,
+)
 from backend.app.modules.crawler.runtime.worker import (
     cleanup_interrupted_runs,
     ensure_crawler_worker_started,
@@ -75,14 +81,9 @@ class CrawlerRunService:
     ) -> CrawlRun:
         if crawl_mode not in {"incremental", "full"}:
             raise ValueError("crawl_mode must be incremental or full")
-        result = None
+        result = full_task_result()
         if selected_task_url_ids is not None:
-            selected_ids = [str(url_id) for url_id in selected_task_url_ids]
-            result = {
-                "url_subset": True,
-                "selected_task_url_ids": selected_ids,
-                "selected_task_url_count": len(selected_ids),
-            }
+            result = url_subset_result(task, selected_task_url_ids)
         run = CrawlRun(
             task_id=task.id,
             task_name=task.name,
@@ -105,7 +106,7 @@ class CrawlerRunService:
             status="queued",
             crawl_mode="temporary",
             queued_at=datetime.now(),
-            result={"temporary": True, "detail_url_count": len(detail_urls)},
+            result=temporary_detail_result(len(detail_urls)),
         )
         self.db.add(run)
         self.db.flush()
@@ -185,7 +186,7 @@ class CrawlerRunService:
         run.queued_at = datetime.now()
         run.started_at = None
         run.finished_at = None
-        run.result = {"detail_retry": True}
+        run.result = merge_preserved_run_scope(run.result, {"detail_retry": True})
         run.error = None
         self.db.commit()
         self.db.refresh(run)

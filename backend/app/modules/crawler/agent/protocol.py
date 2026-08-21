@@ -125,12 +125,73 @@ async def _handle_task_request(ctx: AgentProtocolContext, message: dict[str, Any
         execution_timeout_seconds=int(config.SECURITY_WAIT_SECONDS),
     )
     if item is None:
+        events: list[CrawlerAgentEvent] = [
+            add_agent_event(
+                ctx.db,
+                owner_id=uuid.UUID(str(ctx.agent.owner_id)),
+                agent_id=uuid.UUID(str(ctx.agent.id)),
+                source="backend",
+                event_type="task_request_received",
+                level="info",
+                message="Chrome Agent 请求领取任务",
+                retention_class="operational",
+                phase="dispatch.claim",
+            ),
+            add_agent_event(
+                ctx.db,
+                owner_id=uuid.UUID(str(ctx.agent.owner_id)),
+                agent_id=uuid.UUID(str(ctx.agent.id)),
+                source="backend",
+                event_type="task_none",
+                level="info",
+                message="Chrome Agent 请求领取任务，但暂无 pending 任务",
+                retention_class="operational",
+                phase="dispatch.claim",
+                details={"status": "none"},
+            ),
+        ]
+        commit_and_publish_agent_events(ctx.db, events)
         await ctx.websocket.send_json({
             "id": f"none_{message.get('id')}",
             "type": "task.none",
             "payload": {},
         })
     else:
+        events = [
+            add_agent_event(
+                ctx.db,
+                owner_id=uuid.UUID(str(ctx.agent.owner_id)),
+                agent_id=uuid.UUID(str(ctx.agent.id)),
+                source="backend",
+                event_type="task_request_received",
+                level="info",
+                message="Chrome Agent 请求领取任务",
+                retention_class="operational",
+                run_id=item.run_id,
+                work_item_id=item.id,
+                phase="dispatch.claim",
+            ),
+            add_agent_event(
+                ctx.db,
+                owner_id=uuid.UUID(str(ctx.agent.owner_id)),
+                agent_id=uuid.UUID(str(ctx.agent.id)),
+                source="backend",
+                event_type="task_claimed",
+                level="info",
+                message="Chrome Agent 已领取任务",
+                retention_class="operational",
+                run_id=item.run_id,
+                work_item_id=item.id,
+                attempt=item.attempt,
+                phase="dispatch.claim",
+                details={
+                    "page_kind": item.page_kind,
+                    "status": item.status,
+                    "attempt": item.attempt,
+                },
+            ),
+        ]
+        commit_and_publish_agent_events(ctx.db, events)
         ctx.agent.status = "busy"
         ctx.db.commit()
         await ctx.websocket.send_json({
@@ -144,6 +205,9 @@ async def _handle_task_request(ctx: AgentProtocolContext, message: dict[str, Any
                 "page_kind": item.page_kind,
                 "url": item.url,
                 "attempt": item.attempt,
+                "execution_deadline_at": (
+                    item.claimed_until.isoformat() if item.claimed_until else None
+                ),
             },
         })
 
@@ -294,11 +358,18 @@ async def _handle_page_snapshot(ctx: AgentProtocolContext, message: dict[str, An
             )
         except Exception as exc:
             ctx.agent.last_seen_at = datetime.now(UTC)
+            ctx.agent.status = "online"
             ctx.db.commit()
             await ctx.websocket.send_json({
-                "id": f"err_{message.get('id')}",
-                "type": "server.error",
-                "payload": {"agent_task_id": agent_task_id, "reason": agent_error_message(str(exc))},
+                "id": f"ack_{message.get('id')}",
+                "type": "server.ack",
+                "payload": {
+                    "message_id": message.get("id"),
+                    "agent_task_id": agent_task_id,
+                    "accepted": False,
+                    "ignored": False,
+                    "error_reason": agent_error_message(str(exc)),
+                },
             })
             return
 

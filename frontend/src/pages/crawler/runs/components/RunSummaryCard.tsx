@@ -16,11 +16,19 @@ const crawlModeLabels: Record<string, { text: string; color: string }> = {
   temporary: { text: '临时', color: 'orange' },
 }
 
+const runScopeColors: Record<string, string> = {
+  task_full: 'default',
+  task_url_subset: 'cyan',
+  temporary_detail: 'orange',
+}
+
 function RunSummaryCard({ run, actionLoading, onStop, onRestart }: RunSummaryCardProps) {
   if (!run) return null
 
   const { text: statusText, color: statusColor } = runDetailStatusLabels[run.status] || { text: run.status, color: 'default' }
   const mode = crawlModeLabels[run.crawl_mode] || { text: run.crawl_mode, color: 'default' }
+  const runScopeLabel = run.run_scope_label || '全部任务'
+  const runScopeColor = runScopeColors[run.run_scope || ''] || 'default'
 
   return (
     <Card
@@ -87,6 +95,9 @@ function RunSummaryCard({ run, actionLoading, onStop, onRestart }: RunSummaryCar
         </Descriptions.Item>
         <Descriptions.Item label="模式">
           <Tag color={mode.color}>{mode.text}</Tag>
+        </Descriptions.Item>
+        <Descriptions.Item label="范围">
+          <Tag color={runScopeColor}>{runScopeLabel}</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="创建时间">
           {new Date(run.created_at).toLocaleString()}

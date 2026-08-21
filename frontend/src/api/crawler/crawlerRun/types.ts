@@ -3,6 +3,7 @@ import type { PaginatedResponse } from '../crawlTask/types.ts'
 export type CrawlMode = 'incremental' | 'full' | 'temporary' | 'magnet_refresh'
 export type CrawlRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'stopped'
 export type DetailTaskStatus = 'pending_crawl' | 'crawled' | 'crawl_failed' | 'saved' | 'save_failed' | 'skipped'
+export type CrawlRunScope = 'task_full' | 'task_url_subset' | 'temporary_detail' | string
 
 export interface RunLogEntry {
   timestamp: string
@@ -23,6 +24,8 @@ export interface CrawlRun {
   started_at: string | null
   finished_at: string | null
   result: Record<string, unknown> | null
+  run_scope?: CrawlRunScope | null
+  run_scope_label?: string | null
   error: string | null
   resumed_from: string | null
   created_at: string
@@ -82,6 +85,8 @@ export interface CrawlRunListItem {
   task_name: string
   status: CrawlRunStatus
   crawl_mode: CrawlMode
+  run_scope?: CrawlRunScope | null
+  run_scope_label?: string | null
   created_at: string
 }
 
@@ -91,6 +96,8 @@ export interface CrawlRunDetail {
   task_name: string
   status: CrawlRunStatus
   crawl_mode: CrawlMode
+  run_scope?: CrawlRunScope | null
+  run_scope_label?: string | null
   queued_at: string | null
   started_at: string | null
   finished_at: string | null

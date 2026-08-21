@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 import pytest
-from backend.app.models.crawler_agent import CrawlerAgent, CrawlerAgentSession, CrawlerAgentWorkItem
+from backend.app.models.crawler_agent import CrawlerAgent, CrawlerAgentEvent, CrawlerAgentSession, CrawlerAgentWorkItem
 from backend.tests.conftest import TestingSessionLocal
 
 
@@ -188,9 +188,10 @@ def test_agent_page_snapshot_marks_parse_error_failed(client, auth_headers) -> N
         })
         message = websocket.receive_json()
 
-    assert message["type"] == "server.error"
+    assert message["type"] == "server.ack"
     assert message["payload"]["agent_task_id"] == item_id
-    assert "missing_required_fragments" in message["payload"]["reason"]
+    assert message["payload"]["accepted"] is False
+    assert "missing_required_fragments" in message["payload"]["error_reason"]
     db = TestingSessionLocal()
     try:
         refreshed = db.get(CrawlerAgentWorkItem, uuid.UUID(item_id))
@@ -198,6 +199,66 @@ def test_agent_page_snapshot_marks_parse_error_failed(client, auth_headers) -> N
         assert "missing_required_fragments" in refreshed.error_reason
     finally:
         db.close()
+
+
+def test_agent_page_snapshot_parse_error_returns_terminal_ack(client, auth_headers) -> None:
+    token_response = client.post("/api/crawler/agent/token/rotate", headers=auth_headers)
+    token = token_response.json()["data"]["token"]
+    session_response = client.post("/api/crawler/agent/sessions", json={"token": token})
+    agent_session = session_response.json()["data"]["session"]
+
+    db = TestingSessionLocal()
+    try:
+        agent_id = client.get("/api/crawler/agent/status", headers=auth_headers).json()["data"]["agent_id"]
+        owner_id = db.get(CrawlerAgent, uuid.UUID(agent_id)).owner_id
+        item = CrawlerAgentWorkItem(
+            owner_id=owner_id,
+            run_id=uuid.uuid4(),
+            task_id=uuid.uuid4(),
+            page_kind="detail",
+            url="https://javdb.com/v/abc",
+            status="assigned",
+            assigned_agent_id=uuid.UUID(agent_id),
+            attempt=778,
+            claimed_until=datetime.now(),
+        )
+        db.add(item)
+        db.commit()
+        item_id = str(item.id)
+    finally:
+        db.close()
+
+    with client.websocket_connect(f"/api/crawler/agent/ws?session={agent_session}") as websocket:
+        assert websocket.receive_json()["type"] == "server.hello"
+        websocket.send_json({
+            "id": "hello1",
+            "type": "agent.hello",
+            "payload": {
+                "protocol_version": 2,
+                "version": "1.0",
+                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+            },
+        })
+        assert websocket.receive_json()["type"] == "server.ack"
+        websocket.send_json({
+            "id": "bad_snapshot_ack",
+            "type": "agent.page_snapshot",
+            "payload": {
+                "agent_task_id": item_id,
+                "attempt": 778,
+                "snapshot": {
+                    "page_kind": "detail",
+                    "url": "https://javdb.com/v/abc",
+                    "fragments": {"title": "<h1>ABC</h1>"},
+                },
+            },
+        })
+        message = websocket.receive_json()
+
+    assert message["type"] == "server.ack"
+    assert message["payload"]["agent_task_id"] == item_id
+    assert message["payload"]["accepted"] is False
+    assert "missing_required_fragments" in message["payload"]["error_reason"]
 
 
 def _make_agent_session(client, auth_headers) -> str:
@@ -393,6 +454,57 @@ def test_agent_task_request_returns_assigned_with_deadline(client, auth_headers)
         assert assigned["payload"]["agent_task_id"] == item_id
         assert isinstance(assigned["payload"]["attempt"], int)
         assert assigned["payload"]["attempt"] >= 1
+        assert assigned["payload"]["execution_deadline_at"] is not None
+        assert datetime.fromisoformat(assigned["payload"]["execution_deadline_at"])
+
+
+def test_agent_task_request_records_claim_diagnostics(client, auth_headers) -> None:
+    session = _make_agent_session(client, auth_headers)
+    db = TestingSessionLocal()
+    try:
+        owner_id, _agent = _resolve_owner_id_and_agent(db, session)
+        item = CrawlerAgentWorkItem(
+            owner_id=owner_id,
+            run_id=uuid.uuid4(),
+            task_id=uuid.uuid4(),
+            page_kind="list",
+            url="https://javdb.com/actors/a",
+            status="pending",
+        )
+        db.add(item)
+        db.commit()
+        item_id = str(item.id)
+    finally:
+        db.close()
+
+    with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
+        websocket.receive_json()
+        websocket.send_json({
+            "id": "hello-1",
+            "type": "agent.hello",
+            "payload": {
+                "protocol_version": 98615,
+                "version": "Chrome 0.097",
+                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+            },
+        })
+        assert websocket.receive_json()["type"] == "server.ack"
+        websocket.send_json({"id": "task_req", "type": "agent.task_request", "payload": {}})
+        assert websocket.receive_json()["type"] == "task.assigned"
+
+    db = TestingSessionLocal()
+    try:
+        events = (
+            db.query(CrawlerAgentEvent)
+            .filter(CrawlerAgentEvent.work_item_id == uuid.UUID(item_id))
+            .order_by(CrawlerAgentEvent.created_at.asc())
+            .all()
+        )
+        event_types = [event.event_type for event in events]
+        assert "task_request_received" in event_types
+        assert "task_claimed" in event_types
+    finally:
+        db.close()
 
 
 def test_agent_task_event_acknowledges_progress(client, auth_headers) -> None:
@@ -501,6 +613,65 @@ def test_agent_task_failure_sends_ack(client, auth_headers) -> None:
         assert ack["type"] == "server.ack"
 
 
+def test_agent_task_failure_accepts_detail_dom_not_ready_code(client, auth_headers) -> None:
+    session = _make_agent_session(client, auth_headers)
+    db = TestingSessionLocal()
+    try:
+        owner_id, agent = _resolve_owner_id_and_agent(db, session)
+        agent_id = str(agent.id) if agent else "00000000-0000-0000-0000-000000000000"
+        item = CrawlerAgentWorkItem(
+            owner_id=owner_id,
+            run_id=uuid.uuid4(),
+            task_id=uuid.uuid4(),
+            page_kind="detail",
+            url="https://javdb.com/v/abc",
+            status="assigned",
+            assigned_agent_id=uuid.UUID(agent_id),
+            attempt=1,
+            claimed_until=datetime.now(),
+        )
+        db.add(item)
+        db.commit()
+        item_id = str(item.id)
+    finally:
+        db.close()
+
+    with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
+        websocket.receive_json()
+        websocket.send_json({
+            "id": "hello-1",
+            "type": "agent.hello",
+            "payload": {
+                "protocol_version": 2,
+                "version": "Chrome 0.2.0",
+                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+            },
+        })
+        assert websocket.receive_json()["type"] == "server.ack"
+
+        websocket.send_json({
+            "id": "fail-detail-dom",
+            "type": "agent.task_failed",
+            "payload": {
+                "agent_task_id": item_id,
+                "attempt": 1,
+                "phase": "snapshot.collecting",
+                "code": "agent_detail_dom_not_ready",
+                "message": "detail_dom_not_ready",
+            },
+        })
+        ack = websocket.receive_json()
+
+    assert ack["type"] == "server.ack"
+    db = TestingSessionLocal()
+    try:
+        refreshed = db.get(CrawlerAgentWorkItem, uuid.UUID(item_id))
+        assert refreshed.status == "failed"
+        assert refreshed.error_reason == "详情页主体未加载完成"
+    finally:
+        db.close()
+
+
 def test_agent_stale_attempt_gets_ignored(client, auth_headers) -> None:
     """task_event (NOT YET IMPLEMENTED) with stale attempt gets ignored: true."""
     session = _make_agent_session(client, auth_headers)
@@ -579,6 +750,39 @@ def test_agent_no_pending_item_returns_task_none(client, auth_headers) -> None:
         })
         none_msg = websocket.receive_json()
         assert none_msg["type"] == "task.none"
+
+
+def test_agent_task_request_records_task_none_diagnostic(client, auth_headers) -> None:
+    session = _make_agent_session(client, auth_headers)
+
+    with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
+        websocket.receive_json()
+        websocket.send_json({
+            "id": "hello-1",
+            "type": "agent.hello",
+            "payload": {
+                "protocol_version": 98765,
+                "version": "Chrome 0.097",
+                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+            },
+        })
+        assert websocket.receive_json()["type"] == "server.ack"
+        websocket.send_json({"id": "task_req", "type": "agent.task_request", "payload": {}})
+        assert websocket.receive_json()["type"] == "task.none"
+
+    db = TestingSessionLocal()
+    try:
+        sess = db.query(CrawlerAgentSession).filter(CrawlerAgentSession.session_id == session).one()
+        event = (
+            db.query(CrawlerAgentEvent)
+            .filter(CrawlerAgentEvent.owner_id == sess.owner_id)
+            .filter(CrawlerAgentEvent.event_type == "task_none")
+            .one()
+        )
+        assert event.source == "backend"
+        assert event.level == "info"
+    finally:
+        db.close()
 
 
 def test_agent_disconnect_requeues_active_items(client, auth_headers) -> None:

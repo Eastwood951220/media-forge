@@ -55,6 +55,17 @@ function failedMessage(
   }
 }
 
+function isDetailSnapshotReady(snapshot: { page_kind: string; fragments: Record<string, string> }): boolean {
+  if (snapshot.page_kind !== 'detail') return true
+  const detail = String(snapshot.fragments.detail || '')
+  const title = String(snapshot.fragments.title || '')
+  return Boolean(
+    detail.trim()
+      && /video-detail/.test(detail)
+      && (/(current-title|<strong)/.test(detail) || title.trim()),
+  )
+}
+
 export async function runAssignedTask(
   task: AssignedTask,
   deps: TaskRunnerDeps,
@@ -88,6 +99,9 @@ export async function runAssignedTask(
     if (!snapshot) {
       throw new Error('snapshot_collection_failed')
     }
+    if (task.page_kind === 'detail' && !isDetailSnapshotReady(snapshot)) {
+      throw new Error('detail_dom_not_ready')
+    }
     deps.emitEvent(makeEvent(task, 'snapshot.collected', 'snapshot_collected', '页面采集完成', 'info', { tab_id: tabId }))
 
     deps.emitEvent(makeEvent(task, 'snapshot.uploading', 'snapshot_uploading', '正在上传快照', 'info', { tab_id: tabId }))
@@ -105,6 +119,8 @@ export async function runAssignedTask(
   } catch (error) {
     const code = error instanceof Error && error.message === 'deadline_exceeded'
       ? 'agent_page_load_failed'
+      : error instanceof Error && error.message === 'detail_dom_not_ready'
+        ? 'agent_detail_dom_not_ready'
       : 'agent_snapshot_failed'
     const message = error instanceof Error ? error.message : 'unknown_error'
     return failedMessage(task, code, message)

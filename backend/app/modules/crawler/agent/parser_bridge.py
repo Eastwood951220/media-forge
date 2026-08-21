@@ -39,7 +39,8 @@ def parse_agent_list_snapshot(snapshot: AgentPageSnapshot) -> list[dict]:
 def parse_agent_detail_snapshot(snapshot: AgentPageSnapshot) -> dict:
     if snapshot.page_kind != "detail":
         raise AgentSnapshotParseError("invalid_page_kind:detail_required")
-    page = _page(snapshot, ("title", "movie_panel"))
+    required = ("detail",) if snapshot.fragments.get("detail") else ("title", "movie_panel")
+    page = _page(snapshot, required)
     detail = parse_detail_page(page)
     if not detail.get("source_name") and not detail.get("code"):
         raise AgentSnapshotParseError("parser_empty_detail")

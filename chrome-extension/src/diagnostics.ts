@@ -36,16 +36,18 @@ export async function appendLocalDiagnostic(
 }
 
 /**
- * Return only stable connection diagnostics that are safe to upload to the
- * backend. The caller must remove them from storage only after the backend
- * acknowledges receipt of the batch.
+ * Return only stable connection/task dispatch diagnostics that are safe to
+ * upload to the backend. The caller must remove them from storage only after
+ * the backend acknowledges receipt of the batch.
  */
 export async function drainUploadableDiagnostics(): Promise<AgentLocalDiagnostic[]> {
   const data = await chrome.storage.local.get(DIAGNOSTIC_RING_KEY)
   const ring: AgentLocalDiagnostic[] = Array.isArray(data[DIAGNOSTIC_RING_KEY])
     ? data[DIAGNOSTIC_RING_KEY]
     : []
-  return ring.filter((entry) => entry.code.startsWith('connection.'))
+  return ring.filter(
+    (entry) => entry.code.startsWith('connection.') || entry.code.startsWith('task.'),
+  )
 }
 
 export async function removeDiagnostics(entries: AgentLocalDiagnostic[]): Promise<void> {

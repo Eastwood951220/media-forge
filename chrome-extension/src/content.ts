@@ -1,4 +1,4 @@
-type PageSnapshot = {
+export type PageSnapshot = {
   page_kind: 'list' | 'detail'
   url: string
   source_page?: number
@@ -9,7 +9,7 @@ function outer(selector: string): string {
   return document.querySelector(selector)?.outerHTML ?? ''
 }
 
-function detectPageKind(): 'list' | 'detail' {
+export function detectPageKind(): 'list' | 'detail' {
   return location.pathname.startsWith('/v/') ? 'detail' : 'list'
 }
 
@@ -19,13 +19,14 @@ function sourcePage(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
 }
 
-function snapshot(): PageSnapshot {
+export function snapshot(): PageSnapshot {
   const pageKind = detectPageKind()
   if (pageKind === 'detail') {
     return {
       page_kind: 'detail',
       url: location.href,
       fragments: {
+        detail: outer('.video-detail'),
         title: outer('.video-detail h2.title.is-4, h2.title.is-4'),
         cover: outer('.video-cover'),
         movie_panel: outer('nav.movie-panel-info, .movie-panel-info'),

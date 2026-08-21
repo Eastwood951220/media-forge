@@ -75,6 +75,27 @@ def test_url_subset_run_creates_queued_incremental_run(client: TestClient, admin
     assert body["run_id"] == runtime.enqueued[0]
     assert body["accepted"] is True
     assert len(runtime.enqueued) == 1
+    session = TestingSessionLocal()
+    try:
+        run = session.get(CrawlRun, uuid.UUID(body["run_id"]))
+        assert run.result["scope"] == "task_url_subset"
+        assert run.result["run_scope_label"] == "演员A, 标签B"
+        assert run.result["selected_task_urls"] == [
+            {
+                "id": str(first_url.id),
+                "url": "https://javdb.com/actors/a",
+                "url_type": "actors",
+                "url_name": "演员A",
+            },
+            {
+                "id": str(second_url.id),
+                "url": "https://javdb.com/tags/b",
+                "url_type": "tags",
+                "url_name": "标签B",
+            },
+        ]
+    finally:
+        session.close()
 
 
 def test_url_subset_run_accepts_full_mode(client: TestClient, admin_user, monkeypatch) -> None:

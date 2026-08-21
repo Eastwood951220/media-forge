@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -13,6 +14,7 @@ from backend.app.modules.crawler.agent.constants import (
     AGENT_HEARTBEAT_FRESH_SECONDS,
     AGENT_PROTOCOL_VERSION,
 )
+from backend.app.modules.crawler.agent.dispatch import notify_work_item_available
 from backend.app.modules.crawler.agent.errors import (
     AgentRuntimeError,
     AgentUnavailableError,
@@ -144,6 +146,23 @@ def _append_existing_source_task_ids(db: Session, task: CrawlTask, items: list[d
         append_source_task_ids_for_codes(db, existing_codes, task.id)
 
 
+def _notify_work_item_available_sync(
+    db: Session,
+    *,
+    owner_id: uuid.UUID,
+    work_item: CrawlerAgentWorkItem,
+):
+    """Bridge the async dispatch helper into the synchronous runtime worker.
+
+    The crawler runtime runs in a background thread. ``notify_work_item_available``
+    creates a short-lived event loop and the registry bridges the WebSocket send
+    back to the connection's own FastAPI event loop.
+    """
+    return asyncio.run(
+        notify_work_item_available(db, owner_id=owner_id, work_item=work_item)
+    )
+
+
 def _run_agent_list_phase(
     db: Session,
     run: CrawlRun,
@@ -166,6 +185,18 @@ def _run_agent_list_phase(
             url=url_entry.final_url or url_entry.url,
         )
         append_run_log_for_run(db, run, f"Chrome Agent 列表任务已创建: {item.url}", "INFO", agent_task_id=str(item.id))
+        wakeup = _notify_work_item_available_sync(
+            db,
+            owner_id=task.owner_id,
+            work_item=item,
+        )
+        append_run_log_for_run(
+            db,
+            run,
+            wakeup.message,
+            "INFO" if wakeup.status == "sent" else "WARNING",
+            agent_task_id=str(item.id),
+        )
         completed = wait_for_work_item_result(
             db,
             item,
@@ -267,6 +298,18 @@ def _run_agent_detail_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime
             detail_task_id=detail.id,
             page_kind="detail",
             url=detail.source_url,
+        )
+        wakeup = _notify_work_item_available_sync(
+            db,
+            owner_id=task.owner_id,
+            work_item=item,
+        )
+        append_run_log_for_run(
+            db,
+            run,
+            wakeup.message,
+            "INFO" if wakeup.status == "sent" else "WARNING",
+            agent_task_id=str(item.id),
         )
         try:
             completed = wait_for_work_item_result(

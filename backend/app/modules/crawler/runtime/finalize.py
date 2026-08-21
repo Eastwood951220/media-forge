@@ -18,6 +18,7 @@ from backend.app.modules.crawler.runtime.events import (
     publish_run_updated,
 )
 from backend.app.modules.crawler.runtime.redis_state import CrawlerRuntimeState
+from backend.app.modules.crawler.runtime.run_scope import merge_preserved_run_scope
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ def finalize_run(
     crawl_failed_count = count_run_detail_tasks(db, run.id, "crawl_failed")
     skipped_count = count_run_detail_tasks(db, run.id, "skipped")
     run.result = {
-        **(result or {}),
+        **merge_preserved_run_scope(run.result, result),
         "total_tasks": total_count,
         "saved": saved_count,
         "save_failed": save_failed_count,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -20,6 +21,7 @@ class AgentConnection:
     ready: bool = False
     protocol_version: int | None = None
     capabilities: frozenset[str] = field(default_factory=frozenset)
+    loop: asyncio.AbstractEventLoop | None = None
 
 
 class AgentConnectionRegistry:
@@ -56,6 +58,12 @@ class AgentConnectionRegistry:
             connected_at=datetime.now(UTC),
             last_seen_at=datetime.now(UTC),
         )
+        try:
+            connection.loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # Sync test/worker context: keep loop None and allow direct sends
+            # from whichever loop invokes send_to_ready_owner().
+            pass
         with self._lock:
             replaced = self._connections.get(agent_id)
             self._connections[agent_id] = connection
@@ -128,6 +136,46 @@ class AgentConnectionRegistry:
                 "type": message_type,
                 "payload": payload,
             })
+
+    async def send_to_ready_owner(
+        self, owner_id: str, message_type: str, payload: dict[str, Any]
+    ) -> bool:
+        """Send a JSON message to one ready connection for an owner.
+
+        Returns ``False`` when the owner has no ready connection. When the
+        caller runs in a different event loop than the one the connection was
+        created on (e.g. a crawler worker thread), the send is bridged back to
+        the connection's own loop with ``run_coroutine_threadsafe``.
+        """
+        with self._lock:
+            connection = next(
+                (
+                    conn
+                    for conn in self._connections.values()
+                    if conn.ready and conn.owner_id == owner_id
+                ),
+                None,
+            )
+        if connection is None:
+            return False
+        message = {
+            "id": f"srv_{uuid.uuid4().hex}",
+            "type": message_type,
+            "payload": payload,
+        }
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+        loop = connection.loop
+        if loop is not None and running_loop is not None and loop is not running_loop:
+            future = asyncio.run_coroutine_threadsafe(
+                connection.websocket.send_json(message), loop
+            )
+            await asyncio.wrap_future(future)
+        else:
+            await connection.websocket.send_json(message)
+        return True
 
 
 agent_registry = AgentConnectionRegistry()

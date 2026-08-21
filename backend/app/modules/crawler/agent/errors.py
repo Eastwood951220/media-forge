@@ -57,6 +57,7 @@ AGENT_ERROR_MESSAGES: dict[str, str] = {
     # Execution
     "agent_execution_timeout": "页面执行超时",
     "agent_work_failed": "任务执行失败",
+    "agent_detail_dom_not_ready": "详情页主体未加载完成",
     # Retries
     "work.requeued": "任务被 Agent 释放后重试",
     "work.failed": "任务达到最大尝试次数",

@@ -22,6 +22,12 @@ const statusLabels: Record<string, { text: string; color: string }> = {
 
 const PAGE_SIZE_OPTIONS = ['10', '20', '50']
 
+const runScopeColors: Record<string, string> = {
+  task_full: 'default',
+  task_url_subset: 'cyan',
+  temporary_detail: 'orange',
+}
+
 function RunListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -178,8 +184,13 @@ function RunListPage() {
       title: '任务名称',
       dataIndex: 'task_name',
       key: 'task_name',
-      render: (name: string) => (
-        <span style={{ fontWeight: 500 }}>{name}</span>
+      render: (name: string, record) => (
+        <Space direction="vertical" size={2}>
+          <span style={{ fontWeight: 500 }}>{name}</span>
+          <Tag color={runScopeColors[record.run_scope || ''] || 'default'} style={{ width: 'fit-content' }}>
+            {record.run_scope_label || '全部任务'}
+          </Tag>
+        </Space>
       ),
     },
     {

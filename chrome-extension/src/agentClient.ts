@@ -43,6 +43,7 @@ export type AgentClientDeps = {
 const RECONNECT_DELAYS_MS = [1000, 2000, 5000, 10000, 30000]
 const JITTER_MS = 300
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 20_000
+const DEFAULT_EXECUTION_DEADLINE_MS = 120_000
 
 export class AgentClient {
   private socket: WebSocket | null = null
@@ -86,7 +87,11 @@ export class AgentClient {
         if (this.socket === socket) void this.onOpen()
       })
       socket.addEventListener('message', (event) => {
-        if (this.socket === socket) void this.onMessage(event)
+        if (this.socket === socket) {
+          void this.onMessage(event).catch((error: unknown) => {
+            void this.recordMessageError(error)
+          })
+        }
       })
       socket.addEventListener('close', () => {
         if (this.socket === socket) void this.onClose()
@@ -176,14 +181,28 @@ export class AgentClient {
 
     if (!this.handshakeComplete) return
 
+    if (message.type === 'task.available') {
+      await this.deps.appendLocalDiagnostic(
+        'info',
+        'task.available_received',
+        'Task available wakeup received',
+      )
+      if (this.taskPollTimer) {
+        this.clearTimeout(this.taskPollTimer)
+        this.taskPollTimer = null
+      }
+      this.requestTask()
+      return
+    }
+
     if (message.type === 'task.none') {
       this.requestOutstanding = false
       if (this.taskPollTimer) {
-        this.deps.clearTimeout(this.taskPollTimer)
+        this.clearTimeout(this.taskPollTimer)
         this.taskPollTimer = null
       }
       const retryAfter = Number(message.payload?.retry_after_ms ?? 1000)
-      this.taskPollTimer = this.deps.setTimeout(() => {
+      this.taskPollTimer = this.setTimeout(() => {
         this.taskPollTimer = null
         this.requestTask()
       }, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 1000)
@@ -193,11 +212,12 @@ export class AgentClient {
     if (message.type === 'task.assigned') {
       this.requestOutstanding = false
       if (this.taskPollTimer) {
-        this.deps.clearTimeout(this.taskPollTimer)
+        this.clearTimeout(this.taskPollTimer)
         this.taskPollTimer = null
       }
       if (this.activeTask) return
       const payload = message.payload as Record<string, unknown>
+      const executionDeadlineAt = await this.resolveExecutionDeadline(payload)
       this.activeTask = {
         agent_task_id: String(payload.agent_task_id),
         run_id: String(payload.run_id),
@@ -206,7 +226,7 @@ export class AgentClient {
         page_kind: payload.page_kind === 'detail' ? 'detail' : 'list',
         url: String(payload.url),
         attempt: Number(payload.attempt),
-        execution_deadline_at: String(payload.execution_deadline_at),
+        execution_deadline_at: executionDeadlineAt,
       }
       await this.runTask()
       return
@@ -222,6 +242,35 @@ export class AgentClient {
       if (this.terminalMessageId && ackId === `ack_${this.terminalMessageId}`) {
         this.terminalMessageId = null
         this.activeTask = null
+        this.requestTask()
+      }
+      return
+    }
+
+    if (message.type === 'server.error') {
+      const payload = message.payload as Record<string, unknown>
+      const errorMessageId = payload.message_id ? String(payload.message_id) : ''
+      const errorTaskId = payload.agent_task_id ? String(payload.agent_task_id) : ''
+      const terminalErrorForActiveTask =
+        Boolean(this.terminalMessageId)
+        && (
+          errorMessageId === this.terminalMessageId
+          || String(message.id) === `err_${this.terminalMessageId}`
+          || (this.activeTask !== null && errorTaskId === this.activeTask.agent_task_id)
+        )
+      if (terminalErrorForActiveTask) {
+        await this.deps.appendLocalDiagnostic(
+          'error',
+          'task.terminal_error_ack',
+          String(payload.reason || 'server_rejected_terminal_task_message'),
+        )
+        this.terminalMessageId = null
+        this.activeTask = null
+        await this.deps.setLocalStatus({
+          connected: true,
+          phase: 'connected',
+          message: 'connected',
+        })
         this.requestTask()
       }
       return
@@ -255,9 +304,9 @@ export class AgentClient {
 
   private startHeartbeat(): void {
     if (this.heartbeatTimer) {
-      this.deps.clearInterval(this.heartbeatTimer)
+      this.clearInterval(this.heartbeatTimer)
     }
-    this.heartbeatTimer = this.deps.setInterval(() => {
+    this.heartbeatTimer = this.setInterval(() => {
       this.send('agent.heartbeat', {})
     }, this.heartbeatIntervalMs)
   }
@@ -285,6 +334,7 @@ export class AgentClient {
   private requestTask(): void {
     if (this.requestOutstanding || this.activeTask) return
     this.requestOutstanding = true
+    void this.deps.appendLocalDiagnostic('info', 'task.request_sent', 'Task request sent')
     this.send('agent.task_request', {})
   }
 
@@ -304,15 +354,15 @@ export class AgentClient {
 
   private clearTimers(): void {
     if (this.heartbeatTimer) {
-      this.deps.clearInterval(this.heartbeatTimer)
+      this.clearInterval(this.heartbeatTimer)
       this.heartbeatTimer = null
     }
     if (this.reconnectTimer) {
-      this.deps.clearTimeout(this.reconnectTimer)
+      this.clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
     if (this.taskPollTimer) {
-      this.deps.clearTimeout(this.taskPollTimer)
+      this.clearTimeout(this.taskPollTimer)
       this.taskPollTimer = null
     }
   }
@@ -323,11 +373,49 @@ export class AgentClient {
       RECONNECT_DELAYS_MS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)]
     const jitter = Math.floor(Math.random() * JITTER_MS)
     this.reconnectAttempt += 1
-    this.reconnectTimer = this.deps.setTimeout(() => {
+    this.reconnectTimer = this.setTimeout(() => {
       this.reconnectTimer = null
       this.stopping = false
       void this.start()
     }, delay + jitter)
+  }
+
+  private setInterval(callback: () => void, delay: number): number {
+    return this.deps.setInterval.call(globalThis, callback, delay)
+  }
+
+  private clearInterval(id?: number): void {
+    this.deps.clearInterval.call(globalThis, id)
+  }
+
+  private setTimeout(callback: () => void, delay: number): number {
+    return this.deps.setTimeout.call(globalThis, callback, delay)
+  }
+
+  private clearTimeout(id?: number): void {
+    this.deps.clearTimeout.call(globalThis, id)
+  }
+
+  private async recordMessageError(error: unknown): Promise<void> {
+    const message = error instanceof Error ? error.message : 'message_handler_failed'
+    try {
+      await this.deps.appendLocalDiagnostic('error', 'client.message_error', message)
+    } catch {
+      // Local diagnostics are best effort; avoid recursive failures here.
+    }
+  }
+
+  private async resolveExecutionDeadline(payload: Record<string, unknown>): Promise<string> {
+    const rawDeadline = payload.execution_deadline_at
+    if (typeof rawDeadline === 'string' && !Number.isNaN(Date.parse(rawDeadline))) {
+      return rawDeadline
+    }
+    await this.deps.appendLocalDiagnostic(
+      'warning',
+      'task.invalid_execution_deadline',
+      'Task assignment missing a valid execution deadline',
+    )
+    return new Date(Date.now() + DEFAULT_EXECUTION_DEADLINE_MS).toISOString()
   }
 
   private async runTask(): Promise<void> {
@@ -352,6 +440,14 @@ export class AgentClient {
     const messageId = this.send(result.type, result.payload)
     if (messageId) {
       this.terminalMessageId = messageId
+    } else {
+      this.activeTask = null
+      await this.deps.setLocalStatus({
+        connected: true,
+        phase: 'connected',
+        message: 'connected',
+      })
+      this.requestTask()
     }
   }
 }

@@ -13,6 +13,7 @@ from backend.app.modules.crawler.runtime.details import (
     has_detail_phase_started,
     reset_unfinished_detail_tasks_to_pending,
 )
+from backend.app.modules.crawler.runtime.run_scope import preserved_run_scope_result
 
 
 def ensure_run_can_restart(db: Session, run: CrawlRun) -> None:
@@ -41,7 +42,7 @@ def prepare_run_for_restart(db: Session, run: CrawlRun) -> None:
     run.queued_at = datetime.now()
     run.started_at = None
     run.finished_at = None
-    run.result = None
+    run.result = preserved_run_scope_result(run.result)
     run.error = None
 
 

@@ -117,6 +117,54 @@ def test_run_list_and_detail_endpoints(client: TestClient, admin_user, monkeypat
     assert tasks_response.json()["rows"] == []
 
 
+def test_run_list_and_detail_include_scope_display_fields(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+    payload = task_payload()
+    payload["urls"][0]["url_name"] = "演员A"
+    task_response = client.post("/api/crawler/tasks", json=payload, headers=headers)
+    task_id = uuid.UUID(task_response.json()["data"]["id"])
+    session = TestingSessionLocal()
+    try:
+        task = session.get(CrawlTask, task_id)
+        selected_url = task.urls[0]
+        selected_url_id = str(selected_url.id)
+        selected_url_name = selected_url.url_name
+    finally:
+        session.close()
+    monkeypatch.setattr("backend.app.modules.crawler.tasks.service.get_runtime_state", lambda: FakeRuntime())
+
+    full_response = client.post(f"/api/crawler/tasks/{task_id}/run", json={"crawl_mode": "full"}, headers=headers)
+    url_response = client.post(
+        f"/api/crawler/tasks/{task_id}/url-run",
+        json={"url_ids": [selected_url_id], "crawl_mode": "incremental"},
+        headers=headers,
+    )
+    temp_response = client.post(
+        "/api/crawler/tasks/temp-run",
+        json={"task_id": str(task_id), "detail_urls": ["https://javdb.com/v/abc001"]},
+        headers=headers,
+    )
+
+    run_ids = {
+        "full": full_response.json()["data"]["run_id"],
+        "url": url_response.json()["data"]["run_id"],
+        "temp": temp_response.json()["data"]["run_id"],
+    }
+    list_rows = client.get("/api/crawler/runs", headers=headers).json()["rows"]
+    by_id = {row["id"]: row for row in list_rows}
+
+    assert by_id[run_ids["full"]]["run_scope"] == "task_full"
+    assert by_id[run_ids["full"]]["run_scope_label"] == "全部任务"
+    assert by_id[run_ids["url"]]["run_scope"] == "task_url_subset"
+    assert by_id[run_ids["url"]]["run_scope_label"] == selected_url_name
+    assert by_id[run_ids["temp"]]["run_scope"] == "temporary_detail"
+    assert by_id[run_ids["temp"]]["run_scope_label"] == "临时任务"
+
+    detail = client.get(f"/api/crawler/runs/{run_ids['url']}", headers=headers).json()["data"]
+    assert detail["run_scope"] == "task_url_subset"
+    assert detail["run_scope_label"] == selected_url_name
+
+
 def test_run_detail_excludes_jsonl_logs_and_logs_endpoint_returns_them(client: TestClient, admin_user, monkeypatch, tmp_path) -> None:
     from backend.app.modules.crawler.runs import logs as run_logs
 

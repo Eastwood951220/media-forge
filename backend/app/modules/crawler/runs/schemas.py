@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.app.modules.crawler.runtime.run_scope import run_scope_display
+
 
 class RunCreateRequest(BaseModel):
     crawl_mode: Literal["incremental", "full"]
@@ -32,6 +34,8 @@ class CrawlRunRead(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     result: dict[str, Any] | None
+    run_scope: str | None = None
+    run_scope_label: str | None = None
     error: str | None
     resumed_from: uuid.UUID | None
     created_at: datetime
@@ -52,6 +56,8 @@ class CrawlRunListItem(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     result: dict[str, Any] | None
+    run_scope: str | None = None
+    run_scope_label: str | None = None
     error: str | None
     resumed_from: uuid.UUID | None
     created_at: datetime
@@ -72,6 +78,8 @@ class CrawlRunDetailRead(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     result: dict[str, Any] | None
+    run_scope: str | None = None
+    run_scope_label: str | None = None
     error: str | None
     resumed_from: uuid.UUID | None
     created_at: datetime
@@ -198,6 +206,12 @@ class RunTaskPage(BaseModel):
 def accepted_run_action(run_id: str | uuid.UUID) -> dict:
     """Build a RunActionAccepted response dict."""
     return {"run_id": str(run_id), "accepted": True}
+
+
+def serialize_run(row: Any, model: type[BaseModel]) -> dict:
+    payload = model.model_validate(row).model_dump(mode="json")
+    payload.update(run_scope_display(row.crawl_mode, row.result))
+    return payload
 
 
 TEMPORARY_SOURCE_NAMES = {"临时详情页", "临时任务", ""}

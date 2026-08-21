@@ -23,6 +23,7 @@ from backend.app.modules.crawler.runs.schemas import (
     RunTaskSummary,
     _serialize_run_detail_task,
     accepted_run_action,
+    serialize_run,
 )
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from shared.schemas.common import paginated, success
@@ -135,7 +136,7 @@ def list_runs(
         .all()
     )
     return paginated(
-        rows=[CrawlRunListItem.model_validate(r).model_dump(mode="json") for r in rows],
+        rows=[serialize_run(r, CrawlRunListItem) for r in rows],
         total=total,
     )
 
@@ -145,7 +146,7 @@ def get_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends
     run = db.get(CrawlRun, run_id)
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
-    payload = CrawlRunDetailRead.model_validate(run).model_dump(mode="json")
+    payload = serialize_run(run, CrawlRunDetailRead)
     payload["logs"] = []
     return success(data=payload)
 

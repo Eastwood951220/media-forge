@@ -106,6 +106,7 @@ class AgentTaskFailedPayload(BaseModel):
     code: Literal[
         "agent_tab_create_failed",
         "agent_page_load_failed",
+        "agent_detail_dom_not_ready",
         "agent_content_script_unavailable",
         "agent_snapshot_failed",
     ]
