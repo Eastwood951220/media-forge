@@ -222,6 +222,31 @@ def publish_task_status_updated(db: Session, run: CrawlRun) -> None:
     )
 
 
+def publish_task_status_for_task_id(db: Session, task_id: uuid.UUID) -> None:
+    """Publish a recomputed runtime status event for one task.
+
+    Use this when the run that caused the state change may have been deleted.
+    """
+    from backend.app.modules.realtime.bus import event_bus as realtime_bus
+    from backend.app.modules.realtime.schemas import make_realtime_event
+
+    task = db.get(CrawlTask, task_id)
+    if task is None:
+        return
+    snapshot = get_task_runtime_status(db, task.id, task.owner_id)
+    if snapshot is None:
+        return
+    realtime_bus.publish(
+        make_realtime_event(
+            event="crawler.task.status.updated",
+            scope="crawler.task",
+            owner_id=str(task.owner_id),
+            resource_id=str(task.id),
+            payload=snapshot.model_dump(mode="json"),
+        )
+    )
+
+
 def build_task_runtime_snapshot_event(db: Session, owner_id: uuid.UUID) -> RealtimeEvent:
     """Build a snapshot realtime event for all tasks owned by the user.
 

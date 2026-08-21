@@ -26,6 +26,7 @@ from backend.app.modules.crawler.runs.schemas import (
     serialize_run,
 )
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
+from backend.app.modules.crawler.tasks.runtime_status import publish_task_status_for_task_id
 from shared.schemas.common import paginated, success
 
 router = APIRouter(prefix="/api/crawler/runs", tags=["crawler-runs"])
@@ -273,8 +274,11 @@ def delete_run(run_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depe
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
     if run.status in {"queued", "running"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="运行中任务不能删除，请先停止")
+    task_id = run.task_id
     db.delete(run)
     db.commit()
+    if task_id is not None:
+        publish_task_status_for_task_id(db, task_id)
     return success(data=accepted_run_action(run_id))
 
 
