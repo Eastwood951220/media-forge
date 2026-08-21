@@ -109,7 +109,7 @@ export default function TemporaryTaskModal({
         <Form.ErrorList errors={form.getFieldError('detail_urls')} />
         <Form.List name="detail_urls">
           {(fields, { add, remove }) => (
-            <Space direction="vertical" style={{ width: '100%', marginTop: 8 }}>
+            <Space orientation="vertical" style={{ width: '100%', marginTop: 8 }}>
               {fields.map((field) => (
                 <Space key={field.key} align="baseline" style={{ display: 'flex' }}>
                   <Form.Item

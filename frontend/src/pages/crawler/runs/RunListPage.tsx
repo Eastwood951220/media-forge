@@ -1,18 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
-import { useNavigate } from '@tanstack/react-router'
-import { Button, Popconfirm, Space, Table, Tag, message, Card } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { deleteCrawlerRun, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun } from '@/api/crawler/crawlerRun'
-import type { CrawlRun } from '@/api/crawler/crawlerRun/types'
-import { queryKeys } from '@/api/queryKeys'
-import { invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
-import { StatusTag } from '@/components/common'
-import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
-import { subscribeRealtime } from '@/realtime/eventSourceClient'
-import { useRouteActivationRefresh } from '@/hooks/useRouteActivationRefresh'
-import type { CrawlRunStatus } from '@/api/crawler/crawlerRun/types'
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import {DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined} from '@ant-design/icons'
+import {useNavigate} from '@tanstack/react-router'
+import {Button, Card, message, Popconfirm, Space, Table, Tag} from 'antd'
+import type {ColumnsType} from 'antd/es/table'
+import {useQuery, useQueryClient} from '@tanstack/react-query'
+import {deleteCrawlerRun, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun} from '@/api/crawler/crawlerRun'
+import type {CrawlRun, CrawlRunStatus} from '@/api/crawler/crawlerRun/types'
+import {queryKeys} from '@/api/queryKeys'
+import {invalidateCrawlerTaskLists} from '@/api/queryInvalidation'
+import {StatusTag} from '@/components/common'
+import {useCrawlerRuntimeStore} from '@/stores/useCrawlerRuntimeStore'
+import {subscribeRealtime} from '@/realtime/eventSourceClient'
+import {useRouteActivationRefresh} from '@/hooks/useRouteActivationRefresh'
 import styles from './RunListPage.module.less'
 
 const statusLabels: Record<string, { text: string; color: string }> = {
@@ -130,11 +129,10 @@ function RunListPage() {
 
   // Realtime subscription for resync — refresh the list once so cleared store is rehydrated
   useEffect(() => {
-    const unsubscribe = subscribeRealtime('system.resync_required', () => {
+    return subscribeRealtime('system.resync_required', () => {
       markResyncRequired('run-list')
       void refreshRuns()
     })
-    return unsubscribe
   }, [markResyncRequired, refreshRuns])
 
   useRouteActivationRefresh(refreshRuns)
@@ -142,19 +140,19 @@ function RunListPage() {
   const handleStop = useCallback(async (run: CrawlRun) => {
     try {
       await stopCrawlerRun(run.id)
-      message.success('已停止运行')
+      await message.success('已停止运行')
     } catch {
-      message.error('停止失败')
+      await message.error('停止失败')
     }
   }, [])
 
   const handleRestart = useCallback(async (run: CrawlRun) => {
     try {
       await restartCrawlerRun(run.id)
-      message.success('已重启运行')
+      await message.success('已重启运行')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '重启失败'
-      message.error(msg)
+      await message.error(msg)
     }
   }, [])
 
@@ -163,7 +161,7 @@ function RunListPage() {
       await deleteCrawlerRun(run.id)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '删除失败'
-      message.error(msg)
+      await message.error(msg)
       return
     }
 
@@ -171,7 +169,7 @@ function RunListPage() {
     try {
       await refreshRuns(true)
     } catch {
-      message.warning('运行记录已删除，但列表刷新失败，请手动刷新')
+      await message.warning('运行记录已删除，但列表刷新失败，请手动刷新')
       return
     }
 
@@ -180,7 +178,7 @@ function RunListPage() {
     if (nextPage !== current) {
       setCurrent(nextPage)
     }
-    message.success('已删除运行记录')
+    await message.success('已删除运行记录')
   }, [current, queryClient, refreshRuns, removeRunRuntime, runs.length])
 
   const columns: ColumnsType<CrawlRun> = [
@@ -189,7 +187,7 @@ function RunListPage() {
       dataIndex: 'task_name',
       key: 'task_name',
       render: (name: string, record) => (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <span style={{ fontWeight: 500 }}>{name}</span>
           <Tag color={runScopeColors[record.run_scope || ''] || 'default'} style={{ width: 'fit-content' }}>
             {record.run_scope_label || '全部任务'}

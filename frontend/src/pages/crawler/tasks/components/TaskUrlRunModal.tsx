@@ -12,7 +12,7 @@ interface TaskUrlRunModalProps {
 function optionLabel(url: TaskUrlEntry) {
   const title = url.url_name?.trim() || url.url
   return (
-    <Space direction="vertical" size={2}>
+    <Space orientation="vertical" size={2}>
       <Typography.Text>{title}</Typography.Text>
       <Space size={4}>
         <Tag>{url.url_type}</Tag>

@@ -70,11 +70,11 @@ function TaskListPage() {
     setTemporarySubmitting(true)
     try {
       await createTemporaryCrawlRun(payload)
-      message.success('临时任务已提交')
+      await message.success('临时任务已提交')
       setTemporaryModalOpen(false)
       handleRunSubmitted()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '临时任务提交失败')
+      await message.error(error instanceof Error ? error.message : '临时任务提交失败')
     } finally {
       setTemporarySubmitting(false)
     }
