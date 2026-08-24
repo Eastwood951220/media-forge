@@ -25,7 +25,7 @@ export default function TestResultCard({ result }: { result: StorageTestResult }
       {failedItems.length > 0 && (
         <Alert
           type="error"
-          message="错误详情"
+          title="错误详情"
           description={
             <ul>
               {failedItems.map((item) => (
@@ -39,7 +39,7 @@ export default function TestResultCard({ result }: { result: StorageTestResult }
         />
       )}
 
-      {allPassed && <Alert type="success" message="所有测试通过" showIcon />}
+      {allPassed && <Alert type="success" title="所有测试通过" showIcon />}
     </Card>
   )
 }

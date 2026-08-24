@@ -1,11 +1,31 @@
 .page {
-  max-width: 960px;
+  width: 100%;
 }
 
-.formContent {
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 20px;
+  align-items: start;
+}
+
+.mainPanel,
+.sidePanel {
+  min-width: 0;
+}
+
+.mainPanel {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.sidePanel {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .formCard {
@@ -15,6 +35,54 @@
 
   &:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.fieldGrid,
+.fieldGridDense,
+.switchGrid {
+  display: grid;
+  gap: 0 18px;
+
+  :global(.ant-form-item) {
+    margin-bottom: 18px;
+  }
+
+  :global(.ant-form-item:last-child) {
+    margin-bottom: 0;
+  }
+}
+
+.fieldGrid {
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+}
+
+.fieldGridDense {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.fieldSpan2 {
+  grid-column: span 2;
+}
+
+.switchGrid {
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  padding-top: 2px;
+
+  :global(.ant-form-item) {
+    padding: 12px 14px;
+    margin-bottom: 0;
+    border: 1px solid var(--border-color, #f0f0f0);
+    border-radius: 8px;
+  }
+
+  :global(.ant-form-item-row) {
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  :global(.ant-form-item-label) {
+    padding-bottom: 0;
   }
 }
 
@@ -44,20 +112,72 @@
 
 .actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
+
+  :global(.ant-btn) {
+    width: 100%;
+  }
+}
+
+.actionCard {
+  :global(.ant-card-body) {
+    padding-top: 16px;
+  }
 }
 
 .resultCard {
-  margin-top: 16px;
   border-radius: 12px;
+
+  :global(.ant-card-body) {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  :global(.ant-alert-message) {
+    color: inherit;
+  }
 }
 
 // Responsive
+@media (max-width: 1180px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidePanel {
+    position: static;
+  }
+
+  .actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+
+    :global(.ant-btn) {
+      width: auto;
+    }
+  }
+}
+
 @media (max-width: 768px) {
   .page {
     padding: 16px;
+  }
+
+  .layout,
+  .mainPanel {
     gap: 16px;
+  }
+
+  .fieldGrid,
+  .fieldGridDense,
+  .switchGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fieldSpan2 {
+    grid-column: auto;
   }
 }
 
@@ -69,5 +189,11 @@
 
   .formCard:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .switchGrid {
+    :global(.ant-form-item) {
+      border-color: var(--border-color, #374151);
+    }
   }
 }
