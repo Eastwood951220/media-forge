@@ -56,8 +56,8 @@ def poll_downloaded_video_files(context, search_terms: list[str], task_download_
     config = context.config
     movie_code = getattr(context.subtask, "movie_code", search_terms[0] if search_terms else "")
     max_poll_count = int(config.get("download_max_poll_count", 10) or 10)
-    poll_min = float(config.get("download_poll_interval_min", 5.0) or 0)
-    poll_max = float(config.get("download_poll_interval_max", poll_min) or poll_min)
+    poll_min = float(config.get("download_poll_interval_min", 30.0) or 0)
+    poll_max = float(config.get("download_poll_interval_max", 60.0) or poll_min)
     if poll_max < poll_min:
         poll_max = poll_min
 
