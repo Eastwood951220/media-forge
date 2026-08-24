@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 from backend.app.modules.storage.worker.download import (
@@ -37,6 +38,15 @@ def run_download_flow(context, magnet: dict, download_folder: str, download_root
             {"magnet_id": magnet.get("id"), "download_folder": download_folder, "result_paths": getattr(result, "result_paths", [])},
             step="submit_magnet",
         )
+        initial_wait = float(context.config.get("download_initial_wait_seconds", 60.0) or 0)
+        if initial_wait > 0:
+            context.log(
+                "INFO",
+                f"提交后等待 {initial_wait:g} 秒再首次查找视频",
+                {"wait_seconds": initial_wait, "magnet_id": magnet.get("id"), "download_folder": download_folder},
+                step="waiting_download",
+            )
+            time.sleep(initial_wait)
     except Exception as exc:
         if not is_submit_task_exists_error(exc):
             context.log("ERROR", f"提交磁力失败: {exc}", {"magnet_id": magnet.get("id")}, step="submit_magnet")
