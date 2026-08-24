@@ -62,7 +62,6 @@ def poll_downloaded_video_files(context, search_terms: list[str], task_download_
         poll_max = poll_min
 
     last_signature: tuple[tuple[str, str, int], ...] | None = None
-    last_accepted_files: list[dict] = []
 
     for poll_index in range(1, max_poll_count + 1):
         result = find_listed_video_files(
@@ -88,7 +87,6 @@ def poll_downloaded_video_files(context, search_terms: list[str], task_download_
                 return result.accepted_files
 
             last_signature = signature
-            last_accepted_files = result.accepted_files
             context.log(
                 "INFO",
                 f"检测到 {len(result.accepted_files)} 个候选视频，等待文件列表稳定",
@@ -97,7 +95,6 @@ def poll_downloaded_video_files(context, search_terms: list[str], task_download_
             )
         else:
             last_signature = None
-            last_accepted_files = []
             context.log(
                 "INFO",
                 f"轮询 #{poll_index}: 任务下载目录未发现可用视频文件，等待中",
