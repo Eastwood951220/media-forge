@@ -16,8 +16,9 @@ class StorageConfig(BaseModel):
 
     operation_delay_min: float = Field(default=0.5, ge=0)
     operation_delay_max: float = Field(default=1.5, ge=0)
-    download_poll_interval_min: float = Field(default=5.0, ge=0)
-    download_poll_interval_max: float = Field(default=15.0, ge=0)
+    download_initial_wait_seconds: float = Field(default=60.0, ge=0)
+    download_poll_interval_min: float = Field(default=30.0, ge=0)
+    download_poll_interval_max: float = Field(default=60.0, ge=0)
     retry_delay_min: float = Field(default=10.0, ge=0)
     retry_delay_max: float = Field(default=30.0, ge=0)
     max_step_retries: int = Field(default=3, ge=0)
@@ -43,6 +44,7 @@ class StorageConfigUpdate(BaseModel):
     auto_create_target_folder: bool | None = None
     operation_delay_min: float | None = Field(default=None, ge=0)
     operation_delay_max: float | None = Field(default=None, ge=0)
+    download_initial_wait_seconds: float | None = Field(default=None, ge=0)
     download_poll_interval_min: float | None = Field(default=None, ge=0)
     download_poll_interval_max: float | None = Field(default=None, ge=0)
     retry_delay_min: float | None = Field(default=None, ge=0)

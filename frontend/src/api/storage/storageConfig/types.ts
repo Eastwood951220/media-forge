@@ -10,6 +10,7 @@ export interface StorageConfig {
   auto_create_target_folder: boolean
   operation_delay_min: number
   operation_delay_max: number
+  download_initial_wait_seconds: number
   download_poll_interval_min: number
   download_poll_interval_max: number
   retry_delay_min: number

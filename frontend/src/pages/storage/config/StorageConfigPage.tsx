@@ -173,6 +173,9 @@ export default function StorageConfigPage() {
               <Form.Item name="operation_delay_max" label="操作最大延迟 (秒)">
                 <FullWidthNumberInput min={0} max={60} step={0.5} />
               </Form.Item>
+              <Form.Item name="download_initial_wait_seconds" label="首次查找前等待 (秒)">
+                <FullWidthNumberInput min={0} max={3600} step={1} />
+              </Form.Item>
               <Form.Item name="download_poll_interval_min" label="下载轮询最小间隔 (秒)">
                 <FullWidthNumberInput min={0} max={120} step={0.5} />
               </Form.Item>
