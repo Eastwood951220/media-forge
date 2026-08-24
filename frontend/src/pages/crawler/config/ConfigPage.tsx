@@ -53,9 +53,11 @@ export default function ConfigPage() {
     }
   }
 
+  const isAgentMode = savedFetchMode === 'agent'
+
   return (
     <>
-      <div className={styles.configLayout}>
+      <div className={`${styles.configLayout} ${isAgentMode ? '' : styles.configLayoutFull}`}>
         <div className={styles.configLeft}>
           <Form form={form} layout="vertical" onFinish={handleSaveConfig}>
             <Card
@@ -158,7 +160,7 @@ export default function ConfigPage() {
           </Form>
         </div>
 
-        {savedFetchMode === 'agent' && (
+        {isAgentMode && (
           <div className={styles.configRight}>
             <Card title="Chrome Agent" className={`${styles.formCard} ${styles.agentCard}`}>
               <AgentHealthCard />
