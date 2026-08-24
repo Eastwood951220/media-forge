@@ -178,7 +178,7 @@ export default function CookieConfigDrawer({ open, onClose }: CookieConfigDrawer
     >
       <div className={styles.editorFrame}>
         <Editor
-          height="420px"
+          height="100%"
           defaultLanguage="json"
           value={cookieJson}
           loading="加载 Cookie 中..."
