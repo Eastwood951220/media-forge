@@ -125,32 +125,9 @@ async def _handle_task_request(ctx: AgentProtocolContext, message: dict[str, Any
         execution_timeout_seconds=int(config.SECURITY_WAIT_SECONDS),
     )
     if item is None:
-        events: list[CrawlerAgentEvent] = [
-            add_agent_event(
-                ctx.db,
-                owner_id=uuid.UUID(str(ctx.agent.owner_id)),
-                agent_id=uuid.UUID(str(ctx.agent.id)),
-                source="backend",
-                event_type="task_request_received",
-                level="info",
-                message="Chrome Agent 请求领取任务",
-                retention_class="operational",
-                phase="dispatch.claim",
-            ),
-            add_agent_event(
-                ctx.db,
-                owner_id=uuid.UUID(str(ctx.agent.owner_id)),
-                agent_id=uuid.UUID(str(ctx.agent.id)),
-                source="backend",
-                event_type="task_none",
-                level="info",
-                message="Chrome Agent 请求领取任务，但暂无 pending 任务",
-                retention_class="operational",
-                phase="dispatch.claim",
-                details={"status": "none"},
-            ),
-        ]
-        commit_and_publish_agent_events(ctx.db, events)
+        ctx.agent.last_seen_at = datetime.now(UTC)
+        ctx.agent.status = "online"
+        ctx.db.commit()
         await ctx.websocket.send_json({
             "id": f"none_{message.get('id')}",
             "type": "task.none",
@@ -435,6 +412,7 @@ async def _handle_diagnostics_batch(ctx: AgentProtocolContext, message: dict[str
 
 async def _handle_cookie_sync(ctx: AgentProtocolContext, message: dict[str, Any]) -> None:
     payload = message.get("payload") or {}
+    request_id = str(payload.get("request_id") or "")
     cookies = [
         AgentCookie.model_validate(c)
         for c in payload.get("cookies", [])
@@ -443,14 +421,25 @@ async def _handle_cookie_sync(ctx: AgentProtocolContext, message: dict[str, Any]
     ctx.agent.last_cookie_sync_at = datetime.now(UTC)
     ctx.agent.last_seen_at = datetime.now(UTC)
     ctx.db.commit()
+    sync_payload = {
+        "request_id": request_id or None,
+        "accepted": result.accepted,
+        "rejected": result.rejected,
+        "cookie_names": result.cookie_names,
+        "last_cookie_sync_at": (
+            ctx.agent.last_cookie_sync_at.isoformat()
+            if ctx.agent.last_cookie_sync_at
+            else None
+        ),
+    }
+    if request_id:
+        ctx.registry.complete_cookie_sync_waiter(request_id, sync_payload)
     await ctx.websocket.send_json({
         "id": f"ack_{message.get('id')}",
         "type": "server.ack",
         "payload": {
             "message_id": message.get("id"),
-            "accepted": result.accepted,
-            "rejected": result.rejected,
-            "cookie_names": result.cookie_names,
+            **sync_payload,
         },
     })
 

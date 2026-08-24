@@ -1,9 +1,9 @@
 """Protocol, timing, and retry constants for Chrome Agent dispatch."""
 
-AGENT_PROTOCOL_VERSION: int = 2
+AGENT_PROTOCOL_VERSION: int = 3
 """Current WebSocket protocol version the backend speaks."""
 
-AGENT_MINIMUM_PROTOCOL_VERSION: int = 2
+AGENT_MINIMUM_PROTOCOL_VERSION: int = 3
 """Lowest protocol version the extension must support to connect."""
 
 AGENT_REQUIRED_CAPABILITIES: frozenset[str] = frozenset(
@@ -11,6 +11,7 @@ AGENT_REQUIRED_CAPABILITIES: frozenset[str] = frozenset(
         "task_events",
         "attempt_guard",
         "execution_deadline",
+        "cookie_sync_request",
     }
 )
 """Capabilities the extension must advertise to be considered compatible."""
@@ -18,7 +19,7 @@ AGENT_REQUIRED_CAPABILITIES: frozenset[str] = frozenset(
 AGENT_HEARTBEAT_INTERVAL_SECONDS: int = 20
 """How often the extension should send a heartbeat (seconds)."""
 
-AGENT_HEARTBEAT_FRESH_SECONDS: int = 45
+AGENT_HEARTBEAT_FRESH_SECONDS: int = 900
 """How old the last heartbeat can be before the agent is considered stale."""
 
 AGENT_TASK_POLL_INTERVAL_MS: int = 1000

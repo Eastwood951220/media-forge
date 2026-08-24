@@ -1,6 +1,24 @@
 export type JavdbFetchMode = 'static' | 'agent'
 export type JavdbAgentParseMode = 'backend' | 'extension'
 
+export interface JavdbCookie {
+  domain: string
+  expirationDate?: number | null
+  hostOnly?: boolean
+  httpOnly?: boolean
+  name: string
+  path: string
+  sameSite?: string | null
+  secure?: boolean
+  session?: boolean
+  storeId?: string | null
+  value: string
+}
+
+export interface CookiesConfig {
+  cookies: JavdbCookie[]
+}
+
 /** Application config stored in env vars. */
 export interface AppConfig {
   MAX_LIST_PAGES?: number

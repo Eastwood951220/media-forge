@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
@@ -32,6 +34,7 @@ from backend.app.modules.crawler.agent.diagnostics import (
 from backend.app.modules.crawler.agent.errors import agent_error_message
 from backend.app.modules.crawler.agent.protocol import AgentProtocolContext, dispatch_agent_message, handle_agent_hello
 from backend.app.modules.crawler.agent.schemas import (
+    AgentCookieSyncResponse,
     AgentEventPageResponse,
     AgentSessionCreateRequest,
     AgentSessionCreateResponse,
@@ -42,6 +45,8 @@ from backend.app.modules.crawler.agent.work_items import release_agent_work_item
 from shared.schemas.common import success
 
 router = APIRouter(prefix="/api/crawler/agent", tags=["crawler-agent"])
+
+AGENT_COOKIE_SYNC_TIMEOUT_SECONDS = 10.0
 
 
 def _serialize_work_item(item: CrawlerAgentWorkItem) -> dict[str, Any]:
@@ -161,6 +166,45 @@ def rotate_agent_token(current_user: CurrentUser, db: Session = Depends(get_db))
     db.refresh(agent)
     payload = AgentTokenRotateResponse(token=raw_token, status=AgentStatusResponse(**_status(agent, db)))
     return success(data=payload.model_dump(mode="json"))
+
+
+@router.post("/cookies/sync-request")
+async def request_agent_cookie_sync(current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+    agent = (
+        db.query(CrawlerAgent)
+        .filter(CrawlerAgent.owner_id == current_user.id)
+        .order_by(CrawlerAgent.created_at.desc())
+        .first()
+    )
+    request_id = uuid.uuid4().hex
+    future = agent_registry.create_cookie_sync_waiter(request_id)
+    try:
+        if agent is None or agent.status == "upgrade_required":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"msg": "agent_unavailable", "data": {"reason": "agent_unavailable"}},
+            )
+        sent = await agent_registry.send_to_ready_owner(
+            str(current_user.id),
+            "cookie.sync_request",
+            {"request_id": request_id, "domain": "javdb.com"},
+        )
+        if not sent:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"msg": "agent_unavailable", "data": {"reason": "agent_unavailable"}},
+            )
+        payload = await asyncio.wait_for(future, timeout=AGENT_COOKIE_SYNC_TIMEOUT_SECONDS)
+    except TimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail={"msg": "cookie_sync_timeout", "data": {"reason": "cookie_sync_timeout"}},
+        ) from exc
+    finally:
+        agent_registry.cancel_cookie_sync_waiter(request_id)
+
+    response = AgentCookieSyncResponse.model_validate(payload)
+    return success(data=response.model_dump(mode="json"))
 
 
 @router.post("/sessions")

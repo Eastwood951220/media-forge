@@ -1,6 +1,11 @@
 import { runAssignedTask, waitForTabComplete } from './taskRunner'
+import {
+  AGENT_PROTOCOL_VERSION,
+  AGENT_REQUIRED_CAPABILITIES,
+} from './protocol'
 import type {
   AgentCookie,
+  CookieSyncRequestPayload,
   AgentLocalDiagnostic,
   AgentLocalStatus,
   AssignedTask,
@@ -43,7 +48,9 @@ export type AgentClientDeps = {
 const RECONNECT_DELAYS_MS = [1000, 2000, 5000, 10000, 30000]
 const JITTER_MS = 300
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 20_000
+const DEFAULT_TASK_POLL_INTERVAL_MS = 1_000
 const DEFAULT_EXECUTION_DEADLINE_MS = 120_000
+const ACTIVE_POLL_WINDOW_MS = 120_000
 
 export class AgentClient {
   private socket: WebSocket | null = null
@@ -56,6 +63,8 @@ export class AgentClient {
   private pendingDiagnostics: AgentLocalDiagnostic[] | null = null
   private pendingDiagnosticsMessageId: string | null = null
   private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS
+  private taskPollIntervalMs = DEFAULT_TASK_POLL_INTERVAL_MS
+  private activeUntilMs = 0
   private handshakeComplete = false
   private reconnectAttempt = 0
   private stopping = false
@@ -125,6 +134,23 @@ export class AgentClient {
     await this.start()
   }
 
+  async wake(): Promise<void> {
+    if (this.stopping) return
+    const socketOpen = this.socket?.readyState === WebSocket.OPEN
+    if (!socketOpen) {
+      if (this.reconnectTimer) {
+        this.clearTimeout(this.reconnectTimer)
+        this.reconnectTimer = null
+      }
+      this.stopping = false
+      await this.start()
+      return
+    }
+    if (!this.handshakeComplete) return
+    this.send('agent.heartbeat', {})
+    this.requestTask()
+  }
+
   private wsUrl(backendUrl: string, session: string): string {
     const url = new URL(backendUrl)
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -152,14 +178,19 @@ export class AgentClient {
     if (message.type === 'server.hello') {
       const payload = message.payload as Record<string, unknown>
       const intervalSeconds = Number(payload.heartbeat_interval_seconds ?? 20)
+      const pollIntervalMs = Number(payload.task_poll_interval_ms ?? DEFAULT_TASK_POLL_INTERVAL_MS)
       this.heartbeatIntervalMs =
         Number.isFinite(intervalSeconds) && intervalSeconds > 0
           ? intervalSeconds * 1000
           : DEFAULT_HEARTBEAT_INTERVAL_MS
+      this.taskPollIntervalMs =
+        Number.isFinite(pollIntervalMs) && pollIntervalMs > 0
+          ? pollIntervalMs
+          : DEFAULT_TASK_POLL_INTERVAL_MS
       this.send('agent.hello', {
-        protocol_version: 2,
+        protocol_version: AGENT_PROTOCOL_VERSION,
         version: this.deps.runtimeVersion(),
-        capabilities: ['task_events', 'attempt_guard', 'execution_deadline'],
+        capabilities: [...AGENT_REQUIRED_CAPABILITIES],
       })
       return
     }
@@ -172,7 +203,6 @@ export class AgentClient {
         phase: 'connected',
         message: 'connected',
       })
-      this.startHeartbeat()
       await this.sendCookieSync()
       await this.sendDiagnosticsBatch()
       this.requestTask()
@@ -181,7 +211,13 @@ export class AgentClient {
 
     if (!this.handshakeComplete) return
 
+    if (message.type === 'cookie.sync_request') {
+      await this.handleCookieSyncRequest(message.payload as CookieSyncRequestPayload)
+      return
+    }
+
     if (message.type === 'task.available') {
+      this.enterActiveWindow()
       await this.deps.appendLocalDiagnostic(
         'info',
         'task.available_received',
@@ -202,10 +238,9 @@ export class AgentClient {
         this.taskPollTimer = null
       }
       const retryAfter = Number(message.payload?.retry_after_ms ?? 1000)
-      this.taskPollTimer = this.setTimeout(() => {
-        this.taskPollTimer = null
-        this.requestTask()
-      }, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 1000)
+      this.scheduleActiveTaskPoll(
+        Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : this.taskPollIntervalMs,
+      )
       return
     }
 
@@ -228,6 +263,8 @@ export class AgentClient {
         attempt: Number(payload.attempt),
         execution_deadline_at: executionDeadlineAt,
       }
+      this.enterActiveWindow()
+      this.startHeartbeat()
       await this.runTask()
       return
     }
@@ -242,6 +279,8 @@ export class AgentClient {
       if (this.terminalMessageId && ackId === `ack_${this.terminalMessageId}`) {
         this.terminalMessageId = null
         this.activeTask = null
+        this.stopHeartbeat()
+        this.enterActiveWindow()
         this.requestTask()
       }
       return
@@ -266,6 +305,8 @@ export class AgentClient {
         )
         this.terminalMessageId = null
         this.activeTask = null
+        this.stopHeartbeat()
+        this.enterActiveWindow()
         await this.deps.setLocalStatus({
           connected: true,
           phase: 'connected',
@@ -311,9 +352,49 @@ export class AgentClient {
     }, this.heartbeatIntervalMs)
   }
 
+  private stopHeartbeat(): void {
+    if (!this.heartbeatTimer) return
+    this.clearInterval(this.heartbeatTimer)
+    this.heartbeatTimer = null
+  }
+
+  private enterActiveWindow(): void {
+    this.activeUntilMs = Math.max(this.activeUntilMs, Date.now() + ACTIVE_POLL_WINDOW_MS)
+  }
+
+  private isInActiveWindow(): boolean {
+    return Date.now() <= this.activeUntilMs
+  }
+
+  private scheduleActiveTaskPoll(delay: number): void {
+    if (!this.isInActiveWindow()) return
+    if (this.taskPollTimer) {
+      this.clearTimeout(this.taskPollTimer)
+      this.taskPollTimer = null
+    }
+    this.taskPollTimer = this.setTimeout(() => {
+      this.taskPollTimer = null
+      if (this.isInActiveWindow()) {
+        this.requestTask()
+      }
+    }, delay)
+  }
+
   private async sendCookieSync(): Promise<void> {
     const cookies = await this.deps.javdbCookies()
     this.send('agent.cookie_sync', { cookies })
+  }
+
+  private async handleCookieSyncRequest(payload: CookieSyncRequestPayload): Promise<void> {
+    const requestId = typeof payload.request_id === 'string' ? payload.request_id : undefined
+    try {
+      const cookies = await this.deps.javdbCookies()
+      this.send('agent.cookie_sync', { request_id: requestId, cookies })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'cookie_sync_request_failed'
+      await this.deps.appendLocalDiagnostic('error', 'cookie.sync_request_failed', message)
+      this.send('agent.cookie_sync', { request_id: requestId, cookies: [] })
+    }
   }
 
   private async sendDiagnosticsBatch(): Promise<void> {
@@ -334,7 +415,6 @@ export class AgentClient {
   private requestTask(): void {
     if (this.requestOutstanding || this.activeTask) return
     this.requestOutstanding = true
-    void this.deps.appendLocalDiagnostic('info', 'task.request_sent', 'Task request sent')
     this.send('agent.task_request', {})
   }
 
@@ -442,6 +522,8 @@ export class AgentClient {
       this.terminalMessageId = messageId
     } else {
       this.activeTask = null
+      this.stopHeartbeat()
+      this.enterActiveWindow()
       await this.deps.setLocalStatus({
         connected: true,
         phase: 'connected',

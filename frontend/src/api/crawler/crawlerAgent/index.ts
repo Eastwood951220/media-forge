@@ -2,6 +2,7 @@ import { request } from '@/request'
 import type {
   AgentEventPage,
   AgentEventQuery,
+  AgentCookieSyncResponse,
   AgentStatus,
   AgentTokenRotateResponse,
 } from './types'
@@ -24,7 +25,12 @@ export function rotateAgentToken(): Promise<AgentTokenRotateResponse> {
   return request.post<AgentTokenRotateResponse>(`${BASE_URL}/token/rotate`, {})
 }
 
+export function requestAgentCookieSync(): Promise<AgentCookieSyncResponse> {
+  return request.post<AgentCookieSyncResponse>(`${BASE_URL}/cookies/sync-request`, {})
+}
+
 export type {
+  AgentCookieSyncResponse,
   AgentEvent,
   AgentEventLevel,
   AgentEventPage,

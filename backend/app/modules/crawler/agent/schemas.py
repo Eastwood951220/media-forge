@@ -51,6 +51,13 @@ class AgentTokenRotateResponse(BaseModel):
     status: AgentStatusResponse
 
 
+class AgentCookieSyncResponse(BaseModel):
+    accepted: int = 0
+    rejected: int = 0
+    cookie_names: list[str] = Field(default_factory=list)
+    last_cookie_sync_at: datetime | None = None
+
+
 class AgentSessionCreateRequest(BaseModel):
     token: str
     version: str | None = None
@@ -75,7 +82,7 @@ class ServerMessage(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
-# ── Protocol 2 message schemas ──────────────────────────────────────────────
+# ── Protocol 3 message schemas ──────────────────────────────────────────────
 
 class AgentHelloPayload(BaseModel):
     protocol_version: int

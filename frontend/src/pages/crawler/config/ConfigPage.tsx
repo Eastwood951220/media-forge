@@ -1,23 +1,19 @@
 import { useEffect, useState } from 'react'
 import {
-  Alert,
   App,
   Button,
   Card,
   Form,
   Segmented,
-  Spin,
-  Typography,
 } from 'antd'
 import {
   fetchConfig,
   updateConfig,
   type AppConfig,
-  testCookiesConfig,
-  type CookieTestResponse,
 } from '@/api/crawler/crawlerConfig'
 import { FullWidthNumberInput } from '@/components/common'
 import AgentHealthCard from './components/AgentHealthCard'
+import CookieConfigDrawer from './components/CookieConfigDrawer'
 import styles from './ConfigPage.module.less'
 
 function getErrorMessage(error: unknown): string {
@@ -30,8 +26,7 @@ export default function ConfigPage() {
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [cookieTesting, setCookieTesting] = useState(false)
-  const [cookieTestResult, setCookieTestResult] = useState<CookieTestResponse | null>(null)
+  const [cookieDrawerOpen, setCookieDrawerOpen] = useState(false)
 
   useEffect(() => {
     fetchConfig()
@@ -54,45 +49,24 @@ export default function ConfigPage() {
     }
   }
 
-  const handleTestCookies = async () => {
-    setCookieTesting(true)
-    try {
-      const result = await testCookiesConfig()
-      setCookieTestResult(result)
-      if (result.ok) {
-        message.success(result.message)
-      } else {
-        message.error(result.message)
-      }
-    } catch (error: unknown) {
-      message.error(getErrorMessage(error))
-    } finally {
-      setCookieTesting(false)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className={styles.loadingContainer}>
-        <Spin size="large" />
-        <div className={styles.loadingText}>加载配置中...</div>
-      </div>
-    )
-  }
-
   return (
-    <div className={styles.configLayout}>
-      <div className={styles.configLeft}>
-        <Form form={form} layout="vertical" onFinish={handleSaveConfig}>
-          <Card
-            title="爬取参数"
-            className={styles.formCard}
-            extra={
-              <Button type="primary" htmlType="submit" loading={saving}>
-                保存配置
-              </Button>
-            }
-          >
+    <>
+      <div className={styles.configLayout}>
+        <div className={styles.configLeft}>
+          <Form form={form} layout="vertical" onFinish={handleSaveConfig}>
+            <Card
+              title="爬取参数"
+              className={styles.formCard}
+              loading={loading}
+              extra={
+                <div className={styles.configActions}>
+                  <Button onClick={() => setCookieDrawerOpen(true)}>Cookie 检测</Button>
+                  <Button type="primary" htmlType="submit" loading={saving} disabled={loading}>
+                    保存配置
+                  </Button>
+                </div>
+              }
+            >
             <div className={styles.formSection}>
               <div className={styles.sectionTitle}>并发与性能</div>
               <div className={styles.formGrid}>
@@ -176,46 +150,17 @@ export default function ConfigPage() {
                 <FullWidthNumberInput min={0} />
               </Form.Item>
             </div>
+            </Card>
+          </Form>
+        </div>
+
+        <div className={styles.configRight}>
+          <Card title="Chrome Agent" className={`${styles.formCard} ${styles.agentCard}`}>
+            <AgentHealthCard />
           </Card>
-        </Form>
+        </div>
       </div>
-
-      <div className={styles.configRight}>
-        <Card title="Chrome Agent" className={`${styles.formCard} ${styles.agentCard}`}>
-          <AgentHealthCard />
-        </Card>
-      </div>
-
-      <Card
-        title="Cookie 检测"
-        className={`${styles.formCard} ${styles.cookieCard}`}
-        extra={
-          <Button
-            type="primary"
-            onClick={() => {
-              void handleTestCookies()
-            }}
-            loading={cookieTesting}
-          >
-            测试 Cookie
-          </Button>
-        }
-      >
-        {cookieTestResult && (
-          <Alert
-            className={styles.cookieTestResult}
-            type={cookieTestResult.ok ? 'success' : 'error'}
-            showIcon
-            title={cookieTestResult.message}
-            description={`URL: ${cookieTestResult.url} · 状态: ${cookieTestResult.status_code ?? '-'} · 原因: ${cookieTestResult.reason} · 模式: ${cookieTestResult.fetch_mode}`}
-          />
-        )}
-        {!cookieTestResult && (
-          <Typography.Text type="secondary">
-            点击"测试 Cookie"检测当前 JavDB 访问状态。Agent 模式下 Cookie 由 Chrome 插件自动同步。
-          </Typography.Text>
-        )}
-      </Card>
-    </div>
+      <CookieConfigDrawer open={cookieDrawerOpen} onClose={() => setCookieDrawerOpen(false)} />
+    </>
   )
 }

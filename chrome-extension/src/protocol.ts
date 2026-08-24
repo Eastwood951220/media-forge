@@ -1,9 +1,10 @@
-export const AGENT_PROTOCOL_VERSION = 2
-export const AGENT_MINIMUM_PROTOCOL_VERSION = 2
+export const AGENT_PROTOCOL_VERSION = 3
+export const AGENT_MINIMUM_PROTOCOL_VERSION = 3
 export const AGENT_REQUIRED_CAPABILITIES = [
   'task_events',
   'attempt_guard',
   'execution_deadline',
+  'cookie_sync_request',
 ] as const
 export type AgentRequiredCapability = (typeof AGENT_REQUIRED_CAPABILITIES)[number]
 
@@ -76,6 +77,11 @@ export type AgentCookie = {
   secure: boolean
   session: boolean
   storeId?: string | null
+}
+
+export type CookieSyncRequestPayload = {
+  request_id?: string
+  domain?: string
 }
 
 export type AgentPageSnapshotPayload = {

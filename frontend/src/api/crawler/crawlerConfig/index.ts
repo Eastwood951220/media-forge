@@ -1,7 +1,7 @@
 import { request } from '@/request'
-import type { AppConfig, CookieTestResponse } from './types.ts'
+import type { AppConfig, CookieTestResponse, CookiesConfig } from './types.ts'
 
-export type { AppConfig, CookieTestResponse } from './types.ts'
+export type { AppConfig, CookieTestResponse, CookiesConfig, JavdbCookie } from './types.ts'
 export type { JavdbAgentParseMode, JavdbFetchMode } from './types.ts'
 
 const BASE_URL = '/api/crawler/config'
@@ -12,6 +12,14 @@ export function fetchConfig(): Promise<AppConfig> {
 
 export function updateConfig(data: Partial<AppConfig>): Promise<AppConfig> {
   return request.put<AppConfig>(BASE_URL, data)
+}
+
+export function fetchCookiesConfig(): Promise<CookiesConfig> {
+  return request.get<CookiesConfig>(`${BASE_URL}/cookies`)
+}
+
+export function updateCookiesConfig(data: CookiesConfig): Promise<CookiesConfig> {
+  return request.put<CookiesConfig>(`${BASE_URL}/cookies`, data)
 }
 
 export function testCookiesConfig(url?: string): Promise<CookieTestResponse> {

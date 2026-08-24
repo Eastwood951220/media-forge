@@ -41,6 +41,7 @@ class AgentConnectionRegistry:
     def __init__(self) -> None:
         self._lock = RLock()
         self._connections: dict[str, AgentConnection] = {}
+        self._cookie_sync_waiters: dict[str, asyncio.Future[dict[str, Any]]] = {}
 
     def connect(
         self, *, agent_id: str, owner_id: str, websocket: WebSocket
@@ -123,6 +124,30 @@ class AgentConnectionRegistry:
                 conn.ready and conn.owner_id == owner_id
                 for conn in self._connections.values()
             )
+
+    def create_cookie_sync_waiter(self, request_id: str) -> asyncio.Future[dict[str, Any]]:
+        """Create a one-shot future completed by a matching cookie sync."""
+        future: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
+        with self._lock:
+            self._cookie_sync_waiters[request_id] = future
+        return future
+
+    def complete_cookie_sync_waiter(self, request_id: str, payload: dict[str, Any]) -> bool:
+        """Complete and remove a pending cookie sync future."""
+        with self._lock:
+            future = self._cookie_sync_waiters.pop(request_id, None)
+        if future is None or future.done():
+            return False
+        loop = future.get_loop()
+        loop.call_soon_threadsafe(future.set_result, payload)
+        return True
+
+    def cancel_cookie_sync_waiter(self, request_id: str) -> None:
+        """Remove and cancel a pending cookie sync future."""
+        with self._lock:
+            future = self._cookie_sync_waiters.pop(request_id, None)
+        if future is not None and not future.done():
+            future.cancel()
 
     async def send(
         self, agent_id: str, message_type: str, payload: dict[str, Any]

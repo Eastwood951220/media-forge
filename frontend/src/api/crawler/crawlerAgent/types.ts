@@ -92,3 +92,10 @@ export interface AgentTokenRotateResponse {
   token: string
   status: AgentStatus
 }
+
+export interface AgentCookieSyncResponse {
+  accepted: number
+  rejected: number
+  cookie_names: string[]
+  last_cookie_sync_at: string | null
+}
