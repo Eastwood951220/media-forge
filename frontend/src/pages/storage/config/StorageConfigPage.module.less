@@ -21,8 +21,6 @@
 }
 
 .sidePanel {
-  position: sticky;
-  top: 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -77,12 +75,30 @@
   }
 
   :global(.ant-form-item-row) {
+    display: flex;
+    flex-wrap: nowrap;
     align-items: center;
     justify-content: space-between;
+    width: 100%;
   }
 
   :global(.ant-form-item-label) {
+    flex: 1 1 auto;
     padding-bottom: 0;
+    text-align: left;
+
+    > label {
+      width: 100%;
+      height: auto;
+    }
+  }
+
+  :global(.ant-form-item-control) {
+    flex: 0 0 auto;
+  }
+
+  :global(.ant-form-item-control-input) {
+    min-height: 0;
   }
 }
 
@@ -144,10 +160,6 @@
 @media (max-width: 1180px) {
   .layout {
     grid-template-columns: 1fr;
-  }
-
-  .sidePanel {
-    position: static;
   }
 
   .actions {
