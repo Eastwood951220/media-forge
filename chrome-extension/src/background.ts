@@ -7,6 +7,9 @@ import {
 } from './diagnostics'
 import type { AgentClientDeps, AgentSettings } from './agentClient'
 
+const AGENT_WAKE_ALARM = 'media_forge_agent_wake'
+const AGENT_WAKE_PERIOD_MINUTES = 10
+
 async function settings(): Promise<AgentSettings | null> {
   const data = await chrome.storage.sync.get(['backendUrl', 'token'])
   if (!data.backendUrl || !data.token) return null
@@ -111,6 +114,14 @@ const deps: AgentClientDeps = {
 
 const client = new AgentClient(deps)
 
+async function ensureWakeAlarm() {
+  const existing = await chrome.alarms.get(AGENT_WAKE_ALARM)
+  if (existing) return
+  await chrome.alarms.create(AGENT_WAKE_ALARM, {
+    periodInMinutes: AGENT_WAKE_PERIOD_MINUTES,
+  })
+}
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'sync') return
   if (!changes.backendUrl && !changes.token) return
@@ -126,11 +137,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 })
 
 chrome.runtime.onInstalled.addListener(() => {
+  void ensureWakeAlarm()
   void client.start()
 })
 
 chrome.runtime.onStartup.addListener(() => {
+  void ensureWakeAlarm()
   void client.start()
 })
 
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== AGENT_WAKE_ALARM) return
+  void client.wake()
+})
+
+void ensureWakeAlarm()
 void client.start()

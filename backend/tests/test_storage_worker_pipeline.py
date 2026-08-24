@@ -263,7 +263,7 @@ def test_execute_current_magnet_attempt_polls_until_file_appears(monkeypatch, tm
     )
 
     assert success is True
-    assert provider.list_calls == 3
+    assert provider.list_calls == 4
 
 
 def test_execute_current_magnet_attempt_fails_after_download_poll_limit(monkeypatch, tmp_path):
@@ -493,7 +493,7 @@ def test_execute_current_magnet_attempt_marks_subtask_skipped_when_all_targets_e
         config={
             "download_root_folder": "/Downloads",
             "target_folder": "/Movies",
-            "download_max_poll_count": 1,
+            "download_max_poll_count": 2,
             "download_poll_interval_min": 0,
             "download_poll_interval_max": 0,
             "video_extensions": [".mp4"],
@@ -1229,10 +1229,116 @@ def test_poll_downloaded_video_files_uses_list_subfiles_and_does_not_search_root
     assert context.provider.list_calls == [
         "/Downloads/storage_sub",
         "/Downloads/storage_sub/ACZD-165",
+        "/Downloads/storage_sub",
+        "/Downloads/storage_sub/ACZD-165",
     ]
     assert [log["context"]["search_method"] for log in context.logs if log["message"] == "查找下载文件"] == [
         "list_sub_files",
+        "list_sub_files",
     ]
+
+
+def test_poll_downloaded_video_files_waits_until_accepted_file_set_is_stable(monkeypatch):
+    from backend.app.modules.storage.worker import download
+
+    sleeps: list[float] = []
+
+    class Provider:
+        pass
+
+    class Subtask:
+        movie_code = "ABC-123"
+
+    class Context:
+        provider = Provider()
+        subtask = Subtask()
+        config = {
+            "download_max_poll_count": 4,
+            "download_poll_interval_min": 10,
+            "download_poll_interval_max": 10,
+            "video_extensions": [".mp4"],
+            "minimum_video_size_mb": 100,
+        }
+        messages: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.messages.append(message)
+            return {}
+
+    results = [
+        [{"name": "ABC-123-CD1.mp4", "path": "/Downloads/task/ABC-123-CD1.mp4", "size": 100}],
+        [
+            {"name": "ABC-123-CD1.mp4", "path": "/Downloads/task/ABC-123-CD1.mp4", "size": 100},
+            {"name": "ABC-123-CD2.mp4", "path": "/Downloads/task/ABC-123-CD2.mp4", "size": 100},
+        ],
+        [
+            {"name": "ABC-123-CD1.mp4", "path": "/Downloads/task/ABC-123-CD1.mp4", "size": 100},
+            {"name": "ABC-123-CD2.mp4", "path": "/Downloads/task/ABC-123-CD2.mp4", "size": 100},
+        ],
+    ]
+
+    class SearchResult:
+        def __init__(self, accepted_files):
+            self.accepted_files = accepted_files
+            self.log_context = {}
+
+    def fake_find_listed_video_files(**kwargs):
+        return SearchResult(results.pop(0))
+
+    monkeypatch.setattr(download, "find_listed_video_files", fake_find_listed_video_files)
+    monkeypatch.setattr(download.random, "uniform", lambda minimum, maximum: minimum)
+    monkeypatch.setattr(download.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    context = Context()
+    found = download.poll_downloaded_video_files(context, ["ABC-123"], "/Downloads/task", "/Downloads")
+
+    assert [item["name"] for item in found] == ["ABC-123-CD1.mp4", "ABC-123-CD2.mp4"]
+    assert sleeps == [10, 10]
+    assert any("等待文件列表稳定" in message for message in context.messages)
+    assert any("文件列表已稳定" in message for message in context.messages)
+
+
+def test_poll_downloaded_video_files_uses_schema_poll_interval_defaults_when_missing(monkeypatch):
+    from backend.app.modules.storage.worker import download
+
+    uniform_bounds: list[tuple[float, float]] = []
+    sleeps: list[float] = []
+
+    class Provider:
+        pass
+
+    class Subtask:
+        movie_code = "ABC-123"
+
+    class Context:
+        provider = Provider()
+        subtask = Subtask()
+        config = {
+            "download_max_poll_count": 2,
+            "video_extensions": [".mp4"],
+            "minimum_video_size_mb": 100,
+        }
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            return {}
+
+    class SearchResult:
+        accepted_files: list[dict] = []
+        log_context: dict = {}
+
+    def fake_uniform(minimum, maximum):
+        uniform_bounds.append((minimum, maximum))
+        return minimum
+
+    monkeypatch.setattr(download, "find_listed_video_files", lambda **kwargs: SearchResult())
+    monkeypatch.setattr(download.random, "uniform", fake_uniform)
+    monkeypatch.setattr(download.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    files = download.poll_downloaded_video_files(Context(), ["ABC-123"], "/Downloads/task", "/Downloads")
+
+    assert files == []
+    assert uniform_bounds == [(30.0, 60.0)]
+    assert sleeps == [30.0]
 
 
 def test_poll_downloaded_video_files_does_not_search_root_when_task_folder_has_file(monkeypatch):
@@ -1291,7 +1397,7 @@ def test_poll_downloaded_video_files_does_not_search_root_when_task_folder_has_f
 
     assert [file["path"] for file in files] == ["/Downloads/storage_sub/ACZD-165.mp4"]
     assert context.provider.search_calls == []
-    assert context.provider.list_calls == ["/Downloads/storage_sub"]
+    assert context.provider.list_calls == ["/Downloads/storage_sub", "/Downloads/storage_sub"]
 
 
 def test_poll_downloaded_video_files_does_not_search_download_root_after_poll_exhaustion(monkeypatch):
@@ -2862,6 +2968,108 @@ def test_storage_attempt_flow_modules_export_public_functions() -> None:
     assert callable(run_found_files_pipeline)
 
 
+def test_run_download_flow_waits_before_first_lookup_for_new_submission(monkeypatch):
+    from dataclasses import dataclass
+    from backend.app.modules.storage.worker import download_flow
+
+    sleeps: list[float] = []
+    polled: list[bool] = []
+
+    class Result:
+        success = True
+        error_message = None
+        result_paths = []
+
+    class Provider:
+        def submit_offline_download(self, magnet_url, target_folder):
+            return Result()
+
+    @dataclass
+    class Subtask:
+        movie_code: str = "ABC-123"
+
+    class Context:
+        def __init__(self):
+            self.provider = Provider()
+            self.subtask = Subtask()
+            self.config = {"download_initial_wait_seconds": 45}
+            self.steps: list[str] = []
+
+        def set_step(self, step):
+            self.steps.append(step)
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            return {}
+
+    def fake_ensure_directory_chain(provider, folder):
+        assert folder == "/Downloads/storage_ABC"
+
+    def fake_poll_downloaded_video_files(context, search_terms, task_download_folder, download_root):
+        polled.append(True)
+        assert sleeps == [45.0]
+        return []
+
+    monkeypatch.setattr(download_flow, "ensure_directory_chain", fake_ensure_directory_chain)
+    monkeypatch.setattr(download_flow.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(download_flow, "poll_downloaded_video_files", fake_poll_downloaded_video_files)
+
+    result = download_flow.run_download_flow(
+        Context(),
+        {"id": "m1", "magnet_url": "magnet:?xt=urn:btih:abc"},
+        "/Downloads/storage_ABC",
+        "/Downloads",
+    )
+
+    assert result is not None
+    assert polled == [True]
+
+
+def test_run_download_flow_does_not_initial_wait_for_existing_submit(monkeypatch):
+    from dataclasses import dataclass
+    from backend.app.modules.storage.worker import download_flow
+
+    sleeps: list[float] = []
+    recovered: list[bool] = []
+
+    class Provider:
+        def submit_offline_download(self, magnet_url, target_folder):
+            raise RuntimeError("10008 任务已存在")
+
+    @dataclass
+    class Subtask:
+        movie_code: str = "ABC-123"
+
+    class Context:
+        provider = Provider()
+        subtask = Subtask()
+        config = {"download_initial_wait_seconds": 45}
+
+        def set_step(self, step):
+            pass
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            return {}
+
+    monkeypatch.setattr(download_flow, "ensure_directory_chain", lambda provider, folder: None)
+    monkeypatch.setattr(download_flow.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(
+        download_flow,
+        "recover_existing_downloaded_video_files",
+        lambda context, search_terms, task_download_folder, download_root: recovered.append(True) or [],
+    )
+
+    result = download_flow.run_download_flow(
+        Context(),
+        {"id": "m1", "magnet_url": "magnet:?xt=urn:btih:abc"},
+        "/Downloads/storage_ABC",
+        "/Downloads",
+    )
+
+    assert result is not None
+    assert sleeps == []
+    assert recovered == [True]
+
+
 def test_is_vr_movie_tags_matches_only_clear_vr_tags() -> None:
     from backend.app.modules.storage.tasks.policies import is_vr_movie_tags
 
@@ -3205,12 +3413,12 @@ def test_rename_selected_videos_orders_similar_numeric_parts_before_assigning_cd
     assert [item["renamed_name"] for item in renamed] == [
         "VRKM-1668-CD1.mp4",
         "VRKM-1668-CD2.mp4",
-        "VRKM-1668-CD10.mp4",
+        "VRKM-1668-CD3.mp4",
     ]
     assert context.provider.calls == [
         ("/Downloads/4k2.com@vrkm01668_1_12000.mp4", "VRKM-1668-CD1.mp4"),
         ("/Downloads/4k2.com@vrkm01668_2_12000.mp4", "VRKM-1668-CD2.mp4"),
-        ("/Downloads/4k2.com@vrkm01668_10_12000.mp4", "VRKM-1668-CD10.mp4"),
+        ("/Downloads/4k2.com@vrkm01668_10_12000.mp4", "VRKM-1668-CD3.mp4"),
     ]
 
 

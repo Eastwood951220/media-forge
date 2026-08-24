@@ -14,6 +14,19 @@ def _auth_headers(client, admin_user) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_storage_config_defaults_include_low_frequency_download_waits(tmp_path, monkeypatch):
+    from backend.app.modules.storage.config.service import StorageConfigService
+
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    service = StorageConfigService(paths=RuntimeConfigPaths.from_env())
+
+    config = service.get_config()
+
+    assert config["download_initial_wait_seconds"] == 60.0
+    assert config["download_poll_interval_min"] == 30.0
+    assert config["download_poll_interval_max"] == 60.0
+
+
 def test_storage_config_service_writes_conf_and_masks_token(tmp_path, monkeypatch):
     from backend.app.modules.storage.config.schemas import StorageConfigUpdate
     from backend.app.modules.storage.config.service import StorageConfigService
@@ -27,6 +40,7 @@ def test_storage_config_service_writes_conf_and_masks_token(tmp_path, monkeypatc
             api_token="secret-token-1234",
             operation_delay_min=1,
             operation_delay_max=2,
+            download_initial_wait_seconds=45,
             video_extensions=[".mp4", ".mkv"],
         )
     )
@@ -38,10 +52,12 @@ def test_storage_config_service_writes_conf_and_masks_token(tmp_path, monkeypatc
     conf_text = (tmp_path / "storage.conf").read_text(encoding="utf-8")
     assert "grpc_host=192.168.31.10:9798\n" in conf_text
     assert "api_token=secret-token-1234\n" in conf_text
+    assert "download_initial_wait_seconds=45.0\n" in conf_text
     assert 'video_extensions=[".mp4", ".mkv"]\n' in conf_text
 
     loaded = service.get_config()
     assert loaded["api_token"] == "************1234"
+    assert loaded["download_initial_wait_seconds"] == 45.0
     assert loaded["video_extensions"] == [".mp4", ".mkv"]
 
 
@@ -255,6 +271,8 @@ def test_storage_config_service_open_provider_closes_client(monkeypatch, tmp_pat
         database_file=tmp_path / "database.conf",
         redis_file=tmp_path / "redis.conf",
         storage_file=tmp_path / "storage.conf",
+        storage_index_file=tmp_path / "storage_index.conf",
+        storage_index_meta_file=tmp_path / "storage_index_meta.conf",
     )
     service = StorageConfigService(paths=paths, provider_factory=FakeFactory(), gateway_class=FakeGateway)
 
@@ -293,6 +311,8 @@ def test_storage_config_service_open_provider_closes_client_on_error(monkeypatch
         database_file=tmp_path / "database.conf",
         redis_file=tmp_path / "redis.conf",
         storage_file=tmp_path / "storage.conf",
+        storage_index_file=tmp_path / "storage_index.conf",
+        storage_index_meta_file=tmp_path / "storage_index_meta.conf",
     )
     service = StorageConfigService(paths=paths, provider_factory=FakeFactory(), gateway_class=FakeGateway)
 

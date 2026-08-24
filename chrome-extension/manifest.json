@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Media Forge JavDB Agent",
   "version": "0.2.0",
-  "permissions": ["storage", "cookies", "tabs", "scripting"],
+  "permissions": ["storage", "cookies", "tabs", "scripting", "alarms"],
   "host_permissions": ["https://javdb.com/*", "https://*.javdb.com/*", "http://*/*", "https://*/*"],
   "action": {
     "default_title": "Media Forge Agent",

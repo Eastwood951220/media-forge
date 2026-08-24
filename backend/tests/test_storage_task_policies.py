@@ -53,6 +53,25 @@ def test_build_video_filename_uppercase_suffix_and_disc() -> None:
     assert code_folder_from_filename(filename) == "ABC-123-UC"
 
 
+def test_build_video_filename_multi_video_uses_index_sequence_not_original_disc_marker() -> None:
+    filenames = [
+        build_video_filename("abc-123", "movie-CD2.mp4", [], 0, 3),
+        build_video_filename("abc-123", "movie-part10.mp4", [], 1, 3),
+        build_video_filename("abc-123", "movie_B.mp4", [], 2, 3),
+    ]
+
+    assert filenames == [
+        "ABC-123-CD1.mp4",
+        "ABC-123-CD2.mp4",
+        "ABC-123-CD3.mp4",
+    ]
+
+
+def test_build_video_filename_multi_video_keeps_tag_suffix_before_sequential_cd() -> None:
+    assert build_video_filename("abc-123", "movie-disc03.mkv", ["中文字幕"], 0, 2) == "ABC-123-C-CD1.mkv"
+    assert build_video_filename("abc-123", "movie-A.mkv", ["无码破解"], 1, 2) == "ABC-123-U-CD2.mkv"
+
+
 def test_build_video_filename_single_chinese() -> None:
     assert build_video_filename("abc-123", "movie.mkv", ["中字"], 0, 1) == "ABC-123-C.mkv"
 

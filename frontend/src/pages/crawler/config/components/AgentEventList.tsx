@@ -1,4 +1,4 @@
-import { Button, Empty, List, Select, Spin } from 'antd'
+import { Button, Empty, Select, Spin } from 'antd'
 import type { AgentEvent } from '@/api/crawler/crawlerAgent/types'
 import { formatDateTime } from '@/utils/datetime'
 import styles from '../ConfigPage.module.less'
@@ -62,11 +62,9 @@ export default function AgentEventList({
         ) : events.length === 0 ? (
           <Empty description="暂无诊断日志" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
-          <List
-            size="small"
-            dataSource={events}
-            renderItem={(item) => (
-              <List.Item>
+          <div className={styles.agentEventItems} role="list">
+            {events.map((item) => (
+              <div className={styles.agentEventItem} role="listitem" key={item.id}>
                 <div className={styles.agentEventRow}>
                   <span className={styles.agentEventTime}>{formatDateTime(item.created_at)}</span>
                   <span className={styles.agentEventLevel}>
@@ -74,9 +72,9 @@ export default function AgentEventList({
                   </span>
                   <span className={styles.agentEventMessage}>{item.message}</span>
                 </div>
-              </List.Item>
-            )}
-          />
+              </div>
+            ))}
+          </div>
         )}
 
         {hasNextPage && (

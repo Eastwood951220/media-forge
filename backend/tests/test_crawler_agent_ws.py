@@ -3,7 +3,15 @@ from datetime import datetime
 
 import pytest
 from backend.app.models.crawler_agent import CrawlerAgent, CrawlerAgentEvent, CrawlerAgentSession, CrawlerAgentWorkItem
+from backend.app.modules.crawler.agent.registry import agent_registry
 from backend.tests.conftest import TestingSessionLocal
+
+AGENT_TEST_CAPABILITIES = [
+    "task_events",
+    "attempt_guard",
+    "execution_deadline",
+    "cookie_sync_request",
+]
 
 
 def test_agent_status_defaults_to_offline(client, auth_headers) -> None:
@@ -42,9 +50,9 @@ def test_agent_websocket_cookie_sync_updates_status(client, auth_headers, monkey
             "id": "hello-1",
             "type": "agent.hello",
             "payload": {
-                "protocol_version": 2,
+                "protocol_version": 3,
                 "version": "Chrome 0.1.0",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -68,6 +76,110 @@ def test_agent_websocket_cookie_sync_updates_status(client, auth_headers, monkey
     assert message["payload"]["accepted"] == 1
     status_response = client.get("/api/crawler/agent/status", headers=auth_headers)
     assert status_response.json()["data"]["last_cookie_sync_at"] is not None
+
+
+def test_agent_cookie_sync_request_requires_ready_agent(client, auth_headers) -> None:
+    response = client.post(
+        "/api/crawler/agent/cookies/sync-request",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["data"]["reason"] == "agent_unavailable"
+
+
+def test_agent_cookie_sync_request_sends_agent_message_and_returns_result(
+    client,
+    auth_headers,
+    monkeypatch,
+) -> None:
+    import asyncio
+
+    token_response = client.post("/api/crawler/agent/token/rotate", headers=auth_headers)
+    agent_id = token_response.json()["data"]["status"]["agent_id"]
+    db = TestingSessionLocal()
+    try:
+        agent = db.get(CrawlerAgent, uuid.UUID(agent_id))
+        agent.status = "online"
+        db.commit()
+    finally:
+        db.close()
+
+    sent_payload: dict[str, object] = {}
+
+    def create_waiter(request_id: str):
+        future: asyncio.Future[dict[str, object]] = asyncio.get_running_loop().create_future()
+        sent_payload["request_id"] = request_id
+        sent_payload["future"] = future
+        return future
+
+    async def send_to_ready_owner(owner_id: str, message_type: str, payload: dict):
+        sent_payload["owner_id"] = owner_id
+        sent_payload["message_type"] = message_type
+        sent_payload["payload"] = payload
+        future = sent_payload["future"]
+        future.set_result({
+            "accepted": 1,
+            "rejected": 1,
+            "cookie_names": ["cf_clearance"],
+            "last_cookie_sync_at": "2026-08-24T01:00:00+00:00",
+        })
+        return True
+
+    monkeypatch.setattr(agent_registry, "create_cookie_sync_waiter", create_waiter)
+    monkeypatch.setattr(agent_registry, "send_to_ready_owner", send_to_ready_owner)
+    monkeypatch.setattr(agent_registry, "cancel_cookie_sync_waiter", lambda _request_id: None)
+
+    response = client.post(
+        "/api/crawler/agent/cookies/sync-request",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert sent_payload["message_type"] == "cookie.sync_request"
+    payload = sent_payload["payload"]
+    assert payload["domain"] == "javdb.com"
+    assert payload["request_id"] == sent_payload["request_id"]
+    data = response.json()["data"]
+    assert data["accepted"] == 1
+    assert data["rejected"] == 1
+    assert data["cookie_names"] == ["cf_clearance"]
+    assert data["last_cookie_sync_at"] is not None
+
+
+def test_agent_cookie_sync_request_times_out(client, auth_headers, monkeypatch) -> None:
+    import asyncio
+
+    monkeypatch.setattr(
+        "backend.app.modules.crawler.agent.router.AGENT_COOKIE_SYNC_TIMEOUT_SECONDS",
+        0.01,
+    )
+    token_response = client.post("/api/crawler/agent/token/rotate", headers=auth_headers)
+    agent_id = token_response.json()["data"]["status"]["agent_id"]
+    db = TestingSessionLocal()
+    try:
+        agent = db.get(CrawlerAgent, uuid.UUID(agent_id))
+        agent.status = "online"
+        db.commit()
+    finally:
+        db.close()
+
+    def create_waiter(_request_id: str):
+        return asyncio.get_running_loop().create_future()
+
+    async def send_to_ready_owner(_owner_id: str, _message_type: str, _payload: dict):
+        return True
+
+    monkeypatch.setattr(agent_registry, "create_cookie_sync_waiter", create_waiter)
+    monkeypatch.setattr(agent_registry, "send_to_ready_owner", send_to_ready_owner)
+    monkeypatch.setattr(agent_registry, "cancel_cookie_sync_waiter", lambda _request_id: None)
+    response = client.post(
+        "/api/crawler/agent/cookies/sync-request",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 504
+    assert response.json()["data"]["reason"] == "cookie_sync_timeout"
 
 
 def test_agent_page_snapshot_ignores_late_completed_work_item(client, auth_headers) -> None:
@@ -106,7 +218,7 @@ def test_agent_page_snapshot_ignores_late_completed_work_item(client, auth_heade
             "payload": {
                 "protocol_version": 98615,
                 "version": "Chrome 0.1.0",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -170,7 +282,7 @@ def test_agent_page_snapshot_marks_parse_error_failed(client, auth_headers) -> N
         websocket.send_json({
             "id": "hello1",
             "type": "agent.hello",
-            "payload": {"protocol_version": 2, "version": "1.0", "capabilities": ["task_events", "attempt_guard", "execution_deadline"]},
+            "payload": {"protocol_version": 3, "version": "1.0", "capabilities": AGENT_TEST_CAPABILITIES},
         })
         assert websocket.receive_json()["type"] == "server.ack"
         websocket.send_json({
@@ -234,9 +346,9 @@ def test_agent_page_snapshot_parse_error_returns_terminal_ack(client, auth_heade
             "id": "hello1",
             "type": "agent.hello",
             "payload": {
-                "protocol_version": 2,
+                "protocol_version": 3,
                 "version": "1.0",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -298,8 +410,8 @@ def test_agent_stays_offline_before_hello(client, auth_headers) -> None:
         assert status_resp.json()["data"]["status"] == "offline"
 
 
-def test_agent_hello_protocol_2_sets_online(client, auth_headers) -> None:
-    """A compatible protocol 2 handshake transitions the agent to online."""
+def test_agent_hello_protocol_3_sets_online(client, auth_headers) -> None:
+    """A compatible protocol 3 handshake transitions the agent to online."""
     session = _make_agent_session(client, auth_headers)
 
     with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
@@ -312,7 +424,7 @@ def test_agent_hello_protocol_2_sets_online(client, auth_headers) -> None:
             "payload": {
                 "protocol_version": 98615,
                 "version": "Chrome 0.1.0",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         ack = websocket.receive_json()
@@ -331,15 +443,15 @@ def test_agent_hello_persists_negotiated_protocol_version(client, auth_headers) 
             "id": "hello-persisted-protocol",
             "type": "agent.hello",
             "payload": {
-                "protocol_version": 2,
+                "protocol_version": 3,
                 "version": "Chrome 0.2.0",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
 
         status_resp = client.get("/api/crawler/agent/status", headers=auth_headers)
-        assert status_resp.json()["data"]["protocol_version"] == 2
+        assert status_resp.json()["data"]["protocol_version"] == 3
 
 
 def test_agent_hello_protocol_1_gets_upgrade_required(client, auth_headers) -> None:
@@ -362,14 +474,14 @@ def test_agent_hello_protocol_1_gets_upgrade_required(client, auth_headers) -> N
         err = websocket.receive_json()
         assert err["type"] == "server.error"
         assert err["payload"]["reason"] == "upgrade_required"
-        assert err["payload"]["minimum_protocol_version"] == 2
+        assert err["payload"]["minimum_protocol_version"] == 3
 
         status_resp = client.get("/api/crawler/agent/status", headers=auth_headers)
         assert status_resp.json()["data"]["status"] == "upgrade_required"
 
 
 def test_agent_hello_missing_capabilities_gets_upgrade_required(client, auth_headers) -> None:
-    """An agent.hello with protocol 2 but missing capabilities gets rejected."""
+    """An agent.hello with protocol 3 but missing capabilities gets rejected."""
     session = _make_agent_session(client, auth_headers)
 
     with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
@@ -439,7 +551,7 @@ def test_agent_task_request_returns_assigned_with_deadline(client, auth_headers)
             "payload": {
                 "protocol_version": 98615,
                 "version": "Chrome 0.097",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -485,7 +597,7 @@ def test_agent_task_request_records_claim_diagnostics(client, auth_headers) -> N
             "payload": {
                 "protocol_version": 98615,
                 "version": "Chrome 0.097",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -539,7 +651,7 @@ def test_agent_task_event_acknowledges_progress(client, auth_headers) -> None:
             "payload": {
                 "protocol_version": 98765,
                 "version": "Chrome 097",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -593,7 +705,7 @@ def test_agent_task_failure_sends_ack(client, auth_headers) -> None:
             "payload": {
                 "protocol_version": 98615,
                 "version": "Chrome 095",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -642,9 +754,9 @@ def test_agent_task_failure_accepts_detail_dom_not_ready_code(client, auth_heade
             "id": "hello-1",
             "type": "agent.hello",
             "payload": {
-                "protocol_version": 2,
+                "protocol_version": 3,
                 "version": "Chrome 0.2.0",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -704,7 +816,7 @@ def test_agent_stale_attempt_gets_ignored(client, auth_headers) -> None:
             "payload": {
                 "protocol_version": 98765,
                 "version": "Chrome 0.097",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -738,7 +850,7 @@ def test_agent_no_pending_item_returns_task_none(client, auth_headers) -> None:
             "payload": {
                 "protocol_version": 98765,
                 "version": "Chrome 099",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -752,7 +864,7 @@ def test_agent_no_pending_item_returns_task_none(client, auth_headers) -> None:
         assert none_msg["type"] == "task.none"
 
 
-def test_agent_task_request_records_task_none_diagnostic(client, auth_headers) -> None:
+def test_agent_task_request_without_pending_item_does_not_record_poll_diagnostics(client, auth_headers) -> None:
     session = _make_agent_session(client, auth_headers)
 
     with client.websocket_connect(f"/api/crawler/agent/ws?session={session}") as websocket:
@@ -763,7 +875,7 @@ def test_agent_task_request_records_task_none_diagnostic(client, auth_headers) -
             "payload": {
                 "protocol_version": 98765,
                 "version": "Chrome 0.097",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -773,14 +885,13 @@ def test_agent_task_request_records_task_none_diagnostic(client, auth_headers) -
     db = TestingSessionLocal()
     try:
         sess = db.query(CrawlerAgentSession).filter(CrawlerAgentSession.session_id == session).one()
-        event = (
+        count = (
             db.query(CrawlerAgentEvent)
             .filter(CrawlerAgentEvent.owner_id == sess.owner_id)
-            .filter(CrawlerAgentEvent.event_type == "task_none")
-            .one()
+            .filter(CrawlerAgentEvent.event_type.in_(["task_request_received", "task_none"]))
+            .count()
         )
-        assert event.source == "backend"
-        assert event.level == "info"
+        assert count == 0
     finally:
         db.close()
 
@@ -817,7 +928,7 @@ def test_agent_disconnect_requeues_active_items(client, auth_headers) -> None:
             "payload": {
                 "protocol_version": 98765,
                 "version": "Chrome 099",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -861,7 +972,7 @@ def test_agent_malformed_snapshot_returns_error(client, auth_headers) -> None:
             "payload": {
                 "protocol_version": 98765,
                 "version": "Chrome 0.097",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
@@ -891,7 +1002,7 @@ def test_agent_diagnostics_batch_persists_events(client, auth_headers) -> None:
             "payload": {
                 "protocol_version": 98765,
                 "version": "Chrome 099",
-                "capabilities": ["task_events", "attempt_guard", "execution_deadline"],
+                "capabilities": AGENT_TEST_CAPABILITIES,
             },
         })
         assert websocket.receive_json()["type"] == "server.ack"
