@@ -125,7 +125,7 @@ def build_video_filename(movie_code: str, original_name: str, tags: list[str], i
     base = f"{movie_code.upper()}{derive_code_suffix(tags)}"
     if total <= 1:
         return f"{base}{ext}"
-    return f"{base}-CD{infer_disc_number(original_name, index)}{ext}"
+    return f"{base}-CD{index + 1}{ext}"
 
 
 def code_folder_from_filename(filename: str) -> str:
