@@ -203,6 +203,7 @@ export class AgentClient {
         phase: 'connected',
         message: 'connected',
       })
+      this.startHeartbeat()
       await this.sendCookieSync()
       await this.sendDiagnosticsBatch()
       this.requestTask()
@@ -264,7 +265,6 @@ export class AgentClient {
         execution_deadline_at: executionDeadlineAt,
       }
       this.enterActiveWindow()
-      this.startHeartbeat()
       await this.runTask()
       return
     }
@@ -279,7 +279,6 @@ export class AgentClient {
       if (this.terminalMessageId && ackId === `ack_${this.terminalMessageId}`) {
         this.terminalMessageId = null
         this.activeTask = null
-        this.stopHeartbeat()
         this.enterActiveWindow()
         this.requestTask()
       }
@@ -305,7 +304,6 @@ export class AgentClient {
         )
         this.terminalMessageId = null
         this.activeTask = null
-        this.stopHeartbeat()
         this.enterActiveWindow()
         await this.deps.setLocalStatus({
           connected: true,
@@ -350,12 +348,6 @@ export class AgentClient {
     this.heartbeatTimer = this.setInterval(() => {
       this.send('agent.heartbeat', {})
     }, this.heartbeatIntervalMs)
-  }
-
-  private stopHeartbeat(): void {
-    if (!this.heartbeatTimer) return
-    this.clearInterval(this.heartbeatTimer)
-    this.heartbeatTimer = null
   }
 
   private enterActiveWindow(): void {
@@ -522,7 +514,6 @@ export class AgentClient {
       this.terminalMessageId = messageId
     } else {
       this.activeTask = null
-      this.stopHeartbeat()
       this.enterActiveWindow()
       await this.deps.setLocalStatus({
         connected: true,

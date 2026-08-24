@@ -16,7 +16,7 @@ AGENT_REQUIRED_CAPABILITIES: frozenset[str] = frozenset(
 )
 """Capabilities the extension must advertise to be considered compatible."""
 
-AGENT_HEARTBEAT_INTERVAL_SECONDS: int = 20
+AGENT_HEARTBEAT_INTERVAL_SECONDS: int = 300
 """How often the extension should send a heartbeat (seconds)."""
 
 AGENT_HEARTBEAT_FRESH_SECONDS: int = 900

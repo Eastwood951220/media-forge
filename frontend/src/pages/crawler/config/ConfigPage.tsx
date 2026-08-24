@@ -10,6 +10,7 @@ import {
   fetchConfig,
   updateConfig,
   type AppConfig,
+  type JavdbFetchMode,
 } from '@/api/crawler/crawlerConfig'
 import { FullWidthNumberInput } from '@/components/common'
 import AgentHealthCard from './components/AgentHealthCard'
@@ -27,11 +28,13 @@ export default function ConfigPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [cookieDrawerOpen, setCookieDrawerOpen] = useState(false)
+  const [savedFetchMode, setSavedFetchMode] = useState<JavdbFetchMode>('static')
 
   useEffect(() => {
     fetchConfig()
       .then((data: AppConfig) => {
         form.setFieldsValue(data)
+        setSavedFetchMode(data.JAVDB_FETCH_MODE ?? 'static')
       })
       .catch((error: unknown) => message.error(getErrorMessage(error)))
       .finally(() => setLoading(false))
@@ -40,7 +43,8 @@ export default function ConfigPage() {
   const handleSaveConfig = async (values: AppConfig) => {
     setSaving(true)
     try {
-      await updateConfig(values)
+      const data = await updateConfig(values)
+      setSavedFetchMode(data.JAVDB_FETCH_MODE ?? values.JAVDB_FETCH_MODE ?? 'static')
       message.success('配置已保存')
     } catch (error: unknown) {
       message.error(getErrorMessage(error))
@@ -154,11 +158,13 @@ export default function ConfigPage() {
           </Form>
         </div>
 
-        <div className={styles.configRight}>
-          <Card title="Chrome Agent" className={`${styles.formCard} ${styles.agentCard}`}>
-            <AgentHealthCard />
-          </Card>
-        </div>
+        {savedFetchMode === 'agent' && (
+          <div className={styles.configRight}>
+            <Card title="Chrome Agent" className={`${styles.formCard} ${styles.agentCard}`}>
+              <AgentHealthCard />
+            </Card>
+          </div>
+        )}
       </div>
       <CookieConfigDrawer open={cookieDrawerOpen} onClose={() => setCookieDrawerOpen(false)} />
     </>
