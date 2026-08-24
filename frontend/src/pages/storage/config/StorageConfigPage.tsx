@@ -147,12 +147,18 @@ export default function StorageConfigPage() {
               </Form.Item>
             </div>
             <div className={styles.switchGrid}>
-              <Form.Item name="use_task_subfolder" label="使用任务子文件夹" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-              <Form.Item name="auto_create_target_folder" label="自动创建目标文件夹" valuePropName="checked">
-                <Switch />
-              </Form.Item>
+              <div className={styles.switchItem}>
+                <span className={styles.switchLabel}>使用任务子文件夹</span>
+                <Form.Item name="use_task_subfolder" valuePropName="checked" noStyle>
+                  <Switch aria-label="使用任务子文件夹" />
+                </Form.Item>
+              </div>
+              <div className={styles.switchItem}>
+                <span className={styles.switchLabel}>自动创建目标文件夹</span>
+                <Form.Item name="auto_create_target_folder" valuePropName="checked" noStyle>
+                  <Switch aria-label="自动创建目标文件夹" />
+                </Form.Item>
+              </div>
             </div>
           </Card>
 
