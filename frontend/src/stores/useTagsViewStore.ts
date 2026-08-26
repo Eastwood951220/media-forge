@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { devtools, persist } from 'zustand/middleware'
+import { devtools } from 'zustand/middleware'
 
 export type TagView = {
   path: string
@@ -69,99 +69,93 @@ function normalizeViews(views: TagView[]): TagView[] {
 
 export const useTagsViewStore = create<TagsViewState>()(
   devtools(
-    persist(
-      (set, get) => ({
-        visitedViews: [DASHBOARD_TAG],
+    (set, get) => ({
+      visitedViews: [DASHBOARD_TAG],
 
-        addVisitedView: (view) => {
-          const normalizedView = hydrateView(view)
-          const viewKey = getTagKey(normalizedView)
-          const { visitedViews } = get()
-          if (visitedViews.some((item) => getTagKey(item) === viewKey)) {
-            get().updateVisitedView(normalizedView)
-            return
-          }
+      addVisitedView: (view) => {
+        const normalizedView = hydrateView(view)
+        const viewKey = getTagKey(normalizedView)
+        const { visitedViews } = get()
+        if (visitedViews.some((item) => getTagKey(item) === viewKey)) {
+          get().updateVisitedView(normalizedView)
+          return
+        }
 
-          set({ visitedViews: normalizeViews([...visitedViews, normalizedView]) })
-        },
-
-        updateVisitedView: (view) => {
-          const normalizedView = hydrateView(view)
-          const viewKey = getTagKey(normalizedView)
-          const { visitedViews } = get()
-          set({
-            visitedViews: normalizeViews(
-              visitedViews.map((item) =>
-                getTagKey(item) === viewKey ? { ...item, ...normalizedView } : item,
-              ),
-            ),
-          })
-        },
-
-        removeSelectedView: (view) => {
-          const viewKey = getTagKey(hydrateView(view))
-          const nextViews = normalizeViews(
-            get().visitedViews.filter(
-              (item) => getTagKey(item) !== viewKey || item.closable === false,
-            ),
-          )
-          set({ visitedViews: nextViews })
-          return nextViews
-        },
-
-        removeOtherViews: (view) => {
-          const viewKey = getTagKey(hydrateView(view))
-          const nextViews = normalizeViews(
-            get().visitedViews.filter(
-              (item) => getTagKey(item) === viewKey || item.closable === false,
-            ),
-          )
-          set({ visitedViews: nextViews })
-          return nextViews
-        },
-
-        removeLeftViews: (view) => {
-          const { visitedViews } = get()
-          const viewKey = getTagKey(hydrateView(view))
-          const targetIndex = visitedViews.findIndex((item) => getTagKey(item) === viewKey)
-          if (targetIndex <= 0) return visitedViews
-
-          const nextViews = normalizeViews(
-            visitedViews.filter((item, index) => index >= targetIndex || item.closable === false),
-          )
-          set({ visitedViews: nextViews })
-          return nextViews
-        },
-
-        removeRightViews: (view) => {
-          const { visitedViews } = get()
-          const viewKey = getTagKey(hydrateView(view))
-          const targetIndex = visitedViews.findIndex((item) => getTagKey(item) === viewKey)
-          if (targetIndex === -1) return visitedViews
-
-          const nextViews = normalizeViews(
-            visitedViews.filter((item, index) => index <= targetIndex || item.closable === false),
-          )
-          set({ visitedViews: nextViews })
-          return nextViews
-        },
-
-        removeAllViews: () => {
-          const nextViews = normalizeViews(
-            get().visitedViews.filter((item) => item.closable === false),
-          )
-          set({ visitedViews: nextViews })
-          return nextViews
-        },
-
-        resetViews: () => {
-          set({ visitedViews: [DASHBOARD_TAG] })
-        },
-      }),
-      {
-        name: 'media-forge-tags-view',
-        partialize: (state) => ({ visitedViews: normalizeViews(state.visitedViews) }),
+        set({ visitedViews: normalizeViews([...visitedViews, normalizedView]) })
       },
-    ),
+
+      updateVisitedView: (view) => {
+        const normalizedView = hydrateView(view)
+        const viewKey = getTagKey(normalizedView)
+        const { visitedViews } = get()
+        set({
+          visitedViews: normalizeViews(
+            visitedViews.map((item) =>
+              getTagKey(item) === viewKey ? { ...item, ...normalizedView } : item,
+            ),
+          ),
+        })
+      },
+
+      removeSelectedView: (view) => {
+        const viewKey = getTagKey(hydrateView(view))
+        const nextViews = normalizeViews(
+          get().visitedViews.filter(
+            (item) => getTagKey(item) !== viewKey || item.closable === false,
+          ),
+        )
+        set({ visitedViews: nextViews })
+        return nextViews
+      },
+
+      removeOtherViews: (view) => {
+        const viewKey = getTagKey(hydrateView(view))
+        const nextViews = normalizeViews(
+          get().visitedViews.filter(
+            (item) => getTagKey(item) === viewKey || item.closable === false,
+          ),
+        )
+        set({ visitedViews: nextViews })
+        return nextViews
+      },
+
+      removeLeftViews: (view) => {
+        const { visitedViews } = get()
+        const viewKey = getTagKey(hydrateView(view))
+        const targetIndex = visitedViews.findIndex((item) => getTagKey(item) === viewKey)
+        if (targetIndex <= 0) return visitedViews
+
+        const nextViews = normalizeViews(
+          visitedViews.filter((item, index) => index >= targetIndex || item.closable === false),
+        )
+        set({ visitedViews: nextViews })
+        return nextViews
+      },
+
+      removeRightViews: (view) => {
+        const { visitedViews } = get()
+        const viewKey = getTagKey(hydrateView(view))
+        const targetIndex = visitedViews.findIndex((item) => getTagKey(item) === viewKey)
+        if (targetIndex === -1) return visitedViews
+
+        const nextViews = normalizeViews(
+          visitedViews.filter((item, index) => index <= targetIndex || item.closable === false),
+        )
+        set({ visitedViews: nextViews })
+        return nextViews
+      },
+
+      removeAllViews: () => {
+        const nextViews = normalizeViews(
+          get().visitedViews.filter((item) => item.closable === false),
+        )
+        set({ visitedViews: nextViews })
+        return nextViews
+      },
+
+      resetViews: () => {
+        set({ visitedViews: [DASHBOARD_TAG] })
+      },
+    }),
   ),
 )
