@@ -31,6 +31,9 @@ libraries, and a Chrome browser extension used by crawler agent workflows.
 
 - Never create or use a Git worktree for this repository.
 - Use ordinary Git branches only when branch isolation is required.
+- At the end of completed work, automatically create commits grouped by
+  functional change, even when the task was not executed from a written plan,
+  unless the user explicitly asks not to commit.
 - Stage intended source files explicitly instead of using broad commands such
   as `git add .` or `git add -A`, because already tracked files are not
   excluded by `.gitignore`.
