@@ -518,7 +518,7 @@ def test_execute_current_magnet_attempt_marks_subtask_skipped_when_all_targets_e
     assert subtask.skipped_files[0]["existing_targets"] == [target_file]
     assert provider.move_calls == []
     assert provider.copy_calls == []
-    assert provider.deleted == [f"/Downloads/storage_{subtask.id}"]
+    assert provider.deleted == [f"/Downloads/storage_{subtask.id}/attempt_01_m1"]
 
     logs = read_storage_subtask_logs(str(subtask.id))
     assert any("目标文件已全部存在，子任务标记为跳过" in entry["message"] for entry in logs)
@@ -1531,6 +1531,155 @@ def test_subtask_pipeline_starts_next_magnet_only_after_current_failure(monkeypa
     assert [attempt["success"] for attempt in context.subtask.magnet_attempts] == [False, True]
 
 
+def test_subtask_pipeline_recovers_prior_magnet_before_submitting_later_magnet(monkeypatch):
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.steps import execute_subtask_pipeline
+
+    attempt_order: list[str] = []
+    recovered_paths: list[str] = []
+    sleeps: list[float] = []
+    processed: list[tuple[str, list[str]]] = []
+
+    def fake_execute_current_magnet_attempt(context, magnet, movie=None, movie_tags=None):
+        attempt_order.append(magnet["id"])
+        context.subtask.download_path = f"/Downloads/storage_{context.subtask.id}/attempt_{magnet['attempt_index']:02d}_{magnet['id']}"
+        context.subtask.target_paths = [f"/Movies/{context.subtask.movie_code}"]
+        return False
+
+    def fake_recover_existing_downloaded_video_files(
+        context,
+        search_terms,
+        task_download_folder,
+        download_root,
+        recovery_reason="submit_task_exists",
+    ):
+        recovered_paths.append(task_download_folder)
+        assert recovery_reason == "prior_magnet_attempt"
+        return [{"name": "ACZD-165.mp4", "path": f"{task_download_folder}/ACZD-165.mp4", "size": 500 * 1024 * 1024}]
+
+    def fake_run_found_files_pipeline(context, magnet, found_files, target_paths, download_folder, config):
+        processed.append((magnet["id"], [file["path"] for file in found_files]))
+        return True
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.steps.execute_current_magnet_attempt",
+        fake_execute_current_magnet_attempt,
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.steps.recover_existing_downloaded_video_files",
+        fake_recover_existing_downloaded_video_files,
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.steps.run_found_files_pipeline",
+        fake_run_found_files_pipeline,
+    )
+    monkeypatch.setattr("backend.app.modules.storage.worker.steps.time.sleep", lambda seconds: sleeps.append(seconds))
+
+    @dataclass
+    class FakeMagnet:
+        id: str
+        magnet_url: str
+        tags: list[str]
+        weight: int
+        selected: bool
+
+    class FakeMovie:
+        tags = []
+        magnets = [
+            FakeMagnet("m1", "magnet:?xt=urn:btih:first", [], 100, True),
+            FakeMagnet("m2", "magnet:?xt=urn:btih:second", [], 90, False),
+        ]
+
+    class FakeDb:
+        def get(self, model, movie_id):
+            return FakeMovie()
+
+    @dataclass
+    class FakeSubtask:
+        id: uuid.UUID
+        movie_id: uuid.UUID
+        movie_code: str = "ACZD-165"
+        status: str = "queued"
+        step: str = "prepare"
+        started_at: object | None = None
+        finished_at: object | None = None
+        error_message: str | None = None
+        current_magnet_id: str | None = None
+        current_magnet_url: str = ""
+        magnet_attempts: list | None = None
+        download_path: str = ""
+        target_paths: list | None = None
+
+        def __post_init__(self):
+            if self.magnet_attempts is None:
+                self.magnet_attempts = []
+            if self.target_paths is None:
+                self.target_paths = []
+
+    class FakeContext:
+        def __init__(self) -> None:
+            self.db = FakeDb()
+            self.subtask = FakeSubtask(id=uuid.uuid4(), movie_id=uuid.uuid4())
+            self.config = {
+                "magnet_max_attempts_per_subtask": 2,
+                "download_root_folder": "/Downloads",
+                "download_initial_wait_seconds": 45,
+            }
+            self.logs: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append(message)
+            return {}
+
+        def publish_subtask(self):
+            return None
+
+    context = FakeContext()
+
+    execute_subtask_pipeline(context)
+
+    assert attempt_order == ["m1"]
+    assert sleeps == [45.0]
+    assert recovered_paths == [f"/Downloads/storage_{context.subtask.id}/attempt_01_m1"]
+    assert processed == [("m1", [f"/Downloads/storage_{context.subtask.id}/attempt_01_m1/ACZD-165.mp4"])]
+    assert context.subtask.status == "completed"
+    assert len(context.subtask.magnet_attempts) == 1
+    assert context.subtask.magnet_attempts[0]["magnet_id"] == "m1"
+    assert context.subtask.magnet_attempts[0]["success"] is True
+
+
+def test_plan_storage_attempt_uses_separate_download_folder_for_each_magnet_attempt():
+    import uuid
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.target_planning import plan_storage_attempt
+
+    @dataclass
+    class FakeSubtask:
+        id: uuid.UUID
+        movie_code: str = "ACZD-165"
+        target_locations: list | None = None
+        selected_storage_location: str = ""
+        download_path: str = ""
+        target_paths: list | None = None
+
+        def __post_init__(self):
+            if self.target_locations is None:
+                self.target_locations = []
+            if self.target_paths is None:
+                self.target_paths = []
+
+    subtask = FakeSubtask(id=uuid.uuid4())
+
+    first = plan_storage_attempt(subtask, {"download_root_folder": "/Downloads"}, {"id": "m1", "attempt_index": 1})
+    second = plan_storage_attempt(subtask, {"download_root_folder": "/Downloads"}, {"id": "m2", "attempt_index": 2})
+
+    assert first.download_folder == f"/Downloads/storage_{subtask.id}/attempt_01_m1"
+    assert second.download_folder == f"/Downloads/storage_{subtask.id}/attempt_02_m2"
+
+
 def test_subtask_pipeline_does_not_start_later_magnet_after_success(monkeypatch):
     import uuid
     from dataclasses import dataclass
@@ -1690,15 +1839,15 @@ def test_execute_current_magnet_attempt_uses_recovery_only_when_submit_task_exis
 
         def list_files(self, path, force_refresh=False):
             self.list_calls.append(path)
-            if path == "/Downloads/storage_sub":
+            if path == "/Downloads/storage_sub/attempt_01_m1":
                 return [
-                    RemoteFile("ACZD-165", "/Downloads/storage_sub/ACZD-165", 0, True),
+                    RemoteFile("ACZD-165", "/Downloads/storage_sub/attempt_01_m1/ACZD-165", 0, True),
                 ]
-            if path == "/Downloads/storage_sub/ACZD-165":
+            if path == "/Downloads/storage_sub/attempt_01_m1/ACZD-165":
                 return [
                     RemoteFile(
                         "hhd800.com@ACZD-165.mp4",
-                        "/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4",
+                        "/Downloads/storage_sub/attempt_01_m1/ACZD-165/hhd800.com@ACZD-165.mp4",
                         500 * 1024 * 1024,
                     )
                 ]
@@ -1784,12 +1933,12 @@ def test_execute_current_magnet_attempt_uses_recovery_only_when_submit_task_exis
 
     assert success is True
     assert context.provider.search_calls == []
-    assert "/Downloads/storage_sub" in context.provider.list_calls
+    assert "/Downloads/storage_sub/attempt_01_m1" in context.provider.list_calls
     assert context.provider.renamed == [
-        ("/Downloads/storage_sub/ACZD-165/hhd800.com@ACZD-165.mp4", "ACZD-165.mp4")
+        ("/Downloads/storage_sub/attempt_01_m1/ACZD-165/hhd800.com@ACZD-165.mp4", "ACZD-165.mp4")
     ]
     assert context.provider.moved == [
-        (["/Downloads/storage_sub/ACZD-165/ACZD-165.mp4"], "/Movies/A/ACZD-165")
+        (["/Downloads/storage_sub/attempt_01_m1/ACZD-165/ACZD-165.mp4"], "/Movies/A/ACZD-165")
     ]
     assert any(log["context"].get("search_scope") == "recovery_task_download_folder" for log in context.logs)
 
@@ -2662,7 +2811,7 @@ def test_execute_current_magnet_attempt_copies_from_existing_target_when_multipl
         ("/Movies/A/ACZD-165/ACZD-165.mp4", "/Movies/B/ACZD-165")
     ]
     assert context.provider.find_file("/Movies/B/ACZD-165/ACZD-165.mp4") is not None
-    assert context.provider.deleted == ["/Downloads/storage_sub"]
+    assert context.provider.deleted == ["/Downloads/storage_sub/attempt_01_m1"]
     assert any(log["message"] == "检查目标目录是否已存在视频文件" for log in context.logs)
     assert any(log["message"] == "磁力任务处理成功" for log in context.logs)
 
@@ -2909,7 +3058,7 @@ def test_plan_storage_attempt_uses_selected_storage_location() -> None:
         {"id": "m1", "tags": ["中字"]},
     )
 
-    assert plan.download_folder == "/Downloads/storage_00000000-0000-0000-0000-000000000123"
+    assert plan.download_folder == "/Downloads/storage_00000000-0000-0000-0000-000000000123/attempt_01_m1"
     assert plan.target_paths == ["/Movies/B/ABC-123-C"]
     assert subtask.download_path == plan.download_folder
     assert subtask.target_paths == plan.target_paths
@@ -2936,7 +3085,7 @@ def test_plan_storage_attempt_uses_all_target_locations_without_selected_locatio
         {"id": "m1", "tags": []},
     )
 
-    assert plan.download_folder == "/云下载/storage_00000000-0000-0000-0000-000000000456"
+    assert plan.download_folder == "/云下载/storage_00000000-0000-0000-0000-000000000456/attempt_01_m1"
     assert plan.target_paths == [
         "/嘿嘿/日本/巨乳|熟女|BBW/KATU-125",
         "/嘿嘿/日本/合集/KATU-125",
@@ -3731,7 +3880,7 @@ def test_execute_current_magnet_attempt_copies_existing_movie_storage_before_sub
     ]
     assert context.subtask.result["reason"] == "copied_from_existing_movie_storage"
     assert context.subtask.moved_files[0]["copy_source"] == "/Movies/A/AVSA-257/AVSA-257.mp4"
-    assert context.provider.deleted == [f"/Downloads/storage_{context.subtask.id}"]
+    assert context.provider.deleted == [f"/Downloads/storage_{context.subtask.id}/attempt_01_m1"]
     assert any(log["message"] == "检查电影已有存储位置" for log in context.logs)
     assert any(log["message"] == "磁力任务处理成功" for log in context.logs)
 
@@ -3834,7 +3983,7 @@ def test_execute_current_magnet_attempt_existing_movie_storage_copy_failure_fall
 
     assert success is False
     assert context.provider.submit_calls == [
-        ("magnet:?xt=urn:btih:first", f"/Downloads/storage_{context.subtask.id}")
+        ("magnet:?xt=urn:btih:first", f"/Downloads/storage_{context.subtask.id}/attempt_01_m1")
     ]
     assert any(log["message"] == "电影已有存储复制失败，继续磁力流程" for log in context.logs)
 
@@ -3916,6 +4065,6 @@ def test_execute_current_magnet_attempt_without_existing_movie_storage_uses_magn
 
     assert success is False
     assert context.provider.submit_calls == [
-        ("magnet:?xt=urn:btih:first", f"/Downloads/storage_{context.subtask.id}")
+        ("magnet:?xt=urn:btih:first", f"/Downloads/storage_{context.subtask.id}/attempt_01_m1")
     ]
     assert any(log["message"] == "未找到可用于复制的电影已有存储文件" for log in context.logs)
