@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from backend.app.modules.storage.tasks.policies import (
     build_video_filename,
@@ -20,10 +21,17 @@ class StorageAttemptPlan:
     target_paths: list[str]
 
 
+def _safe_attempt_folder_suffix(magnet: dict) -> str:
+    attempt_index = int(magnet.get("attempt_index") or 1)
+    raw_id = str(magnet.get("id") or "magnet")
+    safe_id = re.sub(r"[^A-Za-z0-9_-]+", "_", raw_id).strip("_") or "magnet"
+    return f"attempt_{attempt_index:02d}_{safe_id[:24]}"
+
+
 def plan_storage_attempt(subtask, config: dict, magnet: dict, movie_tags: list[str] | None = None) -> StorageAttemptPlan:
     tags = list(magnet.get("tags") or [])
     download_root = config.get("download_root_folder", "/Downloads")
-    download_folder = f"{download_root}/storage_{subtask.id}"
+    download_folder = f"{download_root}/storage_{subtask.id}/{_safe_attempt_folder_suffix(magnet)}"
     preview_name = build_video_filename(subtask.movie_code, f"{subtask.movie_code}.mp4", tags, 0, 1)
     code_folder = code_folder_from_filename(preview_name)
     target_root = config.get("target_folder", "/Movies")

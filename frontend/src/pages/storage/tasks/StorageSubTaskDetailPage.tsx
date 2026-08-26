@@ -39,22 +39,26 @@ function StorageSubTaskDetailPage() {
             <Timeline
               items={stepOrder.map((step) => {
                 const stepLogs = logsForStep(logs, step)
-                const lastLog = stepLogs.at(-1)
                 return {
                   color: stepColor(subtask, stepLogs, step),
-                  children: (
+                  content: (
                     <div className={styles.stepTimelineItem}>
                       <div className={styles.stepTimelineHeader}>
                         <Typography.Text strong>{stepLabels[step]}</Typography.Text>
                         <Typography.Text type="secondary">{step}</Typography.Text>
                       </div>
-                      {lastLog ? (
-                        <Typography.Text
-                          type={lastLog.level === 'ERROR' ? 'danger' : 'secondary'}
-                          className={styles.stepTimelineMessage}
-                        >
-                          {formatTime(lastLog.timestamp)} {lastLog.message}
-                        </Typography.Text>
+                      {stepLogs.length > 0 ? (
+                        <div className={styles.stepTimelineMessages}>
+                          {stepLogs.map((log, index) => (
+                            <Typography.Text
+                              key={`${log.timestamp}-${index}`}
+                              type={log.level === 'ERROR' ? 'danger' : 'secondary'}
+                              className={styles.stepTimelineMessage}
+                            >
+                              {formatTime(log.timestamp)} {log.message}
+                            </Typography.Text>
+                          ))}
+                        </div>
                       ) : (
                         <Typography.Text type="secondary" className={styles.stepTimelineMessage}>
                           等待执行
@@ -73,7 +77,7 @@ function StorageSubTaskDetailPage() {
                 <Timeline
                   items={logs.map((log) => ({
                     color: levelColors[log.level] || 'default',
-                    children: (
+                    content: (
                       <div>
                         <Typography.Text type="secondary" style={{ fontSize: 12, marginRight: 8 }}>
                           {formatTime(log.timestamp)}

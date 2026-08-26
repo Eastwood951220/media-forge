@@ -35,7 +35,13 @@ def is_submit_task_exists_error(error: Exception | str) -> bool:
     return "10008" in message or "任务已存在" in message
 
 
-def recover_existing_downloaded_video_files(context, search_terms: list[str], task_download_folder: str, download_root: str) -> list[dict]:
+def recover_existing_downloaded_video_files(
+    context,
+    search_terms: list[str],
+    task_download_folder: str,
+    download_root: str,
+    recovery_reason: str = "submit_task_exists",
+) -> list[dict]:
     from backend.app.modules.storage.worker.file_finder import find_recovery_video_files
 
     movie_code = getattr(context.subtask, "movie_code", search_terms[0] if search_terms else "")
@@ -47,7 +53,7 @@ def recover_existing_downloaded_video_files(context, search_terms: list[str], ta
         movie_code=movie_code,
         config=context.config,
     )
-    result.log_context["recovery_reason"] = "submit_task_exists"
+    result.log_context["recovery_reason"] = recovery_reason
     _log_search_result(context, result)
     return result.accepted_files
 

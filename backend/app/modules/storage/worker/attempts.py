@@ -33,3 +33,16 @@ def append_magnet_attempt(subtask, magnet: dict, success: bool) -> None:
     attempts = list(subtask.magnet_attempts or [])
     attempts.append(attempt_record)
     subtask.magnet_attempts = attempts
+
+
+def mark_magnet_attempt_success(subtask, magnet: dict) -> None:
+    attempts = list(subtask.magnet_attempts or [])
+    magnet_id = magnet.get("id")
+    for attempt in reversed(attempts):
+        if attempt.get("magnet_id") == magnet_id:
+            attempt["success"] = True
+            attempt["status"] = subtask.status
+            attempt["timestamp"] = datetime.now(timezone.utc).isoformat()
+            subtask.magnet_attempts = attempts
+            return
+    append_magnet_attempt(subtask, magnet, True)

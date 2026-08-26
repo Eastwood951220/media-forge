@@ -21,6 +21,60 @@
   word-break: break-word;
 }
 
+.stepTimelineMessages {
+  display: grid;
+  gap: 4px;
+}
+
+.fileResultList {
+  display: grid;
+  gap: 12px;
+}
+
+.fileResultItem {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.fileResultHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fileResultTitle {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fileMetaList {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.fileMetaRow {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.fileMetaLabel {
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.filePath {
+  white-space: normal;
+  word-break: break-all;
+}
+
 .summaryCard {
   margin-bottom: 16px;
 }
@@ -107,6 +161,11 @@
 
   .summaryTitle {
     flex-direction: column;
+  }
+
+  .fileMetaRow {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 }
 
