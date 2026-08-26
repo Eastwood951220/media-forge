@@ -9,7 +9,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { TagsView } from '../src/layout/TagsView'
-import type { RouteCacheControl } from '../src/layout/routeCache'
+import type { RouteCacheControl } from '../src/layout/routeCacheControl'
 import { useTagsViewStore } from '../src/stores/useTagsViewStore'
 
 function createCacheControl(): RouteCacheControl {

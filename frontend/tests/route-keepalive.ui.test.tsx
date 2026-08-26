@@ -13,6 +13,8 @@ import {
 import {
   isRouteCacheExcluded,
   ROUTE_CACHE_EXCLUDE_PATHS,
+} from '../src/layout/routeCacheControl'
+import {
   RouteKeepAliveOutlet,
   RouteKeepAliveProvider,
 } from '../src/layout/routeCache'

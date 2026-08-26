@@ -67,6 +67,24 @@ describe('RunListPage', () => {
     expect(getCrawlerRuns).toHaveBeenCalledTimes(1)
   })
 
+  it('renders run task name and scope tag in one line', async () => {
+    vi.mocked(getCrawlerRuns).mockResolvedValue({
+      rows: [{ ...buildRun(), run_scope_label: '部分 URL', run_scope: 'task_url_subset' }],
+      page: 1,
+      size: 20,
+      has_more: false,
+    } as never)
+
+    render(<RunListPage />, { wrapper })
+
+    const taskName = await screen.findByText('Run Task')
+    const nameLine = taskName.closest('[data-testid="run-task-name-line"]')
+
+    expect(nameLine).toBeInTheDocument()
+    expect(nameLine).toHaveTextContent('Run Task')
+    expect(nameLine).toHaveTextContent('部分 URL')
+  })
+
   it('hydrates baseline run status from the store on mount', async () => {
     vi.mocked(getCrawlerRuns).mockResolvedValue({
       rows: [buildRun('running')],

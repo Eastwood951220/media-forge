@@ -1,12 +1,13 @@
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import BaseListPage from '../src/components/BaseListPage'
 import type { ColumnsType } from 'antd/es/table'
 
 type Row = {
   id: number
   name: string
+  code?: string
 }
 
 const columns: ColumnsType<Row> = [
@@ -14,6 +15,10 @@ const columns: ColumnsType<Row> = [
 ]
 
 describe('BaseListPage', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
   it('renders query, toolbar, table data, and refreshes', async () => {
     const onRefresh = vi.fn()
 
@@ -76,5 +81,33 @@ describe('BaseListPage', () => {
     expect(tableBody?.style.maxHeight).toBe('400px')
 
     globalThis.ResizeObserver = OriginalResizeObserver
+  })
+
+  it('applies persisted column visibility and order when a settings key is provided', () => {
+    localStorage.setItem(
+      'media-forge:list-columns:test-list',
+      JSON.stringify({
+        order: ['code', 'name'],
+        hidden: ['name'],
+      }),
+    )
+
+    render(
+      <BaseListPage<Row>
+        rowKey="id"
+        columnSettingsKey="test-list"
+        columns={[
+          { title: '名称', dataIndex: 'name', key: 'name' },
+          { title: '番号', dataIndex: 'code', key: 'code' },
+        ]}
+        dataSource={[{ id: 1, name: '影片A', code: 'AAA-001' }]}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: '列设置' })).toBeInTheDocument()
+    expect(screen.getByText('番号')).toBeInTheDocument()
+    expect(screen.getByText('AAA-001')).toBeInTheDocument()
+    expect(screen.queryByText('名称')).not.toBeInTheDocument()
+    expect(screen.queryByText('影片A')).not.toBeInTheDocument()
   })
 })

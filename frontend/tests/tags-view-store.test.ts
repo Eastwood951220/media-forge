@@ -3,6 +3,7 @@ import { useTagsViewStore } from '../src/stores/useTagsViewStore'
 
 describe('useTagsViewStore', () => {
   beforeEach(() => {
+    localStorage.clear()
     useTagsViewStore.getState().resetViews()
   })
 
@@ -104,5 +105,17 @@ describe('useTagsViewStore', () => {
     })
 
     expect(nextViews.map((view) => view.cacheKey)).toEqual(['/', '/crawler/tasks'])
+  })
+
+  it('does not persist opened tags across browser sessions', () => {
+    useTagsViewStore.getState().addVisitedView({
+      path: '/crawler/tasks',
+      fullPath: '/crawler/tasks',
+      cacheKey: '/crawler/tasks',
+      title: '任务列表',
+      closable: true,
+    })
+
+    expect(localStorage.getItem('media-forge-tags-view')).toBeNull()
   })
 })
