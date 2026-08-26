@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { Alert, App, Button, Drawer, Space, Typography } from 'antd'
 import {
@@ -65,13 +65,13 @@ export default function CookieConfigDrawer({ open, onClose }: CookieConfigDrawer
     }
   }, [])
 
-  useEffect(() => {
-    if (!open) return
+  const handleAfterOpenChange = useCallback((nextOpen: boolean) => {
+    if (!nextOpen) return
     setSyncResult(null)
     setSyncError(null)
     setTestResult(null)
     void loadCookies()
-  }, [loadCookies, open])
+  }, [loadCookies])
 
   const handleCookieChange = (value: string | undefined) => {
     const text = value ?? ''
@@ -154,6 +154,7 @@ export default function CookieConfigDrawer({ open, onClose }: CookieConfigDrawer
       title="Cookie 检测"
       open={open}
       onClose={onClose}
+      afterOpenChange={handleAfterOpenChange}
       size={720}
       className={styles.cookieDrawer}
       footer={

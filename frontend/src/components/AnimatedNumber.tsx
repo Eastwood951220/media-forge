@@ -9,12 +9,13 @@ interface AnimatedNumberProps {
 
 function AnimatedNumber({ value, duration = 1.5, separator = ',', className }: AnimatedNumberProps) {
   const [displayValue, setDisplayValue] = useState(0)
+  const displayValueRef = useRef(0)
   const startValue = useRef(0)
   const startTime = useRef<number | null>(null)
   const rafId = useRef<number | null>(null)
 
   useEffect(() => {
-    startValue.current = displayValue
+    startValue.current = displayValueRef.current
     startTime.current = null
 
     const animate = (timestamp: number) => {
@@ -26,6 +27,7 @@ function AnimatedNumber({ value, duration = 1.5, separator = ',', className }: A
       const eased = 1 - Math.pow(1 - progress, 3) // easeOutCubic
       const currentValue = Math.round(startValue.current + (value - startValue.current) * eased)
 
+      displayValueRef.current = currentValue
       setDisplayValue(currentValue)
 
       if (progress < 1) {

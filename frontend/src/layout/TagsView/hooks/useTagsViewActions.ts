@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { TagView } from '@/stores/useTagsViewStore'
 import { useTagsViewStore } from '@/stores/useTagsViewStore'
-import type { RouteCacheControl } from '@/layout/routeCache'
+import type { RouteCacheControl } from '@/layout/routeCacheControl'
 import type { ContextMenuState } from './useTagsContextMenu'
 import { getRemovedCacheKeys } from '../tagsViewUtils'
 

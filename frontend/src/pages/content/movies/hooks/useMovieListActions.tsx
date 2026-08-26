@@ -125,7 +125,7 @@ export function useMovieListActions(args: {
         void navigate({ to: `/crawler/runs/${run.id}` })
       },
     })
-  }, [list, message, navigate])
+  }, [list, navigate])
 
   const handleBulkRefreshMagnets = useCallback(() => {
     const selectedIds = new Set(list.selectedRowKeys.map((key) => String(key)))

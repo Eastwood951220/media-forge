@@ -73,7 +73,7 @@ export default function FilterConfigDrawer({open, onClose, config, onSave}: Filt
         onSave(editingConfig);
         updateMovieFilterConfig(editingConfig).catch(() => message.error("保存失败"));
         onClose();
-    }, [editingConfig, onSave, onClose]);
+    }, [editingConfig, message, onSave, onClose]);
 
     return (
         <Drawer

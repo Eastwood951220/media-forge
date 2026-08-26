@@ -41,7 +41,7 @@ export function useMovieList(
         } finally {
             setLoading(false);
         }
-    }, [filterParams, page, pageSize, sortBy, sortOrder]);
+    }, [filterParams, message, page, pageSize, sortBy, sortOrder]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial load on mount/param change is intentional.

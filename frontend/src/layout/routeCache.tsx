@@ -1,37 +1,14 @@
-import { createContext, useContext, useMemo, type PropsWithChildren } from 'react'
+import { useContext, useMemo, type PropsWithChildren } from 'react'
 import { Outlet, useRouterState } from '@tanstack/react-router'
 import { KeepAlive, useKeepAliveRef } from 'keepalive-for-react'
 import { getRouteViewKey } from '@/routes/tags'
-
-export const ROUTE_CACHE_EXCLUDE_PATHS = ['/login', '/init']
-
-export type RouteCacheControl = {
-  destroy: (cacheKey: string) => Promise<void>
-  destroyMany: (cacheKeys: string[]) => Promise<void>
-  destroyOther: (cacheKey: string) => Promise<void>
-  destroyAll: () => Promise<void>
-  refresh: (cacheKey?: string) => void
-}
-
-const noopRouteCacheControl: RouteCacheControl = {
-  destroy: async () => undefined,
-  destroyMany: async () => undefined,
-  destroyOther: async () => undefined,
-  destroyAll: async () => undefined,
-  refresh: () => undefined,
-}
-
-const RouteCacheControlContext = createContext<RouteCacheControl>(noopRouteCacheControl)
-
-const RouteCacheRefContext = createContext<ReturnType<typeof useKeepAliveRef> | null>(null)
-
-export function isRouteCacheExcluded(pathname: string) {
-  return ROUTE_CACHE_EXCLUDE_PATHS.includes(pathname)
-}
-
-export function useRouteCacheControl() {
-  return useContext(RouteCacheControlContext)
-}
+import {
+  ROUTE_CACHE_EXCLUDE_PATHS,
+  RouteCacheControlContext,
+  RouteCacheRefContext,
+  isRouteCacheExcluded,
+  type RouteCacheControl,
+} from './routeCacheControl'
 
 export function RouteKeepAliveProvider({ children }: PropsWithChildren) {
   const aliveRef = useKeepAliveRef()

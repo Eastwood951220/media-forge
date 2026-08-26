@@ -49,6 +49,7 @@ function MovieListPage() {
     list,
     push,
   })
+  const { confirmDeleteMovies, refreshMagnetsForMovies } = actions
 
   useMoviePageSortDefault({
     loaded: configHook.loaded,
@@ -63,12 +64,12 @@ function MovieListPage() {
     () => createMovieColumns({
       onViewDetail: detail.showDetail,
       onPush: push.openSinglePush,
-      onDelete: (movie) => actions.confirmDeleteMovies([movie]),
+      onDelete: (movie) => confirmDeleteMovies([movie]),
       onCd2Sync: storageIndex.handleCd2Sync,
-      onRefreshMagnets: (movie) => actions.refreshMagnetsForMovies([movie]),
+      onRefreshMagnets: (movie) => refreshMagnetsForMovies([movie]),
       cd2SyncingId: storageIndex.cd2SyncingId,
     }),
-    [detail.showDetail, push.openSinglePush, actions.confirmDeleteMovies, storageIndex.handleCd2Sync, storageIndex.cd2SyncingId, actions.refreshMagnetsForMovies],
+    [detail.showDetail, push.openSinglePush, confirmDeleteMovies, storageIndex.handleCd2Sync, storageIndex.cd2SyncingId, refreshMagnetsForMovies],
   )
 
   const queryNode = configHook.loaded ? (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   App,
   Button,
@@ -38,7 +38,7 @@ export default function StorageConfigPage() {
   const [testResult, setTestResult] = useState<StorageTestResult | null>(null)
   const [tokenInput, setTokenInput] = useState('')
 
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     setLoading(true)
     try {
       const data = await fetchStorageConfig()
@@ -48,12 +48,12 @@ export default function StorageConfigPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [form, message])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial config load on mount is intentional.
     void loadConfig()
-  }, [])
+  }, [loadConfig])
 
   const handleSave = async (values: StorageConfig) => {
     setSaving(true)

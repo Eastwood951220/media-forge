@@ -19,7 +19,7 @@ export function useMovieDetail() {
         } catch (e: unknown) {
             message.error(getErrorMessage(e));
         }
-    }, []);
+    }, [message]);
 
     const closeDetail = useCallback(() => {
         setOpen(false);

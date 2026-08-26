@@ -203,7 +203,7 @@ export function useThemeViewTransition({
         transitionLockRef.current = false
       }
     },
-    [duration, easing, toggleTheme],
+    [duration, easing, ensureWarmup, toggleTheme],
   )
 
   return {

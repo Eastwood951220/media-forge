@@ -11,7 +11,7 @@ import {
   updateCrawlTask,
 } from '@/api/crawler/crawlTask'
 import type { CrawlTaskCreateParams, TaskUrlEntry } from '@/api/crawler/crawlTask/types'
-import { useRouteCacheControl } from '@/layout/routeCache'
+import { useRouteCacheControl } from '@/layout/routeCacheControl'
 import { invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
 import { useTagsViewStore } from '@/stores/useTagsViewStore'
 import {
