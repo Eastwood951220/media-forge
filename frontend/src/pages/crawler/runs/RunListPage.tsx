@@ -187,12 +187,15 @@ function RunListPage() {
       dataIndex: 'task_name',
       key: 'task_name',
       render: (name: string, record) => (
-        <Space orientation="vertical" size={2}>
-          <span style={{ fontWeight: 500 }}>{name}</span>
-          <Tag color={runScopeColors[record.run_scope || ''] || 'default'} style={{ width: 'fit-content' }}>
+        <div className={styles.runTaskNameLine} data-testid="run-task-name-line">
+          <span className={styles.runTaskName}>{name}</span>
+          <Tag
+            className={styles.runScopeTag}
+            color={runScopeColors[record.run_scope || ''] || 'default'}
+          >
             {record.run_scope_label || '全部任务'}
           </Tag>
-        </Space>
+        </div>
       ),
     },
     {

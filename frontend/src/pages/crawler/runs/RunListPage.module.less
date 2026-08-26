@@ -12,6 +12,26 @@
   animation: statusPulse 2s ease-in-out infinite;
 }
 
+.runTaskNameLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.runTaskName {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runScopeTag {
+  flex: 0 0 auto;
+  margin-inline-end: 0;
+}
+
 @keyframes statusPulse {
   0%, 100% {
     opacity: 1;
