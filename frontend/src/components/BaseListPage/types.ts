@@ -14,4 +14,5 @@ export interface BaseListPageProps<T extends object> {
   expandable?: TableProps<T>['expandable']
   onRefresh?: () => void
   queryVisibleDefault?: boolean
+  columnSettingsKey?: string
 }

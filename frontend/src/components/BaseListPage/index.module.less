@@ -52,3 +52,43 @@
   min-height: 0;
   overflow: hidden;
 }
+
+.columnSettingsPanel {
+  width: 220px;
+}
+
+.columnSettingsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.columnSettingsList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.columnSettingsItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: grab;
+
+  &:hover {
+    background: rgba(15, 23, 42, 0.04);
+  }
+}
+
+.columnSettingsHandle {
+  color: var(--text-tertiary, #9ca3af);
+  cursor: grab;
+}

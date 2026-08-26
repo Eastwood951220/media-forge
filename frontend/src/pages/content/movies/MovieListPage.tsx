@@ -86,6 +86,7 @@ function MovieListPage() {
     <div className={styles.page}>
       <BaseListPage<Movie>
         rowKey="_id"
+        columnSettingsKey="content.movies"
         columns={columns}
         dataSource={list.data.items}
         loading={configHook.loading || filters.filtersLoading || list.loading}
