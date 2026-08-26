@@ -1,9 +1,7 @@
-import { Button, Dropdown, Space, Tag } from 'antd'
-import type { MenuProps } from 'antd'
-import { DownOutlined } from '@ant-design/icons'
+import { Space, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { Movie } from '@/api/movie/types'
-import styles from '../MovieListPage.module.less'
+import ResponsiveActions, { type ResponsiveAction } from '@/components/ResponsiveActions'
 
 export interface MovieColumnsOptions {
   onViewDetail: (id: string) => void
@@ -105,34 +103,31 @@ export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, 
       fixed: 'right',
       width: 220,
       render: (_: unknown, record) => {
-        const menuItems = [
-          onPush ? { key: 'push', label: '推送' } : null,
-          onCd2Sync ? { key: 'cd2-sync', label: 'CD2同步', disabled: cd2SyncingId === record._id } : null,
-          onRefreshMagnets ? { key: 'refresh-magnets', label: '更新磁力', disabled: magnetRefreshingId === record._id } : null,
-          onDelete ? { key: 'delete', label: <span className={styles.dangerText}>删除</span> } : null,
-        ].filter(Boolean)
-        return (
-          <Space size={0}>
-            <Button type="link" size="small" onClick={() => onViewDetail(record._id)}>
-              详情
-            </Button>
-            <Dropdown
-              menu={{
-                items: menuItems as MenuProps['items'],
-                onClick: ({ key }) => {
-                  if (key === 'push') onPush?.(record)
-                  if (key === 'cd2-sync') onCd2Sync?.(record)
-                  if (key === 'refresh-magnets') onRefreshMagnets?.(record)
-                  if (key === 'delete') onDelete?.(record)
-                },
-              }}
-            >
-              <Button type="link" size="small" loading={cd2SyncingId === record._id || magnetRefreshingId === record._id}>
-                更多 <DownOutlined />
-              </Button>
-            </Dropdown>
-          </Space>
-        )
+        const actions: ResponsiveAction[] = [
+          { key: 'detail', label: '详情', onClick: () => onViewDetail(record._id) },
+          ...(onPush ? [{ key: 'push', label: '推送', onClick: () => onPush(record) }] : []),
+          ...(onCd2Sync
+            ? [{
+                key: 'cd2-sync',
+                label: 'CD2同步',
+                disabled: cd2SyncingId === record._id,
+                loading: cd2SyncingId === record._id,
+                onClick: () => onCd2Sync(record),
+              }]
+            : []),
+          ...(onRefreshMagnets
+            ? [{
+                key: 'refresh-magnets',
+                label: '更新磁力',
+                disabled: magnetRefreshingId === record._id,
+                loading: magnetRefreshingId === record._id,
+                onClick: () => onRefreshMagnets(record),
+              }]
+            : []),
+          ...(onDelete ? [{ key: 'delete', label: '删除', danger: true, onClick: () => onDelete(record) }] : []),
+        ]
+
+        return <ResponsiveActions actions={actions} />
       },
     },
   ]

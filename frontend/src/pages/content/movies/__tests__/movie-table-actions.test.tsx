@@ -16,7 +16,7 @@ const movie = {
 } as unknown as Movie
 
 describe('MovieTable actions', () => {
-  it('renders detail button and more dropdown', () => {
+  it('renders all actions inline until the responsive group measures constrained width', () => {
     const onViewDetail = vi.fn()
     const onPush = vi.fn()
     const onCd2Sync = vi.fn()
@@ -33,6 +33,24 @@ describe('MovieTable actions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '详情' }))
     expect(onViewDetail).toHaveBeenCalledWith('movie-1')
-    expect(screen.getByRole('button', { name: /更多/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '推送' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'CD2同步' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '更新磁力' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '删除' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /更多/ })).not.toBeInTheDocument()
+  })
+
+  it('fixes the action column to the right side', () => {
+    const columns = createMovieColumns({
+      onViewDetail: vi.fn(),
+      onPush: vi.fn(),
+      onCd2Sync: vi.fn(),
+      onRefreshMagnets: vi.fn(),
+      onDelete: vi.fn(),
+    })
+
+    expect(columns.find((column) => column.key === 'action')).toMatchObject({
+      fixed: 'right',
+    })
   })
 })

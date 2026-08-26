@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined} from '@ant-design/icons'
 import {useNavigate} from '@tanstack/react-router'
-import {Button, Card, message, Popconfirm, Space, Table, Tag} from 'antd'
+import {Card, message, Table, Tag} from 'antd'
 import type {ColumnsType} from 'antd/es/table'
 import {useQuery, useQueryClient} from '@tanstack/react-query'
 import {deleteCrawlerRun, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun} from '@/api/crawler/crawlerRun'
@@ -9,6 +9,7 @@ import type {CrawlRun, CrawlRunStatus} from '@/api/crawler/crawlerRun/types'
 import {queryKeys} from '@/api/queryKeys'
 import {invalidateCrawlerTaskLists} from '@/api/queryInvalidation'
 import {StatusTag} from '@/components/common'
+import ResponsiveActions, {type ResponsiveAction} from '@/components/ResponsiveActions'
 import {useCrawlerRuntimeStore} from '@/stores/useCrawlerRuntimeStore'
 import {subscribeRealtime} from '@/realtime/eventSourceClient'
 import {useRouteActivationRefresh} from '@/hooks/useRouteActivationRefresh'
@@ -240,57 +241,54 @@ function RunListPage() {
     {
       title: '操作',
       key: 'actions',
-      width: 200,
-      render: (_, record) => (
-        <Space size="small">
-          <Button
-            size="small"
-            type="primary"
-            ghost
-            icon={<EyeOutlined />}
-            onClick={() => void navigate({ to: `/crawler/runs/${record.id}` })}
-          >
-            详情
-          </Button>
-          {(record.status === 'queued' || record.status === 'running') && (
-            <Button
-              size="small"
-              danger
-              icon={<StopOutlined />}
-              onClick={() => handleStop(record)}
-            >
-              停止
-            </Button>
-          )}
-          {(record.status === 'stopped' || record.status === 'failed') && (
-            <Button
-              size="small"
-              type="primary"
-              icon={<ReloadOutlined />}
-              onClick={() => handleRestart(record)}
-            >
-              重启
-            </Button>
-          )}
-          {record.status !== 'queued' && record.status !== 'running' && (
-            <Popconfirm
-              title="删除运行记录"
-              description="仅删除运行记录和子任务记录，不会删除影片数据。"
-              okText="确定"
-              cancelText="取消"
-              onConfirm={() => handleDelete(record)}
-            >
-              <Button
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-              >
-                删除
-              </Button>
-            </Popconfirm>
-          )}
-        </Space>
-      ),
+      fixed: 'right',
+      width: 220,
+      render: (_, record) => {
+        const actions: ResponsiveAction[] = [
+          {
+            key: 'detail',
+            label: '详情',
+            type: 'primary',
+            icon: <EyeOutlined />,
+            onClick: () => void navigate({ to: `/crawler/runs/${record.id}` }),
+          },
+          ...((record.status === 'queued' || record.status === 'running')
+            ? [{
+                key: 'stop',
+                label: '停止',
+                danger: true,
+                icon: <StopOutlined />,
+                onClick: () => void handleStop(record),
+              }]
+            : []),
+          ...((record.status === 'stopped' || record.status === 'failed')
+            ? [{
+                key: 'restart',
+                label: '重启',
+                type: 'primary' as const,
+                icon: <ReloadOutlined />,
+                onClick: () => void handleRestart(record),
+              }]
+            : []),
+          ...(record.status !== 'queued' && record.status !== 'running'
+            ? [{
+                key: 'delete',
+                label: '删除',
+                danger: true,
+                icon: <DeleteOutlined />,
+                confirm: {
+                  title: '删除运行记录',
+                  description: '仅删除运行记录和子任务记录，不会删除影片数据。',
+                  okText: '确定',
+                  cancelText: '取消',
+                },
+                onClick: () => void handleDelete(record),
+              }]
+            : []),
+        ]
+
+        return <ResponsiveActions actions={actions} />
+      },
     },
   ]
 
@@ -301,6 +299,7 @@ function RunListPage() {
         columns={columns}
         dataSource={runs}
         loading={loading}
+        scroll={{ x: 980 }}
         pagination={{
           current,
           total,

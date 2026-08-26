@@ -1,8 +1,9 @@
 import { DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
-import { Button, Card, Popconfirm, Progress, Space, Table, Tag, Typography } from 'antd'
+import { Button, Card, Progress, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { StorageMainTask, StorageMainTaskStatus, StorageMode } from '@/api/storage/storageTasks/types'
+import ResponsiveActions, { type ResponsiveAction } from '@/components/ResponsiveActions'
 import styles from '../StorageTasks.module.less'
 import { modeLabels, PAGE_SIZE_OPTIONS, statusLabels } from '../utils/status'
 
@@ -104,55 +105,53 @@ export function StorageMainTaskTable({
     {
       title: '操作',
       key: 'actions',
-      width: 200,
-      render: (_, record) => (
-        <Space>
-          <Button
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => void navigate({ to: `/storage/tasks/${record.id}` })}
-          >
-            详情
-          </Button>
-          {(record.status === 'queued' || record.status === 'running') && (
-            <Button
-              size="small"
-              danger
-              icon={<StopOutlined />}
-              onClick={() => void onStop(record)}
-            >
-              停止
-            </Button>
-          )}
-          {(record.status === 'stopped' || record.status === 'failed') && (
-            <Button
-              size="small"
-              type="primary"
-              icon={<ReloadOutlined />}
-              onClick={() => void onRestart(record)}
-            >
-              重启
-            </Button>
-          )}
-          {!['queued', 'running', 'stopping'].includes(record.status) && (
-            <Popconfirm
-              title="删除存储任务"
-              description="将删除主任务、子任务和对应日志，不会删除网盘文件。"
-              okText="确定"
-              cancelText="取消"
-              onConfirm={() => void onDelete(record)}
-            >
-              <Button
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-              >
-                删除
-              </Button>
-            </Popconfirm>
-          )}
-        </Space>
-      ),
+      fixed: 'right',
+      width: 220,
+      render: (_, record) => {
+        const actions: ResponsiveAction[] = [
+          {
+            key: 'detail',
+            label: '详情',
+            icon: <EyeOutlined />,
+            onClick: () => void navigate({ to: `/storage/tasks/${record.id}` }),
+          },
+          ...((record.status === 'queued' || record.status === 'running')
+            ? [{
+                key: 'stop',
+                label: '停止',
+                danger: true,
+                icon: <StopOutlined />,
+                onClick: () => void onStop(record),
+              }]
+            : []),
+          ...((record.status === 'stopped' || record.status === 'failed')
+            ? [{
+                key: 'restart',
+                label: '重启',
+                type: 'primary' as const,
+                icon: <ReloadOutlined />,
+                onClick: () => void onRestart(record),
+              }]
+            : []),
+          ...(!['queued', 'running', 'stopping'].includes(record.status)
+            ? [{
+                key: 'delete',
+                label: '删除',
+                danger: true,
+                icon: <DeleteOutlined />,
+                confirm: {
+                  title: '删除存储任务',
+                  description: '将删除主任务、子任务和对应日志，不会删除网盘文件。',
+                  okText: '确定',
+                  cancelText: '取消',
+                },
+                onClick: () => void onDelete(record),
+              }]
+            : []),
+        ]
+
+        return <ResponsiveActions actions={actions} />
+      },
     },
   ]
 
