@@ -53,4 +53,24 @@ describe('MovieTable actions', () => {
       fixed: 'right',
     })
   })
+
+  it('shows the movie crawl time column', () => {
+    render(
+      <Table
+        rowKey="_id"
+        dataSource={[{ ...movie, created_at: '2026-01-02T03:04:05.000Z' }]}
+        columns={createMovieColumns({
+          onViewDetail: vi.fn(),
+          onPush: vi.fn(),
+          onCd2Sync: vi.fn(),
+          onRefreshMagnets: vi.fn(),
+          onDelete: vi.fn(),
+        })}
+        pagination={false}
+      />,
+    )
+
+    expect(screen.getByRole('columnheader', { name: '抓取时间' })).toBeInTheDocument()
+    expect(screen.getByText(/2026/)).toBeInTheDocument()
+  })
 })

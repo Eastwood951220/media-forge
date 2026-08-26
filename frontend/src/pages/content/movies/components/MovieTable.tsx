@@ -29,6 +29,10 @@ function unique(values: string[] | undefined) {
   return [...new Set(values || [])]
 }
 
+function formatDateTime(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString() : '-'
+}
+
 export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, onRefreshMagnets, cd2SyncingId, magnetRefreshingId }: MovieColumnsOptions): ColumnsType<Movie> {
   return [
     { title: '番号',
@@ -96,6 +100,13 @@ export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, 
         const status = record.storage_status || record.storage_summary?.storage_status || 'not_stored'
         return <Tag color={storageStatusColor[status]}>{storageStatusText[status] || status}</Tag>
       },
+    },
+    {
+      title: '抓取时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 180,
+      render: formatDateTime,
     },
     {
       title: '操作',
