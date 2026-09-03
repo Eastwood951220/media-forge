@@ -3,10 +3,10 @@ ARG PYTHON_BASE_IMAGE=python:3.12-slim
 
 FROM ${NODE_BASE_IMAGE} AS frontend-build
 WORKDIR /build/frontend
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
 COPY frontend/ ./
-RUN npm run build
+RUN pnpm run build
 
 FROM ${PYTHON_BASE_IMAGE} AS runtime
 

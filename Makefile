@@ -17,7 +17,7 @@ DOCKER_BUILD_ARGS ?= --build-arg NODE_BASE_IMAGE=$(NODE_BASE_IMAGE) --build-arg 
 .PHONY: frontend-build docker-build docker-build-arm64 docker-build-amd64 docker-save-arm64 docker-save-amd64 docker-run docker-stop output-dir
 
 frontend-build:
-	cd frontend && npm ci && npm run build
+	cd frontend && CI=true pnpm install --frozen-lockfile && pnpm run build
 
 docker-build:
 	docker buildx build --platform linux/amd64 --load $(DOCKER_BUILD_ARGS) -t $(IMAGE):$(IMAGE_TAG) .
