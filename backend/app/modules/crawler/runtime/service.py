@@ -78,6 +78,9 @@ class CrawlerRunService:
         crawl_mode: str,
         *,
         selected_task_url_ids: list[uuid.UUID] | None = None,
+        trigger_source: str | None = None,
+        schedule_id: uuid.UUID | None = None,
+        schedule_run_id: uuid.UUID | None = None,
     ) -> CrawlRun:
         if crawl_mode not in {"incremental", "full"}:
             raise ValueError("crawl_mode must be incremental or full")
@@ -91,6 +94,9 @@ class CrawlerRunService:
             crawl_mode=crawl_mode,
             queued_at=datetime.now(),
             result=result,
+            trigger_source=trigger_source,
+            schedule_id=schedule_id,
+            schedule_run_id=schedule_run_id,
         )
         self.db.add(run)
         self.db.commit()

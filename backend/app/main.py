@@ -18,6 +18,7 @@ from backend.app.modules.content.movies.router import router as content_movies_r
 from backend.app.modules.crawler.agent.router import router as crawler_agent_router
 from backend.app.modules.crawler.config.router import router as crawler_config_router
 from backend.app.modules.crawler.runs.router import router as crawler_runs_router
+from backend.app.modules.crawler.schedules.scheduler import crawler_schedule_scheduler
 from backend.app.modules.crawler.agent.startup import normalize_agent_state_on_startup
 from backend.app.modules.crawler.runtime.service import cleanup_interrupted_runs, get_runtime_state
 from backend.app.modules.storage.worker.runner import cleanup_interrupted_storage_tasks
@@ -96,6 +97,9 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             storage_stopped = cleanup_interrupted_storage_tasks(session, StorageRuntimeState(get_redis()))
             if storage_stopped:
                 logger.info("Stopped %d interrupted storage tasks.", storage_stopped)
+
+        crawler_schedule_scheduler.start()
+        crawler_schedule_scheduler.load_enabled_schedules()
     else:
         logger.warning("Backend not initialized — only init endpoints available.")
 
@@ -103,6 +107,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Shutdown
     event_bus.close()
+    crawler_schedule_scheduler.shutdown()
     close_redis()
     if runtime_config_exists():
         close_postgres()
