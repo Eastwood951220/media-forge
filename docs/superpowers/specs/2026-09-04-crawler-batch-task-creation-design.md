@@ -147,6 +147,7 @@ Increase crawler task `storage_location` from 10 characters to 200 characters:
 - `backend/app/models/crawl_task.py`: `String(200)`
 - `backend/app/schemas/crawl_task.py`: `max_length=200`
 - Alembic migration: alter `crawl_tasks.storage_location` to length 200
+- Root SQL file: save the equivalent database change under `sql/`
 - Frontend type remains `string`
 
 This keeps storage locations aligned with fetched names while avoiding silent

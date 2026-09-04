@@ -19,6 +19,7 @@
 - Save one independent crawler task per pasted URL.
 - Use each fetched URL name as both the task name and storage location.
 - Increase crawler task `storage_location` capacity from 10 characters to 200 characters.
+- Save database-change SQL files under the repository root `sql/` directory.
 - Preserve existing single-task create/edit behavior.
 
 ---
@@ -28,6 +29,7 @@
 - Modify `backend/app/schemas/crawl_task.py`: add batch request/response schemas and widen `storage_location` validation.
 - Modify `backend/app/models/crawl_task.py`: widen the ORM column type for `storage_location`.
 - Create `backend/alembic/versions/20260904_0001_widen_crawl_task_storage_location.py`: database migration for `crawl_tasks.storage_location`.
+- Create `sql/20260904_widen_crawl_task_storage_location.sql`: standalone SQL for the same database change.
 - Create `backend/app/modules/crawler/tasks/url_detection.py`: backend URL type detection matching the existing frontend route patterns.
 - Modify `backend/app/modules/crawler/tasks/service.py`: add `batch_create_tasks`, per-item transaction handling, name extraction, and conflict suffixing.
 - Modify `backend/app/modules/crawler/tasks/router.py`: add `POST /api/crawler/tasks/batch` before UUID routes.
@@ -50,6 +52,7 @@
 - Modify: `backend/app/schemas/crawl_task.py`
 - Modify: `backend/app/models/crawl_task.py`
 - Create: `backend/alembic/versions/20260904_0001_widen_crawl_task_storage_location.py`
+- Create: `sql/20260904_widen_crawl_task_storage_location.sql`
 - Test: `backend/tests/test_crawler_tasks_api.py`
 
 **Interfaces:**
@@ -159,7 +162,7 @@ to:
 storage_location: Mapped[str] = mapped_column(String(200), nullable=False, default="")
 ```
 
-- [ ] **Step 4: Add Alembic migration**
+- [ ] **Step 4: Add Alembic migration and root SQL file**
 
 Create `backend/alembic/versions/20260904_0001_widen_crawl_task_storage_location.py`:
 
@@ -201,6 +204,13 @@ def downgrade() -> None:
     )
 ```
 
+Create `sql/20260904_widen_crawl_task_storage_location.sql`:
+
+```sql
+ALTER TABLE crawl_tasks
+    ALTER COLUMN storage_location TYPE VARCHAR(200);
+```
+
 - [ ] **Step 5: Run focused tests**
 
 Run:
@@ -214,7 +224,7 @@ Expected: PASS for the long storage-location test. The empty batch route test ma
 - [ ] **Step 6: Commit Task 1**
 
 ```bash
-git add backend/app/schemas/crawl_task.py backend/app/models/crawl_task.py backend/alembic/versions/20260904_0001_widen_crawl_task_storage_location.py backend/tests/test_crawler_tasks_api.py
+git add backend/app/schemas/crawl_task.py backend/app/models/crawl_task.py backend/alembic/versions/20260904_0001_widen_crawl_task_storage_location.py sql/20260904_widen_crawl_task_storage_location.sql backend/tests/test_crawler_tasks_api.py
 git diff --cached --name-only
 git commit -m "feat: widen crawler task storage location"
 ```
