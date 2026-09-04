@@ -53,6 +53,7 @@ export default function ScheduleFormDrawer({
   const [form] = Form.useForm<CrawlerScheduleFormValues>()
   const scheduleType = Form.useWatch('schedule_type', form)
   const autoStorageEnabled = Form.useWatch('auto_storage_enabled', form)
+  const storageMode = Form.useWatch('storage_mode', form)
 
   useEffect(() => {
     if (!open) return
@@ -165,6 +166,7 @@ export default function ScheduleFormDrawer({
         <Form.Item
           name="weekdays"
           label="每周执行日"
+          dependencies={['schedule_type']}
           rules={[
             {
               validator: (_, value: number[] | undefined) => {
@@ -190,16 +192,19 @@ export default function ScheduleFormDrawer({
         {autoStorageEnabled ? (
           <>
             <Form.Item name="storage_mode" label="存储方式">
-              <Select
+              <Segmented
+                block
                 options={[
-                  { value: 'single', label: '单盘' },
-                  { value: 'multiple', label: '多盘' },
+                  { label: '单盘', value: 'single' },
+                  { label: '多盘', value: 'multiple' },
                 ]}
               />
             </Form.Item>
-            <Form.Item name="selected_storage_location" label="存储位置">
-              <Input maxLength={500} placeholder="留空使用任务的默认存储位置" />
-            </Form.Item>
+            {storageMode === 'single' ? (
+              <Form.Item name="selected_storage_location" label="存储位置">
+                <Input maxLength={500} placeholder="留空使用任务的默认存储位置" />
+              </Form.Item>
+            ) : null}
           </>
         ) : null}
       </Form>

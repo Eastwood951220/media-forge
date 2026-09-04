@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Drawer, Empty, Table, Tag } from 'antd'
+import { Drawer, Empty, Table, Tag, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -118,17 +118,30 @@ export default function ScheduleHistoryDrawer({ schedule, onClose }: ScheduleHis
     {
       title: '存储任务',
       key: 'storage',
-      width: 130,
+      width: 200,
       render: (_, record) => {
-        if (record.storage_task_id) {
-          return (
+        const storageLabel = storageStatusLabels[record.storage_status]
+        const storageState =
+          record.storage_task_id ? (
             <Link to="/storage/tasks/$id" params={{ id: record.storage_task_id }}>
               查看
             </Link>
+          ) : storageLabel ? (
+            <Tag color={storageLabel.color}>{storageLabel.text}</Tag>
+          ) : (
+            <span className={styles.muted}>—</span>
+          )
+        if (record.storage_status === 'failed' && record.storage_error) {
+          return (
+            <div className={styles.storageCell}>
+              {storageState}
+              <Tooltip title={record.storage_error}>
+                <span className={styles.storageError}>{record.storage_error}</span>
+              </Tooltip>
+            </div>
           )
         }
-        const label = storageStatusLabels[record.storage_status]
-        return label ? <Tag color={label.color}>{label.text}</Tag> : <span className={styles.muted}>—</span>
+        return storageState
       },
     },
   ]
@@ -151,7 +164,7 @@ export default function ScheduleHistoryDrawer({ schedule, onClose }: ScheduleHis
             columns={columns}
             dataSource={rows}
             loading={loading}
-            scroll={{ x: 820 }}
+            scroll={{ x: 900 }}
             pagination={{
               current,
               pageSize,

@@ -39,6 +39,11 @@ const runStatusLabels: Record<string, { text: string; color: string }> = {
 
 const PAGE_SIZE_OPTIONS = ['10', '20', '50']
 
+const storageModeLabels: Record<string, string> = {
+  single: '单盘',
+  multiple: '多盘',
+}
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '操作失败'
 }
@@ -237,6 +242,22 @@ function ScheduleListPage() {
         enabled ? <Tag color="success">已启用</Tag> : <Tag>已停用</Tag>,
     },
     {
+      title: '自动存储',
+      key: 'auto_storage',
+      width: 130,
+      render: (_, record) =>
+        record.auto_storage_enabled ? (
+          <Space size={4}>
+            <Tag color="processing">自动存储开</Tag>
+            <span className={styles.muted}>
+              {storageModeLabels[record.storage_mode] ?? record.storage_mode}
+            </span>
+          </Space>
+        ) : (
+          <Tag>自动存储关</Tag>
+        ),
+    },
+    {
       title: '操作',
       key: 'actions',
       fixed: 'right',
@@ -292,7 +313,7 @@ function ScheduleListPage() {
           columns={columns}
           dataSource={rows}
           loading={listQuery.isFetching}
-          scroll={{ x: 1340 }}
+          scroll={{ x: 1480 }}
           pagination={{
             current,
             pageSize,
