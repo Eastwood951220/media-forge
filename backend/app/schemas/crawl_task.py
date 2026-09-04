@@ -36,6 +36,7 @@ class CrawlTaskCreate(BaseModel):
     storage_location: str = Field(..., min_length=1, max_length=200)
     urls: list[TaskUrlEntryCreate] = Field(..., min_length=1)
     is_skip: bool = False
+    tag_names: list[str] | None = None
 
 
 class CrawlTaskBatchCreate(BaseModel):
@@ -44,12 +45,14 @@ class CrawlTaskBatchCreate(BaseModel):
     has_chinese_sub: bool = False
     sort_type: int = Field(default=0, ge=0)
     is_skip: bool = False
+    tag_names: list[str] | None = None
 
 
 class CrawlTaskUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     urls: list[TaskUrlEntryCreate] | None = None
     is_skip: bool | None = None
+    tag_names: list[str] | None = None
 
 
 class TemporaryCrawlRunCreate(BaseModel):
@@ -62,12 +65,20 @@ class CrawlTaskUrlRunCreate(BaseModel):
     crawl_mode: Literal["incremental", "full"]
 
 
+class TaskTagRead(BaseModel):
+    id: uuid.UUID
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
 class CrawlTaskRead(BaseModel):
     id: uuid.UUID
     _id: uuid.UUID
     name: str
     storage_location: str
     urls: list[TaskUrlEntryRead]
+    tags: list[TaskTagRead] = Field(default_factory=list)
     is_skip: bool
     status: str
     task_id: str | None = None
@@ -122,6 +133,7 @@ class CrawlTaskListItem(BaseModel):
     storage_location: str
     is_skip: bool
     urls: list[TaskUrlListItem]
+    tags: list[TaskTagRead] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 

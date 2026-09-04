@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.schemas.crawl_task import CrawlTaskListItem, CrawlTaskRead, TaskUrlListItem
+from backend.app.schemas.crawl_task import CrawlTaskListItem, CrawlTaskRead, TaskTagRead, TaskUrlListItem
 
 
 def serialize_task(task, latest_run=None) -> CrawlTaskRead:
@@ -31,4 +31,5 @@ def serialize_task_list_item(task) -> CrawlTaskListItem:
             )
             for u in task.urls
         ],
+        tags=[TaskTagRead.model_validate(tag) for tag in task.tags],
     )

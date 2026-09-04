@@ -1,9 +1,20 @@
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, ForeignKey, Index, Integer, String, Table, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.database.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+
+crawl_task_tag_links = Table(
+    "crawl_task_tag_links",
+    Base.metadata,
+    Column("task_id", ForeignKey("crawl_tasks.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", ForeignKey("crawl_task_tags.id", ondelete="CASCADE"), primary_key=True),
+    UniqueConstraint("task_id", "tag_id", name="uq_crawl_task_tag_links_task_tag"),
+    Index("idx_crawl_task_tag_links_task_id", "task_id"),
+    Index("idx_crawl_task_tag_links_tag_id", "tag_id"),
+)
 
 
 class CrawlTask(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -29,6 +40,13 @@ class CrawlTask(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         back_populates="task",
         cascade="all, delete-orphan",
         order_by="CrawlTaskUrl.position",
+        lazy="selectin",
+    )
+
+    tags: Mapped[list["CrawlTaskTag"]] = relationship(
+        secondary=crawl_task_tag_links,
+        back_populates="tasks",
+        order_by="CrawlTaskTag.name",
         lazy="selectin",
     )
 
@@ -61,3 +79,20 @@ class CrawlTaskUrl(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     url_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     task: Mapped[CrawlTask] = relationship(back_populates="urls")
+
+
+class CrawlTaskTag(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "crawl_task_tags"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "name", name="uq_crawl_task_tags_owner_name"),
+        Index("idx_crawl_task_tags_owner_name", "owner_id", "name"),
+    )
+
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    tasks: Mapped[list[CrawlTask]] = relationship(
+        secondary=crawl_task_tag_links,
+        back_populates="tags",
+        lazy="selectin",
+    )

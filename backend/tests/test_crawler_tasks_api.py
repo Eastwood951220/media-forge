@@ -87,7 +87,8 @@ def test_crawler_task_list_returns_total_and_static_list_fields(client, auth_hea
     assert data["size"] == 2
     assert data["total"] == 3
     assert len(data["rows"]) == 2
-    assert set(data["rows"][0]) == {"id", "name", "storage_location", "is_skip", "urls"}
+    assert set(data["rows"][0]) == {"id", "name", "storage_location", "is_skip", "urls", "tags"}
+    assert data["rows"][0]["tags"] == []
     assert set(data["rows"][0]["urls"][0]) == {
         "id",
         "position",
@@ -261,3 +262,27 @@ def test_batch_create_keeps_successes_when_some_urls_fail(client, auth_headers, 
         {"url": "https://example.com/nope", "reason": "不支持的 URL 来源"},
         {"url": "https://javdb.com/actors/bad", "reason": "页面不可访问"},
     ]
+
+
+def test_crawler_task_tag_tables_are_registered():
+    from shared.database.models.base import Base
+
+    assert "crawl_task_tags" in Base.metadata.tables
+    assert "crawl_task_tag_links" in Base.metadata.tables
+
+
+def test_crawler_task_schemas_accept_tag_names():
+    from backend.app.schemas.crawl_task import CrawlTaskBatchCreate, CrawlTaskCreate, CrawlTaskUpdate
+
+    create = CrawlTaskCreate(
+        name="tag schema",
+        storage_location="tag schema",
+        tag_names=["VR", "演员"],
+        urls=[{"url": "https://javdb.com/actors/schema", "url_type": "actors"}],
+    )
+    update = CrawlTaskUpdate(tag_names=[])
+    batch = CrawlTaskBatchCreate(urls=["https://javdb.com/actors/schema"], tag_names=["VR"])
+
+    assert create.tag_names == ["VR", "演员"]
+    assert update.tag_names == []
+    assert batch.tag_names == ["VR"]
