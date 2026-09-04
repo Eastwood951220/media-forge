@@ -253,6 +253,24 @@ describe('TaskFormPage URL table drawer', () => {
     })
   })
 
+  it('shows the edit enable switch as on for enabled tasks and submits is_skip as false', async () => {
+    await renderEditPage()
+
+    const enableSwitch = screen.getByRole('switch', { name: '启用状态' })
+    expect(enableSwitch).toBeChecked()
+
+    fireEvent.click(await screen.findByText('更 新'))
+
+    await waitFor(() => {
+      expect(updateCrawlTask).toHaveBeenCalledWith(
+        'task-1',
+        expect.objectContaining({
+          is_skip: false,
+        }),
+      )
+    })
+  })
+
   it('blocks edit submit when normalized URL list is empty', async () => {
     await renderEditPage(emptyUrlTask)
 

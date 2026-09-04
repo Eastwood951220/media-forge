@@ -216,7 +216,7 @@ export default function TaskFormPage() {
       const payload: CrawlTaskCreateParams = {
         name: values.name,
         storage_location: values.storage_location,
-        is_skip: values.is_skip ?? false,
+        is_skip: form.getFieldValue('is_skip') ?? false,
         tag_names: values.tag_names ?? [],
         urls: enrichedEntries,
       }
@@ -316,12 +316,19 @@ export default function TaskFormPage() {
               <TaskTagSelect options={tagOptionsQuery.data ?? []} loading={tagOptionsQuery.isLoading} />
             </Form.Item>
             <Form.Item
-              name="is_skip"
               label="启用状态"
-              valuePropName="checked"
-              className={styles.taskConfigStatus}
-            >
-              <Switch checkedChildren="禁用" unCheckedChildren="启用" />
+              className={styles.taskConfigStatus}>
+              <Form.Item noStyle shouldUpdate={(prev, cur) => prev.is_skip !== cur.is_skip}>
+                {({ getFieldValue, setFieldValue }) => (
+                  <Switch
+                    aria-label="启用状态"
+                    checked={!getFieldValue('is_skip')}
+                    checkedChildren="启用"
+                    unCheckedChildren="禁用"
+                    onChange={(checked) => setFieldValue('is_skip', !checked)}
+                  />
+                )}
+              </Form.Item>
             </Form.Item>
           </div>
 
