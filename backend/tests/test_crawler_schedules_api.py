@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.app.models.crawl_task import CrawlTask
-from backend.app.modules.crawler.schedules.schemas import CrawlerScheduleCreate
+from backend.app.modules.crawler.schedules.schemas import CrawlerScheduleCreate, CrawlerScheduleUpdate
 from backend.app.modules.crawler.schedules.service import CrawlerScheduleService, calculate_next_run_at
 
 
@@ -71,3 +71,27 @@ def test_calculate_next_run_at_weekly_uses_selected_weekdays():
     now = datetime(2026, 9, 4, 5, 0)  # Friday
     next_run = calculate_next_run_at("weekly", "03:30", [0], now=now)
     assert next_run == datetime(2026, 9, 7, 3, 30)
+
+
+@pytest.mark.parametrize("field", ["schedule_type", "time_of_day", "weekdays"])
+def test_update_schedule_rejects_null_recurrence_field(db_session, test_user, field):
+    task = seed_task(db_session, test_user.id)
+    service = CrawlerScheduleService(db_session, scheduler=None)
+    data = CrawlerScheduleCreate(
+        name="Weekly",
+        enabled=True,
+        task_ids=[task.id],
+        schedule_type="weekly",
+        time_of_day="04:15",
+        weekdays=[2],
+        auto_storage_enabled=False,
+        storage_mode="single",
+        selected_storage_location=None,
+    )
+    schedule = service.create_schedule(data, test_user.id)
+
+    with pytest.raises(HTTPException) as exc:
+        service.update_schedule(schedule.id, CrawlerScheduleUpdate(**{field: None}), test_user.id)
+
+    assert exc.value.status_code == 400
+    assert "定时类型、执行时间和星期不能为空" in str(exc.value.detail)

@@ -106,6 +106,8 @@ class CrawlerScheduleService:
     def update_schedule(self, schedule_id: uuid.UUID, data: CrawlerScheduleUpdate, owner_id: uuid.UUID) -> CrawlerSchedule:
         schedule = self.get_owned_model(schedule_id, owner_id)
         update_data = data.model_dump(exclude_unset=True)
+        if any(key in update_data and update_data[key] is None for key in ("schedule_type", "time_of_day", "weekdays")):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="定时类型、执行时间和星期不能为空")
         if "name" in update_data and update_data["name"] is not None:
             schedule.name = update_data["name"].strip()
         next_type = update_data.get("schedule_type", schedule.schedule_type)
