@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 import {
+  ClockCircleOutlined,
   CloudOutlined,
   DashboardOutlined,
   HistoryOutlined,
@@ -37,6 +38,11 @@ const menuItems: MenuProps['items'] = [
         key: '/crawler/runs',
         icon: <HistoryOutlined />,
         label: '运行记录',
+      },
+      {
+        key: '/crawler/schedules',
+        icon: <ClockCircleOutlined />,
+        label: '定时任务',
       },
       {
         key: '/crawler/config',
@@ -88,9 +94,11 @@ export function SideMenu({ collapsed }: SideMenuProps) {
     ? '/crawler/tasks'
     : pathname.startsWith('/crawler/runs')
       ? '/crawler/runs'
-      : pathname.startsWith('/crawler/config')
-        ? '/crawler/config'
-        : pathname.startsWith('/storage/tasks')
+      : pathname.startsWith('/crawler/schedules')
+        ? '/crawler/schedules'
+        : pathname.startsWith('/crawler/config')
+          ? '/crawler/config'
+          : pathname.startsWith('/storage/tasks')
           ? '/storage/tasks'
           : pathname.startsWith('/storage/config')
             ? '/storage/config'

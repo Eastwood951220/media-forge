@@ -30,6 +30,7 @@ const ROUTE_TAGS: Array<{ pattern: RegExp; meta: RouteTagMeta }> = [
       singletonKey: '/crawler/runs/:id',
     },
   },
+  { pattern: /^\/crawler\/schedules$/, meta: { title: '定时任务', activeMenu: '/crawler/schedules' } },
   { pattern: /^\/content\/movies$/, meta: { title: '影片列表' } },
   { pattern: /^\/storage\/config$/, meta: { title: '存储配置' } },
   { pattern: /^\/storage\/tasks$/, meta: { title: '存储任务' } },

@@ -19,6 +19,12 @@ export const queryKeys = {
     list: (params: { page: number; size: number; task_id?: string; status?: string }) =>
       ['crawlerRuns', params] as const,
   },
+  crawlerSchedules: {
+    all: () => ['crawlerSchedules'] as const,
+    list: (params: { page: number; size: number }) => ['crawlerSchedules', params] as const,
+    runs: (scheduleId: string, params: { page: number; size: number }) =>
+      ['crawlerSchedules', scheduleId, 'runs', params] as const,
+  },
   crawlerTasks: {
     all: () => ['crawlerTasks'] as const,
     list: (params: { page: number; size: number; keyword?: string; tag_names?: string[] }) =>

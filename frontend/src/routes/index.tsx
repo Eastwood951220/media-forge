@@ -10,6 +10,7 @@ import TaskListPage from '@/pages/crawler/tasks/TaskListPage'
 import TaskFormPage from '@/pages/crawler/tasks/TaskFormPage'
 import RunListPage from '@/pages/crawler/runs/RunListPage'
 import RunDetailPage from '@/pages/crawler/runs/RunDetailPage'
+import ScheduleListPage from '@/pages/crawler/schedules/ScheduleListPage'
 import MovieListPage from '@/pages/content/movies/MovieListPage'
 import StorageConfigPage from '@/pages/storage/config/StorageConfigPage'
 import StorageTaskListPage from '@/pages/storage/tasks/StorageTaskListPage'
@@ -116,6 +117,12 @@ const crawlerRunDetailRoute = createRoute({
   component: RunDetailPage,
 })
 
+const crawlerSchedulesRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/crawler/schedules',
+  component: ScheduleListPage,
+})
+
 const storageConfigRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/storage/config',
@@ -158,6 +165,7 @@ const routeTree = rootRoute.addChildren([
     crawlerTaskEditRoute,
     crawlerRunsRoute,
     crawlerRunDetailRoute,
+    crawlerSchedulesRoute,
     storageConfigRoute,
     storageTasksRoute,
     storageTaskDetailRoute,

@@ -1,0 +1,108 @@
+/* ===== Page Layout ===== */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ===== Panel / Table Container ===== */
+.panel {
+  padding: 20px 24px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  background: var(--app-surface-color);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+/* ===== Toolbar ===== */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.toolbarTitle {
+  margin: 0;
+  color: var(--app-text-color);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.toolbarSubtitle {
+  margin: 4px 0 0;
+  color: var(--app-muted-color);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ===== Table Cells ===== */
+.muted {
+  color: var(--app-muted-color, #6b7280);
+  font-size: 13px;
+}
+
+.taskNames {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.lastRunCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* ===== History Drawer ===== */
+.historyBody {
+  min-height: 200px;
+}
+
+.historyTime {
+  color: var(--app-text-color);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.historyRunLinks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+/* ===== Drawer Footers ===== */
+.drawerFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .page {
+    gap: 16px;
+  }
+
+  .panel {
+    padding: 16px;
+  }
+
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scheduleFormDrawer {
+    :global(.ant-drawer-content-wrapper) {
+      width: 100% !important;
+    }
+  }
+}

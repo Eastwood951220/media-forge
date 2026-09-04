@@ -8,3 +8,7 @@ export function invalidateCrawlerRunLists(queryClient: QueryClient) {
 export function invalidateCrawlerTaskLists(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: queryKeys.crawlerTasks.all() })
 }
+
+export function invalidateCrawlerSchedules(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: queryKeys.crawlerSchedules.all() })
+}
