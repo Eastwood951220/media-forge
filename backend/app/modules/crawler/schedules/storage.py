@@ -18,6 +18,9 @@ def process_schedule_run_completion(db: Session, run: CrawlRun) -> None:
     schedule_run = db.get(CrawlerScheduleRun, run.schedule_run_id)
     if schedule_run is None or schedule_run.storage_status in {"created", "skipped", "failed"}:
         return
+    schedule = schedule_run.schedule
+    if schedule is None:
+        return
     linked_runs = (
         db.query(CrawlRun)
         .join(CrawlerScheduleRunCrawlRun, CrawlerScheduleRunCrawlRun.crawl_run_id == CrawlRun.id)
@@ -33,11 +36,13 @@ def process_schedule_run_completion(db: Session, run: CrawlRun) -> None:
         schedule_run.status = "partial_failed"
     else:
         schedule_run.status = "failed"
-    schedule = schedule_run.schedule
     if not schedule.auto_storage_enabled:
         schedule_run.storage_status = "disabled"
         db.commit()
         return
+    # Persist the finalized status before touching storage so a storage
+    # failure cannot strand the schedule run in "running".
+    db.commit()
     movie_ids = [
         row[0]
         for row in (
@@ -72,7 +77,6 @@ def process_schedule_run_completion(db: Session, run: CrawlRun) -> None:
         db.rollback()
         schedule_run = db.get(CrawlerScheduleRun, run.schedule_run_id)
         if schedule_run is not None:
-            schedule_run.finished_at = datetime.now()
             schedule_run.storage_status = "failed"
             schedule_run.storage_error = str(exc)[:1000]
             db.commit()
