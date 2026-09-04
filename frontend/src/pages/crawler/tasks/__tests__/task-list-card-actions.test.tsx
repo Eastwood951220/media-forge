@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ComponentProps } from 'react'
 import TaskListCards from '../components/TaskListCards'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 
@@ -35,6 +36,10 @@ const baseTask = {
   id: 'task-1',
   name: 'Aligned Task',
   storage_location: 'Aligned Task',
+  tags: [
+    { id: 'tag-vr', name: 'VR' },
+    { id: 'tag-actor', name: '演员' },
+  ],
   urls: [{ id: 'url-1', url: 'https://javdb.com/actors/a', url_type: 'actors', url_name: 'A' }],
   is_skip: false,
   status: 'idle',
@@ -49,39 +54,66 @@ const baseTask = {
   last_run_status: null,
 }
 
+const idleRuntime = {
+  task_id: 'task-1',
+  runtime_status: 'idle' as const,
+  latest_run_id: null,
+  state_updated_at: '2026-09-04T00:00:00Z',
+  last_run_at: null,
+}
+
+function renderCards(overrides: Partial<ComponentProps<typeof TaskListCards>> = {}) {
+  return render(
+    <TaskListCards
+      tasks={[baseTask as never]}
+      loading={false}
+      total={1}
+      runtimeByTaskId={{ 'task-1': idleRuntime } as never}
+      runtimeReady={true}
+      tagOptions={[{ id: 'tag-vr', name: 'VR' }]}
+      selectedTagNames={[]}
+      onTagFilterChange={vi.fn()}
+      selectedTaskIds={[]}
+      onSelectedTaskIdsChange={vi.fn()}
+      onBatchRunClick={vi.fn()}
+      batchRunLoading={false}
+      onEdit={vi.fn()}
+      onDelete={vi.fn()}
+      onToggleSkip={vi.fn()}
+      onRun={vi.fn()}
+      onStop={vi.fn()}
+      onRestart={vi.fn()}
+      onUrlRun={vi.fn()}
+      onTemporaryTaskClick={vi.fn()}
+      onBatchTaskClick={vi.fn()}
+      current={1}
+      pageSize={20}
+      onPageChange={vi.fn()}
+      onPageSizeChange={vi.fn()}
+      {...overrides}
+    />,
+  )
+}
+
 describe('TaskListCards action alignment', () => {
   beforeEach(() => {
     useCrawlerRuntimeStore.getState().reset()
   })
 
   it('renders primary and maintenance action groups for task cards', () => {
-    const { container } = render(
-      <TaskListCards
-        tasks={[baseTask as never]}
-        loading={false}
-        total={1}
-        runtimeByTaskId={{ 'task-1': { task_id: 'task-1', runtime_status: 'idle', latest_run_id: null, latest_run_status: null, last_run_at: null } } as never}
-        runtimeReady={true}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-        onToggleSkip={vi.fn()}
-        onRun={vi.fn()}
-        onStop={vi.fn()}
-        onRestart={vi.fn()}
-        onUrlRun={vi.fn()}
-        onTemporaryTaskClick={vi.fn()}
-        onBatchTaskClick={vi.fn()}
-        current={1}
-        pageSize={20}
-        onPageChange={vi.fn()}
-        onPageSizeChange={vi.fn()}
-      />,
-    )
+    const { container } = renderCards()
 
     expect(screen.getAllByRole('button', { name: /爬取/ }).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByRole('button', { name: /URL 爬取/ })).toBeInTheDocument()
     expect(container.querySelector('[class*="taskCardPrimaryActions"]')).toBeTruthy()
     expect(container.querySelector('[class*="taskCardMaintenanceActions"]')).toBeTruthy()
+  })
+
+  it('shows task tags on the card', () => {
+    renderCards()
+
+    expect(screen.getByText('VR')).toBeInTheDocument()
+    expect(screen.getByText('演员')).toBeInTheDocument()
   })
 
   it('shows sync tag and disables actions when runtime is not ready', () => {
@@ -92,6 +124,13 @@ describe('TaskListCards action alignment', () => {
         total={1}
         runtimeByTaskId={{}}
         runtimeReady={false}
+        tagOptions={[]}
+        selectedTagNames={[]}
+        onTagFilterChange={vi.fn()}
+        selectedTaskIds={[]}
+        onSelectedTaskIdsChange={vi.fn()}
+        onBatchRunClick={vi.fn()}
+        batchRunLoading={false}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onToggleSkip={vi.fn()}
@@ -117,32 +156,26 @@ describe('TaskListCards action alignment', () => {
 
   it('calls batch create handler from the toolbar', () => {
     const onBatchTaskClick = vi.fn()
-    render(
-      <TaskListCards
-        tasks={[baseTask as never]}
-        loading={false}
-        total={1}
-        runtimeByTaskId={{ 'task-1': { task_id: 'task-1', runtime_status: 'idle', latest_run_id: null, state_updated_at: '2026-09-04T00:00:00Z', last_run_at: null } } as never}
-        runtimeReady={true}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-        onToggleSkip={vi.fn()}
-        onRun={vi.fn()}
-        onStop={vi.fn()}
-        onRestart={vi.fn()}
-        onUrlRun={vi.fn()}
-        onTemporaryTaskClick={vi.fn()}
-        onBatchTaskClick={onBatchTaskClick}
-        current={1}
-        pageSize={20}
-        onPageChange={vi.fn()}
-        onPageSizeChange={vi.fn()}
-      />,
-    )
+    renderCards({ onBatchTaskClick })
 
     fireEvent.click(screen.getByRole('button', { name: /批量新建/ }))
 
     expect(onBatchTaskClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls tag filter change from the toolbar', async () => {
+    const onTagFilterChange = vi.fn()
+    renderCards({ onTagFilterChange })
+
+    const filterInput = screen.getByLabelText('标签筛选') as HTMLInputElement
+    fireEvent.mouseDown(filterInput)
+    expect(await screen.findByRole('option', { name: 'VR' })).toBeInTheDocument()
+    fireEvent.keyDown(filterInput, { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40 })
+    fireEvent.keyDown(filterInput, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13 })
+
+    await waitFor(() => {
+      expect(onTagFilterChange).toHaveBeenCalledWith(['VR'], expect.anything())
+    })
   })
 })
 
@@ -155,6 +188,7 @@ describe('optimistic queued runtime updates after run submission', () => {
           name: 'Aligned Task',
           storage_location: 'Aligned Task',
           is_skip: false,
+          tags: [],
           urls: [],
         },
       ],

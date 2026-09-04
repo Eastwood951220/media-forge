@@ -5,13 +5,14 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListPage from '../src/pages/crawler/tasks/TaskListPage'
-import { createTemporaryCrawlRun, createTaskUrlRun, getCrawlTasks, getTaskDict } from '@/api/crawler/crawlTask'
+import { createTemporaryCrawlRun, createTaskUrlRun, getCrawlTasks, getCrawlTaskTags, getTaskDict } from '@/api/crawler/crawlTask'
 import { runCrawlTask } from '@/api/crawler/crawlerRun'
 import { useTaskListQueryStore } from '../src/pages/crawler/tasks/useTaskListQueryStore'
 import { useCrawlerRuntimeStore } from '../src/stores/useCrawlerRuntimeStore'
 
 vi.mock('@/api/crawler/crawlTask', () => ({
   getCrawlTasks: vi.fn(),
+  getCrawlTaskTags: vi.fn(),
   getTaskDict: vi.fn(),
   createTemporaryCrawlRun: vi.fn(),
   createTaskUrlRun: vi.fn(),
@@ -69,6 +70,7 @@ describe('crawler task run controls', () => {
       },
       taskStats: { total: 1, idle: 1, running: 0, queued: 0, stopped: 0 },
     })
+    vi.mocked(getCrawlTaskTags).mockResolvedValue([])
     vi.mocked(getCrawlTasks).mockResolvedValue({
       rows: [{
         id: 'task-1',

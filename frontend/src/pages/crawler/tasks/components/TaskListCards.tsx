@@ -5,9 +5,9 @@ import {
   ReloadOutlined,
   StopOutlined,
 } from '@ant-design/icons'
-import { Button, Dropdown, Empty, Pagination, Popover, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
+import { Button, Dropdown, Empty, Pagination, Popover, Select, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import type { CrawlTask, CrawlTaskRuntimeSnapshot, TaskRuntimeStatus } from '@/api/crawler/crawlTask/types'
+import type { CrawlTask, CrawlTaskRuntimeSnapshot, TaskRuntimeStatus, TaskTag } from '@/api/crawler/crawlTask/types'
 import type { CrawlMode } from '@/api/crawler/crawlerRun/types'
 import styles from '../TaskPages.module.less'
 import {useNavigate} from "@tanstack/react-router";
@@ -18,6 +18,13 @@ type TaskListCardsProps = {
   total: number
   runtimeByTaskId: Record<string, CrawlTaskRuntimeSnapshot>
   runtimeReady: boolean
+  tagOptions: TaskTag[]
+  selectedTagNames: string[]
+  onTagFilterChange: (tagNames: string[]) => void
+  selectedTaskIds?: string[]
+  onSelectedTaskIdsChange?: (ids: string[]) => void
+  onBatchRunClick?: () => void
+  batchRunLoading?: boolean
   onEdit: (task: CrawlTask) => void
   onDelete: (task: CrawlTask) => void
   onToggleSkip: (task: CrawlTask) => void
@@ -100,6 +107,49 @@ function UrlNameTags({ urlNames }: { urlNames: string[] }) {
   )
 }
 
+const MAX_VISIBLE_TAGS = 3
+
+function TaskTagTags({ tags }: { tags: TaskTag[] }) {
+  if (tags.length === 0) {
+    return <Typography.Text type="secondary">-</Typography.Text>
+  }
+
+  if (tags.length <= MAX_VISIBLE_TAGS) {
+    return (
+      <div className={styles.urlNameList}>
+        {tags.map((tag, index) => (
+          <Tag key={`${tag.name}-${index}`}>{tag.name}</Tag>
+        ))}
+      </div>
+    )
+  }
+
+  const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS)
+  const hiddenCount = tags.length - MAX_VISIBLE_TAGS
+
+  return (
+    <div className={styles.urlNameList}>
+      {visibleTags.map((tag, index) => (
+        <Tag key={`${tag.name}-${index}`}>{tag.name}</Tag>
+      ))}
+      <Popover
+        content={
+          <div className={styles.urlNamePopover}>
+            {tags.map((tag, index) => (
+              <Tag key={`${tag.name}-${index}`} className={styles.urlNamePopoverTag}>{tag.name}</Tag>
+            ))}
+          </div>
+        }
+        title="全部标签"
+        trigger="hover"
+        placement="bottomLeft"
+      >
+        <Tag className={styles.urlNameMore}>+{hiddenCount}</Tag>
+      </Popover>
+    </div>
+  )
+}
+
 function TaskCard({
   task,
   runtime,
@@ -158,6 +208,10 @@ function TaskCard({
         <div className={styles.taskMetaRow}>
           <span className={styles.taskMetaLabel}>URL 名称</span>
           <UrlNameTags urlNames={urlNames} />
+        </div>
+        <div className={styles.taskMetaRow}>
+          <span className={styles.taskMetaLabel}>任务标签</span>
+          <TaskTagTags tags={task.tags ?? []} />
         </div>
         <div className={styles.taskMetaRow}>
           <span className={styles.taskMetaLabel}>最后爬取时间</span>
@@ -250,6 +304,9 @@ function TaskListCards({
   total,
   runtimeByTaskId,
   runtimeReady,
+  tagOptions,
+  selectedTagNames,
+  onTagFilterChange,
   onEdit,
   onDelete,
   onToggleSkip,
@@ -268,9 +325,21 @@ function TaskListCards({
   return (
     <div className={styles.taskListShell}>
       <div className={styles.taskListToolbar}>
-        <Typography.Text type="secondary">
-          {runtimeReady ? `共 ${total} 条` : '同步中'}
-        </Typography.Text>
+        <Space size={12} wrap>
+          <Typography.Text type="secondary">
+            {runtimeReady ? `共 ${total} 条` : '同步中'}
+          </Typography.Text>
+          <Select
+            aria-label="标签筛选"
+            mode="multiple"
+            allowClear
+            placeholder="标签筛选"
+            value={selectedTagNames}
+            options={tagOptions.map((tag) => ({ value: tag.name, label: tag.name }))}
+            onChange={onTagFilterChange}
+            className={styles.taskTagFilter}
+          />
+        </Space>
         <Space>
           <Button onClick={onTemporaryTaskClick}>
             临时任务

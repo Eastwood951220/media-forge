@@ -34,14 +34,18 @@ function queuedSnapshot(taskId: string, runId: string | null) {
   }
 }
 
-export function useTaskListData() {
+export function useTaskListData({ tagNames = [] }: { tagNames?: string[] } = {}) {
   const queryClient = useQueryClient()
 
   const [current, setCurrent] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const listParams = useMemo(
-    () => ({ page: current, size: pageSize }),
-    [current, pageSize],
+    () => ({
+      page: current,
+      size: pageSize,
+      ...(tagNames.length > 0 ? { tag_names: tagNames } : {}),
+    }),
+    [current, pageSize, tagNames],
   )
 
   const listQuery = useQuery({

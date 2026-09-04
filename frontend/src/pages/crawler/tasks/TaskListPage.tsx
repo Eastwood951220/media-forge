@@ -1,9 +1,15 @@
 import { useCallback, useState } from 'react'
 import { App } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
-import { useQueryClient } from '@tanstack/react-query'
-import { batchCreateCrawlTasks, createTemporaryCrawlRun, getTaskDict } from '@/api/crawler/crawlTask'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  batchCreateCrawlTasks,
+  createTemporaryCrawlRun,
+  getCrawlTaskTags,
+  getTaskDict,
+} from '@/api/crawler/crawlTask'
 import type { TaskDictItem, TemporaryCrawlRunCreateParams } from '@/api/crawler/crawlTask/types'
+import { queryKeys } from '@/api/queryKeys'
 import { invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
 import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
 import type { CrawlTask } from '@/api/crawler/crawlTask/types'
@@ -24,6 +30,12 @@ function TaskListPage() {
   const queryClient = useQueryClient()
   const { message } = App.useApp()
 
+  const [selectedTagNames, setSelectedTagNames] = useState<string[]>([])
+  const tagOptionsQuery = useQuery({
+    queryKey: queryKeys.crawlerTasks.tags(),
+    queryFn: getCrawlTaskTags,
+  })
+
   const {
     current,
     pageSize,
@@ -41,7 +53,7 @@ function TaskListPage() {
     runtimeByTaskId,
     taskSnapshotReady,
     tasks,
-  } = useTaskListData()
+  } = useTaskListData({ tagNames: selectedTagNames })
 
   useTaskListRealtime()
   useRouteActivationRefresh(refreshList)
@@ -57,6 +69,11 @@ function TaskListPage() {
   const [batchDrawerOpen, setBatchDrawerOpen] = useState(false)
   const [batchSubmitting, setBatchSubmitting] = useState(false)
   const [batchFailedUrls, setBatchFailedUrls] = useState<string[]>([])
+
+  const handleTagFilterChange = useCallback((nextTags: string[]) => {
+    setSelectedTagNames(nextTags)
+    setCurrent(1)
+  }, [setCurrent])
 
   const handleBatchSubmit = useCallback(async (values: BatchTaskCreateFormValues) => {
     setBatchSubmitting(true)
@@ -132,6 +149,9 @@ function TaskListPage() {
           total={total}
           runtimeByTaskId={runtimeByTaskId}
           runtimeReady={taskSnapshotReady}
+          tagOptions={tagOptionsQuery.data ?? []}
+          selectedTagNames={selectedTagNames}
+          onTagFilterChange={handleTagFilterChange}
           onEdit={(task) => navigate({ to: '/crawler/tasks/$id/edit', params: { id: task.id } })}
           onDelete={handleDelete}
           onToggleSkip={handleToggleSkip}
@@ -171,6 +191,8 @@ function TaskListPage() {
         open={batchDrawerOpen}
         submitting={batchSubmitting}
         failedUrls={batchFailedUrls}
+        tagOptions={tagOptionsQuery.data ?? []}
+        tagOptionsLoading={tagOptionsQuery.isLoading}
         onCancel={() => {
           if (batchSubmitting) return
           setBatchDrawerOpen(false)
