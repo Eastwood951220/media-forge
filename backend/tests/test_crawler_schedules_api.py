@@ -129,3 +129,74 @@ def test_schedule_crud_routes(client, auth_headers, db_session, test_user, monke
 
     deleted = client.delete(f"/api/crawler/schedules/{schedule_id}", headers=auth_headers)
     assert deleted.status_code == 200
+
+
+def schedule_create_data(task_id, name):
+    return CrawlerScheduleCreate(
+        name=name,
+        enabled=True,
+        task_ids=[task_id],
+        schedule_type="daily",
+        time_of_day="03:30",
+        weekdays=[],
+        auto_storage_enabled=False,
+        storage_mode="single",
+        selected_storage_location=None,
+    )
+
+
+def test_create_schedule_strips_and_rejects_duplicate_name(db_session, test_user):
+    task = seed_task(db_session, test_user.id)
+    service = CrawlerScheduleService(db_session, scheduler=None)
+
+    created = service.create_schedule(schedule_create_data(task.id, " Nightly "), test_user.id)
+    assert created.name == "Nightly"
+
+    with pytest.raises(HTTPException) as exc:
+        service.create_schedule(schedule_create_data(task.id, "Nightly"), test_user.id)
+    assert exc.value.status_code == 409
+    assert "定时配置名称 'Nightly' 已存在" in str(exc.value.detail)
+
+    with pytest.raises(HTTPException) as exc:
+        service.create_schedule(schedule_create_data(task.id, "  Nightly  "), test_user.id)
+    assert exc.value.status_code == 409
+    assert "定时配置名称 'Nightly' 已存在" in str(exc.value.detail)
+
+
+def test_create_schedule_rejects_whitespace_only_name(db_session, test_user):
+    task = seed_task(db_session, test_user.id)
+    service = CrawlerScheduleService(db_session, scheduler=None)
+
+    with pytest.raises(HTTPException) as exc:
+        service.create_schedule(schedule_create_data(task.id, "   "), test_user.id)
+    assert exc.value.status_code == 400
+    assert "名称不能为空" in str(exc.value.detail)
+
+
+def test_update_schedule_rejects_rename_to_duplicate_name(db_session, test_user):
+    task = seed_task(db_session, test_user.id)
+    service = CrawlerScheduleService(db_session, scheduler=None)
+    first = service.create_schedule(schedule_create_data(task.id, "Alpha"), test_user.id)
+    second = service.create_schedule(schedule_create_data(task.id, "Beta"), test_user.id)
+
+    with pytest.raises(HTTPException) as exc:
+        service.update_schedule(second.id, CrawlerScheduleUpdate(name="Alpha"), test_user.id)
+    assert exc.value.status_code == 409
+    assert "定时配置名称 'Alpha' 已存在" in str(exc.value.detail)
+
+    # Renaming to its own name (after trimming) is allowed.
+    renamed = service.update_schedule(second.id, CrawlerScheduleUpdate(name="  Beta  "), test_user.id)
+    assert renamed.name == "Beta"
+    renamed = service.update_schedule(first.id, CrawlerScheduleUpdate(name="Alpha Two"), test_user.id)
+    assert renamed.name == "Alpha Two"
+
+
+def test_update_schedule_rejects_whitespace_only_name(db_session, test_user):
+    task = seed_task(db_session, test_user.id)
+    service = CrawlerScheduleService(db_session, scheduler=None)
+    schedule = service.create_schedule(schedule_create_data(task.id, "Gamma"), test_user.id)
+
+    with pytest.raises(HTTPException) as exc:
+        service.update_schedule(schedule.id, CrawlerScheduleUpdate(name="   "), test_user.id)
+    assert exc.value.status_code == 400
+    assert "名称不能为空" in str(exc.value.detail)

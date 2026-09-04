@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_task import CrawlTask
@@ -62,11 +63,19 @@ class CrawlerScheduleService:
             self.scheduler.remove_schedule_job(schedule.id)
 
     def create_schedule(self, data: CrawlerScheduleCreate, owner_id: uuid.UUID) -> CrawlerSchedule:
+        name = data.name.strip()
+        if not name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="名称不能为空")
+        duplicate = self.db.query(CrawlerSchedule).filter(
+            CrawlerSchedule.owner_id == owner_id, CrawlerSchedule.name == name
+        ).first()
+        if duplicate is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"定时配置名称 '{name}' 已存在")
         tasks = self._owned_tasks(list(data.task_ids), owner_id)
         weekdays = normalize_weekdays(data.schedule_type, data.weekdays)
         schedule = CrawlerSchedule(
             owner_id=owner_id,
-            name=data.name.strip(),
+            name=name,
             enabled=data.enabled,
             schedule_type=data.schedule_type,
             time_of_day=data.time_of_day,
@@ -78,7 +87,11 @@ class CrawlerScheduleService:
         )
         schedule.tasks = tasks
         self.db.add(schedule)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"定时配置名称 '{name}' 已存在")
         self.db.refresh(schedule)
         self._sync_job(schedule)
         return schedule
@@ -108,8 +121,19 @@ class CrawlerScheduleService:
         update_data = data.model_dump(exclude_unset=True)
         if any(key in update_data and update_data[key] is None for key in ("schedule_type", "time_of_day", "weekdays")):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="定时类型、执行时间和星期不能为空")
+        new_name: str | None = None
         if "name" in update_data and update_data["name"] is not None:
-            schedule.name = update_data["name"].strip()
+            new_name = update_data["name"].strip()
+            if not new_name:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="名称不能为空")
+            duplicate = self.db.query(CrawlerSchedule).filter(
+                CrawlerSchedule.owner_id == owner_id,
+                CrawlerSchedule.name == new_name,
+                CrawlerSchedule.id != schedule_id,
+            ).first()
+            if duplicate is not None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"定时配置名称 '{new_name}' 已存在")
+            schedule.name = new_name
         next_type = update_data.get("schedule_type", schedule.schedule_type)
         next_time = update_data.get("time_of_day", schedule.time_of_day)
         next_weekdays = update_data.get("weekdays", schedule.weekdays or [])
@@ -128,7 +152,14 @@ class CrawlerScheduleService:
             schedule.selected_storage_location = (update_data["selected_storage_location"] or "").strip() or None
         if data.task_ids is not None:
             schedule.tasks = self._owned_tasks(list(data.task_ids), owner_id)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"定时配置名称 '{new_name or schedule.name}' 已存在",
+            )
         self.db.refresh(schedule)
         self._sync_job(schedule)
         return schedule
