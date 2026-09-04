@@ -96,6 +96,7 @@ Current route modules:
 | `/crawler/runs` | `pages/crawler/runs/RunListPage.tsx` | Crawler run history |
 | `/crawler/runs/$id` | `pages/crawler/runs/RunDetailPage.tsx` | Run logs, task summary, retry actions |
 | `/crawler/config` | `pages/crawler/config/ConfigPage.tsx` | Crawler and cookie configuration |
+| `/crawler/schedules` | `pages/crawler/schedules/ScheduleListPage.tsx` | Crawler schedule list, create/edit, and trigger history |
 | `/content/movies` | `pages/content/movies/MovieListPage.tsx` | Movie list, filters, storage sync, push actions |
 | `/storage/config` | `pages/storage/config/StorageConfigPage.tsx` | CloudDrive2/storage target configuration |
 | `/storage/tasks` | `pages/storage/tasks/StorageTaskListPage.tsx` | Storage main task list |
@@ -118,6 +119,7 @@ Current API groups:
 - `crawlTask/`: crawler task CRUD, one static paginated task-list API, and run submission actions.
 - `crawlerRun/`: one static paginated run-list API, run detail/log/subtask APIs, and stop/restart/retry actions.
 - `crawler/crawlerConfig/`: crawler config and cookies config.
+- `crawler/crawlerSchedule/`: crawler schedule CRUD, enable/disable/trigger, and run-history APIs.
 - `movie/`: movie list/detail/filter config, delete, storage sync.
 - `storage/storageConfig/`: storage config and connection test.
 - `storage/storageIndex/`: storage index status and refresh.
