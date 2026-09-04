@@ -149,6 +149,12 @@ export interface TaskUrlRunCreateParams {
 
 export type TaskUrlRunFormValues = TaskUrlRunCreateParams
 
+/** Response payload of run-start endpoints (normal run, URL subset run). */
+export interface RunActionAcceptedResponse {
+  accepted: boolean
+  run_id: string
+}
+
 /** Lightweight URL entry for the task list view (no created_at/updated_at). */
 export interface TaskUrlListItem {
   id: string

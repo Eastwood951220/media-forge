@@ -10,6 +10,7 @@ import type {
   DeleteMode,
   DeleteTaskResult,
   PagedListResponse,
+  RunActionAcceptedResponse,
   TaskDictItem,
   TaskUrlRunCreateParams,
   TemporaryCrawlRunCreateParams,
@@ -65,6 +66,9 @@ export function createTemporaryCrawlRun(data: TemporaryCrawlRunCreateParams): Pr
   return request.post<CrawlRun>(`${BASE_URL}/temp-run`, data)
 }
 
-export function createTaskUrlRun(taskId: string, data: TaskUrlRunCreateParams): Promise<CrawlRun> {
-  return request.post<CrawlRun>(`${BASE_URL}/${taskId}/url-run`, data)
+export function createTaskUrlRun(
+  taskId: string,
+  data: TaskUrlRunCreateParams,
+): Promise<RunActionAcceptedResponse> {
+  return request.post<RunActionAcceptedResponse>(`${BASE_URL}/${taskId}/url-run`, data)
 }

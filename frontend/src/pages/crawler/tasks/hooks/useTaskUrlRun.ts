@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { App } from 'antd'
 import { createTaskUrlRun } from '@/api/crawler/crawlTask'
 import type { CrawlTask, TaskUrlRunFormValues } from '@/api/crawler/crawlTask/types'
+import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 
 interface UseTaskUrlRunOptions {
   onSubmitted: () => void | Promise<void>
@@ -28,7 +29,14 @@ export function useTaskUrlRun({ onSubmitted }: UseTaskUrlRunOptions) {
     if (!selectedTask) return
     setSubmitting(true)
     try {
-      await createTaskUrlRun(selectedTask.id, values)
+      const result = await createTaskUrlRun(selectedTask.id, values)
+      useCrawlerRuntimeStore.getState().upsertTaskRuntime({
+        task_id: selectedTask.id,
+        runtime_status: 'queued',
+        latest_run_id: result.run_id ?? null,
+        state_updated_at: new Date().toISOString(),
+        last_run_at: new Date().toISOString(),
+      })
       message.success('URL 爬取任务已提交')
       setOpen(false)
       setSelectedTask(null)

@@ -7,6 +7,30 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
 }))
 
+vi.mock('@/api/crawler/crawlTask', () => ({
+  createTaskUrlRun: vi.fn(),
+  deleteCrawlTask: vi.fn(),
+  getCrawlTasks: vi.fn(),
+  updateCrawlTask: vi.fn(),
+}))
+
+vi.mock('@/api/crawler/crawlerRun', () => ({
+  restartCrawlerRun: vi.fn(),
+  runCrawlTask: vi.fn(),
+  stopCrawlerRun: vi.fn(),
+}))
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App } from 'antd'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import type { PropsWithChildren } from 'react'
+import { createTaskUrlRun, getCrawlTasks } from '@/api/crawler/crawlTask'
+import { runCrawlTask } from '@/api/crawler/crawlerRun'
+import type { CrawlTask } from '@/api/crawler/crawlTask/types'
+import type { CrawlMode } from '@/api/crawler/crawlerRun/types'
+import { useTaskListData } from '../hooks/useTaskListData'
+import { useTaskUrlRun } from '../hooks/useTaskUrlRun'
+
 const baseTask = {
   id: 'task-1',
   name: 'Aligned Task',
@@ -119,5 +143,71 @@ describe('TaskListCards action alignment', () => {
     fireEvent.click(screen.getByRole('button', { name: /批量新建/ }))
 
     expect(onBatchTaskClick).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('optimistic queued runtime updates after run submission', () => {
+  it('marks a task queued right after a normal run is accepted', async () => {
+    vi.mocked(getCrawlTasks).mockResolvedValue({
+      rows: [
+        {
+          id: 'task-1',
+          name: 'Aligned Task',
+          storage_location: 'Aligned Task',
+          is_skip: false,
+          urls: [],
+        },
+      ],
+      total: 1,
+      page: 1,
+      size: 20,
+    } as never)
+    vi.mocked(runCrawlTask).mockResolvedValue({ accepted: true, run_id: 'run-1' } as never)
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => useTaskListData(), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.handleRun(baseTask as never as CrawlTask, 'incremental' as CrawlMode)
+    })
+
+    expect(useCrawlerRuntimeStore.getState().taskRuntimeById['task-1']).toEqual(
+      expect.objectContaining({
+        task_id: 'task-1',
+        runtime_status: 'queued',
+        latest_run_id: 'run-1',
+      }),
+    )
+  })
+
+  it('marks a task queued right after a URL subset run is accepted', async () => {
+    vi.mocked(createTaskUrlRun).mockResolvedValue({ accepted: true, run_id: 'url-run-9' } as never)
+
+    const onSubmitted = vi.fn()
+    const appWrapper = ({ children }: PropsWithChildren) => <App>{children}</App>
+
+    const { result } = renderHook(() => useTaskUrlRun({ onSubmitted }), { wrapper: appWrapper })
+
+    await act(async () => {
+      result.current.openTaskUrlRun(baseTask as never as CrawlTask)
+    })
+
+    await act(async () => {
+      await result.current.submitTaskUrlRun({ url_ids: ['url-1'], crawl_mode: 'incremental' })
+    })
+
+    expect(onSubmitted).toHaveBeenCalledTimes(1)
+    expect(useCrawlerRuntimeStore.getState().taskRuntimeById['task-1']).toEqual(
+      expect.objectContaining({
+        task_id: 'task-1',
+        runtime_status: 'queued',
+        latest_run_id: 'url-run-9',
+      }),
+    )
   })
 })

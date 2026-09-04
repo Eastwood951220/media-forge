@@ -12,6 +12,7 @@ import type {
   RunLogEntry,
   RunTaskPageWithSummary,
 } from './types.ts'
+import type { RunActionAcceptedResponse } from '@/api/crawler/crawlTask/types.ts'
 
 const BASE_URL = '/api/crawler/runs'
 
@@ -63,8 +64,11 @@ export function retryCrawlerRunTasks(
   return request.post<CrawlRun>(`${BASE_URL}/${runId}/tasks/retry`, payload)
 }
 
-export function runCrawlTask(taskId: string, crawlMode: CrawlMode): Promise<CrawlRun> {
-  return request.post<CrawlRun>(`/api/crawler/tasks/${taskId}/run`, {
+export function runCrawlTask(
+  taskId: string,
+  crawlMode: CrawlMode,
+): Promise<RunActionAcceptedResponse> {
+  return request.post<RunActionAcceptedResponse>(`/api/crawler/tasks/${taskId}/run`, {
     crawl_mode: crawlMode,
   })
 }

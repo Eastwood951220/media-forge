@@ -23,6 +23,17 @@ const deleteModeOptions: Array<{ value: DeleteMode; label: string }> = [
   { value: 'task_movies_and_cloud', label: '删除任务、关联影片和云存储' },
 ]
 
+function queuedSnapshot(taskId: string, runId: string | null) {
+  const now = new Date().toISOString()
+  return {
+    task_id: taskId,
+    runtime_status: 'queued' as const,
+    latest_run_id: runId,
+    state_updated_at: now,
+    last_run_at: now,
+  }
+}
+
 export function useTaskListData() {
   const queryClient = useQueryClient()
 
@@ -112,7 +123,10 @@ export function useTaskListData() {
   const handleRun = useCallback(
     async (task: CrawlTask, mode: CrawlMode) => {
       try {
-        await runCrawlTask(task.id, mode)
+        const result = await runCrawlTask(task.id, mode)
+        useCrawlerRuntimeStore
+          .getState()
+          .upsertTaskRuntime(queuedSnapshot(task.id, result.run_id ?? null))
         message.success(`已提交${mode === 'incremental' ? '增量' : '全量'}爬取任务`)
         handleRunSubmitted()
       } catch {
