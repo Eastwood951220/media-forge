@@ -33,6 +33,17 @@ class CrawlRun(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         ForeignKey("crawl_runs.id", ondelete="SET NULL"),
         nullable=True,
     )
+    trigger_source: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    schedule_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("crawler_schedules.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    schedule_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("crawler_schedule_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     detail_tasks: Mapped[list["CrawlRunDetailTask"]] = relationship(
         back_populates="run",
@@ -75,5 +86,6 @@ class CrawlRunDetailTask(Base, UUIDPrimaryKeyMixin):
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     crawled_at: Mapped[datetime | None] = mapped_column(nullable=True)
     saved_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    movie_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("movies.id", ondelete="SET NULL"), nullable=True, index=True)
 
     run: Mapped[CrawlRun] = relationship(back_populates="detail_tasks")

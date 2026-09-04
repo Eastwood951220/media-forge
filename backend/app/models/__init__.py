@@ -8,6 +8,12 @@ from backend.app.models.crawler_agent import (
     CrawlerAgentSession,
     CrawlerAgentWorkItem,
 )
+from backend.app.models.crawler_schedule import (
+    CrawlerSchedule,
+    CrawlerScheduleRun,
+    CrawlerScheduleRunCrawlRun,
+    CrawlerScheduleTask,
+)
 from backend.app.models.storage_task import StorageMainTask, StorageSubTask
 from backend.app.models.user import User
 
@@ -21,6 +27,10 @@ __all__ = [
     "CrawlerAgentEvent",
     "CrawlerAgentSession",
     "CrawlerAgentWorkItem",
+    "CrawlerSchedule",
+    "CrawlerScheduleTask",
+    "CrawlerScheduleRun",
+    "CrawlerScheduleRunCrawlRun",
     "StorageMainTask",
     "StorageSubTask",
 ]
