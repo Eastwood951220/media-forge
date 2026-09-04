@@ -8,6 +8,7 @@ from backend.app.modules.crawler.runs.schemas import RunCreateRequest
 from backend.app.modules.crawler.tasks.name_extractor import extract_task_name
 from backend.app.modules.crawler.tasks.service import CrawlerTaskService
 from backend.app.schemas.crawl_task import (
+    CrawlTaskBatchCreate,
     CrawlTaskCreate,
     CrawlTaskUpdate,
     CrawlTaskUrlRunCreate,
@@ -51,6 +52,16 @@ def create_temporary_run(
 @router.post("/extract-name")
 def extract_name(body: ExtractNameRequest, _current_user: CurrentUser) -> dict:
     return success(data={"name": extract_task_name(body)})
+
+
+@router.post("/batch", status_code=status.HTTP_201_CREATED)
+def batch_create_tasks(
+    data: CrawlTaskBatchCreate,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    service = CrawlerTaskService(db)
+    return success(data=service.batch_create_tasks(data, current_user.id))
 
 
 @router.get("/{task_id:uuid}")

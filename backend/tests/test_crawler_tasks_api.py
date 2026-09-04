@@ -157,3 +157,107 @@ def test_batch_create_route_rejects_empty_url_list(client, auth_headers):
 
     assert response.status_code == 400
     assert response.json()["msg"] == "请至少提供 1 个 URL"
+
+
+def test_batch_create_creates_one_task_per_url(client, auth_headers, monkeypatch):
+    from backend.app.modules.crawler.tasks import service as task_service
+
+    names = {
+        "https://javdb.com/actors/alpha": "Alpha Actor",
+        "https://javdb.com/series/beta": "Beta Series",
+    }
+    monkeypatch.setattr(
+        task_service,
+        "extract_task_name",
+        lambda body: names[body.url],
+    )
+
+    response = client.post(
+        "/api/crawler/tasks/batch",
+        json={
+            "urls": [" https://javdb.com/actors/alpha ", "https://javdb.com/series/beta"],
+            "has_magnet": True,
+            "has_chinese_sub": True,
+            "sort_type": 5,
+            "is_skip": False,
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["created_count"] == 2
+    assert data["failed_count"] == 0
+    assert [item["task"]["name"] for item in data["created"]] == ["Alpha Actor", "Beta Series"]
+    assert data["created"][0]["task"]["storage_location"] == "Alpha Actor"
+    assert data["created"][0]["task"]["urls"][0]["url"] == "https://javdb.com/actors/alpha"
+    assert data["created"][0]["task"]["urls"][0]["url_type"] == "actors"
+    assert data["created"][0]["task"]["urls"][0]["has_magnet"] is True
+    assert data["created"][0]["task"]["urls"][0]["has_chinese_sub"] is True
+    assert data["created"][0]["task"]["urls"][0]["sort_type"] == 5
+    assert data["created"][0]["task"]["urls"][0]["url_name"] == "Alpha Actor"
+
+
+def test_batch_create_suffixes_duplicate_task_names(client, auth_headers, monkeypatch):
+    from backend.app.modules.crawler.tasks import service as task_service
+
+    monkeypatch.setattr(task_service, "extract_task_name", lambda body: "Same Name")
+
+    existing = client.post(
+        "/api/crawler/tasks",
+        json={
+            "name": "Same Name",
+            "storage_location": "Same Name",
+            "is_skip": False,
+            "urls": [{"url": "https://javdb.com/actors/existing", "url_type": "actors"}],
+        },
+        headers=auth_headers,
+    )
+    assert existing.status_code == 201
+
+    response = client.post(
+        "/api/crawler/tasks/batch",
+        json={"urls": ["https://javdb.com/actors/a", "https://javdb.com/actors/b"]},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201
+    created = response.json()["data"]["created"]
+    assert [item["task"]["name"] for item in created] == ["Same Name (2)", "Same Name (3)"]
+    assert [item["task"]["storage_location"] for item in created] == ["Same Name (2)", "Same Name (3)"]
+
+
+def test_batch_create_keeps_successes_when_some_urls_fail(client, auth_headers, monkeypatch):
+    from fastapi import HTTPException
+    from backend.app.modules.crawler.tasks import service as task_service
+
+    def fake_extract(body):
+        if body.url.endswith("/bad"):
+            raise HTTPException(status_code=502, detail="页面不可访问")
+        return "Good Name"
+
+    monkeypatch.setattr(task_service, "extract_task_name", fake_extract)
+
+    response = client.post(
+        "/api/crawler/tasks/batch",
+        json={
+            "urls": [
+                "https://javdb.com/actors/good",
+                "https://javdb.com/actors/good",
+                "https://example.com/nope",
+                "https://javdb.com/actors/bad",
+            ]
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["created_count"] == 1
+    assert data["failed_count"] == 3
+    assert data["created"][0]["task"]["name"] == "Good Name"
+    assert data["failed"] == [
+        {"url": "https://javdb.com/actors/good", "reason": "URL 重复"},
+        {"url": "https://example.com/nope", "reason": "不支持的 URL 来源"},
+        {"url": "https://javdb.com/actors/bad", "reason": "页面不可访问"},
+    ]

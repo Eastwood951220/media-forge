@@ -12,12 +12,14 @@ from backend.app.modules.crawler.runs.schemas import accepted_run_action, RunCre
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
 from backend.app.modules.crawler.tasks.delete_service import UnsupportedDeleteMode, delete_task
 from backend.app.modules.crawler.tasks.errors import raise_task_integrity_error
+from backend.app.modules.crawler.tasks.name_extractor import extract_task_name
 from backend.app.modules.crawler.tasks.provider import open_delete_provider
 from backend.app.modules.crawler.tasks.runtime_status import (
     can_delete_task_runtime_status,
     get_task_runtime_status,
 )
 from backend.app.modules.crawler.tasks.serializers import serialize_task, serialize_task_list_item
+from backend.app.modules.crawler.tasks.url_detection import detect_task_url_type
 from backend.app.modules.crawler.tasks.validation import (
     check_urls_unique,
     ensure_delete_mode_supported,
@@ -25,12 +27,19 @@ from backend.app.modules.crawler.tasks.validation import (
 )
 from backend.app.repositories.crawl_task import CrawlTaskRepository
 from backend.app.schemas.crawl_task import (
+    CrawlTaskBatchCreate,
+    CrawlTaskBatchCreateResult,
+    CrawlTaskBatchCreatedItem,
+    CrawlTaskBatchFailedItem,
     CrawlTaskCreate,
     CrawlTaskListResponse,
     CrawlTaskUpdate,
     CrawlTaskUrlRunCreate,
+    ExtractNameRequest,
+    TaskUrlEntryCreate,
     TemporaryCrawlRunCreate,
 )
+from scraper.tasks.task_utils import determine_source
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +171,76 @@ class CrawlerTaskService:
             self.db.rollback()
             raise_task_integrity_error(exc, name=data.name)
         return serialize_task(created).model_dump(mode="json")
+
+    def _unique_task_name(self, owner_id: uuid.UUID, base_name: str, reserved: set[str]) -> str:
+        candidate = base_name
+        suffix = 2
+        while candidate in reserved or self.repo.get_by_name(owner_id, candidate):
+            candidate = f"{base_name} ({suffix})"
+            suffix += 1
+        reserved.add(candidate)
+        return candidate
+
+    def batch_create_tasks(self, data: CrawlTaskBatchCreate, owner_id: uuid.UUID) -> dict:
+        normalized_urls = [url.strip() for url in data.urls if url.strip()]
+        if not normalized_urls:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请至少提供 1 个 URL")
+
+        created: list[CrawlTaskBatchCreatedItem] = []
+        failed: list[CrawlTaskBatchFailedItem] = []
+        seen_urls: set[str] = set()
+        reserved_names: set[str] = set()
+
+        for url in normalized_urls:
+            if url in seen_urls:
+                failed.append(CrawlTaskBatchFailedItem(url=url, reason="URL 重复"))
+                continue
+            seen_urls.add(url)
+
+            source = determine_source(url)
+            if source == "unknown":
+                failed.append(CrawlTaskBatchFailedItem(url=url, reason="不支持的 URL 来源"))
+                continue
+
+            url_type = detect_task_url_type(url, source)
+            if not url_type:
+                failed.append(CrawlTaskBatchFailedItem(url=url, reason="无法识别 URL 类型"))
+                continue
+
+            try:
+                extracted_name = extract_task_name(ExtractNameRequest(url=url, url_type=url_type)).strip()
+                if not extracted_name:
+                    raise ValueError("未解析到 URL 名称")
+                task_name = self._unique_task_name(owner_id, extracted_name, reserved_names)
+                task_url = TaskUrlEntryCreate(
+                    url=url,
+                    url_type=url_type,
+                    has_magnet=data.has_magnet,
+                    has_chinese_sub=data.has_chinese_sub,
+                    sort_type=data.sort_type,
+                    url_name=extracted_name,
+                )
+                task = self.repo.create_with_urls(
+                    owner_id=owner_id,
+                    name=task_name,
+                    storage_location=task_name,
+                    is_skip=data.is_skip,
+                    urls=[task_url],
+                )
+                created.append(CrawlTaskBatchCreatedItem(url=url, task=serialize_task(task)))
+            except HTTPException as exc:
+                self.db.rollback()
+                failed.append(CrawlTaskBatchFailedItem(url=url, reason=str(exc.detail)))
+            except Exception as exc:
+                self.db.rollback()
+                failed.append(CrawlTaskBatchFailedItem(url=url, reason=str(exc)))
+
+        return CrawlTaskBatchCreateResult(
+            created=created,
+            failed=failed,
+            created_count=len(created),
+            failed_count=len(failed),
+        ).model_dump(mode="json")
 
     def update_task(
         self,
