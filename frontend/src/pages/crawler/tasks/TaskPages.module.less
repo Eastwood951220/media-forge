@@ -19,7 +19,7 @@
   font-size: 24px;
   font-weight: 700;
   line-height: 1.3;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .subtitle {
@@ -32,7 +32,7 @@
 /* ===== Panel / Card Container ===== */
 .panel {
   border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--app-surface-color);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
@@ -45,6 +45,31 @@
 
 .formPanel {
   padding: 24px;
+}
+
+.taskConfigGrid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.15fr) minmax(260px, 1fr) minmax(240px, 0.9fr) 118px;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+.taskConfigWide,
+.taskConfigTags,
+.taskConfigStatus {
+  min-width: 0;
+  margin-bottom: 16px;
+}
+
+.taskConfigStatus {
+  :global(.ant-form-item-control-input) {
+    min-height: 32px;
+  }
+
+  :global(.ant-switch) {
+    min-width: 58px;
+  }
 }
 
 /* ===== Search Bar ===== */
@@ -62,7 +87,7 @@
 /* ===== URL Card (Form Page) ===== */
 .urlCard {
   height: 100%;
-  border-radius: 10px;
+  border-radius: 8px;
   border-color: rgba(148, 163, 184, 0.25);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
@@ -82,6 +107,59 @@
   :global(.ant-card-body) {
     padding: 16px;
   }
+}
+
+.urlEntryCompactGrid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.35fr) minmax(136px, 0.72fr) minmax(136px, 0.72fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.urlEntryCompactGrid :global(.ant-form-item) {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.urlEntryCompactGrid :global(.ant-form-item-label) {
+  padding-bottom: 4px;
+}
+
+.urlEntryUrlField,
+.urlEntryPreviewField {
+  grid-column: 1 / -1;
+}
+
+.urlEntrySwitchGroup {
+  :global(.ant-form-item-control-input) {
+    min-height: 32px;
+  }
+}
+
+.urlEntrySortField,
+.urlEntryNameField,
+.urlEntryTypeField {
+  min-width: 0;
+}
+
+.urlEntryActionButton {
+  width: 100%;
+}
+
+.urlTypeInputActive,
+.urlNameInputActive {
+  color: #1e40af;
+  font-weight: 500;
+}
+
+.urlNameInputActive {
+  background: rgba(30, 64, 175, 0.04);
+}
+
+.urlPreviewInput {
+  background: rgba(148, 163, 184, 0.06);
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 12px;
 }
 
 .urlCardDelete {
@@ -264,12 +342,41 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 20px;
 }
 
+.taskListToolbarFilters,
+.taskListToolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.taskListToolbarFilters {
+  flex: 1;
+}
+
+.taskListToolbarActions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.taskSelectedCount {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.06);
+  white-space: nowrap;
+}
+
 .taskTagFilter {
-  min-width: 200px;
+  width: min(320px, 100%);
+  min-width: 220px;
 }
 
 .taskSearch {
@@ -279,15 +386,15 @@
 .taskGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 18px;
+  gap: 14px;
 }
 
 .taskCard {
   display: flex;
   flex-direction: column;
-  min-height: 260px;
+  min-height: 238px;
   border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--app-surface-color);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 
@@ -305,11 +412,11 @@
 
 .taskCardHead {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 54px;
-  padding: 16px 16px 12px;
+  min-height: 48px;
+  padding: 12px 14px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 }
 
@@ -327,14 +434,14 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 12px 14px;
 }
 
 .taskMetaRow {
   display: grid;
-  grid-template-columns: 82px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 8px;
   align-items: start;
 }
 
@@ -394,8 +501,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 58px;
-  padding: 12px 16px 16px;
+  min-height: 52px;
+  padding: 10px 14px 14px;
   border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
@@ -474,12 +581,32 @@
 
 /* ===== Card Grid Responsive ===== */
 @media (max-width: 1400px) {
+  .taskConfigGrid {
+    grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr) 128px;
+  }
+
+  .taskConfigTags {
+    grid-column: span 2;
+  }
+
   .taskGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 1100px) {
+  .taskConfigGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .taskConfigTags {
+    grid-column: auto;
+  }
+
+  .taskConfigStatus {
+    max-width: 160px;
+  }
+
   .taskGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -518,6 +645,25 @@
     flex-direction: column;
   }
 
+  .taskListToolbarFilters,
+  .taskListToolbarActions {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .taskListToolbarActions {
+    justify-content: flex-start;
+  }
+
+  .taskConfigGrid,
+  .urlEntryCompactGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .taskConfigStatus {
+    max-width: none;
+  }
+
   .taskSearch {
     width: 100%;
     max-width: none;
@@ -550,6 +696,16 @@
   .taskCardFooter {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .taskListToolbarFilters,
+  .taskListToolbarActions {
+    flex-direction: column;
+  }
+
+  .taskTagFilter {
+    min-width: 0;
+    width: 100%;
   }
 }
 

@@ -1,9 +1,9 @@
 import { App } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { PropsWithChildren } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskFormPage from '../TaskFormPage'
 import {
   createCrawlTask,
@@ -47,6 +47,19 @@ vi.mock('@/stores/useTagsViewStore', () => ({
     },
   ),
 }))
+
+const originalGetComputedStyle = window.getComputedStyle.bind(window)
+beforeAll(() => {
+  vi.stubGlobal('getComputedStyle', (elt: Element) => originalGetComputedStyle(elt))
+})
+afterAll(() => {
+  vi.unstubAllGlobals()
+})
+
+afterEach(async () => {
+  cleanup()
+  await new Promise((resolve) => setTimeout(resolve, 32))
+})
 
 function wrapper({ children }: PropsWithChildren) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -281,5 +294,18 @@ describe('TaskFormPage URL table drawer', () => {
         tag_names: ['VR', '自定义'],
       }))
     })
+  })
+
+  it('uses compact grids for task basics and URL entry fields', async () => {
+    paramsMock = {}
+    const { container } = render(<TaskFormPage />, { wrapper })
+
+    expect(await screen.findByLabelText('任务名称')).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('URL'), 'https://javdb.com/actors/layout')
+
+    expect(container.querySelector('[class*="taskConfigGrid"]')).toBeTruthy()
+    expect(container.querySelector('[class*="taskConfigStatus"]')).toBeTruthy()
+    expect(container.querySelector('[class*="urlEntryCompactGrid"]')).toBeTruthy()
+    expect(container.querySelector('[class*="urlEntrySwitchGroup"]')).toBeTruthy()
   })
 })

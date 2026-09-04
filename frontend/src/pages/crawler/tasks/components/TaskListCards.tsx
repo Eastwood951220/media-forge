@@ -1,7 +1,8 @@
 import {
   DeleteOutlined,
   EditOutlined,
-  PlayCircleOutlined, PlusOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
   ReloadOutlined,
   StopOutlined,
 } from '@ant-design/icons'
@@ -348,7 +349,7 @@ function TaskListCards({
   return (
     <div className={styles.taskListShell}>
       <div className={styles.taskListToolbar}>
-        <Space size={12} wrap>
+        <div className={styles.taskListToolbarFilters}>
           <Typography.Text type="secondary">
             {runtimeReady ? `共 ${total} 条` : '同步中'}
           </Typography.Text>
@@ -362,10 +363,13 @@ function TaskListCards({
             onChange={onTagFilterChange}
             className={styles.taskTagFilter}
           />
-        </Space>
-        <Space wrap>
-          <Typography.Text type="secondary">已选 {selectedTaskIds.length} 个</Typography.Text>
+        </div>
+        <div className={styles.taskListToolbarActions}>
+          <Typography.Text type="secondary" className={styles.taskSelectedCount}>
+            已选 {selectedTaskIds.length} 个
+          </Typography.Text>
           <Button
+            icon={<PlayCircleOutlined />}
             disabled={selectedTaskIds.length === 0}
             loading={batchRunLoading}
             onClick={onBatchRunClick}
@@ -385,7 +389,7 @@ function TaskListCards({
           >
             新建任务
           </Button>
-        </Space>
+        </div>
       </div>
 
       <Spin spinning={loading}>

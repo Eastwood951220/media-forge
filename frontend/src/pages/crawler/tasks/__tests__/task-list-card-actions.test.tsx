@@ -157,8 +157,10 @@ describe('TaskListCards action alignment', () => {
 
   it('calls batch create handler from the toolbar', () => {
     const onBatchTaskClick = vi.fn()
-    renderCards({ onBatchTaskClick })
+    const { container } = renderCards({ onBatchTaskClick })
 
+    expect(container.querySelector('[class*="taskListToolbarFilters"]')).toBeTruthy()
+    expect(container.querySelector('[class*="taskListToolbarActions"]')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /批量新建/ }))
 
     expect(onBatchTaskClick).toHaveBeenCalledTimes(1)

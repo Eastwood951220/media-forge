@@ -11,6 +11,7 @@ import {
   type UrlType,
   URL_TYPE_LABELS,
 } from '../taskUrlUtils'
+import styles from '../TaskPages.module.less'
 
 export interface UrlEntryFieldsProps {
   index: number
@@ -36,7 +37,7 @@ export default function UrlEntryFields({
   }, [url, form, index, onUrlTypeDetected])
 
   return (
-    <>
+    <div className={styles.urlEntryCompactGrid}>
       <Form.Item noStyle shouldUpdate={(prev, cur) => prev.urls?.[index]?.url !== cur.urls?.[index]?.url}>
         {({ getFieldValue }) => {
           const currentUrl = (getFieldValue(['urls', index, 'url']) as string) ?? ''
@@ -54,17 +55,19 @@ export default function UrlEntryFields({
                 : '请输入 URL'
           return (
             <>
-              <Form.Item name={[index, 'url']} label="URL" rules={[{ required: true, message: '请输入 URL' }]}>
+              <Form.Item
+                name={[index, 'url']}
+                label="URL"
+                rules={[{ required: true, message: '请输入 URL' }]}
+                className={styles.urlEntryUrlField}
+              >
                 <Input placeholder="https://javdb.com/actors/... 或 https://javbus.com/..." />
               </Form.Item>
-              <Form.Item label="URL 类型">
+              <Form.Item label="URL 类型" className={styles.urlEntryTypeField}>
                 <Input
                   value={typeLabel}
                   disabled
-                  style={{
-                    color: source || detected ? '#1e40af' : undefined,
-                    fontWeight: source || detected ? 500 : undefined,
-                  }}
+                  className={source || detected ? styles.urlTypeInputActive : undefined}
                 />
               </Form.Item>
               <Form.Item name={[index, 'url_type']} hidden>
@@ -89,14 +92,24 @@ export default function UrlEntryFields({
           const showSort = urlType === 'video_codes' || urlType === 'search'
           return (
             <>
-              <Form.Item name={[index, 'has_magnet']} label="含磁力链接" valuePropName="checked">
+              <Form.Item
+                name={[index, 'has_magnet']}
+                label="含磁力链接"
+                valuePropName="checked"
+                className={styles.urlEntrySwitchGroup}
+              >
                 <Switch />
               </Form.Item>
-              <Form.Item name={[index, 'has_chinese_sub']} label="含中文字幕" valuePropName="checked">
+              <Form.Item
+                name={[index, 'has_chinese_sub']}
+                label="含中文字幕"
+                valuePropName="checked"
+                className={styles.urlEntrySwitchGroup}
+              >
                 <Switch />
               </Form.Item>
               {showSort ? (
-                <Form.Item name={[index, 'sort_type']} label="排序方式">
+                <Form.Item name={[index, 'sort_type']} label="排序方式" className={styles.urlEntrySortField}>
                   <Select options={sortOptions} />
                 </Form.Item>
               ) : null}
@@ -115,15 +128,11 @@ export default function UrlEntryFields({
           const sortType = (getFieldValue(['urls', index, 'sort_type']) as number) ?? 0
           const finalUrl = urlType ? buildFinalUrlPreview(baseUrl, urlType, hasMagnet, hasSub, sortType, source) : baseUrl
           return (
-            <Form.Item label="最终 URL 预览">
+            <Form.Item label="最终 URL 预览" className={styles.urlEntryPreviewField}>
               <Input
                 value={finalUrl}
                 disabled
-                style={{
-                  fontFamily: "'Fira Code', 'Cascadia Code', monospace",
-                  fontSize: 12,
-                  background: 'rgba(148, 163, 184, 0.06)',
-                }}
+                className={styles.urlPreviewInput}
               />
             </Form.Item>
           )
@@ -133,19 +142,15 @@ export default function UrlEntryFields({
       <Form.Item noStyle shouldUpdate={(prev, cur) => prev.urls?.[index]?.url_name !== cur.urls?.[index]?.url_name}>
         {({ getFieldValue }) => {
           const urlName = getFieldValue(['urls', index, 'url_name']) as string | undefined
-          return urlName ? (
-            <Form.Item label="URL 名称">
+          return (
+            <Form.Item label="URL 名称" className={styles.urlEntryNameField}>
               <Input
-                value={urlName}
+                value={urlName || '-'}
                 disabled
-                style={{
-                  color: '#1e40af',
-                  fontWeight: 500,
-                  background: 'rgba(30, 64, 175, 0.04)',
-                }}
+                className={urlName ? styles.urlNameInputActive : undefined}
               />
             </Form.Item>
-          ) : null
+          )
         }}
       </Form.Item>
 
@@ -159,6 +164,7 @@ export default function UrlEntryFields({
               icon={<SearchOutlined />}
               loading={extracting}
               disabled={!currentUrl || (!detected && !source)}
+              className={styles.urlEntryActionButton}
               onClick={async () => {
                 if (!detected && !source) return
                 setExtracting(true)
@@ -176,6 +182,6 @@ export default function UrlEntryFields({
           )
         }}
       </Form.Item>
-    </>
+    </div>
   )
 }

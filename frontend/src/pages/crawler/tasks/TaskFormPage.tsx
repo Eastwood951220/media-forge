@@ -279,52 +279,51 @@ export default function TaskFormPage() {
             tag_names: [],
           }}
         >
-          <Row gutter={24}>
-            <Col flex="auto">
-              <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
-                <Input
-                  placeholder="例如：某演员名称"
-                  onChange={(e) => {
-                    const nextValue = e.target.value
-                    if (!storageLocationManuallyEdited) {
-                      form.setFieldValue('storage_location', nextValue)
-                    }
-                  }}
-                />
-              </Form.Item>
-            </Col>
-            <Col flex="120px">
-              <Form.Item name="is_skip" label="启用状态" valuePropName="checked">
-                <Switch checkedChildren="禁用" unCheckedChildren="启用" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={24}>
-            <Col flex="auto">
-              <Form.Item
-                name="storage_location"
-                label="网盘路径"
-                rules={[{ required: true, message: '请输入网盘路径' }]}
-              >
-                <Input
-                  placeholder="例如：VR"
-                  disabled={isEdit}
-                  onChange={() => {
-                    if (!isEdit) {
-                      setStorageLocationManuallyEdited(true)
-                    }
-                  }}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={24}>
-            <Col flex="auto">
-              <Form.Item name="tag_names" label="任务标签">
-                <TaskTagSelect options={tagOptionsQuery.data ?? []} loading={tagOptionsQuery.isLoading} />
-              </Form.Item>
-            </Col>
-          </Row>
+          <div className={styles.taskConfigGrid}>
+            <Form.Item
+              name="name"
+              label="任务名称"
+              rules={[{ required: true, message: '请输入任务名称' }]}
+              className={styles.taskConfigWide}
+            >
+              <Input
+                placeholder="例如：某演员名称"
+                onChange={(e) => {
+                  const nextValue = e.target.value
+                  if (!storageLocationManuallyEdited) {
+                    form.setFieldValue('storage_location', nextValue)
+                  }
+                }}
+              />
+            </Form.Item>
+            <Form.Item
+              name="storage_location"
+              label="网盘路径"
+              rules={[{ required: true, message: '请输入网盘路径' }]}
+              className={styles.taskConfigWide}
+            >
+              <Input
+                placeholder="例如：VR"
+                disabled={isEdit}
+                onChange={() => {
+                  if (!isEdit) {
+                    setStorageLocationManuallyEdited(true)
+                  }
+                }}
+              />
+            </Form.Item>
+            <Form.Item name="tag_names" label="任务标签" className={styles.taskConfigTags}>
+              <TaskTagSelect options={tagOptionsQuery.data ?? []} loading={tagOptionsQuery.isLoading} />
+            </Form.Item>
+            <Form.Item
+              name="is_skip"
+              label="启用状态"
+              valuePropName="checked"
+              className={styles.taskConfigStatus}
+            >
+              <Switch checkedChildren="禁用" unCheckedChildren="启用" />
+            </Form.Item>
+          </div>
 
           <div className={styles.urlListHeader}>
             <Form.Item label="URL 列表" required className={styles.urlListLabel} />
