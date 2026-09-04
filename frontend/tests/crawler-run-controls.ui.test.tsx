@@ -89,7 +89,7 @@ describe('crawler task run controls', () => {
       page: 1,
       size: 20,
     })
-    vi.mocked(runCrawlTask).mockResolvedValue({ id: 'run-1' } as never)
+    vi.mocked(runCrawlTask).mockResolvedValue({ accepted: true, run_id: 'run-1' })
     vi.mocked(getTaskDict).mockResolvedValue([{ id: 'task-1', name: '任务A' }])
     vi.mocked(createTemporaryCrawlRun).mockResolvedValue({
       id: 'run-temp-1',
@@ -108,20 +108,8 @@ describe('crawler task run controls', () => {
       logs: [],
     })
     vi.mocked(createTaskUrlRun).mockResolvedValue({
-      id: 'run-url-1',
-      task_id: 'task-1',
-      task_name: '任务A',
-      status: 'queued',
-      crawl_mode: 'incremental',
-      queued_at: '2026-07-15T00:00:00',
-      started_at: null,
-      finished_at: null,
-      result: { url_subset: true, selected_task_url_ids: ['url-1'], selected_task_url_count: 1 },
-      error: null,
-      resumed_from: null,
-      created_at: '2026-07-15T00:00:00',
-      updated_at: null,
-      logs: [],
+      accepted: true,
+      run_id: 'url-run-1',
     })
   })
 
