@@ -400,3 +400,92 @@ def test_create_task_rejects_too_long_tag_name(client, auth_headers):
 
     assert response.status_code == 400
     assert "标签长度不能超过 50 个字符" in response.json()["msg"]
+
+
+def test_batch_run_creates_one_run_per_idle_task(client, auth_headers, monkeypatch):
+    from backend.app.modules.crawler.tasks import service as task_service
+
+    task_a = create_tagged_task(client, auth_headers, "batch-run-a", ["VR"])
+    task_b = create_tagged_task(client, auth_headers, "batch-run-b", ["VR"])
+
+    class FakeRun:
+        def __init__(self, run_id):
+            self.id = run_id
+
+    created_modes = []
+
+    class FakeRunService:
+        def __init__(self, db, runtime_state):
+            pass
+
+        def create_run(self, task, crawl_mode):
+            created_modes.append((task.name, crawl_mode))
+            return FakeRun(f"run-{task.name}")
+
+    monkeypatch.setattr(task_service, "CrawlerRunService", FakeRunService)
+    monkeypatch.setattr(task_service, "get_runtime_state", lambda: object())
+
+    response = client.post(
+        "/api/crawler/tasks/batch-run",
+        json={"task_ids": [task_a["id"], task_b["id"]], "crawl_mode": "incremental"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["accepted_count"] == 2
+    assert data["failed_count"] == 0
+    assert [item["task_id"] for item in data["accepted"]] == [task_a["id"], task_b["id"]]
+    assert created_modes == [("batch-run-a", "incremental"), ("batch-run-b", "incremental")]
+
+
+def test_batch_run_returns_per_task_failures(client, auth_headers, monkeypatch):
+    from backend.app.modules.crawler.tasks import service as task_service
+
+    runnable = create_tagged_task(client, auth_headers, "batch-run-ok", ["VR"])
+    skipped = client.post(
+        "/api/crawler/tasks",
+        json={
+            "name": "batch-run-skipped",
+            "storage_location": "batch-run-skipped",
+            "tag_names": ["VR"],
+            "is_skip": True,
+            "urls": [{"url": "https://javdb.com/actors/batch-run-skipped", "url_type": "actors"}],
+        },
+        headers=auth_headers,
+    ).json()["data"]
+
+    class FakeRun:
+        id = "run-ok"
+
+    class FakeRunService:
+        def __init__(self, db, runtime_state):
+            pass
+
+        def create_run(self, task, crawl_mode):
+            return FakeRun()
+
+    monkeypatch.setattr(task_service, "CrawlerRunService", FakeRunService)
+    monkeypatch.setattr(task_service, "get_runtime_state", lambda: object())
+
+    response = client.post(
+        "/api/crawler/tasks/batch-run",
+        json={
+            "task_ids": [
+                runnable["id"],
+                skipped["id"],
+                "00000000-0000-0000-0000-000000000000",
+                runnable["id"],
+            ],
+            "crawl_mode": "full",
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["accepted_count"] == 1
+    assert data["failed"] == [
+        {"task_id": skipped["id"], "reason": "禁用任务不能执行"},
+        {"task_id": "00000000-0000-0000-0000-000000000000", "reason": "Task not found"},
+    ]

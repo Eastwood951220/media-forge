@@ -111,6 +111,28 @@ class CrawlTaskBatchCreateResult(BaseModel):
     failed_count: int
 
 
+class CrawlTaskBatchRunCreate(BaseModel):
+    task_ids: list[uuid.UUID] = Field(..., min_length=1)
+    crawl_mode: Literal["incremental", "full"]
+
+
+class CrawlTaskBatchRunAcceptedItem(BaseModel):
+    task_id: uuid.UUID
+    run_id: uuid.UUID | str
+
+
+class CrawlTaskBatchRunFailedItem(BaseModel):
+    task_id: uuid.UUID
+    reason: str
+
+
+class CrawlTaskBatchRunResult(BaseModel):
+    accepted: list[CrawlTaskBatchRunAcceptedItem]
+    failed: list[CrawlTaskBatchRunFailedItem]
+    accepted_count: int
+    failed_count: int
+
+
 class TaskUrlListItem(BaseModel):
     """Lightweight URL entry for the task list view (no created_at/updated_at)."""
 

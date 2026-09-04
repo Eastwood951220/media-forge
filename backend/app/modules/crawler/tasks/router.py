@@ -9,6 +9,7 @@ from backend.app.modules.crawler.tasks.name_extractor import extract_task_name
 from backend.app.modules.crawler.tasks.service import CrawlerTaskService
 from backend.app.schemas.crawl_task import (
     CrawlTaskBatchCreate,
+    CrawlTaskBatchRunCreate,
     CrawlTaskCreate,
     CrawlTaskUpdate,
     CrawlTaskUrlRunCreate,
@@ -77,6 +78,16 @@ def batch_create_tasks(
 ) -> dict:
     service = CrawlerTaskService(db)
     return success(data=service.batch_create_tasks(data, current_user.id))
+
+
+@router.post("/batch-run", status_code=status.HTTP_201_CREATED)
+def batch_run_tasks(
+    data: CrawlTaskBatchRunCreate,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    service = CrawlerTaskService(db)
+    return success(data=service.batch_run_tasks(data, current_user.id))
 
 
 @router.get("/{task_id:uuid}")

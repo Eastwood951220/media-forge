@@ -31,6 +31,10 @@ from backend.app.schemas.crawl_task import (
     CrawlTaskBatchCreateResult,
     CrawlTaskBatchCreatedItem,
     CrawlTaskBatchFailedItem,
+    CrawlTaskBatchRunAcceptedItem,
+    CrawlTaskBatchRunCreate,
+    CrawlTaskBatchRunFailedItem,
+    CrawlTaskBatchRunResult,
     CrawlTaskCreate,
     CrawlTaskListResponse,
     CrawlTaskUpdate,
@@ -318,6 +322,43 @@ class CrawlerTaskService:
             self.db.rollback()
             raise_task_integrity_error(exc, name=update_data.get("name") or task.name)
         return serialize_task(updated).model_dump(mode="json")
+
+    def _unique_task_ids(self, task_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+        unique_ids: list[uuid.UUID] = []
+        seen: set[uuid.UUID] = set()
+        for task_id in task_ids:
+            if task_id in seen:
+                continue
+            seen.add(task_id)
+            unique_ids.append(task_id)
+        return unique_ids
+
+    def batch_run_tasks(self, data: CrawlTaskBatchRunCreate, owner_id: uuid.UUID) -> dict:
+        accepted: list[CrawlTaskBatchRunAcceptedItem] = []
+        failed: list[CrawlTaskBatchRunFailedItem] = []
+
+        for task_id in self._unique_task_ids(list(data.task_ids)):
+            task = self.repo.get_owned(task_id, owner_id)
+            if task is None:
+                failed.append(CrawlTaskBatchRunFailedItem(task_id=task_id, reason="Task not found"))
+                continue
+            if task.is_skip:
+                failed.append(CrawlTaskBatchRunFailedItem(task_id=task_id, reason="禁用任务不能执行"))
+                continue
+            try:
+                run = CrawlerRunService(self.db, get_runtime_state()).create_run(task, data.crawl_mode)
+                accepted.append(CrawlTaskBatchRunAcceptedItem(task_id=task_id, run_id=run.id))
+            except Exception as exc:
+                self.db.rollback()
+                logger.exception("Create crawler batch run failed for task %s", task_id)
+                failed.append(CrawlTaskBatchRunFailedItem(task_id=task_id, reason=f"任务运行时不可用: {exc}"))
+
+        return CrawlTaskBatchRunResult(
+            accepted=accepted,
+            failed=failed,
+            accepted_count=len(accepted),
+            failed_count=len(failed),
+        ).model_dump(mode="json")
 
     def delete_task(
         self,
