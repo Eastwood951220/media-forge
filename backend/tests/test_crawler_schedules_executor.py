@@ -11,6 +11,30 @@ from backend.app.models.crawler_schedule import (
 from backend.app.modules.crawler.schedules.executor import execute_schedule
 
 
+class _RecordingRuntime:
+    """Stub runtime that records enqueued run ids instead of touching Redis."""
+
+    def __init__(self) -> None:
+        self.enqueued: list[str] = []
+
+    def enqueue_run(self, run_id: str) -> None:
+        self.enqueued.append(run_id)
+
+
+def install_runtime_stubs(monkeypatch) -> _RecordingRuntime:
+    """Replace Redis/worker side effects in the executor path with stubs."""
+    runtime = _RecordingRuntime()
+    monkeypatch.setattr(
+        "backend.app.modules.crawler.schedules.executor.get_runtime_state",
+        lambda: runtime,
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.crawler.runtime.service.ensure_crawler_worker_started",
+        lambda runtime: None,
+    )
+    return runtime
+
+
 def seed_schedule(db_session, test_user, *, enabled=True, next_run_at=datetime(2026, 9, 5, 3, 30)):
     task = CrawlTask(owner_id=test_user.id, name="Task", storage_location="Task", is_skip=False)
     schedule = CrawlerSchedule(
@@ -33,7 +57,7 @@ def seed_schedule(db_session, test_user, *, enabled=True, next_run_at=datetime(2
 
 def test_execute_schedule_creates_incremental_run(db_session, test_user, monkeypatch):
     schedule, task = seed_schedule(db_session, test_user)
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.ensure_crawler_worker_started", lambda runtime: None)
+    runtime = install_runtime_stubs(monkeypatch)
 
     schedule_run = execute_schedule(schedule.id, db_factory=lambda: db_session, trigger_type="manual")
 
@@ -44,6 +68,7 @@ def test_execute_schedule_creates_incremental_run(db_session, test_user, monkeyp
     assert crawl_run.trigger_source == "schedule"
     assert crawl_run.schedule_id == schedule.id
     assert crawl_run.schedule_run_id == schedule_run.id
+    assert runtime.enqueued == [str(crawl_run.id)]
 
 
 def test_execute_schedule_skips_when_existing_linked_run_active(db_session, test_user, monkeypatch):
@@ -66,7 +91,16 @@ def test_execute_schedule_skips_when_existing_linked_run_active(db_session, test
         schedule_run_id=first_history.id,
     )
     db_session.add_all([first_history, active_run])
+    db_session.flush()
+    db_session.add(
+        CrawlerScheduleRunCrawlRun(
+            schedule_run_id=first_history.id,
+            crawl_run_id=active_run.id,
+            task_id=task.id,
+        )
+    )
     db_session.commit()
+    install_runtime_stubs(monkeypatch)
 
     schedule_run = execute_schedule(schedule.id, db_factory=lambda: db_session)
 
@@ -74,9 +108,42 @@ def test_execute_schedule_skips_when_existing_linked_run_active(db_session, test
     assert schedule_run.result["reason"] == "previous_run_active"
 
 
+def test_execute_schedule_ignores_unlinked_queued_run(db_session, test_user, monkeypatch):
+    """An orphaned run without a link row must not wedge the schedule."""
+    schedule, task = seed_schedule(db_session, test_user)
+    stale_history = CrawlerScheduleRun(
+        schedule_id=schedule.id,
+        owner_id=test_user.id,
+        status="failed",
+        trigger_type="scheduled",
+        triggered_at=datetime.now(),
+        result={"accepted": [], "skipped": [], "failed": []},
+        storage_status="disabled",
+    )
+    orphan_run = CrawlRun(
+        task_id=task.id,
+        task_name=task.name,
+        status="queued",
+        crawl_mode="incremental",
+        schedule_id=schedule.id,
+        schedule_run_id=stale_history.id,
+    )
+    db_session.add_all([stale_history, orphan_run])
+    db_session.commit()
+    runtime = install_runtime_stubs(monkeypatch)
+
+    schedule_run = execute_schedule(schedule.id, db_factory=lambda: db_session)
+
+    assert schedule_run.status == "running"
+    assert len(db_session.query(CrawlRun).filter(CrawlRun.task_id == task.id).all()) == 2
+    assert schedule_run.result["accepted"]
+    accepted_run_id = schedule_run.result["accepted"][0]["run_id"]
+    assert runtime.enqueued == [accepted_run_id]
+
+
 def test_execute_schedule_records_link_and_advances_schedule(db_session, test_user, monkeypatch):
     schedule, task = seed_schedule(db_session, test_user, next_run_at=datetime(2000, 1, 1, 3, 30))
-    monkeypatch.setattr("backend.app.modules.crawler.runtime.service.ensure_crawler_worker_started", lambda runtime: None)
+    install_runtime_stubs(monkeypatch)
 
     schedule_run = execute_schedule(schedule.id, db_factory=lambda: db_session, trigger_type="manual")
 

@@ -14,9 +14,18 @@ TERMINAL_RUN_STATUSES = {"completed", "failed", "stopped"}
 
 
 def _has_active_schedule_run(db: Session, schedule_id: uuid.UUID) -> bool:
+    """True when a previous schedule run of this schedule still has linked
+    crawler runs in ``queued`` or ``running`` status. Only *linked* runs count:
+    an unlinked run (e.g. orphaned by an enqueue failure) must not wedge the
+    schedule forever."""
     return (
-        db.query(CrawlRun)
-        .filter(CrawlRun.schedule_id == schedule_id, CrawlRun.status.in_(["queued", "running"]))
+        db.query(CrawlerScheduleRunCrawlRun.schedule_run_id)
+        .join(CrawlerScheduleRun, CrawlerScheduleRun.id == CrawlerScheduleRunCrawlRun.schedule_run_id)
+        .join(CrawlRun, CrawlRun.id == CrawlerScheduleRunCrawlRun.crawl_run_id)
+        .filter(
+            CrawlerScheduleRun.schedule_id == schedule_id,
+            CrawlRun.status.in_(["queued", "running"]),
+        )
         .first()
         is not None
     )
