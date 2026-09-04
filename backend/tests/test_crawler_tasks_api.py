@@ -286,3 +286,117 @@ def test_crawler_task_schemas_accept_tag_names():
     assert create.tag_names == ["VR", "演员"]
     assert update.tag_names == []
     assert batch.tag_names == ["VR"]
+
+
+def create_tagged_task(client, headers, name, tags):
+    response = client.post(
+        "/api/crawler/tasks",
+        json={
+            "name": name,
+            "storage_location": name,
+            "tag_names": tags,
+            "is_skip": False,
+            "urls": [{"url": f"https://javdb.com/actors/{name}", "url_type": "actors"}],
+        },
+        headers=headers,
+    )
+    assert response.status_code == 201
+    return response.json()["data"]
+
+
+def test_create_task_with_tags_returns_tags(client, auth_headers):
+    task = create_tagged_task(client, auth_headers, "tagged-task", ["VR", " 演员 ", "VR", ""])
+
+    assert [tag["name"] for tag in task["tags"]] == ["VR", "演员"]
+
+
+def test_task_list_includes_tags(client, auth_headers):
+    create_tagged_task(client, auth_headers, "listed-tagged-task", ["VR"])
+
+    response = client.get("/api/crawler/tasks", headers=auth_headers)
+
+    assert response.status_code == 200
+    row = response.json()["data"]["rows"][0]
+    assert row["name"] == "listed-tagged-task"
+    assert row["tags"][0]["name"] == "VR"
+
+
+def test_tag_dictionary_returns_current_user_tags(client, auth_headers, other_user):
+    create_tagged_task(client, auth_headers, "dict-a", ["VR", "演员"])
+    create_tagged_task(client, auth_headers, "dict-b", ["VR", "系列"])
+
+    response = client.get("/api/crawler/tasks/tags", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert [item["name"] for item in response.json()["data"]] == ["VR", "演员", "系列"]
+
+
+def test_update_task_replaces_and_clears_tags(client, auth_headers):
+    task = create_tagged_task(client, auth_headers, "replace-tags", ["VR", "演员"])
+
+    replaced = client.put(
+        f"/api/crawler/tasks/{task['id']}",
+        json={
+            "name": "replace-tags",
+            "tag_names": ["系列"],
+            "urls": [{"url": "https://javdb.com/actors/replace-tags", "url_type": "actors"}],
+            "is_skip": False,
+        },
+        headers=auth_headers,
+    )
+    assert replaced.status_code == 200
+    assert [tag["name"] for tag in replaced.json()["data"]["tags"]] == ["系列"]
+
+    cleared = client.put(
+        f"/api/crawler/tasks/{task['id']}",
+        json={"tag_names": []},
+        headers=auth_headers,
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["data"]["tags"] == []
+
+
+def test_update_task_omitting_tag_names_keeps_existing_tags(client, auth_headers):
+    task = create_tagged_task(client, auth_headers, "keep-tags", ["VR"])
+
+    response = client.put(
+        f"/api/crawler/tasks/{task['id']}",
+        json={"name": "keep-tags-renamed"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert [tag["name"] for tag in response.json()["data"]["tags"]] == ["VR"]
+
+
+def test_task_list_filters_by_all_selected_tags(client, auth_headers):
+    create_tagged_task(client, auth_headers, "vr-actor", ["VR", "演员"])
+    create_tagged_task(client, auth_headers, "vr-only", ["VR"])
+    create_tagged_task(client, auth_headers, "actor-only", ["演员"])
+
+    response = client.get(
+        "/api/crawler/tasks?tag_names=VR&tag_names=演员",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 1
+    assert data["rows"][0]["name"] == "vr-actor"
+
+
+def test_create_task_rejects_too_long_tag_name(client, auth_headers):
+    response = client.post(
+        "/api/crawler/tasks",
+        json={
+            "name": "long-tag",
+            "storage_location": "long-tag",
+            "tag_names": ["标" * 51],
+            "is_skip": False,
+            "urls": [{"url": "https://javdb.com/actors/long-tag", "url_type": "actors"}],
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    assert "标签长度不能超过 50 个字符" in response.json()["msg"]

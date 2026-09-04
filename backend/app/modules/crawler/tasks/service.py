@@ -44,6 +44,20 @@ from scraper.tasks.task_utils import determine_source
 logger = logging.getLogger(__name__)
 
 
+def normalize_tag_names(tag_names: list[str] | None) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw_name in tag_names or []:
+        name = raw_name.strip()
+        if not name or name in seen:
+            continue
+        if len(name) > 50:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="标签长度不能超过 50 个字符")
+        seen.add(name)
+        normalized.append(name)
+    return normalized
+
+
 class CrawlerTaskService:
     """Application service for crawler task operations."""
 
@@ -58,9 +72,10 @@ class CrawlerTaskService:
         page: int,
         size: int,
         keyword: str | None = None,
+        tag_names: list[str] | None = None,
     ) -> dict:
-        rows, _ = self.repo.get_by_owner(owner_id, page=page, size=size, keyword=keyword)
-        total = self.repo.count_by_owner(owner_id, keyword=keyword)
+        rows, _ = self.repo.get_by_owner(owner_id, page=page, size=size, keyword=keyword, tag_names=tag_names)
+        total = self.repo.count_by_owner(owner_id, keyword=keyword, tag_names=tag_names)
         return CrawlTaskListResponse(
             rows=[serialize_task_list_item(row) for row in rows],
             total=total,
@@ -70,6 +85,12 @@ class CrawlerTaskService:
 
     def task_dict(self, owner_id: uuid.UUID) -> dict:
         return self.repo.get_dict_by_owner(owner_id)
+
+    def list_task_tags(self, owner_id: uuid.UUID) -> list[dict[str, str]]:
+        return [{"id": str(tag.id), "name": tag.name} for tag in self.repo.get_tags_by_owner(owner_id)]
+
+    def _tags_for_names(self, owner_id: uuid.UUID, tag_names: list[str] | None):
+        return self.repo.get_or_create_tags(owner_id, normalize_tag_names(tag_names))
 
     def get_task(self, task_id: uuid.UUID, owner_id: uuid.UUID) -> dict:
         task = self.repo.get_owned(task_id, owner_id)
@@ -156,6 +177,9 @@ class CrawlerTaskService:
         if self.repo.get_by_name(owner_id, data.name):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"任务名称 '{data.name}' 已存在")
         check_urls_unique(data.urls)
+        # Validate tag names before any database writes so a 400 leaves nothing behind.
+        if data.tag_names is not None:
+            normalize_tag_names(data.tag_names)
         try:
             created = self.repo.create_with_urls(
                 owner_id=owner_id,
@@ -164,6 +188,11 @@ class CrawlerTaskService:
                 is_skip=data.is_skip,
                 urls=data.urls,
             )
+            if data.tag_names is not None:
+                self.repo.replace_task_tags(created, self._tags_for_names(owner_id, data.tag_names))
+                self.db.commit()
+                self.db.refresh(created)
+                created = self.repo.get_owned(created.id, owner_id) or created
         except ValueError as exc:
             self.db.rollback()
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -185,6 +214,9 @@ class CrawlerTaskService:
         normalized_urls = [url.strip() for url in data.urls if url.strip()]
         if not normalized_urls:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请至少提供 1 个 URL")
+        # Validate tag names once so an invalid batch payload fails before any item runs.
+        if data.tag_names is not None:
+            normalize_tag_names(data.tag_names)
 
         created: list[CrawlTaskBatchCreatedItem] = []
         failed: list[CrawlTaskBatchFailedItem] = []
@@ -227,6 +259,10 @@ class CrawlerTaskService:
                     is_skip=data.is_skip,
                     urls=[task_url],
                 )
+                if data.tag_names is not None:
+                    self.repo.replace_task_tags(task, self._tags_for_names(owner_id, data.tag_names))
+                    self.db.commit()
+                    self.db.refresh(task)
                 created.append(CrawlTaskBatchCreatedItem(url=url, task=serialize_task(task)))
             except HTTPException as exc:
                 self.db.rollback()
@@ -252,11 +288,15 @@ class CrawlerTaskService:
         if task is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-        update_data = data.model_dump(exclude_unset=True, exclude={"urls"})
+        update_data = data.model_dump(exclude_unset=True, exclude={"urls", "tag_names"})
         if "name" in update_data:
             duplicate = self.repo.get_by_name(owner_id, update_data["name"])
             if duplicate and duplicate.id != task.id:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"任务名称 '{update_data['name']}' 已存在")
+
+        # Validate tag names before mutating anything else.
+        if data.tag_names is not None:
+            normalize_tag_names(data.tag_names)
 
         for field, value in update_data.items():
             setattr(task, field, value)
@@ -268,6 +308,9 @@ class CrawlerTaskService:
             except ValueError as exc:
                 self.db.rollback()
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+        if data.tag_names is not None:
+            self.repo.replace_task_tags(task, self._tags_for_names(owner_id, data.tag_names))
 
         try:
             updated = self.repo.update(task)

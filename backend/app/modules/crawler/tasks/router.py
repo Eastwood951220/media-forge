@@ -27,9 +27,24 @@ def list_tasks(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
     keyword: str | None = Query(default=None, max_length=200),
+    tag_names: list[str] | None = Query(default=None),
 ) -> dict:
     service = CrawlerTaskService(db)
-    return success(data=service.list_tasks(current_user.id, page=page, size=size, keyword=keyword))
+    return success(
+        data=service.list_tasks(
+            current_user.id,
+            page=page,
+            size=size,
+            keyword=keyword,
+            tag_names=tag_names,
+        )
+    )
+
+
+@router.get("/tags")
+def list_task_tags(current_user: CurrentUser, db: Session = Depends(get_db)) -> dict:
+    service = CrawlerTaskService(db)
+    return success(data=service.list_task_tags(current_user.id))
 
 
 @router.get("/dict")
