@@ -355,7 +355,8 @@ def _process_single_detail(db: Session, run: CrawlRun, task: CrawlTask, detail: 
         cleaned = pipeline.process_item(item, task_name=task.name, task_id=str(task.id))
         if cleaned:
             _apply_cleaned_detail_display_fields(detail, cleaned)
-            upsert_movie_with_magnets(db, {**cleaned, "source_task_ids": [task.id]})
+            movie_id = upsert_movie_with_magnets(db, {**cleaned, "source_task_ids": [task.id]})
+            detail.movie_id = movie_id
             detail.status = "saved"
             detail.item_data = cleaned
             detail.crawled_at = datetime.now()

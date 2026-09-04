@@ -102,3 +102,9 @@ def finalize_run(
     run.finished_at = datetime.now()
     db.commit()
     publish_run_updated(db, run)
+    try:
+        from backend.app.modules.crawler.schedules.storage import process_schedule_run_completion
+
+        process_schedule_run_completion(db, run)
+    except Exception as exc:
+        logger.warning("Failed to process schedule completion for run %s: %s", run.id, exc)

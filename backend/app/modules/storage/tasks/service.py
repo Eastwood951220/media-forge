@@ -60,6 +60,23 @@ class StorageTaskService:
             selected_storage_location=None,
         )
 
+    def create_schedule_push(
+        self,
+        *,
+        movie_ids: list[uuid.UUID],
+        user_id: uuid.UUID,
+        storage_mode: str,
+        selected_storage_location: str | None,
+    ) -> StorageMainTask:
+        return self._create_main_task(
+            movie_ids=movie_ids,
+            user_id=user_id,
+            source="crawler_schedule",
+            alias=None,
+            storage_mode=storage_mode,
+            selected_storage_location=selected_storage_location,
+        )
+
     def stop_main_task(self, task_id: uuid.UUID) -> StorageMainTask:
         task = self.repository.get_main(task_id)
         if task is None:

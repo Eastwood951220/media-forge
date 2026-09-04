@@ -158,6 +158,7 @@ def build_crawl_callbacks(
                 detail.error = None
                 detail.crawled_at = datetime.now()
                 detail.saved_at = datetime.now()
+                detail.movie_id = movie_id
             increment_progress(ctx.progress, "saved")
             append_run_log_for_run(
                 ctx.db, ctx.run, f"入库成功: {code}", "INFO",
