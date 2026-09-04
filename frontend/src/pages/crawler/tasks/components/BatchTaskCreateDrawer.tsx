@@ -71,7 +71,7 @@ export default function BatchTaskCreateDrawer({
   return (
     <Drawer
       title="批量新建任务"
-      placement="left"
+      placement="right"
       open={open}
       onClose={onCancel}
       width={560}
