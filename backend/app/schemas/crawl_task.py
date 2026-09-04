@@ -33,8 +33,16 @@ class TaskUrlEntryRead(TaskUrlEntryBase):
 
 class CrawlTaskCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    storage_location: str = Field(..., min_length=1, max_length=10)
+    storage_location: str = Field(..., min_length=1, max_length=200)
     urls: list[TaskUrlEntryCreate] = Field(..., min_length=1)
+    is_skip: bool = False
+
+
+class CrawlTaskBatchCreate(BaseModel):
+    urls: list[str] = Field(..., min_length=1)
+    has_magnet: bool = True
+    has_chinese_sub: bool = False
+    sort_type: int = Field(default=0, ge=0)
     is_skip: bool = False
 
 
@@ -73,6 +81,23 @@ class CrawlTaskRead(BaseModel):
     last_run_status: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class CrawlTaskBatchCreatedItem(BaseModel):
+    url: str
+    task: CrawlTaskRead
+
+
+class CrawlTaskBatchFailedItem(BaseModel):
+    url: str
+    reason: str
+
+
+class CrawlTaskBatchCreateResult(BaseModel):
+    created: list[CrawlTaskBatchCreatedItem]
+    failed: list[CrawlTaskBatchFailedItem]
+    created_count: int
+    failed_count: int
 
 
 class TaskUrlListItem(BaseModel):

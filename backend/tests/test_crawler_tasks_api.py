@@ -129,3 +129,31 @@ def test_extract_javbus_star_task_name(monkeypatch) -> None:
     ))
 
     assert name == "波多野結衣"
+
+
+def test_create_task_accepts_long_storage_location(client, auth_headers):
+    long_name = "演员名称超过十个字符"
+    response = client.post(
+        "/api/crawler/tasks",
+        json={
+            "name": long_name,
+            "storage_location": long_name,
+            "is_skip": False,
+            "urls": [{"url": "https://javdb.com/actors/long-name", "url_type": "actors"}],
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["storage_location"] == long_name
+
+
+def test_batch_create_route_rejects_empty_url_list(client, auth_headers):
+    response = client.post(
+        "/api/crawler/tasks/batch",
+        json={"urls": ["", "   "]},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["msg"] == "请至少提供 1 个 URL"
