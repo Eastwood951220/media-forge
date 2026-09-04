@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_task import CrawlTask
-from backend.app.models.crawler_schedule import CrawlerSchedule
+from backend.app.models.crawler_schedule import CrawlerSchedule, CrawlerScheduleRun
 from backend.app.modules.crawler.schedules.schemas import CrawlerScheduleCreate, CrawlerScheduleListResponse, CrawlerScheduleUpdate
 from backend.app.modules.crawler.schedules.serializers import serialize_schedule
 
@@ -132,3 +132,55 @@ class CrawlerScheduleService:
         self.db.refresh(schedule)
         self._sync_job(schedule)
         return schedule
+
+    def delete_schedule(self, schedule_id: uuid.UUID, owner_id: uuid.UUID) -> dict:
+        schedule = self.get_owned_model(schedule_id, owner_id)
+        self.db.delete(schedule)
+        self.db.commit()
+        if self.scheduler is not None:
+            self.scheduler.remove_schedule_job(schedule_id)
+        return {"id": str(schedule_id)}
+
+    def enable_schedule(self, schedule_id: uuid.UUID, owner_id: uuid.UUID) -> CrawlerSchedule:
+        schedule = self.get_owned_model(schedule_id, owner_id)
+        schedule.enabled = True
+        schedule.next_run_at = calculate_next_run_at(schedule.schedule_type, schedule.time_of_day, schedule.weekdays)
+        self.db.commit()
+        self.db.refresh(schedule)
+        self._sync_job(schedule)
+        return schedule
+
+    def disable_schedule(self, schedule_id: uuid.UUID, owner_id: uuid.UUID) -> CrawlerSchedule:
+        schedule = self.get_owned_model(schedule_id, owner_id)
+        schedule.enabled = False
+        self.db.commit()
+        self.db.refresh(schedule)
+        self._sync_job(schedule)
+        return schedule
+
+    def list_schedule_runs(self, schedule_id: uuid.UUID, owner_id: uuid.UUID, *, page: int, size: int) -> dict:
+        schedule = self.get_owned_model(schedule_id, owner_id)
+        query = self.db.query(CrawlerScheduleRun).filter(CrawlerScheduleRun.schedule_id == schedule.id)
+        total = query.count()
+        rows = query.order_by(CrawlerScheduleRun.triggered_at.desc()).offset((page - 1) * size).limit(size).all()
+        return {
+            "rows": [
+                {
+                    "id": str(row.id),
+                    "schedule_id": str(row.schedule_id),
+                    "status": row.status,
+                    "trigger_type": row.trigger_type,
+                    "triggered_at": row.triggered_at,
+                    "finished_at": row.finished_at,
+                    "result": row.result or {},
+                    "storage_status": row.storage_status,
+                    "storage_task_id": str(row.storage_task_id) if row.storage_task_id else None,
+                    "storage_error": row.storage_error,
+                    "crawl_run_ids": [str(link.crawl_run_id) for link in row.crawl_run_links],
+                }
+                for row in rows
+            ],
+            "total": total,
+            "page": page,
+            "size": size,
+        }

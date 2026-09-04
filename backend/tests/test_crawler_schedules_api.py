@@ -95,3 +95,37 @@ def test_update_schedule_rejects_null_recurrence_field(db_session, test_user, fi
 
     assert exc.value.status_code == 400
     assert "定时类型、执行时间和星期不能为空" in str(exc.value.detail)
+
+
+def auth_payload(task_id):
+    return {
+        "name": "Nightly",
+        "enabled": True,
+        "task_ids": [str(task_id)],
+        "schedule_type": "daily",
+        "time_of_day": "03:30",
+        "weekdays": [],
+        "auto_storage_enabled": False,
+        "storage_mode": "single",
+        "selected_storage_location": None,
+    }
+
+
+def test_schedule_crud_routes(client, auth_headers, db_session, test_user, monkeypatch):
+    task = seed_task(db_session, test_user.id)
+    monkeypatch.setattr("backend.app.modules.crawler.schedules.service.CrawlerScheduleService._sync_job", lambda self, schedule: None)
+
+    created = client.post("/api/crawler/schedules", json=auth_payload(task.id), headers=auth_headers)
+    assert created.status_code == 201
+    schedule_id = created.json()["data"]["id"]
+
+    listed = client.get("/api/crawler/schedules", headers=auth_headers)
+    assert listed.status_code == 200
+    assert listed.json()["data"]["total"] == 1
+
+    disabled = client.post(f"/api/crawler/schedules/{schedule_id}/disable", headers=auth_headers)
+    assert disabled.status_code == 200
+    assert disabled.json()["data"]["enabled"] is False
+
+    deleted = client.delete(f"/api/crawler/schedules/{schedule_id}", headers=auth_headers)
+    assert deleted.status_code == 200
