@@ -1,6 +1,8 @@
 import { request } from '@/request'
 import type { CrawlRun } from '@/api/crawler/crawlerRun/types.ts'
 import type {
+  BatchCrawlTaskCreateParams,
+  BatchCrawlTaskCreateResult,
   CrawlTask,
   CrawlTaskCreateParams,
   CrawlTaskListItem,
@@ -33,6 +35,12 @@ export function getCrawlTask(taskId: string): Promise<CrawlTask> {
 
 export function createCrawlTask(data: CrawlTaskCreateParams): Promise<CrawlTask> {
   return request.post<CrawlTask>(BASE_URL, data)
+}
+
+export function batchCreateCrawlTasks(
+  data: BatchCrawlTaskCreateParams,
+): Promise<BatchCrawlTaskCreateResult> {
+  return request.post<BatchCrawlTaskCreateResult>(`${BASE_URL}/batch`, data)
 }
 
 export function updateCrawlTask(

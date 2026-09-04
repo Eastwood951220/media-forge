@@ -57,6 +57,31 @@ export interface CrawlTaskCreateParams {
   is_skip?: boolean
 }
 
+export interface BatchCrawlTaskCreateParams {
+  urls: string[]
+  has_magnet?: boolean
+  has_chinese_sub?: boolean
+  sort_type?: number
+  is_skip?: boolean
+}
+
+export interface BatchCrawlTaskCreatedItem {
+  url: string
+  task: CrawlTask
+}
+
+export interface BatchCrawlTaskFailedItem {
+  url: string
+  reason: string
+}
+
+export interface BatchCrawlTaskCreateResult {
+  created: BatchCrawlTaskCreatedItem[]
+  failed: BatchCrawlTaskFailedItem[]
+  created_count: number
+  failed_count: number
+}
+
 export interface CrawlTaskUpdateParams {
   name?: string
   urls?: TaskUrlEntry[]

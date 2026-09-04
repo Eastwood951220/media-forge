@@ -417,7 +417,8 @@
 }
 
 /* ===== URL Entry Drawer ===== */
-.urlEntryDrawer {
+.urlEntryDrawer,
+.batchTaskDrawer {
   :global(.ant-drawer-footer) {
     display: flex;
     justify-content: flex-end;
@@ -432,7 +433,8 @@
 }
 
 @media (max-width: 768px) {
-  .urlEntryDrawer {
+  .urlEntryDrawer,
+  .batchTaskDrawer {
     :global(.ant-drawer-content-wrapper) {
       width: 100% !important;
     }
