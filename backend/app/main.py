@@ -20,6 +20,7 @@ from backend.app.modules.crawler.config.router import router as crawler_config_r
 from backend.app.modules.crawler.runs.router import router as crawler_runs_router
 from backend.app.modules.crawler.schedules.router import router as crawler_schedules_router
 from backend.app.modules.crawler.schedules.scheduler import crawler_schedule_scheduler
+from backend.app.modules.crawler.schedules.storage import finalize_stalled_schedule_runs
 from backend.app.modules.crawler.agent.startup import normalize_agent_state_on_startup
 from backend.app.modules.crawler.runtime.service import cleanup_interrupted_runs, get_runtime_state
 from backend.app.modules.storage.worker.runner import cleanup_interrupted_storage_tasks
@@ -98,6 +99,12 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             storage_stopped = cleanup_interrupted_storage_tasks(session, StorageRuntimeState(get_redis()))
             if storage_stopped:
                 logger.info("Stopped %d interrupted storage tasks.", storage_stopped)
+
+            # Finalize schedule runs stranded in "running" by the restart
+            # cleanup above (their linked crawler runs are all terminal now).
+            finalized_schedule_runs = finalize_stalled_schedule_runs(session)
+            if finalized_schedule_runs:
+                logger.info("Finalized %d interrupted crawler schedule runs.", finalized_schedule_runs)
 
         crawler_schedule_scheduler.start()
         crawler_schedule_scheduler.load_enabled_schedules()

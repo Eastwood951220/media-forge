@@ -83,6 +83,7 @@ def client() -> TestClient:
          patch("backend.app.main.get_session_factory"), \
          patch("backend.app.main.cleanup_interrupted_runs"), \
          patch("backend.app.main.cleanup_interrupted_storage_tasks"), \
+         patch("backend.app.main.finalize_stalled_schedule_runs"), \
          patch("backend.app.main.crawler_schedule_scheduler.start"), \
          patch("backend.app.main.crawler_schedule_scheduler.load_enabled_schedules"), \
          patch("backend.app.main.crawler_schedule_scheduler.shutdown"), \
