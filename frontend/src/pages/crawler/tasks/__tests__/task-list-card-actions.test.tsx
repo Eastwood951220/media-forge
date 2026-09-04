@@ -104,6 +104,7 @@ describe('TaskListCards action alignment', () => {
     const { container } = renderCards()
 
     expect(screen.getAllByRole('button', { name: /爬取/ }).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('button', { name: 'play-circle 爬取' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /URL 爬取/ })).toBeInTheDocument()
     expect(container.querySelector('[class*="taskCardPrimaryActions"]')).toBeTruthy()
     expect(container.querySelector('[class*="taskCardMaintenanceActions"]')).toBeTruthy()
@@ -148,7 +149,7 @@ describe('TaskListCards action alignment', () => {
     )
 
     expect(screen.getByText('同步中')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /爬取/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'play-circle 爬取' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /URL 爬取/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /编辑/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /删除/ })).not.toBeInTheDocument()
@@ -176,6 +177,30 @@ describe('TaskListCards action alignment', () => {
     await waitFor(() => {
       expect(onTagFilterChange).toHaveBeenCalledWith(['VR'], expect.anything())
     })
+  })
+
+  it('tracks card selection and disables batch run without selection', async () => {
+    const onSelectedTaskIdsChange = vi.fn()
+    const onBatchRunClick = vi.fn()
+    renderCards({ onSelectedTaskIdsChange, onBatchRunClick })
+
+    expect(screen.getByRole('button', { name: /批量爬取/ })).toBeDisabled()
+    fireEvent.click(screen.getByRole('checkbox', { name: /选择 Aligned Task/ }))
+
+    await waitFor(() => {
+      expect(onSelectedTaskIdsChange).toHaveBeenCalledWith(['task-1'])
+    })
+    expect(onBatchRunClick).not.toHaveBeenCalled()
+  })
+
+  it('calls batch run handler when tasks are selected', async () => {
+    const onBatchRunClick = vi.fn()
+    renderCards({ selectedTaskIds: ['task-1'], onBatchRunClick })
+
+    expect(screen.getByText('已选 1 个')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /批量爬取/ }))
+
+    expect(onBatchRunClick).toHaveBeenCalledTimes(1)
   })
 })
 

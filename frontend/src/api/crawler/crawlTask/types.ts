@@ -90,6 +90,28 @@ export interface BatchCrawlTaskCreateResult {
   failed_count: number
 }
 
+export interface BatchCrawlTaskRunParams {
+  task_ids: string[]
+  crawl_mode: 'incremental' | 'full'
+}
+
+export interface BatchCrawlTaskRunAcceptedItem {
+  task_id: string
+  run_id: string
+}
+
+export interface BatchCrawlTaskRunFailedItem {
+  task_id: string
+  reason: string
+}
+
+export interface BatchCrawlTaskRunResult {
+  accepted: BatchCrawlTaskRunAcceptedItem[]
+  failed: BatchCrawlTaskRunFailedItem[]
+  accepted_count: number
+  failed_count: number
+}
+
 export interface CrawlTaskUpdateParams {
   name?: string
   urls?: TaskUrlEntry[]

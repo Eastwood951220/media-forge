@@ -5,7 +5,7 @@ import {
   ReloadOutlined,
   StopOutlined,
 } from '@ant-design/icons'
-import { Button, Dropdown, Empty, Pagination, Popover, Select, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
+import { Button, Checkbox, Dropdown, Empty, Pagination, Popover, Select, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import type { CrawlTask, CrawlTaskRuntimeSnapshot, TaskRuntimeStatus, TaskTag } from '@/api/crawler/crawlTask/types'
 import type { CrawlMode } from '@/api/crawler/crawlerRun/types'
@@ -21,10 +21,10 @@ type TaskListCardsProps = {
   tagOptions: TaskTag[]
   selectedTagNames: string[]
   onTagFilterChange: (tagNames: string[]) => void
-  selectedTaskIds?: string[]
-  onSelectedTaskIdsChange?: (ids: string[]) => void
-  onBatchRunClick?: () => void
-  batchRunLoading?: boolean
+  selectedTaskIds: string[]
+  onSelectedTaskIdsChange: (ids: string[]) => void
+  onBatchRunClick: () => void
+  batchRunLoading: boolean
   onEdit: (task: CrawlTask) => void
   onDelete: (task: CrawlTask) => void
   onToggleSkip: (task: CrawlTask) => void
@@ -154,6 +154,8 @@ function TaskCard({
   task,
   runtime,
   runtimeReady,
+  selectedTaskIds,
+  onSelectedTaskIdsChange,
   onEdit,
   onDelete,
   onToggleSkip,
@@ -165,6 +167,8 @@ function TaskCard({
   task: CrawlTask
   runtime: CrawlTaskRuntimeSnapshot | undefined
   runtimeReady: boolean
+  selectedTaskIds: string[]
+  onSelectedTaskIdsChange: (ids: string[]) => void
   onEdit: (task: CrawlTask) => void
   onDelete: (task: CrawlTask) => void
   onToggleSkip: (task: CrawlTask) => void
@@ -181,8 +185,17 @@ function TaskCard({
   const canUrlRun = runtimeReady && canRun && hasUrls
   const canEditOrDelete = runtimeReady && isIdle
   const canToggle = runtimeReady && isIdle
+  const isSelectable = runtimeReady && isIdle && !task.is_skip
   const canStop = runtimeReady && (runtimeStatus === 'queued' || runtimeStatus === 'running') && Boolean(runtime?.latest_run_id)
   const canRestart = runtimeReady && runtimeStatus === 'stopped' && Boolean(runtime?.latest_run_id)
+
+  const toggleSelected = (checked: boolean) => {
+    onSelectedTaskIdsChange(
+      checked
+        ? [...selectedTaskIds, task.id]
+        : selectedTaskIds.filter((id) => id !== task.id),
+    )
+  }
 
   const runItems: MenuProps['items'] = [
     { key: 'incremental', label: '增量爬取', icon: <PlayCircleOutlined /> },
@@ -192,6 +205,12 @@ function TaskCard({
   return (
     <article className={task.is_skip ? `${styles.taskCard} ${styles.taskCardDisabled}` : styles.taskCard}>
       <div className={styles.taskCardHead}>
+        <Checkbox
+          aria-label={`选择 ${task.name}`}
+          checked={selectedTaskIds.includes(task.id)}
+          disabled={!isSelectable}
+          onChange={(event) => toggleSelected(event.target.checked)}
+        />
         <Tooltip title={task.name}>
           <Typography.Text strong className={styles.taskCardTitle}>
             {task.name}
@@ -307,6 +326,10 @@ function TaskListCards({
   tagOptions,
   selectedTagNames,
   onTagFilterChange,
+  selectedTaskIds,
+  onSelectedTaskIdsChange,
+  onBatchRunClick,
+  batchRunLoading,
   onEdit,
   onDelete,
   onToggleSkip,
@@ -340,7 +363,15 @@ function TaskListCards({
             className={styles.taskTagFilter}
           />
         </Space>
-        <Space>
+        <Space wrap>
+          <Typography.Text type="secondary">已选 {selectedTaskIds.length} 个</Typography.Text>
+          <Button
+            disabled={selectedTaskIds.length === 0}
+            loading={batchRunLoading}
+            onClick={onBatchRunClick}
+          >
+            批量爬取
+          </Button>
           <Button onClick={onTemporaryTaskClick}>
             临时任务
           </Button>
@@ -366,6 +397,8 @@ function TaskListCards({
                 task={task}
                 runtime={runtimeByTaskId[task.id]}
                 runtimeReady={runtimeReady}
+                selectedTaskIds={selectedTaskIds}
+                onSelectedTaskIdsChange={onSelectedTaskIdsChange}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onToggleSkip={onToggleSkip}

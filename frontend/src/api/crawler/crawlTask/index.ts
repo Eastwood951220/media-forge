@@ -3,6 +3,8 @@ import type { CrawlRun } from '@/api/crawler/crawlerRun/types.ts'
 import type {
   BatchCrawlTaskCreateParams,
   BatchCrawlTaskCreateResult,
+  BatchCrawlTaskRunParams,
+  BatchCrawlTaskRunResult,
   CrawlTask,
   CrawlTaskCreateParams,
   CrawlTaskListItem,
@@ -48,6 +50,12 @@ export function batchCreateCrawlTasks(
   data: BatchCrawlTaskCreateParams,
 ): Promise<BatchCrawlTaskCreateResult> {
   return request.post<BatchCrawlTaskCreateResult>(`${BASE_URL}/batch`, data)
+}
+
+export function batchRunCrawlTasks(
+  data: BatchCrawlTaskRunParams,
+): Promise<BatchCrawlTaskRunResult> {
+  return request.post<BatchCrawlTaskRunResult>(`${BASE_URL}/batch-run`, data)
 }
 
 export function updateCrawlTask(

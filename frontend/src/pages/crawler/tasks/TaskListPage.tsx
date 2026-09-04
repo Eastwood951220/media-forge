@@ -1,16 +1,21 @@
 import { useCallback, useState } from 'react'
-import { App } from 'antd'
+import { App, Modal, Select } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   batchCreateCrawlTasks,
+  batchRunCrawlTasks,
   createTemporaryCrawlRun,
   getCrawlTaskTags,
   getTaskDict,
 } from '@/api/crawler/crawlTask'
-import type { TaskDictItem, TemporaryCrawlRunCreateParams } from '@/api/crawler/crawlTask/types'
+import type {
+  BatchCrawlTaskRunAcceptedItem,
+  TaskDictItem,
+  TemporaryCrawlRunCreateParams,
+} from '@/api/crawler/crawlTask/types'
 import { queryKeys } from '@/api/queryKeys'
-import { invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
+import { invalidateCrawlerRunLists, invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
 import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
 import type { CrawlTask } from '@/api/crawler/crawlTask/types'
 import BatchTaskCreateDrawer from './components/BatchTaskCreateDrawer'
@@ -69,11 +74,78 @@ function TaskListPage() {
   const [batchDrawerOpen, setBatchDrawerOpen] = useState(false)
   const [batchSubmitting, setBatchSubmitting] = useState(false)
   const [batchFailedUrls, setBatchFailedUrls] = useState<string[]>([])
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
+  const [batchRunSubmitting, setBatchRunSubmitting] = useState(false)
+
+  const markBatchRunsQueued = useCallback((accepted: BatchCrawlTaskRunAcceptedItem[]) => {
+    const now = new Date().toISOString()
+    for (const item of accepted) {
+      useCrawlerRuntimeStore.getState().upsertTaskRuntime({
+        task_id: item.task_id,
+        runtime_status: 'queued',
+        latest_run_id: item.run_id,
+        state_updated_at: now,
+        last_run_at: now,
+      })
+    }
+  }, [])
+
+  const openBatchRunConfirm = useCallback(() => {
+    let crawlMode: 'incremental' | 'full' = 'incremental'
+    Modal.confirm({
+      title: '批量爬取',
+      content: (
+        <Select<'incremental' | 'full'>
+          aria-label="爬取模式"
+          defaultValue="incremental"
+          options={[
+            { value: 'incremental', label: '增量爬取' },
+            { value: 'full', label: '全量爬取' },
+          ]}
+          onChange={(value) => {
+            crawlMode = value
+          }}
+          style={{ width: '100%' }}
+        />
+      ),
+      okText: '开始',
+      cancelText: '取消',
+      onOk: async () => {
+        setBatchRunSubmitting(true)
+        try {
+          const result = await batchRunCrawlTasks({ task_ids: selectedTaskIds, crawl_mode: crawlMode })
+          markBatchRunsQueued(result.accepted)
+          await invalidateCrawlerRunLists(queryClient)
+          setSelectedTaskIds([])
+          if (result.failed_count > 0) {
+            await message.warning(`已提交 ${result.accepted_count} 个任务，${result.failed_count} 个失败`)
+          } else {
+            await message.success(`已提交 ${result.accepted_count} 个任务`)
+          }
+        } catch (error) {
+          await message.error(error instanceof Error ? error.message : '批量爬取失败')
+        } finally {
+          setBatchRunSubmitting(false)
+        }
+      },
+    })
+  }, [markBatchRunsQueued, message, queryClient, selectedTaskIds])
 
   const handleTagFilterChange = useCallback((nextTags: string[]) => {
     setSelectedTagNames(nextTags)
+    setSelectedTaskIds([])
     setCurrent(1)
   }, [setCurrent])
+
+  const handlePageChange = useCallback((page: number) => {
+    setSelectedTaskIds([])
+    setCurrent(page)
+  }, [setCurrent])
+
+  const handlePageSizeChange = useCallback((size: number) => {
+    setSelectedTaskIds([])
+    setPageSize(size)
+  }, [setPageSize])
 
   const handleBatchSubmit = useCallback(async (values: BatchTaskCreateFormValues) => {
     setBatchSubmitting(true)
@@ -152,6 +224,10 @@ function TaskListPage() {
           tagOptions={tagOptionsQuery.data ?? []}
           selectedTagNames={selectedTagNames}
           onTagFilterChange={handleTagFilterChange}
+          selectedTaskIds={selectedTaskIds}
+          onSelectedTaskIdsChange={setSelectedTaskIds}
+          onBatchRunClick={openBatchRunConfirm}
+          batchRunLoading={batchRunSubmitting}
           onEdit={(task) => navigate({ to: '/crawler/tasks/$id/edit', params: { id: task.id } })}
           onDelete={handleDelete}
           onToggleSkip={handleToggleSkip}
@@ -163,8 +239,8 @@ function TaskListPage() {
           onBatchTaskClick={() => setBatchDrawerOpen(true)}
           current={current}
           pageSize={pageSize}
-          onPageChange={setCurrent}
-          onPageSizeChange={setPageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
         />
       </section>
 
