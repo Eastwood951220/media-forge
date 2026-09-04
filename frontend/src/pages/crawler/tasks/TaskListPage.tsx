@@ -1,10 +1,14 @@
 import { useCallback, useState } from 'react'
 import { App } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
-import { createTemporaryCrawlRun, getTaskDict } from '@/api/crawler/crawlTask'
+import { useQueryClient } from '@tanstack/react-query'
+import { batchCreateCrawlTasks, createTemporaryCrawlRun, getTaskDict } from '@/api/crawler/crawlTask'
 import type { TaskDictItem, TemporaryCrawlRunCreateParams } from '@/api/crawler/crawlTask/types'
+import { invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
 import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
 import type { CrawlTask } from '@/api/crawler/crawlTask/types'
+import BatchTaskCreateDrawer from './components/BatchTaskCreateDrawer'
+import type { BatchTaskCreateFormValues } from './components/BatchTaskCreateDrawer'
 import TaskUrlRunModal from './components/TaskUrlRunModal'
 import TemporaryTaskModal from './components/TemporaryTaskModal'
 import { useTaskListData } from './hooks/useTaskListData'
@@ -17,6 +21,7 @@ import styles from './TaskPages.module.less'
 
 function TaskListPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { message } = App.useApp()
 
   const {
@@ -48,6 +53,30 @@ function TaskListPage() {
   const [taskOptionsLoading, setTaskOptionsLoading] = useState(false)
   const [taskOptionsError, setTaskOptionsError] = useState<string | null>(null)
   const [temporarySubmitting, setTemporarySubmitting] = useState(false)
+
+  const [batchDrawerOpen, setBatchDrawerOpen] = useState(false)
+  const [batchSubmitting, setBatchSubmitting] = useState(false)
+  const [batchFailedUrls, setBatchFailedUrls] = useState<string[]>([])
+
+  const handleBatchSubmit = useCallback(async (values: BatchTaskCreateFormValues) => {
+    setBatchSubmitting(true)
+    try {
+      const result = await batchCreateCrawlTasks(values)
+      await invalidateCrawlerTaskLists(queryClient)
+      if (result.failed_count > 0) {
+        setBatchFailedUrls(result.failed.map((item) => item.url))
+        await message.warning(`已创建 ${result.created_count} 个任务，${result.failed_count} 个失败`)
+        return
+      }
+      setBatchFailedUrls([])
+      setBatchDrawerOpen(false)
+      await message.success(`已创建 ${result.created_count} 个任务`)
+    } catch (error) {
+      await message.error(error instanceof Error ? error.message : '批量新建任务失败')
+    } finally {
+      setBatchSubmitting(false)
+    }
+  }, [message, queryClient])
 
   const loadTaskOptions = useCallback(async () => {
     setTaskOptionsLoading(true)
@@ -111,6 +140,7 @@ function TaskListPage() {
           onRestart={handleRestart}
           onUrlRun={taskUrlRun.openTaskUrlRun}
           onTemporaryTaskClick={openTemporaryModal}
+          onBatchTaskClick={() => setBatchDrawerOpen(true)}
           current={current}
           pageSize={pageSize}
           onPageChange={setCurrent}
@@ -135,6 +165,18 @@ function TaskListPage() {
         submitting={taskUrlRun.submitting}
         onCancel={taskUrlRun.closeTaskUrlRun}
         onSubmit={taskUrlRun.submitTaskUrlRun}
+      />
+
+      <BatchTaskCreateDrawer
+        open={batchDrawerOpen}
+        submitting={batchSubmitting}
+        failedUrls={batchFailedUrls}
+        onCancel={() => {
+          if (batchSubmitting) return
+          setBatchDrawerOpen(false)
+          setBatchFailedUrls([])
+        }}
+        onSubmit={handleBatchSubmit}
       />
     </div>
   )

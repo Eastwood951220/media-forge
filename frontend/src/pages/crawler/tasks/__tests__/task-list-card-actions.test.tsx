@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListCards from '../components/TaskListCards'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
@@ -46,6 +46,7 @@ describe('TaskListCards action alignment', () => {
         onRestart={vi.fn()}
         onUrlRun={vi.fn()}
         onTemporaryTaskClick={vi.fn()}
+        onBatchTaskClick={vi.fn()}
         current={1}
         pageSize={20}
         onPageChange={vi.fn()}
@@ -75,6 +76,7 @@ describe('TaskListCards action alignment', () => {
         onRestart={vi.fn()}
         onUrlRun={vi.fn()}
         onTemporaryTaskClick={vi.fn()}
+        onBatchTaskClick={vi.fn()}
         current={1}
         pageSize={20}
         onPageChange={vi.fn()}
@@ -87,5 +89,35 @@ describe('TaskListCards action alignment', () => {
     expect(screen.queryByRole('button', { name: /URL 爬取/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /编辑/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /删除/ })).not.toBeInTheDocument()
+  })
+
+  it('calls batch create handler from the toolbar', () => {
+    const onBatchTaskClick = vi.fn()
+    render(
+      <TaskListCards
+        tasks={[baseTask as never]}
+        loading={false}
+        total={1}
+        runtimeByTaskId={{ 'task-1': { task_id: 'task-1', runtime_status: 'idle', latest_run_id: null, state_updated_at: '2026-09-04T00:00:00Z', last_run_at: null } } as never}
+        runtimeReady={true}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleSkip={vi.fn()}
+        onRun={vi.fn()}
+        onStop={vi.fn()}
+        onRestart={vi.fn()}
+        onUrlRun={vi.fn()}
+        onTemporaryTaskClick={vi.fn()}
+        onBatchTaskClick={onBatchTaskClick}
+        current={1}
+        pageSize={20}
+        onPageChange={vi.fn()}
+        onPageSizeChange={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /批量新建/ }))
+
+    expect(onBatchTaskClick).toHaveBeenCalledTimes(1)
   })
 })

@@ -26,6 +26,7 @@ type TaskListCardsProps = {
   onRestart: (task: CrawlTask) => void
   onUrlRun: (task: CrawlTask) => void
   onTemporaryTaskClick: () => void
+  onBatchTaskClick: () => void
   current: number
   pageSize: number
   onPageChange: (page: number) => void
@@ -257,6 +258,7 @@ function TaskListCards({
   onRestart,
   onUrlRun,
   onTemporaryTaskClick,
+  onBatchTaskClick,
   current,
   pageSize,
   onPageChange,
@@ -272,6 +274,9 @@ function TaskListCards({
         <Space>
           <Button onClick={onTemporaryTaskClick}>
             临时任务
+          </Button>
+          <Button onClick={onBatchTaskClick}>
+            批量新建
           </Button>
           <Button
             type="primary"
