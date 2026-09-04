@@ -59,6 +59,7 @@ describe('BatchTaskCreateDrawer', () => {
         has_chinese_sub: false,
         sort_type: 0,
         is_skip: false,
+        tag_names: [],
       })
     })
   })
@@ -88,5 +89,43 @@ describe('BatchTaskCreateDrawer', () => {
     )
 
     expect(within(screen.getByRole('dialog')).getByLabelText('URL 列表')).toHaveValue('https://javdb.com/actors/bad')
+  })
+
+  it('submits tag names with batch create values', async () => {
+    render(
+      <BatchTaskCreateDrawer
+        open
+        submitting={false}
+        failedUrls={[]}
+        tagOptions={[{ id: 'tag-vr', name: 'VR' }]}
+        onCancel={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+      { wrapper },
+    )
+
+    await userEvent.type(screen.getByLabelText('URL 列表'), 'https://javdb.com/actors/a')
+
+    const tagInput = screen.getByLabelText('任务标签') as HTMLInputElement
+    fireEvent.mouseDown(tagInput)
+    // Existing tag options are offered from the tag dictionary.
+    expect(await screen.findByRole('option', { name: 'VR' })).toBeInTheDocument()
+
+    // Tags mode accepts typed tokens for both existing and new tag names.
+    const typeTagToken = (tagName: string) => {
+      const liveInput = screen.getByLabelText('任务标签') as HTMLInputElement
+      fireEvent.change(liveInput, { target: { value: tagName } })
+      fireEvent.keyDown(liveInput, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13 })
+      fireEvent.blur(liveInput)
+    }
+    typeTagToken('VR')
+    typeTagToken('自定义')
+    fireEvent.click(screen.getByRole('button', { name: '保 存' }))
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        tag_names: ['VR', '自定义'],
+      }))
+    })
   })
 })

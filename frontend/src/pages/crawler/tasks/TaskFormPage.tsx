@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DeleteOutlined, EditOutlined, PlusOutlined, UnorderedListOutlined, AppstoreOutlined } from '@ant-design/icons'
 import { useNavigate, useParams, useRouterState } from '@tanstack/react-router'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Col, Form, Input, Row, Space, Switch, Table, Tooltip, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   createCrawlTask,
   extractTaskName,
   getCrawlTask,
+  getCrawlTaskTags,
   updateCrawlTask,
 } from '@/api/crawler/crawlTask'
 import type { CrawlTaskCreateParams, TaskUrlEntry } from '@/api/crawler/crawlTask/types'
+import { queryKeys } from '@/api/queryKeys'
 import { useRouteCacheControl } from '@/layout/routeCacheControl'
 import { invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
 import { useTagsViewStore } from '@/stores/useTagsViewStore'
@@ -22,6 +24,7 @@ import {
   URL_TYPE_LABELS,
 } from './taskUrlUtils'
 import { getRouteViewKey } from '@/routes/tags'
+import TaskTagSelect from './components/TaskTagSelect'
 import UrlEntryCard from './components/UrlEntryCard'
 import UrlEntryDrawer from './components/UrlEntryDrawer'
 import styles from './TaskPages.module.less'
@@ -57,6 +60,10 @@ export default function TaskFormPage() {
   const navigate = useNavigate()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
+  const tagOptionsQuery = useQuery({
+    queryKey: queryKeys.crawlerTasks.tags(),
+    queryFn: getCrawlTaskTags,
+  })
   const [form] = Form.useForm<CrawlTaskCreateParams>()
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -98,6 +105,7 @@ export default function TaskFormPage() {
           name: task.name,
           storage_location: task.storage_location,
           is_skip: task.is_skip,
+          tag_names: task.tags?.map((tag) => tag.name) ?? [],
           urls: task.urls.map((entry) => ({
             id: entry.id,
             position: entry.position,
@@ -209,6 +217,7 @@ export default function TaskFormPage() {
         name: values.name,
         storage_location: values.storage_location,
         is_skip: values.is_skip ?? false,
+        tag_names: values.tag_names ?? [],
         urls: enrichedEntries,
       }
       if (isEdit && taskId) {
@@ -267,6 +276,7 @@ export default function TaskFormPage() {
           initialValues={{
             urls: [{ has_magnet: true, has_chinese_sub: false, sort_type: 0 }],
             is_skip: false,
+            tag_names: [],
           }}
         >
           <Row gutter={24}>
@@ -305,6 +315,13 @@ export default function TaskFormPage() {
                     }
                   }}
                 />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={24}>
+            <Col flex="auto">
+              <Form.Item name="tag_names" label="任务标签">
+                <TaskTagSelect options={tagOptionsQuery.data ?? []} loading={tagOptionsQuery.isLoading} />
               </Form.Item>
             </Col>
           </Row>

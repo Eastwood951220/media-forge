@@ -11,12 +11,18 @@ export interface TaskUrlEntry {
   url_name?: string | null
 }
 
+export interface TaskTag {
+  id: string
+  name: string
+}
+
 export interface CrawlTask {
   id: string
   _id?: string
   name: string
   storage_location: string
   urls: TaskUrlEntry[]
+  tags: TaskTag[]
   is_skip: boolean
   status: string
   task_id: string | null
@@ -55,6 +61,7 @@ export interface CrawlTaskCreateParams {
   storage_location: string
   urls: TaskUrlEntry[]
   is_skip?: boolean
+  tag_names?: string[]
 }
 
 export interface BatchCrawlTaskCreateParams {
@@ -63,6 +70,7 @@ export interface BatchCrawlTaskCreateParams {
   has_chinese_sub?: boolean
   sort_type?: number
   is_skip?: boolean
+  tag_names?: string[]
 }
 
 export interface BatchCrawlTaskCreatedItem {
@@ -86,6 +94,7 @@ export interface CrawlTaskUpdateParams {
   name?: string
   urls?: TaskUrlEntry[]
   is_skip?: boolean
+  tag_names?: string[]
 }
 
 export interface CrawlTaskStats {
@@ -173,6 +182,7 @@ export interface CrawlTaskListItem {
   storage_location: string
   is_skip: boolean
   urls: TaskUrlListItem[]
+  tags: TaskTag[]
 }
 
 /** Standard paginated list wrapper. */

@@ -12,6 +12,7 @@ import type {
   PagedListResponse,
   RunActionAcceptedResponse,
   TaskDictItem,
+  TaskTag,
   TaskUrlRunCreateParams,
   TemporaryCrawlRunCreateParams,
 } from './types.ts'
@@ -22,12 +23,17 @@ export function getCrawlTasks(params: {
   page: number
   size: number
   keyword?: string
+  tag_names?: string[]
 }): Promise<PagedListResponse<CrawlTaskListItem>> {
   return request.get<PagedListResponse<CrawlTaskListItem>>(BASE_URL, params)
 }
 
 export function getTaskDict(): Promise<TaskDictItem[]> {
   return request.get<TaskDictItem[]>(`${BASE_URL}/dict`)
+}
+
+export function getCrawlTaskTags(): Promise<TaskTag[]> {
+  return request.get<TaskTag[]>(`${BASE_URL}/tags`)
 }
 
 export function getCrawlTask(taskId: string): Promise<CrawlTask> {

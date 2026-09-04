@@ -75,6 +75,7 @@ describe('crawler task run controls', () => {
         name: '任务A',
         storage_location: 'A',
         is_skip: false,
+        tags: [],
         urls: [{
           id: 'url-1',
           position: 0,
