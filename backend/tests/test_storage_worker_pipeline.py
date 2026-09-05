@@ -518,7 +518,7 @@ def test_execute_current_magnet_attempt_marks_subtask_skipped_when_all_targets_e
     assert subtask.skipped_files[0]["existing_targets"] == [target_file]
     assert provider.move_calls == []
     assert provider.copy_calls == []
-    assert provider.deleted == [f"/Downloads/storage_{subtask.id}/attempt_01_m1"]
+    assert provider.deleted == [f"/Downloads/storage_{subtask.id}"]
 
     logs = read_storage_subtask_logs(str(subtask.id))
     assert any("目标文件已全部存在，子任务标记为跳过" in entry["message"] for entry in logs)
@@ -2811,7 +2811,7 @@ def test_execute_current_magnet_attempt_copies_from_existing_target_when_multipl
         ("/Movies/A/ACZD-165/ACZD-165.mp4", "/Movies/B/ACZD-165")
     ]
     assert context.provider.find_file("/Movies/B/ACZD-165/ACZD-165.mp4") is not None
-    assert context.provider.deleted == ["/Downloads/storage_sub/attempt_01_m1"]
+    assert context.provider.deleted == ["/Downloads/storage_sub"]
     assert any(log["message"] == "检查目标目录是否已存在视频文件" for log in context.logs)
     assert any(log["message"] == "磁力任务处理成功" for log in context.logs)
 
@@ -3036,6 +3036,66 @@ def test_storage_file_operation_modules_export_current_public_functions() -> Non
     assert file_ops.move_renamed_videos is move_ops.move_renamed_videos
     assert file_ops.verify_moved_files is verify_ops.verify_moved_files
     assert file_ops.cleanup_download_folder is cleanup_ops.cleanup_download_folder
+
+
+def test_cleanup_download_folder_removes_storage_subtask_folder() -> None:
+    from backend.app.modules.storage.worker.cleanup_ops import cleanup_download_folder
+
+    class Provider:
+        def __init__(self) -> None:
+            self.deleted: list[str] = []
+
+        def delete_file(self, path):
+            self.deleted.append(path)
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.logs: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append(message)
+
+    context = Context()
+
+    cleanup_download_folder(
+        context,
+        "/Downloads/storage_00000000-0000-0000-0000-000000000123/attempt_01_m1",
+        {"download_root_folder": "/Downloads", "use_task_subfolder": True},
+    )
+
+    assert context.provider.deleted == ["/Downloads/storage_00000000-0000-0000-0000-000000000123"]
+    assert "已清理下载目录: /Downloads/storage_00000000-0000-0000-0000-000000000123" in context.logs
+
+
+def test_cleanup_download_folder_does_not_delete_download_root() -> None:
+    from backend.app.modules.storage.worker.cleanup_ops import cleanup_download_folder
+
+    class Provider:
+        def __init__(self) -> None:
+            self.deleted: list[str] = []
+
+        def delete_file(self, path):
+            self.deleted.append(path)
+
+    class Context:
+        def __init__(self) -> None:
+            self.provider = Provider()
+            self.logs: list[str] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append(message)
+
+    context = Context()
+
+    cleanup_download_folder(
+        context,
+        "/Downloads",
+        {"download_root_folder": "/Downloads", "use_task_subfolder": True},
+    )
+
+    assert context.provider.deleted == []
+    assert "清理完成" in context.logs
 
 
 def test_plan_storage_attempt_uses_selected_storage_location() -> None:
@@ -3880,7 +3940,7 @@ def test_execute_current_magnet_attempt_copies_existing_movie_storage_before_sub
     ]
     assert context.subtask.result["reason"] == "copied_from_existing_movie_storage"
     assert context.subtask.moved_files[0]["copy_source"] == "/Movies/A/AVSA-257/AVSA-257.mp4"
-    assert context.provider.deleted == [f"/Downloads/storage_{context.subtask.id}/attempt_01_m1"]
+    assert context.provider.deleted == [f"/Downloads/storage_{context.subtask.id}"]
     assert any(log["message"] == "检查电影已有存储位置" for log in context.logs)
     assert any(log["message"] == "磁力任务处理成功" for log in context.logs)
 
