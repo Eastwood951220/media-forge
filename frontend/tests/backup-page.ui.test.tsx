@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { PropsWithChildren } from 'react'
 
-import BackupPage from '@/pages/content/backup/BackupPage'
+import BackupPage from '@/pages/backup/BackupPage'
 
 vi.mock('@/api/backup', () => ({
   getBackupConfig: vi.fn().mockResolvedValue({

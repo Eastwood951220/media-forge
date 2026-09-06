@@ -28,6 +28,6 @@ describe('route tag helpers', () => {
   })
 
   it('returns backup route tag metadata', () => {
-    expect(getRouteTagMeta('/content/backup')).toEqual({ title: '数据备份' })
+    expect(getRouteTagMeta('/backup')).toEqual({ title: '数据备份' })
   })
 })
