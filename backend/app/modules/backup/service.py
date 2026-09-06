@@ -70,7 +70,13 @@ def prune_backup_files(backup_dir: Path, retention_count: int) -> int:
 class BackupService:
     """Orchestrate export, inspect, restore, and local backup file handling."""
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session | None = None) -> None:
+        """Create a backup service.
+
+        ``db`` is optional for file/config-only operations (listing, deleting,
+        inspecting, and kicking off background jobs); export and restore need a
+        real session and raise when it is missing.
+        """
         self.db = db
 
     def export_to_file(
@@ -81,6 +87,8 @@ class BackupService:
         job_id: uuid.UUID | None = None,
     ) -> Path:
         """Export the selected groups into a timestamped ``.mfbackup`` archive."""
+        if self.db is None:
+            raise RuntimeError("Exporting a backup requires a database session")
         output_dir.mkdir(parents=True, exist_ok=True)
         path = output_dir / backup_file_name()
         groups = list(dict.fromkeys(request.groups))
@@ -151,6 +159,8 @@ class BackupService:
         job_id: uuid.UUID | None = None,
     ) -> dict[str, Any]:
         """Restore the selected groups from ``path`` in the requested mode."""
+        if self.db is None:
+            raise RuntimeError("Restoring a backup requires a database session")
         inspected = inspect_backup_archive(path)
         result: dict[str, Any] = {}
         partial = False
