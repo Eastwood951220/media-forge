@@ -1,10 +1,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from 'antd'
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { PropsWithChildren } from 'react'
 
 import BackupPage from '@/pages/backup/BackupPage'
+import styles from '@/pages/backup/BackupPage.module.less'
+
+const originalGetComputedStyle = window.getComputedStyle.bind(window)
+beforeAll(() => {
+  vi.stubGlobal('getComputedStyle', (elt: Element) => originalGetComputedStyle(elt))
+})
+afterAll(() => {
+  vi.unstubAllGlobals()
+})
 
 vi.mock('@/api/backup', () => ({
   getBackupConfig: vi.fn().mockResolvedValue({
@@ -47,5 +56,18 @@ describe('BackupPage', () => {
     expect(screen.getAllByText('电影数据').length).toBeGreaterThan(0)
     expect(screen.getAllByText('任务与定时').length).toBeGreaterThan(0)
     expect(screen.getAllByText('配置').length).toBeGreaterThan(0)
+  })
+
+  it('uses a compact actions column and a wide file list panel', async () => {
+    const { container } = render(<BackupPage />, { wrapper })
+
+    expect(await screen.findByText('手动备份')).toBeInTheDocument()
+    expect(container.querySelector(`.${styles.actionPanel}`)).toBeInTheDocument()
+    expect(container.querySelector(`.${styles.contentPanel}`)).toBeInTheDocument()
+
+    const filePanel = container.querySelector(`.${styles.filePanel}`)
+    expect(filePanel).toBeInTheDocument()
+    expect(filePanel).toHaveTextContent('近期备份文件')
+    expect(filePanel?.querySelector('.ant-table')).toBeInTheDocument()
   })
 })

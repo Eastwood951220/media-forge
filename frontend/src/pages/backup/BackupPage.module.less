@@ -4,26 +4,53 @@
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+  grid-template-columns: minmax(360px, 480px) minmax(640px, 1fr);
   gap: 16px;
   align-items: start;
 }
 
-.mainPanel,
-.sidePanel {
+.actionPanel,
+.contentPanel {
   min-width: 0;
 }
 
-.mainPanel {
+.actionPanel {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.sidePanel {
+.contentPanel {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.autoForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+  align-items: start;
+}
+
+.autoForm :global(.ant-form-item) {
+  min-width: 0;
+  margin-bottom: 16px;
+}
+
+.autoForm > :global(.ant-btn) {
+  grid-column: 1 / -1;
+}
+
+.fullRow {
+  grid-column: 1 / -1;
+}
+
+.timeFields {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
 }
 
 .sensitiveRow {
@@ -43,9 +70,12 @@
   border-radius: 8px;
 }
 
-.fileListHeader {
-  margin: 18px 0 8px;
-  font-weight: 500;
+.filePanel :global(.ant-card-body) {
+  padding-top: 12px;
+}
+
+.fileTable :global(.ant-table-cell) {
+  vertical-align: top;
 }
 
 .progressTrack {
@@ -62,8 +92,24 @@
   transition: width 0.3s ease;
 }
 
+@media (max-width: 1280px) {
+  .layout {
+    grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 1100px) {
   .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .autoForm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .timeFields {
     grid-template-columns: minmax(0, 1fr);
   }
 }

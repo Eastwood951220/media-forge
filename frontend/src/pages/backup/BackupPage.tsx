@@ -363,7 +363,7 @@ export default function BackupPage() {
   return (
     <div className={styles.page}>
       <div className={styles.layout}>
-        <div className={styles.mainPanel}>
+        <div className={styles.actionPanel}>
           <Card
             title="手动备份"
             extra={jobProgress ? <JobProgress job={jobProgress} /> : undefined}
@@ -462,13 +462,18 @@ export default function BackupPage() {
           </Card>
         </div>
 
-        <div className={styles.sidePanel}>
+        <div className={styles.contentPanel}>
           <Card title="自动备份" loading={configQuery.isLoading}>
-            <Form form={autoForm} layout="vertical" onFinish={(values) => void handleAutoSave(values as BackupConfig)}>
+            <Form
+              form={autoForm}
+              layout="vertical"
+              className={styles.autoForm}
+              onFinish={(values) => void handleAutoSave(values as BackupConfig)}
+            >
               <Form.Item name="enabled" label="启用自动备份" valuePropName="checked">
                 <Switch />
               </Form.Item>
-              <Form.Item name="backup_dir" label="备份目录" rules={[{ required: true, message: '请输入备份目录' }]}>
+              <Form.Item name="backup_dir" label="备份目录" className={styles.fullRow} rules={[{ required: true, message: '请输入备份目录' }]}>
                 <Input placeholder="默认 data/backups" />
               </Form.Item>
               <Form.Item name="schedule_type" label="执行频率">
@@ -480,21 +485,21 @@ export default function BackupPage() {
                 />
               </Form.Item>
               <Form.Item label="执行时间" required>
-                <Space size={12}>
+                <div className={styles.timeFields}>
                   <Form.Item name="time_of_day" noStyle>
-                    <TimePicker format="HH:mm" minuteStep={5} style={{ width: 130 }} />
+                    <TimePicker format="HH:mm" minuteStep={5} style={{ width: '100%' }} />
                   </Form.Item>
                   <Form.Item name="weekdays" noStyle>
                     <Select
                       mode="multiple"
                       placeholder="选择星期"
-                      style={{ minWidth: 260 }}
+                      style={{ width: '100%' }}
                       options={WEEKDAY_OPTIONS}
                       maxTagCount="responsive"
                       disabled={scheduleType !== 'weekly'}
                     />
                   </Form.Item>
-                </Space>
+                </div>
               </Form.Item>
               <Form.Item name="groups" label="备份内容">
                 <Checkbox.Group options={GROUP_OPTIONS} />
@@ -509,14 +514,17 @@ export default function BackupPage() {
                 保存设置
               </Button>
             </Form>
+          </Card>
 
-            <div className={styles.fileListHeader}>近期备份文件</div>
+          <Card title="近期备份文件" className={styles.filePanel}>
             <Table<BackupFileInfo>
               rowKey="name"
               size="small"
+              className={styles.fileTable}
               columns={columns}
               dataSource={fileData}
               loading={filesQuery.isLoading}
+              scroll={{ x: 900 }}
               pagination={{ pageSize: 5, hideOnSinglePage: true }}
               locale={{ emptyText: '暂无本地备份文件' }}
             />
