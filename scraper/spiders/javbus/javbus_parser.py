@@ -63,9 +63,17 @@ def _extract_code_from_url(url: str) -> str:
     return match.group(1) if match else ""
 
 
+def _list_movie_boxes(page: Adaptor):
+    for selector in ("#waterfall a.movie-box", "div.item a.movie-box", "a.movie-box"):
+        nodes = page.css(selector)
+        if nodes:
+            return nodes
+    return []
+
+
 def parse_list_page(page: Adaptor, source_url: str) -> tuple[list[dict[str, Any]], str | None]:
     items: list[dict[str, Any]] = []
-    for node in page.css("a.movie-box"):
+    for node in _list_movie_boxes(page):
         href = node.css("::attr(href)").get("")
         if not href:
             continue

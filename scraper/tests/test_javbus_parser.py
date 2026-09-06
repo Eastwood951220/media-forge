@@ -315,6 +315,62 @@ REAL_LIST_PAGE_HTML = """
 """
 
 
+ACTUAL_WATERFALL_LIST_HTML = """
+<div id="waterfall">
+  <div class="item masonry-brick" style="position: absolute; top: 0px; left: 0px;">
+    <a class="movie-box" href="https://www.javbus.com/ABF-382">
+      <div class="photo-frame">
+        <img src="/pics/thumb/cixj.jpg" title="性欲に支配された倒錯カップルの同棲中出し性交録。 鈴村あいり">
+      </div>
+      <div class="photo-info">
+        <span>性欲に支配された倒錯カップルの同棲中出し性交録。 鈴村あいり<br>
+          <div class="item-tag">
+            <button class="btn btn-xs btn-primary" disabled="disabled" title="包含高清HD的磁力連結">高清</button>
+            <button class="btn btn-xs btn-success" disabled="disabled" title="包含最新出種的磁力連結">今日新種</button>
+          </div>
+          <date>ABF-382</date> / <date>2026-09-18</date>
+        </span>
+      </div>
+    </a>
+  </div>
+  <div class="item masonry-brick" style="position: absolute; top: 0px; left: 187px;">
+    <a class="movie-box" href="https://www.javbus.com/MKMP-755">
+      <div class="photo-frame">
+        <img src="/pics/thumb/cith.jpg" title="～聖パイパンヌ学園～ つるぷに無毛マ●コでボクを魅了する美少女たちの夢のパイパン学園ハーレム 日向由奈 西元めいさ 南日菜乃">
+      </div>
+      <div class="photo-info">
+        <span>～聖パイパンヌ学園～ つるぷに無毛マ●コでボクを魅了する美少女たちの夢のパイパン学園ハーレム 日向由奈 西元めいさ 南日菜乃<br>
+          <div class="item-tag">
+            <button class="btn btn-xs btn-primary" disabled="disabled" title="包含高清HD的磁力連結">高清</button>
+            <button class="btn btn-xs btn-success" disabled="disabled" title="包含最新出種的磁力連結">今日新種</button>
+          </div>
+          <date>MKMP-755</date> / <date>2026-09-05</date>
+        </span>
+      </div>
+    </a>
+  </div>
+</div>
+"""
+
+
+def test_parse_actual_javbus_waterfall_element_extracts_items_and_covers() -> None:
+    items, next_url = parse_list_page(
+        _page(ACTUAL_WATERFALL_LIST_HTML),
+        "https://www.javbus.com/label/7l/7",
+    )
+
+    assert items[0] == {
+        "url": "https://www.javbus.com/ABF-382",
+        "title": "性欲に支配された倒錯カップルの同棲中出し性交録。 鈴村あいり",
+        "code": "ABF-382",
+        "cover_url": "https://www.javbus.com/pics/thumb/cixj.jpg",
+        "release_date": "2026-09-18",
+    }
+    assert items[1]["code"] == "MKMP-755"
+    assert items[1]["cover_url"] == "https://www.javbus.com/pics/thumb/cith.jpg"
+    assert next_url is None
+
+
 def test_parse_real_list_page_extracts_metadata_without_tags() -> None:
     items, next_url = parse_list_page(
         _page(REAL_LIST_PAGE_HTML),
