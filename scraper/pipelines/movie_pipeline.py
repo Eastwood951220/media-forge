@@ -28,6 +28,11 @@ class MoviePipeline(BasePipeline):
         if isinstance(source_name, str):
             result["source_name"] = source_name.strip()
 
+        cover = str(item.get("cover") or "").strip()
+        cover_url = str(item.get("cover_url") or "").strip()
+        if not cover and cover_url:
+            result["cover"] = cover_url
+
         tags = item.get("tags")
         if isinstance(tags, list) and item.get("has_chinese_sub") and "中文字幕" not in tags:
             result["tags"] = [*tags, "中文字幕"]

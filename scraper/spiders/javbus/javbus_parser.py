@@ -19,9 +19,13 @@ FIELD_MAPPING = {
 }
 
 
-def _first_text(node, selector: str) -> str:
-    value = node.css(selector).get()
-    return str(clean_text(value)) if value else ""
+def _first_text(node, selector: str | list[str]) -> str:
+    selectors = [selector] if isinstance(selector, str) else selector
+    for current_selector in selectors:
+        value = node.css(current_selector).get()
+        if value:
+            return str(clean_text(value))
+    return ""
 
 
 def _all_text(node, selector: str) -> list[str]:
@@ -61,7 +65,7 @@ def _extract_code_from_url(url: str) -> str:
 
 def parse_list_page(page: Adaptor, source_url: str) -> tuple[list[dict[str, Any]], str | None]:
     items: list[dict[str, Any]] = []
-    for node in page.css("div.item a.movie-box"):
+    for node in page.css("a.movie-box"):
         href = node.css("::attr(href)").get("")
         if not href:
             continue
@@ -70,7 +74,15 @@ def parse_list_page(page: Adaptor, source_url: str) -> tuple[list[dict[str, Any]
         dates = _all_text(node, "date::text")
         code = dates[0] if dates else _extract_code_from_url(detail_url)
         title = _first_text(node, "img::attr(title)")
-        cover_path = _first_text(node, "img::attr(src)")
+        cover_path = _first_text(
+            node,
+            [
+                "img::attr(src)",
+                "img::attr(data-src)",
+                "img::attr(data-original)",
+                "img::attr(data-lazy-src)",
+            ],
+        )
 
         items.append({
             "url": detail_url,
@@ -95,7 +107,16 @@ def parse_javbus_url_name(page: Adaptor) -> str:
 
 def parse_detail_page(page: Adaptor, source_url: str) -> dict[str, Any]:
     title = _first_text(page, ".screencap img::attr(title)")
-    cover_url = _first_text(page, ".screencap img::attr(src)")
+    cover_url = _first_text(
+        page,
+        [
+            ".screencap img::attr(src)",
+            ".screencap img::attr(data-src)",
+            ".screencap img::attr(data-original)",
+            ".screencap img::attr(data-lazy-src)",
+            ".screencap a.bigImage::attr(href)",
+        ],
+    )
 
     result: dict[str, Any] = {
         "source": "javbus",

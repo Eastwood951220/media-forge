@@ -244,6 +244,26 @@ def test_parse_detail_page_keeps_missing_cover_empty() -> None:
     assert result["cover_url"] == ""
 
 
+def test_parse_detail_page_extracts_lazy_loaded_cover() -> None:
+    html = """
+    <div class="screencap">
+      <a class="bigImage" href="/pics/cover/lazy_b.jpg">
+        <img title="Lazy Cover" data-original="/pics/cover/lazy_thumb.jpg">
+      </a>
+    </div>
+    <div class="col-md-3 info">
+      <p><span class="header">識別碼:</span> LAZY-001</p>
+    </div>
+    """
+
+    result = parse_detail_page(
+        _page(html),
+        "https://www.javbus.com/LAZY-001",
+    )
+
+    assert result["cover_url"] == "https://www.javbus.com/pics/cover/lazy_thumb.jpg"
+
+
 REAL_LIST_PAGE_HTML = """
 <html>
 <body>
@@ -319,6 +339,59 @@ def test_parse_real_list_page_extracts_metadata_without_tags() -> None:
     ]
     assert next_url == "https://www.javbus.com/star/10uz/2"
     assert all("tags" not in item for item in items)
+
+
+def test_parse_list_page_extracts_movie_boxes_without_item_wrapper() -> None:
+    html = """
+    <html><body>
+      <div id="waterfall">
+        <a class="movie-box" href="/WRAP-001">
+          <div class="photo-frame">
+            <img src="/pics/thumb/wrap.jpg" title="Wrapper Changed">
+          </div>
+          <div class="photo-info">
+            <date>WRAP-001</date> / <date>2026-08-01</date>
+          </div>
+        </a>
+      </div>
+      <a id="next" href="/label/7l/8">下一頁</a>
+    </body></html>
+    """
+
+    items, next_url = parse_list_page(
+        _page(html),
+        "https://www.javbus.com/label/7l/7",
+    )
+
+    assert items == [{
+        "url": "https://www.javbus.com/WRAP-001",
+        "title": "Wrapper Changed",
+        "code": "WRAP-001",
+        "cover_url": "https://www.javbus.com/pics/thumb/wrap.jpg",
+        "release_date": "2026-08-01",
+    }]
+    assert next_url == "https://www.javbus.com/label/7l/8"
+
+
+def test_parse_list_page_extracts_lazy_loaded_cover() -> None:
+    html = """
+    <div class="item">
+      <a class="movie-box" href="/LAZY-002">
+        <div class="photo-frame">
+          <img title="Lazy List Cover" data-src="/pics/thumb/lazy.jpg">
+        </div>
+        <date>LAZY-002</date> / <date>2026-08-02</date>
+      </a>
+    </div>
+    """
+
+    items, next_url = parse_list_page(
+        _page(html),
+        "https://www.javbus.com/label/7l/7",
+    )
+
+    assert items[0]["cover_url"] == "https://www.javbus.com/pics/thumb/lazy.jpg"
+    assert next_url is None
 
 
 def test_parse_list_page_keeps_item_when_optional_metadata_is_missing() -> None:
