@@ -3,14 +3,21 @@
 }
 
 .layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.topGrid {
   display: grid;
   grid-template-columns: minmax(360px, 480px) minmax(640px, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .actionPanel,
-.contentPanel {
+.autoPanel,
+.filePanel {
   min-width: 0;
 }
 
@@ -20,10 +27,12 @@
   gap: 16px;
 }
 
-.contentPanel {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.autoPanel {
+  height: 100%;
+}
+
+.autoPanel :global(.ant-card-body) {
+  min-height: 0;
 }
 
 .autoForm {
@@ -74,6 +83,10 @@
   padding-top: 12px;
 }
 
+.recentRow {
+  width: 100%;
+}
+
 .fileTable :global(.ant-table-cell) {
   vertical-align: top;
 }
@@ -93,13 +106,13 @@
 }
 
 @media (max-width: 1280px) {
-  .layout {
+  .topGrid {
     grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
   }
 }
 
 @media (max-width: 1100px) {
-  .layout {
+  .topGrid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

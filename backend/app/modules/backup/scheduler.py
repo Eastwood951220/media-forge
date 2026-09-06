@@ -23,7 +23,19 @@ def next_backup_run(config: BackupConfig, now: datetime | None = None) -> dateti
     if config.schedule_type == "daily":
         candidate = moment.replace(hour=hour, minute=minute, second=0, microsecond=0)
         return candidate if candidate > moment else candidate + timedelta(days=1)
-    # Weekly
+    if config.schedule_type == "monthly":
+        monthdays = sorted(set(config.monthdays))
+        if not monthdays:
+            return None
+        for offset in range(0, 367):
+            candidate_day = moment + timedelta(days=offset)
+            if candidate_day.day not in monthdays:
+                continue
+            candidate = candidate_day.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if candidate > moment:
+                return candidate
+        return None
+
     weekdays = sorted(set(config.weekdays))
     if not weekdays:
         return None

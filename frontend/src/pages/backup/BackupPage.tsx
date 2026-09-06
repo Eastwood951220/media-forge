@@ -58,6 +58,11 @@ const WEEKDAY_OPTIONS = [
   { label: '周日', value: 0 },
 ]
 
+const MONTHDAY_OPTIONS = Array.from({ length: 31 }, (_, index) => {
+  const day = index + 1
+  return { label: `${day}号`, value: day }
+})
+
 const DEFAULT_GROUPS: BackupGroup[] = ['movies', 'tasks', 'config']
 
 function formatSize(size: number): string {
@@ -285,12 +290,14 @@ export default function BackupPage() {
     const timeOfDay = values.time_of_day ? dayjs(values.time_of_day).format('HH:mm') : '03:30'
     const scheduleType = values.schedule_type ?? 'daily'
     const weekdays = scheduleType === 'weekly' ? (values.weekdays ?? []) : []
+    const monthdays = scheduleType === 'monthly' ? (values.monthdays ?? []) : []
     const payload: BackupConfig = {
       enabled: Boolean(values.enabled),
       backup_dir: values.backup_dir || '/data/backups',
       schedule_type: scheduleType,
       time_of_day: timeOfDay,
       weekdays,
+      monthdays,
       groups: values.groups && values.groups.length > 0 ? values.groups : DEFAULT_GROUPS,
       include_sensitive: Boolean(values.include_sensitive),
       retention_count: values.retention_count ?? 10,
@@ -363,107 +370,107 @@ export default function BackupPage() {
   return (
     <div className={styles.page}>
       <div className={styles.layout}>
-        <div className={styles.actionPanel}>
-          <Card
-            title="手动备份"
-            extra={jobProgress ? <JobProgress job={jobProgress} /> : undefined}
-          >
-            <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-              <Checkbox.Group
-                options={GROUP_OPTIONS}
-                value={exportGroups}
-                onChange={(values) => setExportGroups(values as BackupGroup[])}
-              />
-              <div className={styles.sensitiveRow}>
-                <Space>
-                  <span>包含敏感配置（JavDB Cookie、云盘 Token）</span>
-                  <Switch size="small" checked={exportSensitive} onChange={setExportSensitive} />
-                </Space>
-              </div>
-              <Button type="primary" icon={<CloudUploadOutlined />} loading={busy} disabled={exportGroups.length === 0} onClick={() => void handleManualExport()}>
-                开始备份
-              </Button>
-            </Space>
-          </Card>
-
-          <Card title="恢复备份">
-            <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-              <Space size={8} wrap>
-                <Upload
-                  accept=".mfbackup"
-                  maxCount={1}
-                  beforeUpload={() => false}
-                  onChange={(info) => {
-                    const file = info.fileList[0]?.originFileObj ?? null
-                    setRestoreFile(file)
-                    setInspected(null)
-                  }}
-                  onRemove={() => {
-                    setRestoreFile(null)
-                    setInspected(null)
-                  }}
-                >
-                  <Button icon={<UploadOutlined />}>选择 .mfbackup 文件</Button>
-                </Upload>
-                <Button icon={<PlayCircleOutlined />} loading={inspecting} disabled={!restoreFile} onClick={() => void handleInspect()}>
-                  检查备份内容
-                </Button>
-              </Space>
-
-              {inspected && (
-                <div className={styles.inspectSummary}>
-                  <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-                    <Space size={8} wrap>
-                      <span>包含分组：</span>
-                      {inspected.groups.length > 0 ? (
-                        inspected.groups.map((group) => (
-                          <Tag key={group} color="blue">{GROUP_LABELS[group] ?? group}</Tag>
-                        ))
-                      ) : (
-                        <Tag>未知</Tag>
-                      )}
-                      {inspected.include_sensitive && <Tag color="orange">含敏感配置</Tag>}
-                    </Space>
-                    <Typography.Text type="secondary">
-                      {Object.entries(inspected.row_counts)
-                        .map(([name, count]) => `${name.replace('data/', '').replace('.jsonl', '')}: ${count}`)
-                        .join('，')}
-                    </Typography.Text>
+        <div className={styles.topGrid}>
+          <div className={styles.actionPanel}>
+            <Card
+              title="手动备份"
+              extra={jobProgress ? <JobProgress job={jobProgress} /> : undefined}
+            >
+              <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                <Checkbox.Group
+                  options={GROUP_OPTIONS}
+                  value={exportGroups}
+                  onChange={(values) => setExportGroups(values as BackupGroup[])}
+                />
+                <div className={styles.sensitiveRow}>
+                  <Space>
+                    <span>包含敏感配置（JavDB Cookie、云盘 Token）</span>
+                    <Switch size="small" checked={exportSensitive} onChange={setExportSensitive} />
                   </Space>
                 </div>
-              )}
-
-              <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-                <Radio.Group value={restoreMode} onChange={(event) => setRestoreMode(event.target.value as RestoreMode)}>
-                  <Radio value="merge">合并（保留现有数据，冲突跳过）</Radio>
-                  <Radio value="overwrite">覆盖（清空所选分组后导入）</Radio>
-                </Radio.Group>
-                <div>
-                  <div className={styles.groupLabel}>恢复分组</div>
-                  <Checkbox.Group
-                    options={GROUP_OPTIONS}
-                    value={restoreGroups}
-                    disabled={!inspected}
-                    onChange={(values) => setRestoreGroups(values as BackupGroup[])}
-                  />
-                </div>
-                <Button
-                  type="primary"
-                  danger={restoreMode === 'overwrite'}
-                  disabled={!restoreFile || !inspected || restoreGroups.length === 0 || busy}
-                  loading={busy}
-                  onClick={() => void handleUploadRestore()}
-                >
-                  开始恢复
+                <Button type="primary" icon={<CloudUploadOutlined />} loading={busy} disabled={exportGroups.length === 0} onClick={() => void handleManualExport()}>
+                  开始备份
                 </Button>
-                <AlertInline text="恢复不会写入历史运行记录；覆盖恢复需要二次确认。" />
               </Space>
-            </Space>
-          </Card>
-        </div>
+            </Card>
 
-        <div className={styles.contentPanel}>
-          <Card title="自动备份" loading={configQuery.isLoading}>
+            <Card title="恢复备份">
+              <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                <Space size={8} wrap>
+                  <Upload
+                    accept=".mfbackup"
+                    maxCount={1}
+                    beforeUpload={() => false}
+                    onChange={(info) => {
+                      const file = info.fileList[0]?.originFileObj ?? null
+                      setRestoreFile(file)
+                      setInspected(null)
+                    }}
+                    onRemove={() => {
+                      setRestoreFile(null)
+                      setInspected(null)
+                    }}
+                  >
+                    <Button icon={<UploadOutlined />}>选择 .mfbackup 文件</Button>
+                  </Upload>
+                  <Button icon={<PlayCircleOutlined />} loading={inspecting} disabled={!restoreFile} onClick={() => void handleInspect()}>
+                    检查备份内容
+                  </Button>
+                </Space>
+
+                {inspected && (
+                  <div className={styles.inspectSummary}>
+                    <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                      <Space size={8} wrap>
+                        <span>包含分组：</span>
+                        {inspected.groups.length > 0 ? (
+                          inspected.groups.map((group) => (
+                            <Tag key={group} color="blue">{GROUP_LABELS[group] ?? group}</Tag>
+                          ))
+                        ) : (
+                          <Tag>未知</Tag>
+                        )}
+                        {inspected.include_sensitive && <Tag color="orange">含敏感配置</Tag>}
+                      </Space>
+                      <Typography.Text type="secondary">
+                        {Object.entries(inspected.row_counts)
+                          .map(([name, count]) => `${name.replace('data/', '').replace('.jsonl', '')}: ${count}`)
+                          .join('，')}
+                      </Typography.Text>
+                    </Space>
+                  </div>
+                )}
+
+                <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                  <Radio.Group value={restoreMode} onChange={(event) => setRestoreMode(event.target.value as RestoreMode)}>
+                    <Radio value="merge">合并（保留现有数据，冲突跳过）</Radio>
+                    <Radio value="overwrite">覆盖（清空所选分组后导入）</Radio>
+                  </Radio.Group>
+                  <div>
+                    <div className={styles.groupLabel}>恢复分组</div>
+                    <Checkbox.Group
+                      options={GROUP_OPTIONS}
+                      value={restoreGroups}
+                      disabled={!inspected}
+                      onChange={(values) => setRestoreGroups(values as BackupGroup[])}
+                    />
+                  </div>
+                  <Button
+                    type="primary"
+                    danger={restoreMode === 'overwrite'}
+                    disabled={!restoreFile || !inspected || restoreGroups.length === 0 || busy}
+                    loading={busy}
+                    onClick={() => void handleUploadRestore()}
+                  >
+                    开始恢复
+                  </Button>
+                  <AlertInline text="恢复不会写入历史运行记录；覆盖恢复需要二次确认。" />
+                </Space>
+              </Space>
+            </Card>
+          </div>
+
+          <Card title="自动备份" loading={configQuery.isLoading} className={styles.autoPanel}>
             <Form
               form={autoForm}
               layout="vertical"
@@ -481,6 +488,7 @@ export default function BackupPage() {
                   options={[
                     { label: '每天', value: 'daily' },
                     { label: '每周', value: 'weekly' },
+                    { label: '每月', value: 'monthly' },
                   ]}
                 />
               </Form.Item>
@@ -501,6 +509,15 @@ export default function BackupPage() {
                   </Form.Item>
                 </div>
               </Form.Item>
+              <Form.Item name="monthdays" label="选择日期" className={styles.fullRow}>
+                <Select
+                  mode="multiple"
+                  placeholder="选择每月日期"
+                  options={MONTHDAY_OPTIONS}
+                  maxTagCount="responsive"
+                  disabled={scheduleType !== 'monthly'}
+                />
+              </Form.Item>
               <Form.Item name="groups" label="备份内容">
                 <Checkbox.Group options={GROUP_OPTIONS} />
               </Form.Item>
@@ -515,21 +532,21 @@ export default function BackupPage() {
               </Button>
             </Form>
           </Card>
-
-          <Card title="近期备份文件" className={styles.filePanel}>
-            <Table<BackupFileInfo>
-              rowKey="name"
-              size="small"
-              className={styles.fileTable}
-              columns={columns}
-              dataSource={fileData}
-              loading={filesQuery.isLoading}
-              scroll={{ x: 900 }}
-              pagination={{ pageSize: 5, hideOnSinglePage: true }}
-              locale={{ emptyText: '暂无本地备份文件' }}
-            />
-          </Card>
         </div>
+
+        <Card title="近期备份文件" className={`${styles.filePanel} ${styles.recentRow}`}>
+          <Table<BackupFileInfo>
+            rowKey="name"
+            size="small"
+            className={styles.fileTable}
+            columns={columns}
+            dataSource={fileData}
+            loading={filesQuery.isLoading}
+            scroll={{ x: 900 }}
+            pagination={{ pageSize: 5, hideOnSinglePage: true }}
+            locale={{ emptyText: '暂无本地备份文件' }}
+          />
+        </Card>
       </div>
     </div>
   )

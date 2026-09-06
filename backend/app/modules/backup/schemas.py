@@ -5,14 +5,14 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.app.modules.backup.groups import DEFAULT_BACKUP_GROUPS, BackupGroup
 
 BackupOperation = Literal["export", "inspect", "restore", "auto_export", "delete"]
 BackupJobStatus = Literal["pending", "running", "succeeded", "failed", "skipped"]
 RestoreMode = Literal["merge", "overwrite"]
-ScheduleType = Literal["daily", "weekly"]
+ScheduleType = Literal["daily", "weekly", "monthly"]
 
 
 class BackupConfig(BaseModel):
@@ -21,6 +21,7 @@ class BackupConfig(BaseModel):
     schedule_type: ScheduleType = "daily"
     time_of_day: str = "03:30"
     weekdays: list[int] = Field(default_factory=list)
+    monthdays: list[int] = Field(default_factory=list)
     groups: list[BackupGroup] = Field(default_factory=lambda: list(DEFAULT_BACKUP_GROUPS))
     include_sensitive: bool = False
     retention_count: int = Field(default=10, ge=1, le=365)
@@ -42,6 +43,24 @@ class BackupConfig(BaseModel):
             raise ValueError("weekdays must contain values from 0 to 6")
         return sorted(set(value))
 
+    @field_validator("monthdays")
+    @classmethod
+    def validate_monthdays(cls, value: list[int]) -> list[int]:
+        if any(day < 1 or day > 31 for day in value):
+            raise ValueError("monthdays must contain values from 1 to 31")
+        return sorted(set(value))
+
+    @model_validator(mode="after")
+    def normalize_schedule_days(self) -> "BackupConfig":
+        if self.schedule_type == "daily":
+            self.weekdays = []
+            self.monthdays = []
+        elif self.schedule_type == "weekly":
+            self.monthdays = []
+        elif self.schedule_type == "monthly":
+            self.weekdays = []
+        return self
+
 
 class BackupConfigUpdate(BaseModel):
     enabled: bool | None = None
@@ -49,6 +68,7 @@ class BackupConfigUpdate(BaseModel):
     schedule_type: ScheduleType | None = None
     time_of_day: str | None = None
     weekdays: list[int] | None = None
+    monthdays: list[int] | None = None
     groups: list[BackupGroup] | None = None
     include_sensitive: bool | None = None
     retention_count: int | None = Field(default=None, ge=1, le=365)

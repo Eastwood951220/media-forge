@@ -22,6 +22,7 @@ vi.mock('@/api/backup', () => ({
     schedule_type: 'daily',
     time_of_day: '03:30',
     weekdays: [],
+    monthdays: [],
     groups: ['movies', 'tasks', 'config'],
     include_sensitive: false,
     retention_count: 10,
@@ -62,12 +63,21 @@ describe('BackupPage', () => {
     const { container } = render(<BackupPage />, { wrapper })
 
     expect(await screen.findByText('手动备份')).toBeInTheDocument()
+    expect(container.querySelector(`.${styles.topGrid}`)).toBeInTheDocument()
     expect(container.querySelector(`.${styles.actionPanel}`)).toBeInTheDocument()
-    expect(container.querySelector(`.${styles.contentPanel}`)).toBeInTheDocument()
+    expect(container.querySelector(`.${styles.autoPanel}`)).toBeInTheDocument()
 
     const filePanel = container.querySelector(`.${styles.filePanel}`)
     expect(filePanel).toBeInTheDocument()
+    expect(filePanel).toHaveClass(styles.recentRow)
     expect(filePanel).toHaveTextContent('近期备份文件')
     expect(filePanel?.querySelector('.ant-table')).toBeInTheDocument()
+  })
+
+  it('supports monthly automatic backup frequency', async () => {
+    render(<BackupPage />, { wrapper })
+
+    expect(await screen.findByRole('radio', { name: '每月' })).toBeInTheDocument()
+    expect(screen.getByText('选择日期')).toBeInTheDocument()
   })
 })

@@ -1,9 +1,10 @@
+from datetime import datetime
 from pathlib import Path
 
 from backend.app.modules.backup.config import BackupConfigService
 from backend.app.modules.backup.jobs import BackupJobRegistry
-from backend.app.modules.backup.schemas import BackupConfigUpdate
-from backend.app.modules.backup.scheduler import BackupScheduler
+from backend.app.modules.backup.schemas import BackupConfig, BackupConfigUpdate
+from backend.app.modules.backup.scheduler import BackupScheduler, next_backup_run
 
 
 def test_backup_config_defaults_to_local_backup_dir(tmp_path: Path):
@@ -38,6 +39,39 @@ def test_backup_config_preserves_single_line_values(tmp_path: Path):
     assert config.schedule_type == "weekly"
     assert config.weekdays == [1, 3, 5]
     assert service.get_config().groups == ["movies", "config"]
+
+
+def test_backup_config_preserves_monthly_schedule_days(tmp_path: Path):
+    service = BackupConfigService(config_file=tmp_path / "backup.conf", project_root=tmp_path)
+
+    config = service.update_config(
+        BackupConfigUpdate(
+            enabled=True,
+            backup_dir=str(tmp_path / "custom-backups"),
+            schedule_type="monthly",
+            time_of_day="03:30",
+            monthdays=[1, 15, 31, 15],
+        )
+    )
+
+    assert config.schedule_type == "monthly"
+    assert config.weekdays == []
+    assert config.monthdays == [1, 15, 31]
+    assert service.get_config().monthdays == [1, 15, 31]
+
+
+def test_backup_scheduler_uses_monthly_schedule_days():
+    config = BackupConfig(
+        enabled=True,
+        backup_dir="/tmp/backups",
+        schedule_type="monthly",
+        time_of_day="03:30",
+        monthdays=[1, 15],
+    )
+
+    next_run = next_backup_run(config, now=datetime(2026, 9, 1, 4, 0))
+
+    assert next_run == datetime(2026, 9, 15, 3, 30)
 
 
 def test_backup_job_registry_tracks_success_and_failure():

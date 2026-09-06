@@ -1,7 +1,7 @@
 export type BackupGroup = 'movies' | 'tasks' | 'config'
 export type RestoreMode = 'merge' | 'overwrite'
 export type BackupJobStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'
-export type ScheduleType = 'daily' | 'weekly'
+export type ScheduleType = 'daily' | 'weekly' | 'monthly'
 
 export interface BackupConfig {
   enabled: boolean
@@ -9,6 +9,7 @@ export interface BackupConfig {
   schedule_type: ScheduleType
   time_of_day: string
   weekdays: number[]
+  monthdays: number[]
   groups: BackupGroup[]
   include_sensitive: boolean
   retention_count: number
@@ -20,6 +21,7 @@ export interface BackupConfigUpdate {
   schedule_type?: ScheduleType
   time_of_day?: string
   weekdays?: number[]
+  monthdays?: number[]
   groups?: BackupGroup[]
   include_sensitive?: boolean
   retention_count?: number

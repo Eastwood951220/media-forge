@@ -13,8 +13,9 @@ def test_backup_config_api_round_trip(client, auth_headers, tmp_path: Path, monk
     response = client.put("/api/backup/config", headers=auth_headers, json={
         "enabled": True,
         "backup_dir": str(tmp_path / "backups"),
-        "schedule_type": "daily",
+        "schedule_type": "monthly",
         "time_of_day": "04:15",
+        "monthdays": [1, 15],
         "groups": ["movies"],
         "include_sensitive": False,
         "retention_count": 2,
@@ -22,6 +23,8 @@ def test_backup_config_api_round_trip(client, auth_headers, tmp_path: Path, monk
 
     assert response.status_code == 200
     assert response.json()["data"]["enabled"] is True
+    assert response.json()["data"]["schedule_type"] == "monthly"
+    assert response.json()["data"]["monthdays"] == [1, 15]
     assert response.json()["data"]["groups"] == ["movies"]
 
 
