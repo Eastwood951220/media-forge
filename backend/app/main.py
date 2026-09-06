@@ -14,6 +14,8 @@ from backend.app.core.config import get_settings
 from backend.app.core.dependencies import close_redis, get_redis
 from backend.app.core.exception_handlers import register_exception_handlers
 from backend.app.modules.auth.router import router as auth_router
+from backend.app.modules.backup.router import router as backup_router
+from backend.app.modules.backup.scheduler import backup_scheduler
 from backend.app.modules.content.movies.router import router as content_movies_router
 from backend.app.modules.crawler.agent.router import router as crawler_agent_router
 from backend.app.modules.crawler.config.router import router as crawler_config_router
@@ -108,6 +110,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
         crawler_schedule_scheduler.start()
         crawler_schedule_scheduler.load_enabled_schedules()
+        backup_scheduler.start()
     else:
         logger.warning("Backend not initialized — only init endpoints available.")
 
@@ -116,6 +119,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Shutdown
     event_bus.close()
     crawler_schedule_scheduler.shutdown()
+    backup_scheduler.shutdown()
     close_redis()
     if runtime_config_exists():
         close_postgres()
@@ -155,6 +159,7 @@ app.include_router(crawler_runs_router)
 app.include_router(crawler_schedules_router)
 app.include_router(crawler_agent_router)
 app.include_router(content_movies_router)
+app.include_router(backup_router)
 app.include_router(storage_config_router)
 app.include_router(storage_index_router)
 app.include_router(storage_tasks_router)

@@ -111,14 +111,18 @@ def serialize_model_row(model: object, exclude: set[str] | None = None) -> dict[
     return payload
 
 
-def _scope_entity_rows(db: Session, entity: Any, owner_id: uuid.UUID) -> Any:
-    """Build a scoped select statement for one entity in ``db``."""
+def _scope_entity_rows(db: Session, entity: Any, owner_id: uuid.UUID | None) -> Any:
+    """Build a scoped select statement for one entity in ``db``.
+
+    ``owner_id`` may be ``None`` for automatic backups, which include every
+    user's rows instead of one owner's rows.
+    """
     specs = [spec for spec in MOVIE_EXPORTS + TASK_EXPORTS if spec[0] is entity]
     scope: Scope | None = None
     if specs:
         scope = specs[0][2]
     stmt = select(entity)
-    if scope is not None:
+    if scope is not None and owner_id is not None:
         stmt = scope(stmt, owner_id)
     return stmt
 

@@ -3,6 +3,7 @@ from pathlib import Path
 from backend.app.modules.backup.config import BackupConfigService
 from backend.app.modules.backup.jobs import BackupJobRegistry
 from backend.app.modules.backup.schemas import BackupConfigUpdate
+from backend.app.modules.backup.scheduler import BackupScheduler
 
 
 def test_backup_config_defaults_to_local_backup_dir(tmp_path: Path):
@@ -52,3 +53,17 @@ def test_backup_job_registry_tracks_success_and_failure():
     assert saved.status == "succeeded"
     assert saved.processed == 7
     assert saved.result == {"file_name": "sample.mfbackup"}
+
+
+def test_backup_scheduler_refresh_replaces_timer(tmp_path: Path):
+    service = BackupConfigService(config_file=tmp_path / "backup.conf", project_root=tmp_path)
+    scheduler = BackupScheduler(config_service=service)
+
+    service.update_config(BackupConfigUpdate(enabled=True, backup_dir=str(tmp_path / "backups")))
+    scheduler.start()
+    first_timer = scheduler._timer
+    scheduler.refresh()
+
+    assert scheduler._timer is not None
+    assert scheduler._timer is not first_timer
+    scheduler.shutdown()
