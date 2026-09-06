@@ -157,9 +157,96 @@
   line-height: 24px;
 }
 
+.panelHint {
+  margin: 2px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .chartCanvas {
   width: 100%;
   min-height: 240px;
+}
+
+.rankingGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.rankingCard {
+  min-width: 0;
+  padding: 0 0 0 16px;
+  border-left: 3px solid rgba(0, 106, 255, 0.18);
+}
+
+.rankingCard h3 {
+  margin: 0 0 12px;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.rankingList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rankingItem {
+  display: grid;
+  grid-template-columns: 22px minmax(72px, 0.9fr) minmax(64px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.rankingIndex {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: rgba(0, 106, 255, 0.08);
+  color: var(--app-primary-color, #006aff);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rankingName {
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rankingBar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.rankingBar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--app-primary-color, #006aff);
+}
+
+.rankingItem strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .recentList,
@@ -214,7 +301,8 @@
   }
 
   .chartGrid,
-  .workGrid {
+  .workGrid,
+  .rankingGrid {
     grid-template-columns: 1fr;
   }
 }
@@ -248,6 +336,11 @@
     padding: 16px;
   }
 
+  .panelHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .metricBody strong {
     font-size: 24px;
   }
@@ -265,6 +358,9 @@
   .statusHeader h1,
   .metricBody strong,
   .panelHeader h2,
+  .rankingCard h3,
+  .rankingName,
+  .rankingItem strong,
   .recentRow a,
   .alertRow a,
   .alertRow strong {
@@ -279,9 +375,23 @@
   .refreshedAt,
   .metricLabel,
   .metricDetail,
+  .panelHint,
   .recentRow span,
   .alertRow span {
     color: #94a3b8;
+  }
+
+  .rankingCard {
+    border-left-color: rgba(96, 165, 250, 0.32);
+  }
+
+  .rankingIndex {
+    background: rgba(96, 165, 250, 0.12);
+    color: #60a5fa;
+  }
+
+  .rankingBar {
+    background: rgba(51, 65, 85, 0.9);
   }
 
   .recentRow,

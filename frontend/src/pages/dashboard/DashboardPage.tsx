@@ -1,6 +1,7 @@
 import { Alert, Button, Skeleton } from 'antd'
 import { DashboardAlerts } from './components/DashboardAlerts'
 import { DashboardCharts } from './components/DashboardCharts'
+import { DashboardContentRankings } from './components/DashboardContentRankings'
 import { DashboardMetricCards } from './components/DashboardMetricCards'
 import { DashboardRecentTabs } from './components/DashboardRecentTabs'
 import { DashboardStatusHeader } from './components/DashboardStatusHeader'
@@ -53,6 +54,7 @@ function DashboardPage() {
       ) : null}
       <DashboardMetricCards overview={data} />
       <DashboardCharts distribution={data.runs.status_distribution} trend={data.runs.daily_trend} />
+      <DashboardContentRankings rankings={data.content.rankings} />
       <section className={styles.workGrid}>
         <DashboardRecentTabs overview={data} />
         <DashboardAlerts alerts={data.alerts} />

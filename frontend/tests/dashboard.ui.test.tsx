@@ -21,6 +21,26 @@ const overview: DashboardOverview = {
   content: {
     movie_total: 10,
     storage_status: { stored: 6, storing: 1, not_stored: 3 },
+    rankings: {
+      total: {
+        actors: [{ name: '演员A', count: 6 }],
+        makers: [{ name: '片商A', count: 4 }],
+        tags: [{ name: '标签A', count: 5 }],
+        series: [{ name: '系列A', count: 3 }],
+      },
+      recent_storage: {
+        actors: [{ name: '演员B', count: 2 }],
+        makers: [{ name: '片商B', count: 2 }],
+        tags: [{ name: '标签B', count: 2 }],
+        series: [{ name: '系列B', count: 1 }],
+      },
+      recent_created: {
+        actors: [{ name: '演员C', count: 3 }],
+        makers: [{ name: '片商C', count: 2 }],
+        tags: [{ name: '标签C', count: 3 }],
+        series: [{ name: '系列C', count: 1 }],
+      },
+    },
   },
   storage: {
     task_status_distribution: [{ status: 'completed', count: 1 }],
@@ -84,6 +104,11 @@ describe('DashboardPage runtime overview', () => {
     expect(screen.getByText('任务配置')).toBeInTheDocument()
     expect(screen.getByText('影片库')).toBeInTheDocument()
     expect(screen.getByText('存储索引')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '内容排名' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '总排名' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '最近存储' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '最近入库' })).toBeInTheDocument()
+    expect(screen.getByText('演员A')).toBeInTheDocument()
     expect(screen.getByText('暂无需要关注的问题')).toBeInTheDocument()
     expect(screen.queryByText('Operations Console')).not.toBeInTheDocument()
   })

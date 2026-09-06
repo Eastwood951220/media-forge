@@ -217,3 +217,67 @@ def test_dashboard_content_section_counts_storage_status_without_loading_movie_e
     assert overview.content.storage_status.stored == 2
     assert overview.content.storage_status.storing == 1
     assert overview.content.storage_status.not_stored == 1
+
+
+def test_dashboard_content_section_builds_top_rankings(admin_user) -> None:
+    session = TestingSessionLocal()
+    now = datetime.now(timezone.utc)
+    session.add_all(
+        [
+            Movie(
+                code="RANK-001",
+                source_url="https://example.test/rank-1",
+                maker="片商A",
+                series="系列A",
+                actors=["演员A", "演员B"],
+                tags=["标签A", "标签B"],
+                storage_summary={"storage_status": "stored", "synced_at": now.isoformat()},
+                created_at=now,
+            ),
+            Movie(
+                code="RANK-002",
+                source_url="https://example.test/rank-2",
+                maker="片商A",
+                series="系列B",
+                actors=["演员A"],
+                tags=["标签A"],
+                storage_summary={"storage_status": "stored", "synced_at": now.isoformat()},
+                created_at=now - timedelta(days=40),
+            ),
+            Movie(
+                code="RANK-003",
+                source_url="https://example.test/rank-3",
+                maker="片商B",
+                series="系列A",
+                actors=["演员C"],
+                tags=["标签C"],
+                storage_summary={"storage_status": "not_stored"},
+                created_at=now,
+            ),
+        ]
+    )
+    session.commit()
+
+    overview = build_dashboard_overview(
+        db=session,
+        owner_id=admin_user.id,
+        queue_status={"queue_size": 0, "is_running": False, "current_run_id": None, "stop_requested": False},
+        index_metadata={
+            "target_folder": "",
+            "status": "completed",
+            "category_count": 0,
+            "code_folder_count": 0,
+            "video_count": 0,
+            "completed_at": None,
+            "errors": [],
+        },
+    )
+
+    rankings = overview.content.rankings
+    assert rankings.total.actors[0].name == "演员A"
+    assert rankings.total.actors[0].count == 2
+    assert rankings.total.makers[0].name == "片商A"
+    assert rankings.total.tags[0].name == "标签A"
+    assert rankings.total.series[0].name == "系列A"
+    assert [item.name for item in rankings.recent_storage.actors] == ["演员A", "演员B"]
+    assert [item.name for item in rankings.recent_created.actors] == ["演员A", "演员B", "演员C"]

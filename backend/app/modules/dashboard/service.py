@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
@@ -23,6 +23,8 @@ from backend.app.modules.dashboard.schemas import (
     DashboardOverview,
     DashboardOverviewDraft,
     DashboardQueueStatus,
+    DashboardContentRankings,
+    DashboardRankingGroup,
     DashboardRunsSection,
     DashboardRuntimeStats,
     DashboardStorageIndex,
@@ -31,6 +33,7 @@ from backend.app.modules.dashboard.schemas import (
     PartialError,
     RecentCrawlerRun,
     RecentStorageTask,
+    RankingItem,
     SystemStatus,
 )
 from shared.database.models.content import Movie
@@ -38,6 +41,8 @@ from shared.database.models.content import Movie
 
 RECENT_LIMIT = 6
 TREND_DAYS = 7
+RANKING_LIMIT = 5
+RECENT_RANKING_DAYS = 30
 
 
 def _iso(value) -> str | None:
@@ -164,11 +169,122 @@ def _count_movie_storage_statuses(db: Session) -> tuple[int, dict[str, int]]:
     return total, counts
 
 
+def _parse_datetime(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str) and value:
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _normalized_storage_status_from_summary(summary: object) -> str:
+    if not isinstance(summary, dict):
+        return "not_stored"
+    status = str(summary.get("storage_status") or summary.get("last_status") or "")
+    if status == "completed":
+        return "stored"
+    if status in {"queued", "running", "pending", "waiting_download", "moving"}:
+        return "storing"
+    if status in {"stored", "storing", "not_stored"}:
+        return status
+    return "not_stored"
+
+
+def _add_movie_rank_values(
+    counters: dict[str, Counter[str]],
+    *,
+    actors: list[str] | None,
+    tags: list[str] | None,
+    maker: str | None,
+    series: str | None,
+) -> None:
+    for actor in sorted({str(value).strip() for value in (actors or []) if str(value).strip()}):
+        counters["actors"][actor] += 1
+    for tag in sorted({str(value).strip() for value in (tags or []) if str(value).strip()}):
+        counters["tags"][tag] += 1
+    maker_name = str(maker or "").strip()
+    if maker_name:
+        counters["makers"][maker_name] += 1
+    series_name = str(series or "").strip()
+    if series_name:
+        counters["series"][series_name] += 1
+
+
+def _empty_ranking_counters() -> dict[str, Counter[str]]:
+    return {
+        "actors": Counter(),
+        "makers": Counter(),
+        "tags": Counter(),
+        "series": Counter(),
+    }
+
+
+def _ranking_items(counter: Counter[str]) -> list[RankingItem]:
+    ordered = sorted(counter.items(), key=lambda item: (-item[1], item[0]))[:RANKING_LIMIT]
+    return [RankingItem(name=name, count=count) for name, count in ordered]
+
+
+def _ranking_group(counters: dict[str, Counter[str]]) -> DashboardRankingGroup:
+    return DashboardRankingGroup(
+        actors=_ranking_items(counters["actors"]),
+        makers=_ranking_items(counters["makers"]),
+        tags=_ranking_items(counters["tags"]),
+        series=_ranking_items(counters["series"]),
+    )
+
+
+def _build_content_rankings(db: Session) -> DashboardContentRankings:
+    now = datetime.now(timezone.utc)
+    recent_cutoff = now - timedelta(days=RECENT_RANKING_DAYS)
+    total = _empty_ranking_counters()
+    recent_storage = _empty_ranking_counters()
+    recent_created = _empty_ranking_counters()
+
+    rows = db.query(
+        Movie.actors,
+        Movie.tags,
+        Movie.maker,
+        Movie.series,
+        Movie.storage_summary,
+        Movie.created_at,
+    ).all()
+    for actors, tags, maker, series, storage_summary, created_at in rows:
+        values = {
+            "actors": list(actors or []),
+            "tags": list(tags or []),
+            "maker": maker,
+            "series": series,
+        }
+        _add_movie_rank_values(total, **values)
+
+        created_at_value = _parse_datetime(created_at)
+        if created_at_value is not None and created_at_value >= recent_cutoff:
+            _add_movie_rank_values(recent_created, **values)
+
+        synced_at = _parse_datetime((storage_summary or {}).get("synced_at") if isinstance(storage_summary, dict) else None)
+        if _normalized_storage_status_from_summary(storage_summary) == "stored" and synced_at is not None and synced_at >= recent_cutoff:
+            _add_movie_rank_values(recent_storage, **values)
+
+    return DashboardContentRankings(
+        total=_ranking_group(total),
+        recent_storage=_ranking_group(recent_storage),
+        recent_created=_ranking_group(recent_created),
+    )
+
+
 def _build_content_section(db: Session) -> DashboardContentSection:
     total, counts = _count_movie_storage_statuses(db)
     return DashboardContentSection(
         movie_total=total,
         storage_status=DashboardMovieStorageStatus(**counts),
+        rankings=_build_content_rankings(db),
     )
 
 

@@ -45,7 +45,15 @@ vi.mock('@/api/dashboard', () => ({
       queue: { queue_size: 0, is_running: false, current_run_id: null, stop_requested: false },
     },
     runs: { status_distribution: [], daily_trend: [], recent: [] },
-    content: { movie_total: 0, storage_status: { stored: 0, storing: 0, not_stored: 0 } },
+    content: {
+      movie_total: 0,
+      storage_status: { stored: 0, storing: 0, not_stored: 0 },
+      rankings: {
+        total: { actors: [], makers: [], tags: [], series: [] },
+        recent_storage: { actors: [], makers: [], tags: [], series: [] },
+        recent_created: { actors: [], makers: [], tags: [], series: [] },
+      },
+    },
     storage: {
       task_status_distribution: [],
       recent_tasks: [],

@@ -62,9 +62,28 @@ export interface DashboardMovieStorageStatus {
   not_stored: number
 }
 
+export interface RankingItem {
+  name: string
+  count: number
+}
+
+export interface DashboardRankingGroup {
+  actors: RankingItem[]
+  makers: RankingItem[]
+  tags: RankingItem[]
+  series: RankingItem[]
+}
+
+export interface DashboardContentRankings {
+  total: DashboardRankingGroup
+  recent_storage: DashboardRankingGroup
+  recent_created: DashboardRankingGroup
+}
+
 export interface DashboardContentSection {
   movie_total: number
   storage_status: DashboardMovieStorageStatus
+  rankings: DashboardContentRankings
 }
 
 export interface DashboardStorageIndex {

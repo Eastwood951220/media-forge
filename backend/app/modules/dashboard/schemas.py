@@ -70,9 +70,28 @@ class DashboardMovieStorageStatus(BaseModel):
     not_stored: int = 0
 
 
+class RankingItem(BaseModel):
+    name: str
+    count: int
+
+
+class DashboardRankingGroup(BaseModel):
+    actors: list[RankingItem] = Field(default_factory=list)
+    makers: list[RankingItem] = Field(default_factory=list)
+    tags: list[RankingItem] = Field(default_factory=list)
+    series: list[RankingItem] = Field(default_factory=list)
+
+
+class DashboardContentRankings(BaseModel):
+    total: DashboardRankingGroup = Field(default_factory=DashboardRankingGroup)
+    recent_storage: DashboardRankingGroup = Field(default_factory=DashboardRankingGroup)
+    recent_created: DashboardRankingGroup = Field(default_factory=DashboardRankingGroup)
+
+
 class DashboardContentSection(BaseModel):
     movie_total: int = 0
     storage_status: DashboardMovieStorageStatus = Field(default_factory=DashboardMovieStorageStatus)
+    rankings: DashboardContentRankings = Field(default_factory=DashboardContentRankings)
 
 
 class DashboardStorageIndex(BaseModel):
