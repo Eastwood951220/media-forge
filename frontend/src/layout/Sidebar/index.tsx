@@ -6,6 +6,7 @@ import {
   DashboardOutlined,
   HistoryOutlined,
   PlayCircleOutlined,
+  SaveOutlined,
   SearchOutlined,
   SettingOutlined,
   UnorderedListOutlined,
@@ -78,6 +79,11 @@ const menuItems: MenuProps['items'] = [
         icon: <VideoCameraOutlined />,
         label: '电影列表',
       },
+      {
+        key: '/content/backup',
+        icon: <SaveOutlined />,
+        label: '数据备份',
+      },
     ],
   },
 ]
@@ -104,7 +110,9 @@ export function SideMenu({ collapsed }: SideMenuProps) {
             ? '/storage/config'
             : pathname.startsWith('/content/movies')
               ? '/content/movies'
-              : pathname
+              : pathname.startsWith('/content/backup')
+                ? '/content/backup'
+                : pathname
   const selectedKeys = useMemo(() => [selectedKey === '/' ? '/' : selectedKey], [selectedKey])
   const openKeys = useMemo(() => {
     const keys: string[] = []

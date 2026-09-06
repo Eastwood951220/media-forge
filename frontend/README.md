@@ -98,6 +98,7 @@ Current route modules:
 | `/crawler/config` | `pages/crawler/config/ConfigPage.tsx` | Crawler and cookie configuration |
 | `/crawler/schedules` | `pages/crawler/schedules/ScheduleListPage.tsx` | Crawler schedule list, create/edit, and trigger history |
 | `/content/movies` | `pages/content/movies/MovieListPage.tsx` | Movie list, filters, storage sync, push actions |
+| `/content/backup` | `pages/content/backup/BackupPage.tsx` | Manual/automatic backup and restore |
 | `/storage/config` | `pages/storage/config/StorageConfigPage.tsx` | CloudDrive2/storage target configuration |
 | `/storage/tasks` | `pages/storage/tasks/StorageTaskListPage.tsx` | Storage main task list |
 | `/storage/tasks/$id` | `pages/storage/tasks/StorageTaskDetailPage.tsx` | Storage task detail and subtasks |
@@ -121,6 +122,7 @@ Current API groups:
 - `crawler/crawlerConfig/`: crawler config and cookies config.
 - `crawler/crawlerSchedule/`: crawler schedule CRUD, enable/disable/trigger, and run-history APIs.
 - `movie/`: movie list/detail/filter config, delete, storage sync.
+- `backup/`: backup config, local file list/delete/download, export/restore jobs, and job status.
 - `storage/storageConfig/`: storage config and connection test.
 - `storage/storageIndex/`: storage index status and refresh.
 - `storage/storageTasks/`: storage push creation and task/subtask detail APIs.

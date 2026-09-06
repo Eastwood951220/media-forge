@@ -26,4 +26,8 @@ describe('route tag helpers', () => {
     expect(getRouteViewKey('/crawler/runs/run-a', '')).toBe('/crawler/runs/:id')
     expect(getRouteViewKey('/crawler/runs/run-b', '?status=failed')).toBe('/crawler/runs/:id')
   })
+
+  it('returns backup route tag metadata', () => {
+    expect(getRouteTagMeta('/content/backup')).toEqual({ title: '数据备份' })
+  })
 })

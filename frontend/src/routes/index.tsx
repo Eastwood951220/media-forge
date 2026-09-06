@@ -12,6 +12,7 @@ import RunListPage from '@/pages/crawler/runs/RunListPage'
 import RunDetailPage from '@/pages/crawler/runs/RunDetailPage'
 import ScheduleListPage from '@/pages/crawler/schedules/ScheduleListPage'
 import MovieListPage from '@/pages/content/movies/MovieListPage'
+import BackupPage from '@/pages/content/backup/BackupPage'
 import StorageConfigPage from '@/pages/storage/config/StorageConfigPage'
 import StorageTaskListPage from '@/pages/storage/tasks/StorageTaskListPage'
 import StorageTaskDetailPage from '@/pages/storage/tasks/StorageTaskDetailPage'
@@ -153,6 +154,12 @@ const contentMoviesRoute = createRoute({
   component: MovieListPage,
 })
 
+const contentBackupRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/content/backup',
+  component: BackupPage,
+})
+
 const routeTree = rootRoute.addChildren([
   initRoute,
   loginRoute,
@@ -171,6 +178,7 @@ const routeTree = rootRoute.addChildren([
     storageTaskDetailRoute,
     storageSubTaskDetailRoute,
     contentMoviesRoute,
+    contentBackupRoute,
   ]),
 ])
 

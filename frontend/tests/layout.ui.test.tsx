@@ -87,6 +87,8 @@ describe('modern console layout', () => {
     expect(screen.getByText('爬虫')).toBeInTheDocument()
     expect(screen.getAllByText('任务列表').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('爬虫配置')).toBeInTheDocument()
+    expect(screen.getByText('内容管理')).toBeInTheDocument()
+    expect(screen.getByText('数据备份')).toBeInTheDocument()
     expect(screen.getByText('console outlet')).toBeInTheDocument()
     expect(screen.queryByLabelText('Open settings')).not.toBeInTheDocument()
   })

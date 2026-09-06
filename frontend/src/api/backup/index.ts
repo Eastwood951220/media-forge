@@ -15,10 +15,15 @@ export type {
   BackupConfigUpdate,
   BackupExportRequest,
   BackupFileInfo,
+  BackupGroup,
+  BackupGroupStats,
   BackupInspectResult,
   BackupJob,
   BackupJobResponse,
+  BackupJobStatus,
   BackupRestoreRequest,
+  RestoreMode,
+  ScheduleType,
 } from './types.ts'
 
 const BASE_URL = '/api/backup'
