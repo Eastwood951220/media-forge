@@ -25,12 +25,12 @@ def resolve_target_locations(
         if crawl_task and crawl_task.storage_location and crawl_task.storage_location not in locations:
             locations.append(crawl_task.storage_location)
 
+    if storage_mode == "single" and selected_storage_location:
+        return [selected_storage_location]
     if not locations:
         return []
     if storage_mode == "multiple":
         return locations
-    if source == "single" and selected_storage_location and selected_storage_location in locations:
-        return [selected_storage_location]
     if source == "batch":
         return [locations[0]]
     return locations

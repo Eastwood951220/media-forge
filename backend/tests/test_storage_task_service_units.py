@@ -44,6 +44,15 @@ def test_resolve_target_locations_uses_storage_mode_and_source_task_locations(db
     assert resolve_target_locations(db_session, movie, "single", None, "single") == ["A", "B"]
 
 
+def test_resolve_target_locations_uses_single_selected_location_outside_existing_locations(db_session, test_user) -> None:
+    task_a = CrawlTask(name="A", owner_id=test_user.id, storage_location="A")
+    db_session.add(task_a)
+    db_session.flush()
+    movie = Movie(code="LOC-2", source_name="LOC", source_task_ids=[task_a.id])
+
+    assert resolve_target_locations(db_session, movie, "single", "Custom/Sub", "single") == ["Custom/Sub"]
+
+
 def test_storage_task_serializers_preserve_response_shape(test_user) -> None:
     main_id = uuid.uuid4()
     movie_id = uuid.uuid4()
@@ -148,6 +157,73 @@ def test_storage_task_service_create_single_push_uses_creator_path(db_session, t
     assert main_task.alias == "service-path"
     assert main_task.subtasks[0].status == "skipped"
     assert main_task.subtasks[0].skip_reason == "no_magnets"
+
+
+def test_storage_task_service_create_batch_push_preserves_selected_storage_location(db_session, test_user) -> None:
+    from backend.app.modules.storage.tasks.schemas import StorageBatchPushRequest
+    from backend.app.modules.storage.tasks.service import StorageTaskService
+
+    task_a = CrawlTask(name="A", owner_id=test_user.id, storage_location="A")
+    movie = Movie(code="BATCH-CUSTOM", source_name="Batch Custom", source_task_ids=[])
+    db_session.add_all([task_a, movie])
+    db_session.flush()
+    movie.source_task_ids = [task_a.id]
+    db_session.add(MovieMagnet(movie_id=movie.id, magnet_url="magnet:?xt=urn:btih:batchcustom", dedupe_key="batchcustom"))
+    db_session.flush()
+
+    class ConfigService:
+        provider_factory = None
+
+        def get_raw_config(self):
+            return {"target_folder": "/Movies"}
+
+    service = StorageTaskService(db_session, ConfigService(), runtime=None)
+    main_task = service.create_batch_push(
+        StorageBatchPushRequest(
+            movie_ids=[movie.id],
+            storage_mode="single",
+            selected_storage_location="Custom/Sub",
+        ),
+        test_user.id,
+    )
+
+    subtask = main_task.subtasks[0]
+    assert subtask.selected_storage_location == "Custom/Sub"
+    assert subtask.target_locations == ["Custom/Sub"]
+
+
+def test_storage_task_service_ignores_selected_location_for_multiple_mode(db_session, test_user) -> None:
+    from backend.app.modules.storage.tasks.schemas import StorageBatchPushRequest
+    from backend.app.modules.storage.tasks.service import StorageTaskService
+
+    task_a = CrawlTask(name="A", owner_id=test_user.id, storage_location="A")
+    task_b = CrawlTask(name="B", owner_id=test_user.id, storage_location="B")
+    movie = Movie(code="MULTI-CUSTOM", source_name="Multi Custom", source_task_ids=[])
+    db_session.add_all([task_a, task_b, movie])
+    db_session.flush()
+    movie.source_task_ids = [task_a.id, task_b.id]
+    db_session.add(MovieMagnet(movie_id=movie.id, magnet_url="magnet:?xt=urn:btih:multicustom", dedupe_key="multicustom"))
+    db_session.flush()
+
+    class ConfigService:
+        provider_factory = None
+
+        def get_raw_config(self):
+            return {"target_folder": "/Movies"}
+
+    service = StorageTaskService(db_session, ConfigService(), runtime=None)
+    main_task = service.create_batch_push(
+        StorageBatchPushRequest(
+            movie_ids=[movie.id],
+            storage_mode="multiple",
+            selected_storage_location="Custom/Sub",
+        ),
+        test_user.id,
+    )
+
+    subtask = main_task.subtasks[0]
+    assert subtask.selected_storage_location is None
+    assert subtask.target_locations == ["A", "B"]
 
 
 def test_storage_task_creator_persists_batch_multiple_target_locations_and_log_context(db_session, test_user, tmp_path, monkeypatch) -> None:

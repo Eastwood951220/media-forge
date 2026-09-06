@@ -17,6 +17,7 @@ class StorageBatchPushRequest(BaseModel):
     movie_ids: list[UUID]
     alias: str | None = Field(default=None, max_length=240)
     storage_mode: str = "single"
+    selected_storage_location: str | None = Field(default=None, max_length=500)
 
 
 class StorageMainTaskResponse(BaseModel):

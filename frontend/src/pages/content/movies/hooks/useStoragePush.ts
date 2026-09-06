@@ -65,6 +65,7 @@ export function useStoragePush(onSuccess: () => void) {
           movie_ids: pushMovies.map((m) => m._id),
           alias: values.alias,
           storage_mode: values.storageMode,
+          selected_storage_location: values.selectedStorageLocation,
         })
       }
       message.success('推送任务已创建')

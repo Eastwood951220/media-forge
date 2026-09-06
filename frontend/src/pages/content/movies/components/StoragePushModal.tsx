@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Form, Input, Modal, Select } from 'antd'
+import { Form, Input, Modal, Segmented, Select } from 'antd'
 import type { StorageMode } from '@/api/storage/storageTasks/types'
+
+type TargetMode = 'default' | 'existing' | 'custom'
 
 type PushMovie = {
   _id: string
@@ -21,13 +23,14 @@ type Props = {
 }
 
 function StoragePushModal({ open, mode, movies, selectedRowKeys, loading, defaultAlias, onCancel, onSubmit }: Props) {
-  const [form] = Form.useForm<{ alias?: string; selectedStorageLocation?: string }>()
+  const [form] = Form.useForm<{ alias?: string; existingStorageLocation?: string; customStorageLocation?: string }>()
   const [storageMode, setStorageMode] = useState<StorageMode>('single')
+  const [targetMode, setTargetMode] = useState<TargetMode>('default')
   const firstMovie = movies[0]
-  const locationOptions = useMemo(
-    () => (firstMovie?.storage_locations ?? []).map((value) => ({ value, label: value })),
-    [firstMovie],
-  )
+  const locationOptions = useMemo(() => {
+    const values = movies.flatMap((movie) => movie.storage_locations ?? [])
+    return Array.from(new Set(values)).map((value) => ({ value, label: value }))
+  }, [movies])
 
   useEffect(() => {
     if (open && defaultAlias) {
@@ -44,26 +47,52 @@ function StoragePushModal({ open, mode, movies, selectedRowKeys, loading, defaul
       onOk={() => onSubmit({
         alias: form.getFieldValue('alias'),
         storageMode,
-        selectedStorageLocation: form.getFieldValue('selectedStorageLocation'),
+        selectedStorageLocation: targetMode === 'existing'
+          ? form.getFieldValue('existingStorageLocation')
+          : targetMode === 'custom'
+            ? form.getFieldValue('customStorageLocation')?.trim() || undefined
+            : undefined,
       })}
     >
-      <Form form={form} layout="vertical" initialValues={{ selectedStorageLocation: locationOptions[0]?.value }}>
+      <Form form={form} layout="vertical" initialValues={{ existingStorageLocation: locationOptions[0]?.value }}>
         <Form.Item label="别名" name="alias">
           <Input />
         </Form.Item>
-        <Form.Item label="存储模式">
+        <Form.Item label="存储范围">
           <Select
             value={storageMode}
-            onChange={setStorageMode}
+            onChange={(value) => {
+              setStorageMode(value)
+              if (value === 'multiple') setTargetMode('default')
+            }}
             options={[
-              { value: 'single', label: '单个' },
-              { value: 'multiple', label: '多个' },
+              { value: 'single', label: '单盘' },
+              { value: 'multiple', label: '多盘' },
             ]}
           />
         </Form.Item>
-        {mode === 'single' && storageMode === 'single' && (
-          <Form.Item label="目标文件夹" name="selectedStorageLocation">
+        {storageMode === 'single' && (
+          <Form.Item label="目标策略">
+            <Segmented
+              block
+              value={targetMode}
+              onChange={(value) => setTargetMode(value as TargetMode)}
+              options={[
+                { label: '默认路径', value: 'default' },
+                { label: '选择已有路径', value: 'existing' },
+                { label: '指定路径', value: 'custom' },
+              ]}
+            />
+          </Form.Item>
+        )}
+        {storageMode === 'single' && targetMode === 'existing' && (
+          <Form.Item label="已有路径" name="existingStorageLocation">
             <Select options={locationOptions} />
+          </Form.Item>
+        )}
+        {storageMode === 'single' && targetMode === 'custom' && (
+          <Form.Item label="指定路径" name="customStorageLocation">
+            <Input maxLength={500} placeholder="填写 target_folder 下的相对路径" />
           </Form.Item>
         )}
         <div>{mode === 'batch' ? `已选择 ${selectedRowKeys.length} 条` : firstMovie?.code}</div>

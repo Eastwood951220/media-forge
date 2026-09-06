@@ -66,4 +66,5 @@ export interface StorageBatchPushPayload {
   movie_ids: string[]
   alias?: string
   storage_mode: StorageMode
+  selected_storage_location?: string
 }

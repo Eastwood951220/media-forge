@@ -57,7 +57,7 @@ class StorageTaskService:
             source="batch",
             alias=body.alias,
             storage_mode=body.storage_mode,
-            selected_storage_location=None,
+            selected_storage_location=body.selected_storage_location,
         )
 
     def create_schedule_push(
@@ -170,6 +170,9 @@ class StorageTaskService:
         storage_mode: str,
         selected_storage_location: str | None,
     ) -> StorageMainTask:
+        selected_storage_location = (selected_storage_location or "").strip() or None
+        if storage_mode != "single":
+            selected_storage_location = None
         creator = StorageTaskCreator(
             db=self.db,
             repository=self.repository,
