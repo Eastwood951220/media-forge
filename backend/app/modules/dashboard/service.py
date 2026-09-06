@@ -43,6 +43,7 @@ RECENT_LIMIT = 6
 TREND_DAYS = 7
 RANKING_LIMIT = 5
 RECENT_RANKING_DAYS = 30
+EXCLUDED_RANKING_TAGS = {"單體作品", "中出"}
 
 
 def _iso(value) -> str | None:
@@ -208,6 +209,8 @@ def _add_movie_rank_values(
     for actor in sorted({str(value).strip() for value in (actors or []) if str(value).strip()}):
         counters["actors"][actor] += 1
     for tag in sorted({str(value).strip() for value in (tags or []) if str(value).strip()}):
+        if tag in EXCLUDED_RANKING_TAGS:
+            continue
         counters["tags"][tag] += 1
     maker_name = str(maker or "").strip()
     if maker_name:

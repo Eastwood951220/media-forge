@@ -230,7 +230,7 @@ def test_dashboard_content_section_builds_top_rankings(admin_user) -> None:
                 maker="片商A",
                 series="系列A",
                 actors=["演员A", "演员B"],
-                tags=["标签A", "标签B"],
+                tags=["标签A", "單體作品", "中出"],
                 storage_summary={"storage_status": "stored", "synced_at": now.isoformat()},
                 created_at=now,
             ),
@@ -240,7 +240,7 @@ def test_dashboard_content_section_builds_top_rankings(admin_user) -> None:
                 maker="片商A",
                 series="系列B",
                 actors=["演员A"],
-                tags=["标签A"],
+                tags=["标签A", "單體作品", "中出"],
                 storage_summary={"storage_status": "stored", "synced_at": now.isoformat()},
                 created_at=now - timedelta(days=40),
             ),
@@ -250,7 +250,7 @@ def test_dashboard_content_section_builds_top_rankings(admin_user) -> None:
                 maker="片商B",
                 series="系列A",
                 actors=["演员C"],
-                tags=["标签C"],
+                tags=["标签C", "單體作品", "中出"],
                 storage_summary={"storage_status": "not_stored"},
                 created_at=now,
             ),
@@ -279,5 +279,8 @@ def test_dashboard_content_section_builds_top_rankings(admin_user) -> None:
     assert rankings.total.makers[0].name == "片商A"
     assert rankings.total.tags[0].name == "标签A"
     assert rankings.total.series[0].name == "系列A"
+    assert {item.name for item in rankings.total.tags}.isdisjoint({"單體作品", "中出"})
+    assert {item.name for item in rankings.recent_storage.tags}.isdisjoint({"單體作品", "中出"})
+    assert {item.name for item in rankings.recent_created.tags}.isdisjoint({"單體作品", "中出"})
     assert [item.name for item in rankings.recent_storage.actors] == ["演员A", "演员B"]
     assert [item.name for item in rankings.recent_created.actors] == ["演员A", "演员B", "演员C"]
