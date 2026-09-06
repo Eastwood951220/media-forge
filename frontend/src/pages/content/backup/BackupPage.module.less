@@ -1,0 +1,69 @@
+.page {
+  width: 100%;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+  gap: 16px;
+  align-items: start;
+}
+
+.mainPanel,
+.sidePanel {
+  min-width: 0;
+}
+
+.mainPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sidePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sensitiveRow {
+  display: flex;
+  align-items: center;
+}
+
+.groupLabel {
+  margin-bottom: 8px;
+  color: rgba(0, 0, 0, 0.65);
+  font-size: 13px;
+}
+
+.inspectSummary {
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+}
+
+.fileListHeader {
+  margin: 18px 0 8px;
+  font-weight: 500;
+}
+
+.progressTrack {
+  height: 6px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--ant-color-primary, #006aff);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
