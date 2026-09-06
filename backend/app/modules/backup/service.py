@@ -3,12 +3,16 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_settings
-from backend.app.modules.backup.format import write_manifest
+from backend.app.modules.backup.format import (
+    inspect_backup_archive,
+    write_manifest,
+)
 from backend.app.modules.backup.groups import (
     BACKUP_FORMAT_NAME,
     BACKUP_FORMAT_VERSION,
@@ -19,7 +23,17 @@ from backend.app.modules.backup.exporters import (
     export_config_files,
     export_db_group,
 )
-from backend.app.modules.backup.schemas import BackupExportRequest
+from backend.app.modules.backup.restorers import (
+    restore_config,
+    restore_movies,
+    restore_tasks_and_schedules,
+    stats_to_dict,
+)
+from backend.app.modules.backup.schemas import (
+    BackupExportRequest,
+    BackupInspectResult,
+    BackupRestoreRequest,
+)
 from shared.database.models.base import TZ
 
 
@@ -101,3 +115,48 @@ class BackupService:
                 },
             )
         return path
+
+    def inspect_file(self, path: Path) -> BackupInspectResult:
+        """Preflight-inspect an archive without writing anything to the database."""
+        return inspect_backup_archive(path)
+
+    def restore_from_file(
+        self,
+        path: Path,
+        request: BackupRestoreRequest,
+        owner_id: uuid.UUID,
+        job_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
+        """Restore the selected groups from ``path`` in the requested mode."""
+        from backend.app.modules.backup.jobs import backup_job_registry
+
+        inspected = inspect_backup_archive(path)
+        result: dict[str, Any] = {}
+        partial = False
+        with ZipFile(path) as zip_file:
+            groups = list(dict.fromkeys(request.groups))
+            if "movies" in groups:
+                if job_id is not None:
+                    backup_job_registry.mark_running(job_id, phase="movies")
+                stats = restore_movies(self.db, zip_file, request.mode)
+                result["movies"] = stats_to_dict(stats)
+                partial = partial or bool(stats.errors)
+                if job_id is not None:
+                    backup_job_registry.update_progress(job_id, phase="movies", processed=stats.created + stats.updated)
+            if "tasks" in groups:
+                if job_id is not None:
+                    backup_job_registry.mark_running(job_id, phase="tasks")
+                stats = restore_tasks_and_schedules(self.db, zip_file, request.mode, owner_id)
+                result["tasks"] = stats_to_dict(stats)
+                partial = partial or bool(stats.errors)
+                if job_id is not None:
+                    backup_job_registry.update_progress(job_id, phase="tasks", processed=stats.created + stats.updated)
+            if "config" in groups:
+                if job_id is not None:
+                    backup_job_registry.mark_running(job_id, phase="config")
+                stats = restore_config(zip_file, include_sensitive_in_archive=inspected.include_sensitive)
+                result["config"] = stats_to_dict(stats)
+                partial = partial or bool(stats.errors)
+        if partial:
+            result["partial"] = True
+        return result
