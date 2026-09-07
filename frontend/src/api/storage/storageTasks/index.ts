@@ -68,6 +68,10 @@ export function getStorageSubTask(subtaskId: string): Promise<StorageSubTask> {
   return request.get<StorageSubTask>(`${BASE_URL}/subtasks/${subtaskId}`)
 }
 
+export function retryStorageSubTask(subtaskId: string): Promise<StorageSubTask> {
+  return request.post<StorageSubTask>(`${BASE_URL}/subtasks/${subtaskId}/retry`)
+}
+
 export function getStorageSubTaskLogs(subtaskId: string): Promise<StorageTaskLog[]> {
   return request.get<StorageTaskLog[]>(`${BASE_URL}/subtasks/${subtaskId}/logs`)
 }

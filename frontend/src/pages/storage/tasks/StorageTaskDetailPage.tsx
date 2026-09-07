@@ -28,6 +28,8 @@ function StorageTaskDetailPage() {
       />
       <StorageSubTaskTable
         loading={detail.subtasksLoading}
+        onRetry={detail.handleRetrySubtask}
+        retryingSubtaskId={detail.retryingSubtaskId}
         subtasks={detail.subtasks}
       />
     </div>

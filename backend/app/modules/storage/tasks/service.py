@@ -128,6 +128,50 @@ class StorageTaskService:
 
         return task
 
+    def retry_subtask(self, subtask_id: uuid.UUID, user_id: uuid.UUID) -> StorageSubTask:
+        subtask = self.repository.get_subtask(subtask_id)
+        if subtask is None or subtask.main_task is None or subtask.main_task.created_by != user_id:
+            raise LookupError("存储子任务不存在")
+        main_task = subtask.main_task
+        if main_task.status in {"queued", "running", "stopping"}:
+            raise ValueError("运行中的存储任务不能重试子任务")
+        if subtask.status != "failed":
+            raise ValueError("只能重试失败的存储子任务")
+
+        subtask.status = "queued"
+        subtask.step = "prepare"
+        subtask.error_message = None
+        subtask.started_at = None
+        subtask.finished_at = None
+        subtask.magnet_attempts = []
+        subtask.current_magnet_id = None
+        subtask.current_magnet_url = ""
+        subtask.renamed_files = []
+        subtask.moved_files = []
+        subtask.skipped_files = []
+        subtask.result = {}
+        main_task.status = "queued"
+        main_task.started_at = None
+        main_task.finished_at = None
+        main_task.error_message = None
+        self.repository.recompute_counts(main_task)
+
+        if self.runtime is not None:
+            self.runtime.clear_stop(str(main_task.id))
+            self.runtime.enqueue_main_task(str(main_task.id))
+            ensure_storage_worker_started(
+                self.runtime,
+                self.config_service.provider_factory,
+                self.config_service,
+            )
+        self.db.commit()
+        self.db.refresh(subtask)
+
+        from backend.app.modules.storage.tasks.events import publish_storage_main_updated, publish_storage_sub_updated
+        publish_storage_main_updated(main_task)
+        publish_storage_sub_updated(str(main_task.created_by), subtask)
+        return subtask
+
     def delete_main_task(self, task_id: uuid.UUID, user_id: uuid.UUID) -> dict:
         task = self.repository.get_main(task_id)
         if task is None or task.created_by != user_id:

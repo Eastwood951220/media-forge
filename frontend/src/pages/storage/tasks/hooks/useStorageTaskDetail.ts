@@ -3,6 +3,7 @@ import {
   getStorageMainTask,
   listStorageSubTasks,
   restartStorageMainTask,
+  retryStorageSubTask,
   stopStorageMainTask,
 } from '@/api/storage/storageTasks'
 import type { StorageMainTask, StorageSubTask } from '@/api/storage/storageTasks/types'
@@ -13,6 +14,7 @@ export function useStorageTaskDetail(id: string | undefined) {
   const [loading, setLoading] = useState(false)
   const [subtasksLoading, setSubtasksLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<'stop' | 'restart' | null>(null)
+  const [retryingSubtaskId, setRetryingSubtaskId] = useState<string | null>(null)
 
   const fetchTask = useCallback(async () => {
     if (!id) return
@@ -80,13 +82,28 @@ export function useStorageTaskDetail(id: string | undefined) {
     }
   }, [id, fetchSubtasks])
 
+  const handleRetrySubtask = useCallback(async (subtask: StorageSubTask) => {
+    setRetryingSubtaskId(subtask.id)
+    try {
+      await retryStorageSubTask(subtask.id)
+      void fetchTask()
+      void fetchSubtasks()
+    } catch {
+      // error handled by request interceptor
+    } finally {
+      setRetryingSubtaskId(null)
+    }
+  }, [fetchTask, fetchSubtasks])
+
   return {
     actionLoading,
     fetchSubtasks,
     fetchTask,
     handleRestart,
+    handleRetrySubtask,
     handleStop,
     loading,
+    retryingSubtaskId,
     setSubtasks,
     setTask,
     subtasks,

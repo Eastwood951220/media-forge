@@ -51,6 +51,17 @@ def get_storage_subtask_logs(subtask_id: UUID, current_user: CurrentUser):
     return success(data=logs)
 
 
+@router.post("/subtasks/{subtask_id}/retry")
+def retry_storage_subtask(subtask_id: UUID, current_user: CurrentUser, service=Depends(get_storage_task_service)):
+    try:
+        subtask = service.retry_subtask(subtask_id, current_user.id)
+        return success(data=service.to_subtask_response(subtask))
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 # --- Main task list, detail, and subtask listing ---
 
 

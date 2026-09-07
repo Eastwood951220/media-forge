@@ -4,7 +4,7 @@ import type { PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import StorageTaskListPage from '../StorageTaskListPage'
 import StorageTaskDetailPage from '../StorageTaskDetailPage'
-import { deleteStorageMainTask, listStorageMainTasks } from '@/api/storage/storageTasks'
+import { deleteStorageMainTask, listStorageMainTasks, listStorageSubTasks, retryStorageSubTask } from '@/api/storage/storageTasks'
 
 function wrapper({ children }: PropsWithChildren) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -31,6 +31,7 @@ vi.mock('@/api/storage/storageTasks', () => ({
   listStorageSubTasks: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
   stopStorageMainTask: vi.fn(),
   restartStorageMainTask: vi.fn(),
+  retryStorageSubTask: vi.fn(),
   deleteStorageMainTask: vi.fn().mockResolvedValue(undefined),
 }))
 
@@ -143,5 +144,25 @@ describe('StorageTaskListPage', () => {
     })
     // Check for the progress column header
     expect(screen.getByRole('columnheader', { name: '处理进度' })).toBeInTheDocument()
+  })
+
+  it('shows retry only for failed storage subtasks and retries that subtask', async () => {
+    vi.mocked(listStorageSubTasks).mockResolvedValue({
+      rows: [
+        { id: 'sub-failed', main_task_id: 'task-detail-1', movie_id: 'movie-1', movie_code: 'AAA-001', movie_title: 'A', status: 'failed', step: 'waiting_download' },
+        { id: 'sub-ok', main_task_id: 'task-detail-1', movie_id: 'movie-2', movie_code: 'BBB-002', movie_title: 'B', status: 'completed', step: 'done' },
+      ],
+      total: 2,
+    } as never)
+    vi.mocked(retryStorageSubTask).mockResolvedValue({ id: 'sub-failed', status: 'queued' } as never)
+
+    render(<StorageTaskDetailPage />)
+
+    expect(await screen.findByText('AAA-001')).toBeInTheDocument()
+    const retryButtons = screen.getAllByRole('button', { name: /重试/ })
+    expect(retryButtons).toHaveLength(1)
+    fireEvent.click(retryButtons[0])
+
+    await waitFor(() => expect(retryStorageSubTask).toHaveBeenCalledWith('sub-failed'))
   })
 })

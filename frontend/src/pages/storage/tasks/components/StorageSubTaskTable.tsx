@@ -1,16 +1,25 @@
+import { ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
-import { Button, Card, Table, Tag } from 'antd'
+import { Card, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { StorageSubTask } from '@/api/storage/storageTasks/types'
+import ResponsiveActions, { type ResponsiveAction } from '@/components/ResponsiveActions'
 import styles from '../StorageTasks.module.less'
 import { subTaskStatusLabels } from '../utils/status'
 
 interface StorageSubTaskTableProps {
   subtasks: StorageSubTask[]
   loading: boolean
+  onRetry?: (subtask: StorageSubTask) => void
+  retryingSubtaskId?: string | null
 }
 
-export function StorageSubTaskTable({ subtasks, loading }: StorageSubTaskTableProps) {
+export function StorageSubTaskTable({
+  subtasks,
+  loading,
+  onRetry,
+  retryingSubtaskId = null,
+}: StorageSubTaskTableProps) {
   const navigate = useNavigate()
 
   const columns: ColumnsType<StorageSubTask> = [
@@ -39,15 +48,27 @@ export function StorageSubTaskTable({ subtasks, loading }: StorageSubTaskTablePr
     {
       title: '操作',
       key: 'actions',
-      width: 100,
-      render: (_, record) => (
-        <Button
-          size="small"
-          onClick={() => void navigate({ to: `/storage/tasks/subtasks/${record.id}` })}
-        >
-          详情
-        </Button>
-      ),
+      width: 160,
+      render: (_, record) => {
+        const actions: ResponsiveAction[] = [
+          {
+            key: 'detail',
+            label: '详情',
+            onClick: () => void navigate({ to: `/storage/tasks/subtasks/${record.id}` }),
+          },
+          ...(record.status === 'failed' && onRetry
+            ? [{
+                key: 'retry',
+                label: '重试',
+                icon: <ReloadOutlined />,
+                loading: retryingSubtaskId === record.id,
+                onClick: () => void onRetry(record),
+              }]
+            : []),
+        ]
+
+        return <ResponsiveActions actions={actions} />
+      },
     },
   ]
 
@@ -59,7 +80,7 @@ export function StorageSubTaskTable({ subtasks, loading }: StorageSubTaskTablePr
         dataSource={subtasks}
         loading={loading}
         size="middle"
-        scroll={{ x: 520 }}
+        scroll={{ x: 560 }}
         pagination={{
           pageSize: 50,
           showSizeChanger: true,
