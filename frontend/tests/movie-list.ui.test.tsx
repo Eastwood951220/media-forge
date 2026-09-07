@@ -263,6 +263,24 @@ describe('MovieListPage', () => {
     })
   })
 
+  it('filters task dropdown options by typed task name', async () => {
+    vi.mocked(getTaskDict).mockResolvedValue([
+      { id: 'task-1', name: '每日演员任务' },
+      { id: 'task-2', name: '临时补采任务' },
+    ])
+
+    renderPage()
+
+    await screen.findByText('AAA-001')
+    const taskSelectInput = screen.getAllByRole('combobox')[0]
+
+    await userEvent.click(taskSelectInput)
+    await userEvent.type(taskSelectInput, '补采')
+
+    expect(await screen.findByText('临时补采任务')).toBeInTheDocument()
+    expect(screen.queryByText('每日演员任务')).not.toBeInTheDocument()
+  })
+
   it('keeps the requested page when table pagination changes', async () => {
     vi.mocked(fetchMovies).mockResolvedValue({
       items: [movie],

@@ -118,6 +118,8 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
                     onChange={(v) => patchForm({selectedTask: v})}
                     options={taskOptions}
                     placeholder="选择任务"
+                    showSearch
+                    optionFilterProp="label"
                     allowClear
                 />
                 <Input
