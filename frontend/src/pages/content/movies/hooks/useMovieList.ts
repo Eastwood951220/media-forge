@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import type React from "react";
 import {App} from "antd";
 import {fetchMovies, syncMovieStorageStatus} from "@/api/movie";
@@ -24,6 +24,9 @@ export function useMovieList(
     const [syncingStorage, setSyncingStorage] = useState(false);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
+    const filterKey = JSON.stringify(filterParams ?? {});
+    const previousFilterKeyRef = useRef<string | null>(null);
+
     const loadMovies = useCallback(async () => {
         if (!filterParams) return;
         setLoading(true);
@@ -42,6 +45,22 @@ export function useMovieList(
             setLoading(false);
         }
     }, [filterParams, message, page, pageSize, sortBy, sortOrder]);
+
+    useEffect(() => {
+        if (!filterParams) {
+            previousFilterKeyRef.current = null;
+            return;
+        }
+        if (previousFilterKeyRef.current === null) {
+            previousFilterKeyRef.current = filterKey;
+            return;
+        }
+        if (previousFilterKeyRef.current !== filterKey) {
+            previousFilterKeyRef.current = filterKey;
+            setSelectedRowKeys([]);
+            setPage(DEFAULT_MOVIE_PAGE);
+        }
+    }, [filterKey, filterParams]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial load on mount/param change is intentional.
