@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal, Select, Typography, message } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -15,6 +15,7 @@ import type { CrawlMode } from '@/api/crawler/crawlerRun/types'
 import { queryKeys } from '@/api/queryKeys'
 import { invalidateCrawlerRunLists } from '@/api/queryInvalidation'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
+import { useTaskListQueryStore } from '../useTaskListQueryStore'
 import styles from '../TaskPages.module.less'
 
 const deleteModeOptions: Array<{ value: DeleteMode; label: string }> = [
@@ -39,14 +40,25 @@ export function useTaskListData({ tagNames = [] }: { tagNames?: string[] } = {})
 
   const [current, setCurrent] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  const keyword = useTaskListQueryStore((state) => state.keyword)
+  const normalizedKeyword = keyword.trim()
   const listParams = useMemo(
     () => ({
       page: current,
       size: pageSize,
       ...(tagNames.length > 0 ? { tag_names: tagNames } : {}),
+      ...(normalizedKeyword ? { keyword: normalizedKeyword } : {}),
     }),
-    [current, pageSize, tagNames],
+    [current, normalizedKeyword, pageSize, tagNames],
   )
+
+  // Keyword or tag changes start a new search: jump back to the first page.
+  // Deps are value-stable (joined string, trimmed keyword) so paginating to
+  // another page does not get immediately reset by a re-created array identity.
+  const tagKey = tagNames.join('\u0000')
+  useEffect(() => {
+    setCurrent((previous) => (previous === 1 ? previous : 1))
+  }, [normalizedKeyword, tagKey])
 
   const listQuery = useQuery({
     queryKey: queryKeys.crawlerTasks.list(listParams),

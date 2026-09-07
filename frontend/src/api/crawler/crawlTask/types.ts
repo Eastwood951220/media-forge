@@ -34,6 +34,8 @@ export interface CrawlTask {
   updated_at: string | null
   last_run_at: string | null
   last_run_status: string | null
+  last_run_total?: number | null
+  last_run_failed?: number | null
 }
 
 export interface PaginatedResponse<T> {
@@ -197,7 +199,7 @@ export interface TaskUrlListItem {
   url_name: string | null
 }
 
-/** Task row for the paginated list view (no runtime fields). */
+/** Task row for the paginated list view (runtime fields are optional latest-run summary). */
 export interface CrawlTaskListItem {
   id: string
   name: string
@@ -205,6 +207,10 @@ export interface CrawlTaskListItem {
   is_skip: boolean
   urls: TaskUrlListItem[]
   tags: TaskTag[]
+  last_run_status?: string | null
+  last_run_at?: string | null
+  last_run_total?: number | null
+  last_run_failed?: number | null
 }
 
 /** Standard paginated list wrapper. */

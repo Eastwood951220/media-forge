@@ -80,12 +80,20 @@ class CrawlerTaskService:
     ) -> dict:
         rows, _ = self.repo.get_by_owner(owner_id, page=page, size=size, keyword=keyword, tag_names=tag_names)
         total = self.repo.count_by_owner(owner_id, keyword=keyword, tag_names=tag_names)
-        return CrawlTaskListResponse(
-            rows=[serialize_task_list_item(row) for row in rows],
+        latest_runs = self.repo.get_latest_runs_by_task_ids([row.id for row in rows])
+        data = CrawlTaskListResponse(
+            rows=[serialize_task_list_item(row, latest_runs.get(row.id)) for row in rows],
             total=total,
             page=page,
             size=size,
         ).model_dump(mode="json")
+        # Keep list rows shape-stable for tasks that have never run: omit the
+        # optional last-run summary keys instead of emitting nulls.
+        for row in data["rows"]:
+            for field in ("last_run_status", "last_run_at", "last_run_total", "last_run_failed"):
+                if row.get(field) is None:
+                    row.pop(field, None)
+        return data
 
     def task_dict(self, owner_id: uuid.UUID) -> dict:
         return self.repo.get_dict_by_owner(owner_id)

@@ -6,7 +6,7 @@ import {
   ReloadOutlined,
   StopOutlined,
 } from '@ant-design/icons'
-import { Button, Checkbox, Dropdown, Empty, Pagination, Popover, Select, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
+import { Button, Checkbox, Dropdown, Empty, Input, Pagination, Popover, Select, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import type { CrawlTask, CrawlTaskRuntimeSnapshot, TaskRuntimeStatus, TaskTag } from '@/api/crawler/crawlTask/types'
 import type { CrawlMode } from '@/api/crawler/crawlerRun/types'
@@ -22,6 +22,8 @@ type TaskListCardsProps = {
   tagOptions: TaskTag[]
   selectedTagNames: string[]
   onTagFilterChange: (tagNames: string[]) => void
+  keyword: string
+  onKeywordChange: (keyword: string) => void
   selectedTaskIds: string[]
   onSelectedTaskIdsChange: (ids: string[]) => void
   onBatchRunClick: () => void
@@ -151,6 +153,22 @@ function TaskTagTags({ tags }: { tags: TaskTag[] }) {
   )
 }
 
+function LatestRunSummary({ task }: { task: CrawlTask }) {
+  if (!task.last_run_status && !task.last_run_at) {
+    return <Typography.Text type="secondary">-</Typography.Text>
+  }
+  const failed = task.last_run_failed
+  const total = task.last_run_total
+  const hasFailures = typeof failed === 'number' && failed > 0
+  return (
+    <Typography.Text type={hasFailures ? 'warning' : 'secondary'} className={styles.taskMetaValue}>
+      {typeof failed === 'number' && typeof total === 'number'
+        ? `失败 ${failed} / 总 ${total}`
+        : task.last_run_status === 'failed' ? '失败' : '已完成'}
+    </Typography.Text>
+  )
+}
+
 function TaskCard({
   task,
   runtime,
@@ -232,6 +250,10 @@ function TaskCard({
         <div className={styles.taskMetaRow}>
           <span className={styles.taskMetaLabel}>任务标签</span>
           <TaskTagTags tags={task.tags ?? []} />
+        </div>
+        <div className={styles.taskMetaRow}>
+          <span className={styles.taskMetaLabel}>上次运行</span>
+          <LatestRunSummary task={task} />
         </div>
         <div className={styles.taskMetaRow}>
           <span className={styles.taskMetaLabel}>最后爬取时间</span>
@@ -327,6 +349,8 @@ function TaskListCards({
   tagOptions,
   selectedTagNames,
   onTagFilterChange,
+  keyword,
+  onKeywordChange,
   selectedTaskIds,
   onSelectedTaskIdsChange,
   onBatchRunClick,
@@ -353,6 +377,14 @@ function TaskListCards({
           <Typography.Text type="secondary">
             {runtimeReady ? `共 ${total} 条` : '同步中'}
           </Typography.Text>
+          <Input.Search
+            allowClear
+            aria-label="搜索任务名称、URL 名称或 URL"
+            placeholder="搜索任务名称 / URL 名称 / URL"
+            value={keyword}
+            onChange={(event) => onKeywordChange(event.target.value)}
+            className={styles.taskSearchInput}
+          />
           <Select
             aria-label="标签筛选"
             mode="multiple"

@@ -73,6 +73,8 @@ function renderCards(overrides: Partial<ComponentProps<typeof TaskListCards>> = 
       tagOptions={[{ id: 'tag-vr', name: 'VR' }]}
       selectedTagNames={[]}
       onTagFilterChange={vi.fn()}
+      keyword=""
+      onKeywordChange={vi.fn()}
       selectedTaskIds={[]}
       onSelectedTaskIdsChange={vi.fn()}
       onBatchRunClick={vi.fn()}
@@ -128,6 +130,8 @@ describe('TaskListCards action alignment', () => {
         tagOptions={[]}
         selectedTagNames={[]}
         onTagFilterChange={vi.fn()}
+        keyword=""
+        onKeywordChange={vi.fn()}
         selectedTaskIds={[]}
         onSelectedTaskIdsChange={vi.fn()}
         onBatchRunClick={vi.fn()}
@@ -179,6 +183,51 @@ describe('TaskListCards action alignment', () => {
     await waitFor(() => {
       expect(onTagFilterChange).toHaveBeenCalledWith(['VR'], expect.anything())
     })
+  })
+
+  it('renders the crawler task search input in the toolbar and reports keyword changes', () => {
+    const onKeywordChange = vi.fn()
+    const { container } = renderCards({ onKeywordChange })
+
+    const searchInput = screen.getByPlaceholderText('搜索任务名称 / URL 名称 / URL') as HTMLInputElement
+    expect(searchInput).toBeInTheDocument()
+    expect(searchInput).toHaveAttribute('aria-label', '搜索任务名称、URL 名称或 URL')
+    expect(container.querySelector('[class*="taskListToolbarFilters"]')).toBeTruthy()
+    expect(container.querySelector('[class*="taskSearchInput"]')).toBeTruthy()
+
+    fireEvent.change(searchInput, { target: { value: 'prestige' } })
+
+    expect(onKeywordChange).toHaveBeenCalledWith('prestige')
+  })
+
+  it('shows the keyword from props inside the search input', () => {
+    renderCards({ keyword: 'prestige' })
+
+    const searchInput = screen.getByPlaceholderText('搜索任务名称 / URL 名称 / URL') as HTMLInputElement
+    expect(searchInput.value).toBe('prestige')
+  })
+
+  it('shows a dash for the latest run row when the task has no latest run', () => {
+    renderCards()
+
+    const row = screen.getByText('上次运行').parentElement as HTMLElement
+    expect(row.textContent).toBe('上次运行-')
+  })
+
+  it('shows failed and total counts from the latest run summary', () => {
+    renderCards({
+      tasks: [
+        {
+          ...baseTask,
+          last_run_at: '2026-09-05T10:00:00Z',
+          last_run_status: 'completed',
+          last_run_total: 63,
+          last_run_failed: 3,
+        },
+      ] as never,
+    })
+
+    expect(screen.getByText('失败 3 / 总 63')).toBeInTheDocument()
   })
 
   it('tracks card selection and disables batch run without selection', async () => {

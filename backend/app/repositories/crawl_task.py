@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.crawl_run import CrawlRun
@@ -17,6 +17,19 @@ class CrawlTaskRepository(BaseRepository):
     def __init__(self, session: Session) -> None:
         super().__init__(session, CrawlTask)
 
+    def _apply_keyword_filter(self, query, keyword: str | None):
+        normalized_keyword = keyword.strip() if keyword else ""
+        if not normalized_keyword:
+            return query
+        pattern = f"%{normalized_keyword}%"
+        return query.filter(
+            or_(
+                CrawlTask.name.ilike(pattern),
+                CrawlTask.urls.any(CrawlTaskUrl.url_name.ilike(pattern)),
+                CrawlTask.urls.any(CrawlTaskUrl.url.ilike(pattern)),
+            )
+        )
+
     def _owner_query(
         self,
         owner_id: uuid.UUID,
@@ -28,9 +41,7 @@ class CrawlTaskRepository(BaseRepository):
             .options(selectinload(CrawlTask.urls), selectinload(CrawlTask.tags))
             .filter(CrawlTask.owner_id == owner_id)
         )
-        normalized_keyword = keyword.strip() if keyword else ""
-        if normalized_keyword:
-            query = query.filter(CrawlTask.name.ilike(f"%{normalized_keyword}%"))
+        query = self._apply_keyword_filter(query, keyword)
         return self._apply_tag_filter(query, owner_id, tag_names)
 
     def _apply_tag_filter(
@@ -75,9 +86,7 @@ class CrawlTaskRepository(BaseRepository):
         tag_names: list[str] | None = None,
     ) -> int:
         query = self.session.query(CrawlTask).filter(CrawlTask.owner_id == owner_id)
-        normalized_keyword = keyword.strip() if keyword else ""
-        if normalized_keyword:
-            query = query.filter(CrawlTask.name.ilike(f"%{normalized_keyword}%"))
+        query = self._apply_keyword_filter(query, keyword)
         query = self._apply_tag_filter(query, owner_id, tag_names)
         return query.with_entities(func.count(CrawlTask.id)).scalar() or 0
 

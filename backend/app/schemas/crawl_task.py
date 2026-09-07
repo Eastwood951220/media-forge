@@ -148,7 +148,7 @@ class TaskUrlListItem(BaseModel):
 
 
 class CrawlTaskListItem(BaseModel):
-    """Task row for the paginated list view (no runtime fields)."""
+    """Task row for the paginated list view, with optional latest-run summary."""
 
     id: uuid.UUID
     name: str
@@ -156,6 +156,10 @@ class CrawlTaskListItem(BaseModel):
     is_skip: bool
     urls: list[TaskUrlListItem]
     tags: list[TaskTagRead] = Field(default_factory=list)
+    last_run_status: str | None = None
+    last_run_at: datetime | None = None
+    last_run_total: int | None = None
+    last_run_failed: int | None = None
 
     model_config = {"from_attributes": True}
 

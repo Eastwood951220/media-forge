@@ -27,6 +27,7 @@ import { useTaskListRealtime } from './hooks/useTaskListRealtime'
 import { useTaskUrlRun } from './hooks/useTaskUrlRun'
 import { useRouteActivationRefresh } from '@/hooks/useRouteActivationRefresh'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
+import { useTaskListQueryStore } from './useTaskListQueryStore'
 import { MetricGrid } from '@/components/common'
 import styles from './TaskPages.module.less'
 
@@ -137,6 +138,15 @@ function TaskListPage() {
     setCurrent(1)
   }, [setCurrent])
 
+  const keyword = useTaskListQueryStore((state) => state.keyword)
+  const setKeyword = useTaskListQueryStore((state) => state.setKeyword)
+
+  const handleKeywordChange = useCallback((nextKeyword: string) => {
+    // Page-1 reset happens in useTaskListData when the keyword changes.
+    setKeyword(nextKeyword)
+    setSelectedTaskIds([])
+  }, [setKeyword])
+
   const handlePageChange = useCallback((page: number) => {
     setSelectedTaskIds([])
     setCurrent(page)
@@ -224,6 +234,8 @@ function TaskListPage() {
           tagOptions={tagOptionsQuery.data ?? []}
           selectedTagNames={selectedTagNames}
           onTagFilterChange={handleTagFilterChange}
+          keyword={keyword}
+          onKeywordChange={handleKeywordChange}
           selectedTaskIds={selectedTaskIds}
           onSelectedTaskIdsChange={setSelectedTaskIds}
           onBatchRunClick={openBatchRunConfirm}
