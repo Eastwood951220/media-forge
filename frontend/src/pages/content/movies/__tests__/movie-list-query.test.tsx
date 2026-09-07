@@ -34,6 +34,40 @@ describe('useMovieList', () => {
     expect(fetchMovies).toHaveBeenCalledWith(expect.objectContaining({ search: 'abc', page: 1 }))
   })
 
+  it('loads movies when filters transition from not ready to empty filters', async () => {
+    vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, total_pages: 1 } as never)
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useMovieList(filters as never),
+      { wrapper, initialProps: { filters: undefined as Record<string, never> | undefined } },
+    )
+
+    await act(async () => {})
+    expect(fetchMovies).not.toHaveBeenCalled()
+
+    rerender({ filters: {} })
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(fetchMovies).toHaveBeenCalledWith(expect.objectContaining({ page: 1, limit: 20 }))
+  })
+
+  it('searches with the current ready filters after starting not ready', async () => {
+    vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, total_pages: 1 } as never)
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useMovieList(filters as never),
+      { wrapper, initialProps: { filters: undefined as { search?: string } | undefined } },
+    )
+
+    rerender({ filters: { search: 'ready' } })
+    await waitFor(() => expect(fetchMovies).toHaveBeenCalledWith(expect.objectContaining({ search: 'ready' })))
+
+    vi.mocked(fetchMovies).mockClear()
+    act(() => result.current.search())
+
+    await waitFor(() => expect(fetchMovies).toHaveBeenCalledWith(expect.objectContaining({ search: 'ready', page: 1 })))
+  })
+
   it('resets to the first page when effective filters change', async () => {
     vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, total_pages: 1 } as never)
 

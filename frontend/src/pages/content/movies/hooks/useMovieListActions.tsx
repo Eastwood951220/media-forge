@@ -8,7 +8,7 @@ import type { useMovieDetail } from './useMovieDetail'
 import type { useMovieFilters } from './useMovieFilters'
 import type { useMovieList } from './useMovieList'
 import type { useStoragePush } from './useStoragePush'
-import type { MovieFilterState } from '../utils/movieFilter'
+import { buildMovieFilterDefaultState } from '../utils/movieFilter'
 import { parseSortDefault } from '../utils/sort'
 import { applyDetailFilterClick } from '../utils/detailFilter'
 import styles from '../MovieListPage.module.less'
@@ -96,14 +96,9 @@ export function useMovieListActions(args: {
   const handleResetFilters = useCallback(() => {
     filters.resetFilters()
     if (config) {
-      const defaults: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(config)) {
-        if (key !== 'sortBy' && value?.defaultValue !== undefined) {
-          defaults[key] = value.defaultValue
-        }
-      }
+      const defaults = buildMovieFilterDefaultState(config)
       if (Object.keys(defaults).length > 0) {
-        filters.patchForm(defaults as Partial<MovieFilterState>)
+        filters.patchForm(defaults)
       }
     }
     list.resetSort(parseSortDefault(config))

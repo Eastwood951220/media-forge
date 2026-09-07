@@ -24,7 +24,7 @@ export function useMovieList(
     const [syncingStorage, setSyncingStorage] = useState(false);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-    const filterKey = JSON.stringify(filterParams ?? {});
+    const filterKey = filterParams === undefined ? "__not_ready__" : JSON.stringify(filterParams);
     const previousFilterKeyRef = useRef<string | null>(null);
     const requestSeqRef = useRef(0);
 

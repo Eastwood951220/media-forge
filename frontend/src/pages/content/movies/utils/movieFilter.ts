@@ -1,4 +1,5 @@
 import type {Dayjs} from "dayjs";
+import type { MovieFilterConfig } from "@/api/movie/types";
 
 export interface MovieFilterState {
     selectedTask?: string;
@@ -76,4 +77,76 @@ export function buildMovieFilterParams(state: MovieFilterState): MovieFilterPara
         created_at_to: state.createdAtTo?.format("YYYY-MM-DD"),
         storage_status: state.storageStatus,
     };
+}
+
+function splitDefaultValues(value: unknown): string[] {
+    if (Array.isArray(value)) {
+        return value.map((item) => String(item).trim()).filter(Boolean);
+    }
+    if (typeof value !== "string") return [];
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+export function buildMovieFilterDefaultState(config: MovieFilterConfig | undefined): Partial<MovieFilterState> {
+    const defaults: Partial<MovieFilterState> = {};
+    if (!config) return defaults;
+
+    for (const [key, value] of Object.entries(config)) {
+        if (key === "sortBy" || value?.defaultValue === undefined) continue;
+        const defaultValue = value.defaultValue;
+        switch (key) {
+            case "actors":
+                defaults.selectedActors = splitDefaultValues(defaultValue);
+                break;
+            case "actorsNot":
+                defaults.selectedActorsNot = splitDefaultValues(defaultValue);
+                break;
+            case "tags":
+                defaults.selectedTags = splitDefaultValues(defaultValue);
+                break;
+            case "tagsNot":
+                defaults.selectedTagsNot = splitDefaultValues(defaultValue);
+                break;
+            case "director":
+                defaults.selectedDirectors = splitDefaultValues(defaultValue);
+                break;
+            case "directorNot":
+                defaults.selectedDirectorsNot = splitDefaultValues(defaultValue);
+                break;
+            case "maker":
+                defaults.selectedMakers = splitDefaultValues(defaultValue);
+                break;
+            case "makerNot":
+                defaults.selectedMakersNot = splitDefaultValues(defaultValue);
+                break;
+            case "series":
+                defaults.selectedSeries = splitDefaultValues(defaultValue);
+                break;
+            case "seriesNot":
+                defaults.selectedSeriesNot = splitDefaultValues(defaultValue);
+                break;
+            case "storageStatus":
+                defaults.storageStatus = typeof defaultValue === "string" ? defaultValue : undefined;
+                break;
+            case "ratingMin":
+                defaults.ratingMin = typeof defaultValue === "number" ? defaultValue : undefined;
+                break;
+            case "ratingMax":
+                defaults.ratingMax = typeof defaultValue === "number" ? defaultValue : undefined;
+                break;
+            case "actorsCountMin":
+                defaults.actorsCountMin = typeof defaultValue === "number" ? defaultValue : undefined;
+                break;
+            case "actorsCountMax":
+                defaults.actorsCountMax = typeof defaultValue === "number" ? defaultValue : undefined;
+                break;
+            case "releaseDateFrom":
+            case "releaseDateTo":
+            case "createdAtFrom":
+            case "createdAtTo":
+                break;
+        }
+    }
+
+    return defaults;
 }

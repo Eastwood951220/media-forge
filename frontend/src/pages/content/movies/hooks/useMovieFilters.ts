@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { App } from 'antd'
 import { fetchFilters } from '@/api/movie'
 import { getTaskDict } from '@/api/crawler/crawlTask'
 import { MOVIE_FILTER_OPTION_TYPE } from '../constants'
 import type { MovieFilterConfig, SelectOption } from '@/api/movie/types'
-import { buildMovieFilterParams, type MovieFilterState } from '../utils/movieFilter'
+import { buildMovieFilterDefaultState, buildMovieFilterParams, type MovieFilterState } from '../utils/movieFilter'
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '请求失败'
@@ -75,6 +75,8 @@ export function useMovieFilters(options: UseMovieFiltersOptions = {}) {
   const [seriesOptions, setSeriesOptions] = useState<SelectOption[]>([])
   const [filtersLoading, setFiltersLoading] = useState(false)
   const [optionsLoaded, setOptionsLoaded] = useState(false)
+  const configKey = JSON.stringify(filterConfig ?? {})
+  const appliedDefaultsKeyRef = useRef<string | null>(null)
 
   const patchForm = useCallback((payload: Partial<MovieFilterState>) => {
     dispatch({ type: 'patch', payload })
@@ -127,12 +129,21 @@ export function useMovieFilters(options: UseMovieFiltersOptions = {}) {
     } finally {
       setFiltersLoading(false)
     }
-  }, [enabled, filterConfig, message])
+  }, [enabled, configKey, message])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Load option dependencies once when filter config changes.
     void loadOptions()
   }, [loadOptions])
+
+  useEffect(() => {
+    if (!enabled || !optionsLoaded) return
+    if (appliedDefaultsKeyRef.current === configKey) return
+    appliedDefaultsKeyRef.current = configKey
+    const defaults = buildMovieFilterDefaultState(filterConfig)
+    if (Object.keys(defaults).length === 0) return
+    dispatch({ type: 'patch', payload: defaults })
+  }, [configKey, enabled, filterConfig, optionsLoaded])
 
   const requestParams = useMemo(() => buildMovieFilterParams(form), [form])
 

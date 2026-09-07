@@ -2,7 +2,7 @@ import {useState, useCallback, useEffect} from "react";
 import {App, Drawer, List, Switch, Button, Space, Typography, Input, InputNumber, Select} from "antd";
 import type {FilterItemConfig} from "@/api/movie";
 import {updateMovieFilterConfig} from "@/api/movie";
-import {MOVIE_FILTER_CONFIG_ITEMS as filterConfigItems} from "../constants";
+import {MOVIE_FILTER_CONFIG_ITEMS as filterConfigItems, MOVIE_STORAGE_STATUS_OPTIONS} from "../constants";
 import styles from "../MovieListPage.module.less";
 
 interface FilterConfigDrawerProps {
@@ -21,9 +21,7 @@ function DefaultValueInput({filterKey, value, onChange}: {filterKey: string; val
         return <InputNumber size="small" className={styles.filterConfigNumber} placeholder="默认值" min={0} max={isRating ? 5 : undefined} step={isRating ? 0.1 : 1} value={value as number} onChange={(v) => onChange(v ?? undefined)} />;
     }
     if (filterKey === "storageStatus") {
-        return <Select size="small" className={styles.filterConfigSelect} placeholder="默认值" allowClear value={value as string} onChange={(v) => onChange(v)} options={[
-            {value: "completed", label: "已完成"}, {value: "missing", label: "缺失"}, {value: "failed", label: "失败"}, {value: "pending", label: "等待"}, {value: "running", label: "运行"}, {value: "retryable", label: "可重试"},
-        ]} />;
+        return <Select size="small" className={styles.filterConfigSelect} placeholder="默认值" allowClear value={value as string} onChange={(v) => onChange(v)} options={MOVIE_STORAGE_STATUS_OPTIONS} />;
     }
     if (filterKey === "sortBy") {
         return <Select size="small" className={styles.filterConfigSortSelect} placeholder="默认排序" allowClear value={value as string} onChange={(v) => onChange(v)} options={[
