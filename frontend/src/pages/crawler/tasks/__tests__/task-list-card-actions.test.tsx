@@ -230,6 +230,88 @@ describe('TaskListCards action alignment', () => {
     expect(screen.getByText('失败 3 / 总 63')).toBeInTheDocument()
   })
 
+  it('shows 进行中 for an in-flight latest run without counts and never 已完成', () => {
+    renderCards({
+      tasks: [
+        {
+          ...baseTask,
+          last_run_at: '2026-09-05T09:00:00Z',
+          last_run_status: 'running',
+        },
+      ] as never,
+    })
+
+    const row = screen.getByText('上次运行').parentElement as HTMLElement
+    expect(row.textContent).toBe('上次运行进行中')
+    expect(screen.queryByText('已完成')).not.toBeInTheDocument()
+  })
+
+  it('shows 进行中 for queued and stopping latest runs without counts', () => {
+    for (const status of ['queued', 'stopping']) {
+      const { unmount } = renderCards({
+        tasks: [
+          {
+            ...baseTask,
+            last_run_at: '2026-09-05T09:00:00Z',
+            last_run_status: status,
+          },
+        ] as never,
+      })
+      const row = screen.getByText('上次运行').parentElement as HTMLElement
+      expect(row.textContent).toBe('上次运行进行中')
+      expect(screen.queryByText('已完成')).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('shows 失败 for a failed latest run without counts', () => {
+    renderCards({
+      tasks: [
+        {
+          ...baseTask,
+          last_run_at: '2026-09-05T09:00:00Z',
+          last_run_status: 'failed',
+        },
+      ] as never,
+    })
+
+    const row = screen.getByText('上次运行').parentElement as HTMLElement
+    expect(row.textContent).toBe('上次运行失败')
+    expect(row.querySelector('[class*="typography-warning"]')).toBeTruthy()
+    expect(screen.queryByText('已完成')).not.toBeInTheDocument()
+  })
+
+  it('shows 已完成 for a completed latest run without counts', () => {
+    renderCards({
+      tasks: [
+        {
+          ...baseTask,
+          last_run_at: '2026-09-05T09:00:00Z',
+          last_run_status: 'completed',
+        },
+      ] as never,
+    })
+
+    const row = screen.getByText('上次运行').parentElement as HTMLElement
+    expect(row.textContent).toBe('上次运行已完成')
+  })
+
+  it('shows a dash for an unknown latest run status', () => {
+    renderCards({
+      tasks: [
+        {
+          ...baseTask,
+          last_run_at: '2026-09-05T09:00:00Z',
+          last_run_status: 'weird-status',
+        },
+      ] as never,
+    })
+
+    const row = screen.getByText('上次运行').parentElement as HTMLElement
+    expect(row.textContent).toBe('上次运行-')
+    expect(screen.queryByText('已完成')).not.toBeInTheDocument()
+  })
+
   it('tracks card selection and disables batch run without selection', async () => {
     const onSelectedTaskIdsChange = vi.fn()
     const onBatchRunClick = vi.fn()

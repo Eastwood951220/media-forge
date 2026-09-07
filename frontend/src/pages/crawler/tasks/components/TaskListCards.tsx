@@ -153,6 +153,15 @@ function TaskTagTags({ tags }: { tags: TaskTag[] }) {
   )
 }
 
+const LATEST_RUN_FALLBACK_LABELS: Record<string, string> = {
+  completed: '已完成',
+  failed: '失败',
+  stopped: '已停止',
+  queued: '进行中',
+  running: '进行中',
+  stopping: '进行中',
+}
+
 function LatestRunSummary({ task }: { task: CrawlTask }) {
   if (!task.last_run_status && !task.last_run_at) {
     return <Typography.Text type="secondary">-</Typography.Text>
@@ -160,11 +169,17 @@ function LatestRunSummary({ task }: { task: CrawlTask }) {
   const failed = task.last_run_failed
   const total = task.last_run_total
   const hasFailures = typeof failed === 'number' && failed > 0
+  const status = task.last_run_status ?? ''
+  const hasCounts = typeof failed === 'number' && typeof total === 'number'
+  // Fall back to truthful terminal/in-flight labels when counts are missing;
+  // unknown statuses must never read as a completed run.
+  const fallbackLabel = status ? (LATEST_RUN_FALLBACK_LABELS[status] ?? '-') : '-'
   return (
-    <Typography.Text type={hasFailures ? 'warning' : 'secondary'} className={styles.taskMetaValue}>
-      {typeof failed === 'number' && typeof total === 'number'
-        ? `失败 ${failed} / 总 ${total}`
-        : task.last_run_status === 'failed' ? '失败' : '已完成'}
+    <Typography.Text
+      type={hasFailures || status === 'failed' ? 'warning' : 'secondary'}
+      className={styles.taskMetaValue}
+    >
+      {hasCounts ? `失败 ${failed} / 总 ${total}` : fallbackLabel}
     </Typography.Text>
   )
 }
