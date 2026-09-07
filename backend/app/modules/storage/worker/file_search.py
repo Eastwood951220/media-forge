@@ -4,6 +4,7 @@ from backend.app.modules.storage.worker.file_candidates import append_candidate
 from backend.app.modules.storage.worker.file_identity import resolve_file_candidate
 from backend.app.modules.storage.worker.file_listing import find_listed_video_files, recursive_list
 from backend.app.modules.storage.worker.file_result import ScopedSearchResult
+from backend.app.modules.storage.worker.path_utils import normalize_storage_operation_path
 
 
 def find_scoped_video_files(
@@ -44,6 +45,8 @@ def find_scoped_video_files(
 
     for file_obj in search_results:
         raw_item, resolved, resolution_error, original_log = resolve_file_candidate(provider, file_obj)
+        resolved = {**resolved, "path": normalize_storage_operation_path(resolved["path"], config)}
+        resolved["name"] = resolved["name"] or raw_item["name"]
         raw_results.append({key: raw_item[key] for key in ("name", "path", "size")})
         resolved_results.append({key: resolved[key] for key in ("name", "path", "size")})
         if original_log is not None:
@@ -131,13 +134,14 @@ def find_recovery_video_files(
     movie_code: str,
     config: dict,
 ) -> ScopedSearchResult:
+    recovery_config = {**config, "download_root_folder": download_root}
     task_result = find_listed_video_files(
         provider=provider,
         search_path=task_download_folder,
         search_scope="recovery_task_download_folder",
         movie_code=movie_code,
         task_download_folder=task_download_folder,
-        config=config,
+        config=recovery_config,
     )
     if task_result.accepted_files:
         return task_result
@@ -148,7 +152,7 @@ def find_recovery_video_files(
         search_path=download_root,
         search_scope="recovery_download_root",
         movie_code=movie_code,
-        task_download_folder=download_root,
-        config=config,
+        task_download_folder=task_download_folder,
+        config=recovery_config,
     )
     return root_result

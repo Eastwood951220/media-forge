@@ -151,6 +151,83 @@ def test_root_recovery_rejects_other_movie_codes() -> None:
     ]
 
 
+def test_root_recovery_rejects_other_storage_task_folders() -> None:
+    from backend.app.modules.storage.worker.file_finder import find_recovery_video_files
+
+    class Provider:
+        def __init__(self) -> None:
+            self.original_paths = {
+                "/Search/MIMK-293-old.mp4": "/云下载/storage_790269c8-95c4/MIMK-293/MIMK-293.mp4",
+                "/Search/MIMK-293-current.mp4": "/云下载/storage_f9f98752-773d/attempt_01_m1/MIMK-293/MIMK-293.mp4",
+            }
+
+        def list_files(self, path, force_refresh=False):
+            return []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            return [
+                FakeRemoteFile("MIMK-293.mp4", "/Search/MIMK-293-old.mp4", 900 * 1024 * 1024, False, True),
+                FakeRemoteFile("MIMK-293.mp4", "/Search/MIMK-293-current.mp4", 900 * 1024 * 1024, False, True),
+            ]
+
+        def get_original_path(self, path):
+            return self.original_paths.get(path, "")
+
+    result = find_recovery_video_files(
+        provider=Provider(),
+        search_terms=["MIMK-293"],
+        task_download_folder="/云下载/storage_f9f98752-773d/attempt_02_m2",
+        download_root="/云下载",
+        movie_code="MIMK-293",
+        config={"video_extensions": [".mp4"], "minimum_video_size_mb": 100},
+    )
+
+    assert [file["path"] for file in result.accepted_files] == [
+        "/云下载/storage_f9f98752-773d/attempt_01_m1/MIMK-293/MIMK-293.mp4"
+    ]
+    assert result.log_context["rejected_files"] == [
+        {
+            "name": "MIMK-293.mp4",
+            "raw_path": "/Search/MIMK-293-old.mp4",
+            "resolved_path": "/云下载/storage_790269c8-95c4/MIMK-293/MIMK-293.mp4",
+            "size": 943718400,
+            "reason": "outside_storage_task_folder",
+        }
+    ]
+
+
+def test_root_recovery_normalizes_cloud_mount_prefix_to_download_root() -> None:
+    from backend.app.modules.storage.worker.file_finder import find_recovery_video_files
+
+    class Provider:
+        def list_files(self, path, force_refresh=False):
+            return []
+
+        def search_files(self, term, path="/", force_refresh=False, fuzzy_match=False):
+            return [
+                FakeRemoteFile("MIMK-293.mp4", "/Search/MIMK-293.mp4", 900 * 1024 * 1024, False, True),
+            ]
+
+        def get_original_path(self, path):
+            return "/115open/云下载/storage_f9f98752-773d/attempt_01_m1/MIMK-293/MIMK-293.mp4"
+
+    result = find_recovery_video_files(
+        provider=Provider(),
+        search_terms=["MIMK-293"],
+        task_download_folder="/云下载/storage_f9f98752-773d/attempt_02_m2",
+        download_root="/云下载",
+        movie_code="MIMK-293",
+        config={"video_extensions": [".mp4"], "minimum_video_size_mb": 100},
+    )
+
+    assert [file["path"] for file in result.accepted_files] == [
+        "/云下载/storage_f9f98752-773d/attempt_01_m1/MIMK-293/MIMK-293.mp4"
+    ]
+    assert result.log_context["resolved_results"] == [
+        {"name": "MIMK-293.mp4", "path": "/云下载/storage_f9f98752-773d/attempt_01_m1/MIMK-293/MIMK-293.mp4", "size": 943718400}
+    ]
+
+
 class DuplicateVirtualPathProvider:
     def __init__(self) -> None:
         self.original_path_calls: list[str] = []
@@ -383,6 +460,58 @@ def test_list_subfiles_discovery_accepts_nested_real_video_without_search() -> N
             "resolved_path": "/Downloads/storage_sub/cover.jpg",
             "size": 1024,
             "reason": "extension_not_allowed",
+        }
+    ]
+
+
+def test_list_subfiles_discovery_normalizes_cloud_mount_prefix() -> None:
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.file_finder import find_listed_video_files
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def list_files(self, path, force_refresh=False):
+            if path == "/云下载/storage_f9f98752/attempt_01_m1":
+                return [
+                    RemoteFile(
+                        "MIMK-293",
+                        "/115open/云下载/storage_f9f98752/attempt_01_m1/MIMK-293",
+                        0,
+                        True,
+                    )
+                ]
+            if path == "/云下载/storage_f9f98752/attempt_01_m1/MIMK-293":
+                return [
+                    RemoteFile(
+                        "MIMK-293.mp4",
+                        "/115open/云下载/storage_f9f98752/attempt_01_m1/MIMK-293/MIMK-293.mp4",
+                        900 * 1024 * 1024,
+                    )
+                ]
+            return []
+
+    result = find_listed_video_files(
+        provider=Provider(),
+        search_path="/云下载/storage_f9f98752/attempt_01_m1",
+        search_scope="task_download_folder",
+        movie_code="MIMK-293",
+        task_download_folder="/云下载/storage_f9f98752/attempt_01_m1",
+        config={"download_root_folder": "/云下载", "video_extensions": [".mp4"], "minimum_video_size_mb": 100},
+    )
+
+    assert result.accepted_files == [
+        {
+            "name": "MIMK-293.mp4",
+            "path": "/云下载/storage_f9f98752/attempt_01_m1/MIMK-293/MIMK-293.mp4",
+            "size": 943718400,
+            "is_dir": False,
         }
     ]
 

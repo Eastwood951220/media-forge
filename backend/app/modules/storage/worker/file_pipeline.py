@@ -63,12 +63,27 @@ def run_found_files_pipeline(
 
     context.set_step("rename_files")
     renamed_files = rename_selected_videos(context, selected_videos, tags)
+    subtask.renamed_files = renamed_files
+    if renamed_files and all(file.get("rename_error") for file in renamed_files):
+        context.log(
+            "WARNING",
+            "全部视频重命名失败，跳过移动",
+            {
+                "magnet_id": magnet.get("id"),
+                "rename_errors": [
+                    {"name": file.get("name"), "path": file.get("path"), "error": file.get("rename_error")}
+                    for file in renamed_files
+                ],
+            },
+            step="rename_files",
+        )
+        context.publish_subtask()
+        return False
 
     context.set_step("move_files")
     move_result = move_renamed_videos(context, renamed_files, target_paths)
     moved_files = move_result.moved_files
     skipped_files = move_result.skipped_files
-    subtask.renamed_files = renamed_files
     subtask.moved_files = moved_files
     subtask.skipped_files = skipped_files
     context.publish_subtask()

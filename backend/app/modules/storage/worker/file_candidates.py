@@ -4,6 +4,7 @@ import re
 from pathlib import PurePosixPath
 
 from backend.app.modules.storage.worker.file_identity import is_virtual_search_path
+from backend.app.modules.storage.worker.path_utils import storage_task_root_from_attempt
 
 
 def is_usable_video(file_dict: dict, config: dict) -> bool:
@@ -52,6 +53,8 @@ def rejection_reason(file_dict: dict, *, config: dict, movie_code: str, search_s
         return "movie_code_mismatch"
     if search_scope == "task_download_folder" and not path_is_under(file_dict["path"], task_download_folder):
         return "outside_task_download_folder"
+    if search_scope == "recovery_download_root" and not path_is_under(file_dict["path"], storage_task_root_from_attempt(task_download_folder)):
+        return "outside_storage_task_folder"
     return None
 
 

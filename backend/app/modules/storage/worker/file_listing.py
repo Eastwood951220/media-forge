@@ -12,6 +12,7 @@ from backend.app.modules.storage.worker.file_identity import (
     raw_file_to_dict,
 )
 from backend.app.modules.storage.worker.file_result import ScopedSearchResult
+from backend.app.modules.storage.worker.path_utils import normalize_storage_operation_path
 
 
 def raw_entry_log(current_path: str, item: dict) -> dict:
@@ -72,8 +73,9 @@ def list_real_files_recursive(
         return found
 
     for entry in entries:
-        item = raw_file_to_dict(entry)
-        raw_entries.append(raw_entry_log(normalized_current, item))
+        raw_item = raw_file_to_dict(entry)
+        raw_entries.append(raw_entry_log(normalized_current, raw_item))
+        item = {**raw_item, "path": normalize_storage_operation_path(raw_item["path"], config)}
         if is_virtual_search_path(item["path"]):
             rejected.append(rejected_file(item, item, "virtual_search_path"))
             continue
@@ -101,6 +103,7 @@ def recursive_list(provider, path: str, config: dict) -> list[dict]:
     found = []
     for entry in provider.list_files(path):
         item = file_to_dict(provider, entry)
+        item = {**item, "path": normalize_storage_operation_path(item["path"], config)}
         if item["is_dir"]:
             found.extend(recursive_list(provider, item["path"], config))
         elif _is_usable_video(item, config):

@@ -3638,6 +3638,78 @@ def test_run_found_files_pipeline_dedupes_quality_variants_before_rename(monkeyp
     )
 
 
+def test_run_found_files_pipeline_stops_when_all_renames_fail(monkeypatch) -> None:
+    import uuid
+    from types import SimpleNamespace
+
+    from backend.app.modules.storage.worker.file_pipeline import run_found_files_pipeline
+    from backend.app.modules.storage.worker.move_ops import MoveRenamedVideosResult
+
+    move_calls: list[list[dict]] = []
+
+    def fake_rename_selected_videos(context, selected_videos, tags):
+        return [
+            {
+                **selected_videos[0],
+                "renamed_name": "XXX.mp4",
+                "rename_error": "not found",
+            }
+        ]
+
+    def fake_move_renamed_videos(context, renamed_files, target_paths):
+        move_calls.append(renamed_files)
+        return MoveRenamedVideosResult(moved_files=[], skipped_files=renamed_files)
+
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.file_pipeline.rename_selected_videos",
+        fake_rename_selected_videos,
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.storage.worker.file_pipeline.move_renamed_videos",
+        fake_move_renamed_videos,
+    )
+
+    class Context:
+        def __init__(self) -> None:
+            self.subtask = SimpleNamespace(
+                id=uuid.uuid4(),
+                movie_id=uuid.uuid4(),
+                movie_code="XXX",
+                renamed_files=[],
+                moved_files=[],
+                skipped_files=[],
+                result={},
+            )
+            self.config = {"auto_create_target_folder": False}
+            self.logs: list[dict] = []
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            self.logs.append({"level": level, "message": message, "context": context or {}, "step": step, "event": event})
+            return {}
+
+        def set_step(self, step):
+            self.subtask.step = step
+
+        def publish_subtask(self):
+            return None
+
+    context = Context()
+
+    success = run_found_files_pipeline(
+        context,
+        {"id": "m1", "tags": []},
+        [{"name": "XXX.mp4", "path": "/Downloads/XXX.mp4", "size": 100 * 1024 * 1024, "is_dir": False}],
+        ["/Movies/XXX"],
+        "/Downloads/storage_task",
+        {"video_extensions": [".mp4"], "minimum_video_size_mb": 1},
+    )
+
+    assert success is False
+    assert move_calls == []
+    assert context.subtask.renamed_files[0]["rename_error"] == "not found"
+    assert context.logs[-1]["message"] == "全部视频重命名失败，跳过移动"
+
+
 def test_rename_selected_videos_orders_similar_numeric_parts_before_assigning_cd() -> None:
     from types import SimpleNamespace
 
