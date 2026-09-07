@@ -1238,6 +1238,71 @@ def test_poll_downloaded_video_files_uses_list_subfiles_and_does_not_search_root
     ]
 
 
+def test_poll_downloaded_video_files_accepts_code_with_zero_padded_numeric_part(monkeypatch):
+    from dataclasses import dataclass
+
+    from backend.app.modules.storage.worker.download import poll_downloaded_video_files
+
+    monkeypatch.setattr("backend.app.modules.storage.worker.download.time.sleep", lambda seconds: None)
+    task_folder = "/Downloads/storage_sub/attempt_01_cf3c9f99-6c38-4702-bc7d-"
+    nested_folder = f"{task_folder}/bbs2048.org@juvr00110.part1"
+    nested_video = f"{nested_folder}/bbs2048.org@juvr00110.part1.mp4"
+
+    @dataclass
+    class RemoteFile:
+        name: str
+        full_path: str
+        size: int
+        is_directory: bool = False
+
+    class Provider:
+        def list_files(self, path, force_refresh=False):
+            if path == task_folder:
+                return [
+                    RemoteFile(
+                        "bbs2048.org@juvr00110.part1",
+                        nested_folder,
+                        0,
+                        True,
+                    )
+                ]
+            if path == nested_folder:
+                return [
+                    RemoteFile(
+                        "bbs2048.org@juvr00110.part1.mp4",
+                        nested_video,
+                        500 * 1024 * 1024,
+                    )
+                ]
+            return []
+
+    class Subtask:
+        movie_code = "JUVR-110"
+
+    class Context:
+        provider = Provider()
+        subtask = Subtask()
+        config = {
+            "download_max_poll_count": 2,
+            "download_poll_interval_min": 0,
+            "download_poll_interval_max": 0,
+            "video_extensions": [".mp4"],
+            "minimum_video_size_mb": 100,
+        }
+
+        def log(self, level, message, context=None, *, step=None, event=None):
+            return {}
+
+    files = poll_downloaded_video_files(
+        Context(),
+        search_terms=["JUVR-110"],
+        task_download_folder=task_folder,
+        download_root="/Downloads",
+    )
+
+    assert [file["path"] for file in files] == [nested_video]
+
+
 def test_poll_downloaded_video_files_waits_until_accepted_file_set_is_stable(monkeypatch):
     from backend.app.modules.storage.worker import download
 

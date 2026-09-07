@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import PurePosixPath
 
 from backend.app.modules.storage.worker.file_identity import is_virtual_search_path
@@ -20,7 +21,24 @@ def path_is_under(path: str, folder: str) -> bool:
 def movie_code_matches(file_dict: dict, movie_code: str) -> bool:
     normalized_code = movie_code.upper()
     haystack = f"{file_dict.get('name', '')} {file_dict.get('path', '')}".upper()
-    return normalized_code in haystack
+    if normalized_code in haystack:
+        return True
+
+    compact_code = re.sub(r"[^A-Z0-9]", "", normalized_code)
+    compact_haystack = re.sub(r"[^A-Z0-9]", "", haystack)
+    if compact_code and compact_code in compact_haystack:
+        return True
+
+    match = re.fullmatch(r"([A-Z]+)0*(\d+)", compact_code)
+    if not match:
+        return False
+
+    code_prefix, code_number = match.groups()
+    expected_number = int(code_number)
+    for candidate in re.finditer(rf"{re.escape(code_prefix)}(\d+)", compact_haystack):
+        if int(candidate.group(1)) == expected_number:
+            return True
+    return False
 
 
 def rejection_reason(file_dict: dict, *, config: dict, movie_code: str, search_scope: str, task_download_folder: str) -> str | None:
