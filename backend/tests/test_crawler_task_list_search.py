@@ -108,13 +108,14 @@ def test_list_tasks_includes_latest_run_summary_of_newest_run_per_task(db_sessio
     task_c = create_task(service.repo, test_user.id, "summary-c-no-runs", NO_MATCH_URL)
 
     now = datetime.now(timezone.utc)
+    # Real runtime shapes: in-process engine finalize() persists total_tasks/save_failed/crawl_failed.
     older_failed = CrawlRun(
         task_id=task_a.id,
         task_name=task_a.name,
         status="failed",
         crawl_mode="full",
         created_at=now - timedelta(hours=2),
-        result={"total": 5, "failed": 5},
+        result={"total_tasks": 5, "saved": 0, "save_failed": 4, "crawl_failed": 1, "skipped_tasks": 0},
     )
     newest_completed = CrawlRun(
         task_id=task_a.id,
@@ -122,7 +123,7 @@ def test_list_tasks_includes_latest_run_summary_of_newest_run_per_task(db_sessio
         status="completed",
         crawl_mode="full",
         created_at=now,
-        result={"total": 63, "total_failed": 3},
+        result={"total_tasks": 63, "saved": 60, "save_failed": 2, "crawl_failed": 1, "skipped_tasks": 0},
     )
     run_without_counts = CrawlRun(
         task_id=task_b.id,
@@ -145,6 +146,7 @@ def test_list_tasks_includes_latest_run_summary_of_newest_run_per_task(db_sessio
         == newest_completed.created_at.replace(tzinfo=None)
     )
     assert row_a["last_run_total"] == 63
+    # Finalize output has no "failed" key: 3 = save_failed 2 + crawl_failed 1.
     assert row_a["last_run_failed"] == 3
 
     row_b = rows_by_name["summary-b"]
@@ -160,31 +162,70 @@ def test_list_tasks_includes_latest_run_summary_of_newest_run_per_task(db_sessio
     assert row_c.get("last_run_failed") is None
 
 
-def test_serialize_list_item_reads_counts_from_common_result_keys(db_session, test_user) -> None:
+def test_serialize_list_item_reads_counts_from_real_result_shapes(db_session, test_user) -> None:
     from backend.app.modules.crawler.tasks.serializers import serialize_task_list_item
 
     repo = CrawlTaskRepository(db_session)
-    task = create_task(repo, test_user.id, "counts-task", NO_MATCH_URL)
     now = datetime.now(timezone.utc)
 
-    run = CrawlRun(
-        task_id=task.id,
-        task_name=task.name,
+    finalize_task = create_task(repo, test_user.id, "finalize-shape", NO_MATCH_URL)
+    finalize_run = CrawlRun(
+        task_id=finalize_task.id,
+        task_name=finalize_task.name,
         status="completed",
         crawl_mode="full",
         created_at=now,
-        result={"total_found": 40, "total_failed": 2},
+        # In-process engine finalize() output: failures are split into save_failed + crawl_failed.
+        result={"total_tasks": 27, "saved": 24, "save_failed": 2, "crawl_failed": 1, "skipped_tasks": 0},
     )
-    db_session.add(run)
+
+    threaded_task = create_task(repo, test_user.id, "threaded-shape", NO_MATCH_URL)
+    threaded_run = CrawlRun(
+        task_id=threaded_task.id,
+        task_name=threaded_task.name,
+        status="completed",
+        crawl_mode="full",
+        created_at=now,
+        # Threaded/agent engine output shape: failed_tasks alongside legacy "failed".
+        result={
+            "total_tasks": 27,
+            "completed_tasks": 23,
+            "failed_tasks": 3,
+            "skipped_tasks": 1,
+            "saved": 23,
+            "failed": 3,
+            "skipped": 1,
+        },
+    )
+
+    legacy_task = create_task(repo, test_user.id, "legacy-shape", NO_MATCH_URL)
+    legacy_run = CrawlRun(
+        task_id=legacy_task.id,
+        task_name=legacy_task.name,
+        status="completed",
+        crawl_mode="full",
+        created_at=now,
+        # Legacy keys must still work as fallbacks.
+        result={"total": 40, "failed": 2},
+    )
+    db_session.add_all([finalize_run, threaded_run, legacy_run])
     db_session.commit()
 
-    item = serialize_task_list_item(task, run)
-    assert item.last_run_status == "completed"
-    assert item.last_run_at == run.created_at
-    assert item.last_run_total == 40
-    assert item.last_run_failed == 2
+    finalize_item = serialize_task_list_item(finalize_task, finalize_run)
+    assert finalize_item.last_run_status == "completed"
+    assert finalize_item.last_run_at == finalize_run.created_at
+    assert finalize_item.last_run_total == 27
+    assert finalize_item.last_run_failed == 3  # save_failed 2 + crawl_failed 1
 
-    without_run = serialize_task_list_item(task)
+    threaded_item = serialize_task_list_item(threaded_task, threaded_run)
+    assert threaded_item.last_run_total == 27
+    assert threaded_item.last_run_failed == 3  # reported via failed_tasks
+
+    legacy_item = serialize_task_list_item(legacy_task, legacy_run)
+    assert legacy_item.last_run_total == 40
+    assert legacy_item.last_run_failed == 2
+
+    without_run = serialize_task_list_item(legacy_task)
     assert without_run.last_run_status is None
     assert without_run.last_run_at is None
     assert without_run.last_run_total is None

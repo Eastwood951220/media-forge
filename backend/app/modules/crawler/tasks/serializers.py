@@ -7,8 +7,22 @@ def _latest_run_counts(latest_run) -> tuple[int | None, int | None]:
     if latest_run is None:
         return None, None
     result = latest_run.result or {}
-    total = next((result[key] for key in ("total", "total_found", "total_tasks") if key in result), None)
-    failed = next((result[key] for key in ("failed", "failed_count", "total_failed") if key in result), None)
+    total = next((result[key] for key in ("total_tasks", "total", "total_found") if key in result), None)
+
+    # Runtime writers: in-process engine persists {"total_tasks", "save_failed", "crawl_failed", ...},
+    # threaded/agent engines persist {"total_tasks", "failed_tasks", ...}; "failed"/"total_failed"
+    # are legacy keys kept only as fallbacks.
+    failed = result.get("failed_tasks")
+    if not isinstance(failed, int | float):
+        save_failed = result.get("save_failed")
+        crawl_failed = result.get("crawl_failed")
+        if isinstance(save_failed, int | float) and isinstance(crawl_failed, int | float):
+            failed = save_failed + crawl_failed
+        else:
+            failed = next(
+                (result[key] for key in ("failed", "failed_count", "total_failed") if key in result),
+                None,
+            )
     return (
         int(total) if isinstance(total, int | float) else None,
         int(failed) if isinstance(failed, int | float) else None,
