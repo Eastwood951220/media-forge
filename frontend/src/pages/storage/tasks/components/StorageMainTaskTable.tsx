@@ -8,6 +8,9 @@ import styles from '../StorageTasks.module.less'
 import { getProgressStatus } from '../utils/progress'
 import { modeLabels, PAGE_SIZE_OPTIONS, statusLabels } from '../utils/status'
 
+const STORAGE_PROGRESS_COLUMN_WIDTH = 340
+const STORAGE_MAIN_TABLE_SCROLL_X = 1100
+
 interface StorageMainTaskTableProps {
   tasks: StorageMainTask[]
   loading: boolean
@@ -79,7 +82,7 @@ export function StorageMainTaskTable({
     {
       title: '处理进度',
       key: 'progress',
-      width: 220,
+      width: STORAGE_PROGRESS_COLUMN_WIDTH,
       render: (_, record) => (
         <div className={styles.tableProgressCell}>
           <Progress
@@ -175,7 +178,7 @@ export function StorageMainTaskTable({
         columns={columns}
         dataSource={tasks}
         loading={loading}
-        scroll={{ x: 980 }}
+        scroll={{ x: STORAGE_MAIN_TABLE_SCROLL_X }}
         pagination={{
           current,
           total: hasMore && !countLoading ? undefined : (countLoading ? 0 : total),

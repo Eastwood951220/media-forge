@@ -4,6 +4,7 @@ import type { PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import StorageTaskListPage from '../StorageTaskListPage'
 import StorageTaskDetailPage from '../StorageTaskDetailPage'
+import { StorageMainTaskTable } from '../components/StorageMainTaskTable'
 import { deleteStorageMainTask, getStorageMainTask, listStorageMainTasks, listStorageSubTasks, retryStorageSubTask } from '@/api/storage/storageTasks'
 
 function wrapper({ children }: PropsWithChildren) {
@@ -144,6 +145,40 @@ describe('StorageTaskListPage', () => {
     })
     // Check for the progress column header
     expect(screen.getByRole('columnheader', { name: '处理进度' })).toBeInTheDocument()
+  })
+
+  it('allocates enough progress column space for long storage counts', () => {
+    const { container } = render(
+      <StorageMainTaskTable
+        tasks={[{
+          id: 'task-wide-progress',
+          alias: '云存储_长进度',
+          display_name: '云存储_长进度',
+          source: 'batch',
+          storage_mode: 'single',
+          status: 'completed',
+          total_count: 12345,
+          success_count: 12344,
+          failed_count: 1,
+          skipped_count: 0,
+          created_at: '2026-09-07T00:00:00Z',
+        }]}
+        loading={false}
+        total={1}
+        current={1}
+        pageSize={20}
+        onStop={vi.fn()}
+        onRestart={vi.fn()}
+        onDelete={vi.fn()}
+        onRefresh={vi.fn()}
+        onPageChange={vi.fn()}
+        onPageSizeChange={vi.fn()}
+      />,
+      { wrapper },
+    )
+
+    expect(screen.getByText('成功 12344')).toBeInTheDocument()
+    expect(container.querySelector('col[style*="width: 340px"]')).toBeInTheDocument()
   })
 
   it('does not mark mixed completed storage progress as exception', async () => {
