@@ -26,9 +26,11 @@ export function useMovieList(
 
     const filterKey = JSON.stringify(filterParams ?? {});
     const previousFilterKeyRef = useRef<string | null>(null);
+    const requestSeqRef = useRef(0);
 
     const loadMovies = useCallback(async () => {
         if (!filterParams) return;
+        const requestSeq = ++requestSeqRef.current;
         setLoading(true);
         try {
             const result = await fetchMovies({
@@ -38,13 +40,18 @@ export function useMovieList(
                 sort_by: sortBy,
                 sort_order: sortOrder,
             });
+            if (requestSeq !== requestSeqRef.current) return;
             setData(result);
         } catch (e: unknown) {
+            if (requestSeq !== requestSeqRef.current) return;
             message.error(getErrorMessage(e));
         } finally {
-            setLoading(false);
+            if (requestSeq === requestSeqRef.current) {
+                setLoading(false);
+            }
         }
-    }, [filterParams, message, page, pageSize, sortBy, sortOrder]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- Fetch identity is filter CONTENT (filterKey), not object identity: filterParams only changes content when filterKey changes, so keying off filterKey keeps identity-only parent rerenders from refetching equal queries.
+    }, [filterKey, message, page, pageSize, sortBy, sortOrder]);
 
     useEffect(() => {
         if (!filterParams) {

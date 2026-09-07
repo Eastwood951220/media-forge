@@ -2,7 +2,7 @@ import { App } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchMovies } from '@/api/movie'
 import { useMovieList } from '../hooks/useMovieList'
 
@@ -21,6 +21,9 @@ function wrapper({ children }: PropsWithChildren) {
 }
 
 describe('useMovieList', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
   it('loads movie list through a query keyed by filters and pagination', async () => {
     vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0 } as never)
 
@@ -42,10 +45,61 @@ describe('useMovieList', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
     act(() => result.current.handlePageChange(3, 20))
     await waitFor(() => expect(result.current.page).toBe(3))
+    act(() => result.current.setSelectedRowKeys(['movie-1']))
 
     rerender({ filters: { search: 'xyz' } })
 
     await waitFor(() => expect(result.current.page).toBe(1))
     expect(result.current.selectedRowKeys).toEqual([])
+    // The reload after the filter change must target the first page with the new filters.
+    expect(fetchMovies).toHaveBeenCalledWith(expect.objectContaining({ search: 'xyz', page: 1 }))
+  })
+
+  it('does not reset or refetch when a new object of equal filter content arrives', async () => {
+    vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, total_pages: 1 } as never)
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useMovieList(filters as never),
+      { wrapper, initialProps: { filters: { search: 'abc' } } },
+    )
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    act(() => result.current.handlePageChange(3, 20))
+    await waitFor(() => expect(result.current.page).toBe(3))
+
+    const callsBeforeEqualContentRerender = vi.mocked(fetchMovies).mock.calls.length
+    rerender({ filters: { search: 'abc' } })
+
+    await act(async () => {})
+    expect(result.current.page).toBe(3)
+    expect(vi.mocked(fetchMovies).mock.calls.length).toBe(callsBeforeEqualContentRerender)
+  })
+
+  it('discards responses from superseded requests that resolve out of order', async () => {
+    const filters = { search: 'abc' }
+    const resolvers: Array<(value: never) => void> = []
+    vi.mocked(fetchMovies).mockImplementation((() => new Promise<never>((resolve) => {
+      resolvers.push(resolve)
+    })) as never)
+
+    const { result } = renderHook(() => useMovieList(filters as never), { wrapper })
+    await waitFor(() => expect(resolvers).toHaveLength(1))
+    act(() => resolvers[0]({ items: [], total: 0, page: 1, page_size: 20, total_pages: 1 } as never))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => result.current.handlePageChange(2, 20))
+    await waitFor(() => expect(resolvers).toHaveLength(2))
+    act(() => result.current.handlePageChange(3, 20))
+    await waitFor(() => expect(resolvers).toHaveLength(3))
+
+    const page3Result = { items: [{ _id: 'm-3' }], total: 1, page: 3, page_size: 20, total_pages: 1 }
+    const page2Result = { items: [{ _id: 'm-2' }], total: 1, page: 2, page_size: 20, total_pages: 1 }
+
+    // Newest (page 3) resolves first and is applied...
+    await act(async () => { resolvers[2](page3Result as never) })
+    expect(result.current.data).toEqual(page3Result)
+    // ...then the superseded page-2 response lands late and must be discarded.
+    await act(async () => { resolvers[1](page2Result as never) })
+    expect(result.current.data).toEqual(page3Result)
   })
 })
