@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table'
 import type { StorageMainTask, StorageMainTaskStatus, StorageMode } from '@/api/storage/storageTasks/types'
 import ResponsiveActions, { type ResponsiveAction } from '@/components/ResponsiveActions'
 import styles from '../StorageTasks.module.less'
+import { getProgressStatus } from '../utils/progress'
 import { modeLabels, PAGE_SIZE_OPTIONS, statusLabels } from '../utils/status'
 
 interface StorageMainTaskTableProps {
@@ -27,12 +28,6 @@ function getProgressPercent(task: StorageMainTask) {
   if (!task.total_count) return 0
   const finished = task.success_count + task.failed_count + task.skipped_count
   return Math.min(100, Math.round((finished / task.total_count) * 100))
-}
-
-function getProgressStatus(task: StorageMainTask) {
-  const hasAnySuccess = task.success_count + task.skipped_count > 0
-  if (task.status === 'failed' && !hasAnySuccess) return 'exception' as const
-  return undefined
 }
 
 export function StorageMainTaskTable({

@@ -4,7 +4,7 @@ import type { PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import StorageTaskListPage from '../StorageTaskListPage'
 import StorageTaskDetailPage from '../StorageTaskDetailPage'
-import { deleteStorageMainTask, listStorageMainTasks, listStorageSubTasks, retryStorageSubTask } from '@/api/storage/storageTasks'
+import { deleteStorageMainTask, getStorageMainTask, listStorageMainTasks, listStorageSubTasks, retryStorageSubTask } from '@/api/storage/storageTasks'
 
 function wrapper({ children }: PropsWithChildren) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -191,5 +191,27 @@ describe('StorageTaskListPage', () => {
     fireEvent.click(retryButtons[0])
 
     await waitFor(() => expect(retryStorageSubTask).toHaveBeenCalledWith('sub-failed'))
+  })
+
+  it('does not mark completed mixed storage detail progress as exception', async () => {
+    vi.mocked(getStorageMainTask).mockResolvedValue({
+      id: 'task-detail-mixed-1',
+      alias: '云存储_详情部分失败',
+      display_name: '云存储_详情部分失败',
+      source: 'batch',
+      storage_mode: 'single',
+      status: 'completed',
+      total_count: 27,
+      success_count: 26,
+      failed_count: 1,
+      skipped_count: 0,
+      created_at: '2026-09-07T00:00:00Z',
+      finished_at: '2026-09-07T01:00:00Z',
+    } as never)
+
+    render(<StorageTaskDetailPage />)
+
+    expect(await screen.findByText('云存储_详情部分失败')).toBeInTheDocument()
+    expect(document.querySelector('.ant-progress-status-exception')).not.toBeInTheDocument()
   })
 })

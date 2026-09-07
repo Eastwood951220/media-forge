@@ -3,6 +3,7 @@ import { Alert, Button, Card, Descriptions, Progress, Space, Statistic, Tag, Typ
 import type { StorageMainTask } from '@/api/storage/storageTasks/types'
 import { formatDateTime } from '@/utils/datetime'
 import styles from '../StorageTasks.module.less'
+import { getProgressStatus } from '../utils/progress'
 import { modeLabels, statusLabels } from '../utils/status'
 
 interface StorageMainSummaryCardProps {
@@ -30,6 +31,7 @@ export function StorageMainSummaryCard({
 
   const status = statusLabels[task.status] || { text: task.status, color: 'default' }
   const progressPercent = getProgressPercent(task)
+  const progressStatus = getProgressStatus(task)
 
   return (
     <Card
@@ -74,8 +76,8 @@ export function StorageMainSummaryCard({
           <div className={styles.panelLabel}>任务进度</div>
           <Progress
             percent={progressPercent}
-            status={task.failed_count > 0 ? 'exception' : undefined}
-            strokeColor={task.failed_count > 0 ? undefined : '#1677ff'}
+            status={progressStatus}
+            strokeColor={progressStatus ? undefined : '#1677ff'}
           />
           <div className={styles.progressMeta}>
             <span>总数 {task.total_count}</span>
