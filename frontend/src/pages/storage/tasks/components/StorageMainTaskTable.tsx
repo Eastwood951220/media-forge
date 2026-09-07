@@ -29,6 +29,12 @@ function getProgressPercent(task: StorageMainTask) {
   return Math.min(100, Math.round((finished / task.total_count) * 100))
 }
 
+function getProgressStatus(task: StorageMainTask) {
+  const hasAnySuccess = task.success_count + task.skipped_count > 0
+  if (task.status === 'failed' && !hasAnySuccess) return 'exception' as const
+  return undefined
+}
+
 export function StorageMainTaskTable({
   tasks,
   loading,
@@ -84,12 +90,14 @@ export function StorageMainTaskTable({
           <Progress
             percent={getProgressPercent(record)}
             size="small"
-            status={record.failed_count > 0 ? 'exception' : undefined}
+            status={getProgressStatus(record)}
           />
           <div className={styles.tableProgressMeta}>
             <span>总 {record.total_count}</span>
             <span>成功 {record.success_count}</span>
-            <span>失败 {record.failed_count}</span>
+            <span className={record.failed_count > 0 ? styles.tableProgressFailedMeta : undefined}>
+              失败 {record.failed_count}
+            </span>
             <span>跳过 {record.skipped_count}</span>
           </div>
         </div>

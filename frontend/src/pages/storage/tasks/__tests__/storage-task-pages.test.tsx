@@ -146,6 +146,33 @@ describe('StorageTaskListPage', () => {
     expect(screen.getByRole('columnheader', { name: '处理进度' })).toBeInTheDocument()
   })
 
+  it('does not mark mixed completed storage progress as exception', async () => {
+    vi.mocked(listStorageMainTasks).mockResolvedValue({
+      rows: [{
+        id: 'task-mixed-1',
+        alias: '云存储_部分失败',
+        display_name: '云存储_部分失败',
+        source: 'batch',
+        storage_mode: 'single',
+        status: 'completed',
+        total_count: 27,
+        success_count: 26,
+        failed_count: 1,
+        skipped_count: 0,
+        created_at: '2026-09-07T00:00:00Z',
+      }],
+      page: 1,
+      size: 20,
+      has_more: false,
+    } as never)
+
+    render(<StorageTaskListPage />, { wrapper })
+
+    expect(await screen.findByText('云存储_部分失败')).toBeInTheDocument()
+    expect(document.querySelector('.ant-progress-status-exception')).not.toBeInTheDocument()
+    expect(screen.getByText('失败 1')).toBeInTheDocument()
+  })
+
   it('shows retry only for failed storage subtasks and retries that subtask', async () => {
     vi.mocked(listStorageSubTasks).mockResolvedValue({
       rows: [
