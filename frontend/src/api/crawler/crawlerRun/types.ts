@@ -31,6 +31,7 @@ export interface CrawlRun {
   created_at: string
   updated_at: string | null
   logs: RunLogEntry[]
+  summary?: RunTaskSummary | null
 }
 
 export interface CrawlRunDetailTask {
@@ -88,6 +89,7 @@ export interface CrawlRunListItem {
   run_scope?: CrawlRunScope | null
   run_scope_label?: string | null
   created_at: string
+  summary?: RunTaskSummary | null
 }
 
 /** Minimal run detail read (no logs, no result). */

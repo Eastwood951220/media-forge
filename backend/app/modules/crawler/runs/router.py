@@ -74,6 +74,12 @@ def _run_task_summary(db: Session, run: CrawlRun) -> dict:
     return summary.model_dump(mode="json")
 
 
+def _serialize_run_list_item(db: Session, run: CrawlRun) -> dict:
+    payload = serialize_run(run, CrawlRunListItem)
+    payload["summary"] = _run_task_summary(db, run)
+    return payload
+
+
 def _owned_agent_work_items(db: Session, run_id: uuid.UUID):
     return (
         db.query(CrawlerAgentWorkItem)
@@ -137,7 +143,7 @@ def list_runs(
         .all()
     )
     return paginated(
-        rows=[serialize_run(r, CrawlRunListItem) for r in rows],
+        rows=[_serialize_run_list_item(db, r) for r in rows],
         total=total,
     )
 

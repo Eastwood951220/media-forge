@@ -205,7 +205,7 @@ describe('StorageTaskListPage', () => {
 
     expect(await screen.findByText('云存储_部分失败')).toBeInTheDocument()
     expect(document.querySelector('.ant-progress-status-exception')).not.toBeInTheDocument()
-    expect(screen.getByText('失败 1')).toBeInTheDocument()
+    expect(screen.getByText('失败 1').className).toContain('tableProgressErrorMeta')
   })
 
   it('shows retry only for failed storage subtasks and retries that subtask', async () => {

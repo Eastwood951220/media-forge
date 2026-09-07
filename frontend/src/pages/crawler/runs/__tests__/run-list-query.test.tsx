@@ -85,6 +85,36 @@ describe('RunListPage', () => {
     expect(nameLine).toHaveTextContent('部分 URL')
   })
 
+  it('renders crawler progress summary in the run list', async () => {
+    vi.mocked(getCrawlerRuns).mockResolvedValue({
+      rows: [{
+        ...buildRun('completed'),
+        summary: {
+          total: 4,
+          pending_crawl: 0,
+          crawling: 0,
+          saved: 1,
+          skipped: 1,
+          crawl_failed: 2,
+          save_failed: 0,
+          completed: 2,
+          waiting: 0,
+          failed: 2,
+        },
+      }],
+      total: 1,
+    } as unknown as RunListResponse)
+
+    render(<RunListPage />, { wrapper })
+
+    expect(await screen.findByRole('columnheader', { name: '爬虫进度' })).toBeInTheDocument()
+    expect(await screen.findByText('Run Task')).toBeInTheDocument()
+    expect(screen.getByText('总 4')).toBeInTheDocument()
+    expect(screen.getByText('成功 2')).toBeInTheDocument()
+    expect(screen.getByText('失败 2').className).toContain('runProgressErrorMeta')
+    expect(screen.getByText('跳过 1')).toBeInTheDocument()
+  })
+
   it('hydrates baseline run status from the store on mount', async () => {
     vi.mocked(getCrawlerRuns).mockResolvedValue({
       rows: [buildRun('running')],

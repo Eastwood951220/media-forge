@@ -42,6 +42,19 @@ class CrawlRunRead(BaseModel):
     updated_at: datetime | None
 
 
+class RunTaskSummary(BaseModel):
+    total: int = 0
+    pending_crawl: int = 0
+    crawling: int = 0
+    saved: int = 0
+    skipped: int = 0
+    crawl_failed: int = 0
+    save_failed: int = 0
+    completed: int = 0
+    waiting: int = 0
+    failed: int = 0
+
+
 class CrawlRunListItem(BaseModel):
     """Lightweight list item — no logs, no detail_tasks."""
 
@@ -62,6 +75,7 @@ class CrawlRunListItem(BaseModel):
     resumed_from: uuid.UUID | None
     created_at: datetime
     updated_at: datetime | None
+    summary: RunTaskSummary | None = None
 
 
 class CrawlRunDetailRead(BaseModel):
@@ -180,19 +194,6 @@ class AgentWorkSummary(BaseModel):
 class AgentWorkItemPage(BaseModel):
     rows: list[AgentWorkItemRead]
     summary: AgentWorkSummary
-
-
-class RunTaskSummary(BaseModel):
-    total: int = 0
-    pending_crawl: int = 0
-    crawling: int = 0
-    saved: int = 0
-    skipped: int = 0
-    crawl_failed: int = 0
-    save_failed: int = 0
-    completed: int = 0
-    waiting: int = 0
-    failed: int = 0
 
 
 class RunTaskPage(BaseModel):

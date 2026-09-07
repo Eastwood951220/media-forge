@@ -93,7 +93,7 @@ export function StorageMainTaskTable({
           <div className={styles.tableProgressMeta}>
             <span>总 {record.total_count}</span>
             <span>成功 {record.success_count}</span>
-            <span className={record.failed_count > 0 ? styles.tableProgressFailedMeta : undefined}>
+            <span className={record.failed_count > 0 ? styles.tableProgressErrorMeta : undefined}>
               失败 {record.failed_count}
             </span>
             <span>跳过 {record.skipped_count}</span>

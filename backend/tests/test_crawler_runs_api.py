@@ -117,6 +117,42 @@ def test_run_list_and_detail_endpoints(client: TestClient, admin_user, monkeypat
     assert tasks_response.json()["rows"] == []
 
 
+def test_run_list_includes_task_summary(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    task = CrawlTask(name="summary-task", storage_location="A", owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="completed", crawl_mode="full")
+    session.add(run)
+    session.flush()
+    session.add_all([
+        CrawlRunDetailTask(run_id=run.id, task_name=task.name, code="S", source_url="https://s", source_name="S", status="saved", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name=task.name, code="K", source_url="https://k", source_name="K", status="skipped", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name=task.name, code="C", source_url="https://c", source_name="C", status="crawl_failed", created_at=datetime.now()),
+        CrawlRunDetailTask(run_id=run.id, task_name=task.name, code="F", source_url="https://f", source_name="F", status="save_failed", created_at=datetime.now()),
+    ])
+    session.commit()
+
+    response = client.get("/api/crawler/runs", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    rows = response.json()["rows"]
+    row = next(item for item in rows if item["id"] == str(run.id))
+    assert row["summary"] == {
+        "total": 4,
+        "pending_crawl": 0,
+        "crawling": 0,
+        "saved": 1,
+        "skipped": 1,
+        "crawl_failed": 1,
+        "save_failed": 1,
+        "completed": 2,
+        "waiting": 0,
+        "failed": 2,
+    }
+
+
 def test_run_list_and_detail_include_scope_display_fields(client: TestClient, admin_user, monkeypatch) -> None:
     headers = auth_headers(client, admin_user)
     payload = task_payload()

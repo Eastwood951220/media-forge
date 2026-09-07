@@ -1,11 +1,11 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined} from '@ant-design/icons'
 import {useNavigate} from '@tanstack/react-router'
-import {Card, message, Table, Tag} from 'antd'
+import {Card, message, Progress, Table, Tag} from 'antd'
 import type {ColumnsType} from 'antd/es/table'
 import {useQuery, useQueryClient} from '@tanstack/react-query'
 import {deleteCrawlerRun, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun} from '@/api/crawler/crawlerRun'
-import type {CrawlRun, CrawlRunStatus} from '@/api/crawler/crawlerRun/types'
+import type {CrawlRun, CrawlRunStatus, RunTaskSummary} from '@/api/crawler/crawlerRun/types'
 import {queryKeys} from '@/api/queryKeys'
 import {invalidateCrawlerTaskLists} from '@/api/queryInvalidation'
 import {StatusTag} from '@/components/common'
@@ -24,11 +24,39 @@ const statusLabels: Record<string, { text: string; color: string }> = {
 }
 
 const PAGE_SIZE_OPTIONS = ['10', '20', '50']
+const CRAWLER_PROGRESS_COLUMN_WIDTH = 340
+const CRAWLER_RUN_TABLE_SCROLL_X = 1120
 
 const runScopeColors: Record<string, string> = {
   task_full: 'default',
   task_url_subset: 'cyan',
   temporary_detail: 'orange',
+}
+
+function emptyRunTaskSummary(): RunTaskSummary {
+  return {
+    total: 0,
+    pending_crawl: 0,
+    crawling: 0,
+    saved: 0,
+    skipped: 0,
+    crawl_failed: 0,
+    save_failed: 0,
+    completed: 0,
+    waiting: 0,
+    failed: 0,
+  }
+}
+
+function getRunProgressPercent(summary: RunTaskSummary) {
+  if (!summary.total) return 0
+  const finished = summary.completed + summary.failed
+  return Math.min(100, Math.round((finished / summary.total) * 100))
+}
+
+function getRunProgressStatus(run: CrawlRun, summary: RunTaskSummary): 'exception' | undefined {
+  if (run.status === 'failed' && summary.completed === 0) return 'exception'
+  return undefined
 }
 
 function RunListPage() {
@@ -228,6 +256,31 @@ function RunListPage() {
       },
     },
     {
+      title: '爬虫进度',
+      key: 'progress',
+      width: CRAWLER_PROGRESS_COLUMN_WIDTH,
+      render: (_, record) => {
+        const summary = record.summary ?? emptyRunTaskSummary()
+        return (
+          <div className={styles.runProgressCell}>
+            <Progress
+              percent={getRunProgressPercent(summary)}
+              size="small"
+              status={getRunProgressStatus(record, summary)}
+            />
+            <div className={styles.runProgressMeta}>
+              <span>总 {summary.total}</span>
+              <span>成功 {summary.completed}</span>
+              <span className={summary.failed > 0 ? styles.runProgressErrorMeta : undefined}>
+                失败 {summary.failed}
+              </span>
+              <span>跳过 {summary.skipped}</span>
+            </div>
+          </div>
+        )
+      },
+    },
+    {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
@@ -299,7 +352,7 @@ function RunListPage() {
         columns={columns}
         dataSource={runs}
         loading={loading}
-        scroll={{ x: 980 }}
+        scroll={{ x: CRAWLER_RUN_TABLE_SCROLL_X }}
         pagination={{
           current,
           total,
