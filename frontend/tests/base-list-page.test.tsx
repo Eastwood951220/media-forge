@@ -83,6 +83,64 @@ describe('BaseListPage', () => {
     globalThis.ResizeObserver = OriginalResizeObserver
   })
 
+  it('keeps the previous table height when hidden layout reports zero before returning', () => {
+    const resizeCallbacks: ResizeObserverCallback[] = []
+    const OriginalResizeObserver = globalThis.ResizeObserver
+
+    globalThis.ResizeObserver = class ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback)
+      }
+
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+
+    try {
+      const { container, unmount } = render(
+        <BaseListPage<Row>
+          rowKey="id"
+          columnSettingsKey="height-list"
+          columns={columns}
+          dataSource={[{ id: 1, name: '影片A' }]}
+        />,
+      )
+
+      act(() => {
+        resizeCallbacks[0]?.([
+          { contentRect: { height: 520 } as DOMRectReadOnly } as ResizeObserverEntry,
+        ], {} as ResizeObserver)
+      })
+
+      const tableBody = container.querySelector('.ant-table-body') as HTMLElement | null
+      expect(tableBody?.style.maxHeight).toBe('400px')
+
+      act(() => {
+        resizeCallbacks[0]?.([
+          { contentRect: { height: 0 } as DOMRectReadOnly } as ResizeObserverEntry,
+        ], {} as ResizeObserver)
+      })
+
+      expect(tableBody?.style.maxHeight).toBe('400px')
+
+      unmount()
+      const remounted = render(
+        <BaseListPage<Row>
+          rowKey="id"
+          columnSettingsKey="height-list"
+          columns={columns}
+          dataSource={[{ id: 1, name: '影片A' }]}
+        />,
+      )
+
+      const remountedTableBody = remounted.container.querySelector('.ant-table-body') as HTMLElement | null
+      expect(remountedTableBody?.style.maxHeight).toBe('400px')
+    } finally {
+      globalThis.ResizeObserver = OriginalResizeObserver
+    }
+  })
+
   it('applies persisted column visibility and order when a settings key is provided', () => {
     localStorage.setItem(
       'media-forge:list-columns:test-list',

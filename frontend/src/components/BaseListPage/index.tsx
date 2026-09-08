@@ -7,6 +7,7 @@ import styles from './index.module.less'
 const TABLE_SCROLL_OFFSET = 120
 const MIN_TABLE_SCROLL_Y = 160
 const COLUMN_SETTINGS_STORAGE_PREFIX = 'media-forge:list-columns:'
+const tableHeightCache = new Map<string, number>()
 
 type ColumnSettings = {
   order: string[]
@@ -84,9 +85,9 @@ function writeColumnSettings(storageKey: string | undefined, settings: ColumnSet
   window.localStorage.setItem(storageKey, JSON.stringify(settings))
 }
 
-function useElementHeight<T extends HTMLElement>() {
+function useElementHeight<T extends HTMLElement>(cacheKey?: string) {
   const ref = useRef<T | null>(null)
-  const [height, setHeight] = useState(0)
+  const [height, setHeight] = useState(() => cacheKey ? tableHeightCache.get(cacheKey) ?? 0 : 0)
 
   useEffect(() => {
     const element = ref.current
@@ -97,12 +98,17 @@ function useElementHeight<T extends HTMLElement>() {
       if (!entry) return
 
       const nextHeight = Math.round(entry.contentRect.height)
+      if (nextHeight <= 0) return
+
+      if (cacheKey) {
+        tableHeightCache.set(cacheKey, nextHeight)
+      }
       setHeight((previousHeight) => (previousHeight === nextHeight ? previousHeight : nextHeight))
     })
 
     resizeObserver.observe(element)
     return () => resizeObserver.disconnect()
-  }, [])
+  }, [cacheKey])
 
   return { ref, height }
 }
@@ -123,7 +129,7 @@ export default function BaseListPage<T extends object>({
   columnSettingsKey,
 }: BaseListPageProps<T>) {
   const [queryVisible, setQueryVisible] = useState(queryVisibleDefault)
-  const { ref: tableWrapperRef, height: tableWrapperHeight } = useElementHeight<HTMLDivElement>()
+  const { ref: tableWrapperRef, height: tableWrapperHeight } = useElementHeight<HTMLDivElement>(columnSettingsKey)
   const columnItems = useMemo(() => createColumnItems(columns), [columns])
   const columnIds = useMemo(() => columnItems.map((item) => item.id), [columnItems])
   const columnStorageKey = columnSettingsKey
