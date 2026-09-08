@@ -100,7 +100,7 @@ function MovieListPage() {
           total: list.data.total,
           pageSize: list.pageSize,
           showSizeChanger: true,
-          pageSizeOptions: ['20', '50', '100'],
+          pageSizeOptions: ['20', '50', '100', '200', '300'],
           showTotal: (count) => `共 ${count} 条`,
         }}
         queryNode={queryNode}
