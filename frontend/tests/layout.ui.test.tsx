@@ -1,15 +1,17 @@
+import React from 'react'
 import { act, render, screen, within } from '@testing-library/react'
 import { createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import { createMemoryHistory } from '@tanstack/react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AppLayout from '../src/layout'
 import headerStyles from '../src/layout/Header/Header.module.less'
+import layoutStyles from '../src/layout/index.module.less'
 import { useAuthStore } from '../src/stores/useAuthStore'
 import { useTagsViewStore } from '../src/stores/useTagsViewStore'
 import { useThemeStore } from '../src/stores/useThemeStore'
 
 vi.mock('keepalive-for-react', () => ({
-  KeepAlive: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  KeepAlive: ({ children }: { children: React.ReactNode }) => children,
   useKeepAliveRef: () => ({
     current: {
       destroy: vi.fn(),
@@ -23,6 +25,10 @@ vi.mock('keepalive-for-react', () => ({
 
 vi.mock('@/realtime/useRealtimeLifecycle', () => ({
   useRealtimeLifecycle: vi.fn(),
+}))
+
+vi.mock('@/components/ThemeModeToggle', () => ({
+  ThemeModeToggle: () => <button type="button" aria-label="切换明暗模式" />,
 }))
 
 function renderLayout(initialPath = '/') {
@@ -116,5 +122,41 @@ describe('modern console layout', () => {
     const header = await screen.findByRole('banner')
     expect(header).toHaveClass(headerStyles.header)
     expect(header).toHaveClass(headerStyles.dark)
+  })
+
+  it('keeps route cache wrappers constrained inside the content viewport', async () => {
+    const { container } = render(
+      <main className={layoutStyles.content}>
+        <div className={layoutStyles.pageContainer}>
+          <div className="keep-alive-render">
+            <div className="keepalive-cache-div cache-component active">
+              <div>cached page</div>
+            </div>
+          </div>
+        </div>
+      </main>,
+    )
+
+    const content = container.querySelector(`.${layoutStyles.content}`)
+    const pageContainer = container.querySelector(`.${layoutStyles.pageContainer}`)
+    const keepAliveRender = container.querySelector('.keep-alive-render')
+    const cachedPage = container.querySelector('.keepalive-cache-div')
+
+    expect(content).toHaveStyle({ overflow: 'auto' })
+    expect(pageContainer).toHaveStyle({
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '0',
+    })
+    expect(keepAliveRender).toHaveStyle({
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '0',
+    })
+    expect(cachedPage).toHaveStyle({
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '0',
+    })
   })
 })
