@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import BaseListPage from '../src/components/BaseListPage'
+import styles from '../src/components/BaseListPage/index.module.less'
 import type { ColumnsType } from 'antd/es/table'
 
 type Row = {
@@ -222,6 +223,55 @@ describe('BaseListPage', () => {
         configurable: true,
         value: originalInnerHeight,
       })
+    }
+  })
+
+  it('keeps overflow constrained to the table body when many rows are rendered', () => {
+    let resizeCallback: ResizeObserverCallback | undefined
+    const OriginalResizeObserver = globalThis.ResizeObserver
+
+    globalThis.ResizeObserver = class ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback
+      }
+
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+
+    try {
+      const rows = Array.from({ length: 50 }, (_, index) => ({
+        id: index + 1,
+        name: `影片${index + 1}`,
+      }))
+      const { container } = render(
+        <BaseListPage<Row>
+          rowKey="id"
+          columnSettingsKey="overflow-list"
+          columns={columns}
+          dataSource={rows}
+          pagination={{ current: 1, pageSize: 50, total: 50 }}
+        />,
+      )
+
+      act(() => {
+        resizeCallback?.([
+          { contentRect: { height: 520 } as DOMRectReadOnly } as ResizeObserverEntry,
+        ], {} as ResizeObserver)
+      })
+
+      const tableWrapper = container.querySelector(`.${styles.tableWrapper}`)
+      const tableRoot = container.querySelector('.ant-table-wrapper')
+      const tableContainer = container.querySelector('.ant-table-container')
+      const tableBody = container.querySelector('.ant-table-body')
+
+      expect(tableWrapper).toHaveStyle({ overflow: 'hidden' })
+      expect(tableRoot).toHaveStyle({ overflow: 'hidden' })
+      expect(tableContainer).toHaveStyle({ overflow: 'hidden' })
+      expect(tableBody).toHaveStyle({ maxHeight: '400px' })
+    } finally {
+      globalThis.ResizeObserver = OriginalResizeObserver
     }
   })
 
