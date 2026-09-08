@@ -236,6 +236,19 @@ class TestCrawlTasksApi:
         assert data["total"] == 25
         assert len(data["rows"]) == 25
 
+    def test_list_tasks_rejects_page_size_above_cap(
+        self,
+        client: TestClient,
+        admin_user,
+    ) -> None:
+        headers = auth_headers(client, admin_user)
+
+        accepted = client.get("/api/crawler/tasks?size=160", headers=headers)
+        assert accepted.status_code == HTTPStatus.OK
+
+        rejected = client.get("/api/crawler/tasks?size=161", headers=headers)
+        assert rejected.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
     def test_task_detail_keeps_full_edit_fields(
         self,
         client: TestClient,

@@ -26,7 +26,7 @@ def list_tasks(
     current_user: CurrentUser,
     db: Session = Depends(get_db),
     page: int = Query(default=1, ge=1),
-    size: int = Query(default=20, ge=1, le=100),
+    size: int = Query(default=20, ge=1, le=160),
     keyword: str | None = Query(default=None, max_length=200),
     tag_names: list[str] | None = Query(default=None),
 ) -> dict:

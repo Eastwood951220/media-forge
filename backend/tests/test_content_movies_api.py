@@ -56,6 +56,16 @@ def test_list_movies_search_and_source_task(client: TestClient, admin_user) -> N
     assert str(TASK_ID_A) in body["rows"][0]["source_task_ids"]
 
 
+def test_list_movies_accepts_page_size_up_to_cap(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+
+    accepted = client.get("/api/content/movies?limit=300", headers=headers)
+    assert accepted.status_code == HTTPStatus.OK
+
+    rejected = client.get("/api/content/movies?limit=301", headers=headers)
+    assert rejected.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
 def test_get_movie_detail_includes_magnets(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
     movie_id = seed_movie()

@@ -53,7 +53,7 @@ def list_movies(
     db: Session = Depends(get_db),
     skip: int | None = Query(default=None, ge=0),
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=300),
     keyword: str | None = Query(default=None, max_length=200),
     search: str | None = Query(default=None, max_length=200),
     source_task_id: str | None = Query(default=None, max_length=36),
