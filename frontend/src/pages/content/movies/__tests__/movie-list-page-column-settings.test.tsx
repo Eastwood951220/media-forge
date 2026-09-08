@@ -30,6 +30,7 @@ vi.mock('../hooks/useMovieFilters', () => ({
     filtersLoading: false,
     requestParams: {},
     search: vi.fn(),
+    form: { selectedTask: undefined },
   }),
 }))
 

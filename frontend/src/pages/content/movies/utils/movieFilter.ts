@@ -150,3 +150,9 @@ export function buildMovieFilterDefaultState(config: MovieFilterConfig | undefin
 
     return defaults;
 }
+
+export function taskPresetFromSearch(search: string): string | undefined {
+    const params = new URLSearchParams(search);
+    const taskId = params.get("task_id");
+    return taskId ? taskId : undefined;
+}
