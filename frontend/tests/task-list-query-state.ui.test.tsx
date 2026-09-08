@@ -5,10 +5,16 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListPage from '../src/pages/crawler/tasks/TaskListPage'
 import { useCrawlerRuntimeStore } from '../src/stores/useCrawlerRuntimeStore'
+import { useTaskListQueryStore } from '../src/pages/crawler/tasks/useTaskListQueryStore'
 import { getCrawlTasks } from '@/api/crawler/crawlTask'
 
 vi.mock('@/api/crawler/crawlTask', () => ({
+  batchCreateCrawlTasks: vi.fn(),
+  batchRunCrawlTasks: vi.fn(),
+  createTemporaryCrawlRun: vi.fn(),
+  getCrawlTaskTags: vi.fn().mockResolvedValue([{ name: 'VR' }]),
   getCrawlTasks: vi.fn(),
+  getTaskDict: vi.fn().mockResolvedValue([]),
   deleteCrawlTask: vi.fn(),
   updateCrawlTask: vi.fn(),
 }))
@@ -75,6 +81,8 @@ function renderTaskRoutes() {
 
 describe('TaskListPage routing', () => {
   beforeEach(() => {
+    sessionStorage.clear()
+    useTaskListQueryStore.getState().reset()
     useCrawlerRuntimeStore.getState().reset()
     useCrawlerRuntimeStore.setState({
       taskSnapshotReady: true,
@@ -106,5 +114,17 @@ describe('TaskListPage routing', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'tasks' }))
     expect(await screen.findByText('临时任务')).toBeInTheDocument()
+  })
+
+  it('restores cached tag filters when entering the task list again', async () => {
+    sessionStorage.setItem(
+      'media-forge:crawler-task-list-filter-state',
+      JSON.stringify({ selectedTagNames: ['VR'] }),
+    )
+
+    renderTaskRoutes()
+
+    await screen.findByText('临时任务')
+    expect(getCrawlTasks).toHaveBeenCalledWith(expect.objectContaining({ tag_names: ['VR'] }))
   })
 })

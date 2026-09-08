@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import StorageTaskListPage from '../StorageTaskListPage'
 import StorageTaskDetailPage from '../StorageTaskDetailPage'
 import { StorageMainTaskTable } from '../components/StorageMainTaskTable'
-import { deleteStorageMainTask, getStorageMainTask, listStorageMainTasks, listStorageSubTasks, retryStorageSubTask } from '@/api/storage/storageTasks'
+import { countStorageMainTasks, deleteStorageMainTask, getStorageMainTask, listStorageMainTasks, listStorageSubTasks, retryStorageSubTask } from '@/api/storage/storageTasks'
 
 function wrapper({ children }: PropsWithChildren) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -49,7 +49,9 @@ vi.mock('@tanstack/react-router', () => ({
 describe('StorageTaskListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    sessionStorage.clear()
     vi.mocked(listStorageMainTasks).mockResolvedValue({ rows: [], page: 1, size: 20, has_more: false } as never)
+    vi.mocked(countStorageMainTasks).mockResolvedValue({ total: 0 } as never)
   })
 
   it('renders storage task list heading', () => {
@@ -145,6 +147,39 @@ describe('StorageTaskListPage', () => {
     })
     // Check for the progress column header
     expect(screen.getByRole('columnheader', { name: '处理进度' })).toBeInTheDocument()
+  })
+
+  it('keeps pagination and refreshes that page when the storage task list is mounted again', async () => {
+    vi.mocked(countStorageMainTasks).mockResolvedValue({ total: 120 } as never)
+    vi.mocked(listStorageMainTasks).mockResolvedValue({
+      rows: [{
+        id: 'task-page-1',
+        alias: '云存储_分页测试',
+        display_name: '云存储_分页测试',
+        source: 'batch',
+        storage_mode: 'single',
+        status: 'completed',
+        total_count: 1,
+        success_count: 1,
+        failed_count: 0,
+        skipped_count: 0,
+        created_at: '2026-09-08T00:00:00Z',
+      }],
+      page: 1,
+      size: 20,
+      has_more: false,
+    } as never)
+
+    const { unmount } = render(<StorageTaskListPage />, { wrapper })
+
+    await screen.findByText('云存储_分页测试')
+    fireEvent.click(screen.getByTitle('2'))
+    await waitFor(() => expect(listStorageMainTasks).toHaveBeenCalledWith({ page: 2, size: 20 }))
+
+    unmount()
+    render(<StorageTaskListPage />, { wrapper })
+
+    await waitFor(() => expect(listStorageMainTasks).toHaveBeenLastCalledWith({ page: 2, size: 20 }))
   })
 
   it('allocates enough progress column space for long storage counts', () => {

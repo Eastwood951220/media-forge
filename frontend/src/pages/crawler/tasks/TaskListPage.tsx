@@ -18,6 +18,7 @@ import { queryKeys } from '@/api/queryKeys'
 import { invalidateCrawlerRunLists, invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
 import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
 import type { CrawlTask } from '@/api/crawler/crawlTask/types'
+import { useSessionListState } from '@/hooks/useSessionListState'
 import BatchTaskCreateDrawer from './components/BatchTaskCreateDrawer'
 import type { BatchTaskCreateFormValues } from './components/BatchTaskCreateDrawer'
 import TaskUrlRunModal from './components/TaskUrlRunModal'
@@ -31,12 +32,17 @@ import { useTaskListQueryStore } from './useTaskListQueryStore'
 import { MetricGrid } from '@/components/common'
 import styles from './TaskPages.module.less'
 
+const TASK_LIST_FILTER_STATE_CACHE_KEY = 'media-forge:crawler-task-list-filter-state'
+
 function TaskListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
 
-  const [selectedTagNames, setSelectedTagNames] = useState<string[]>([])
+  const [filterState, setFilterState] = useSessionListState(TASK_LIST_FILTER_STATE_CACHE_KEY, {
+    selectedTagNames: [] as string[],
+  })
+  const selectedTagNames = filterState.selectedTagNames
   const tagOptionsQuery = useQuery({
     queryKey: queryKeys.crawlerTasks.tags(),
     queryFn: getCrawlTaskTags,
@@ -133,10 +139,10 @@ function TaskListPage() {
   }, [markBatchRunsQueued, message, queryClient, selectedTaskIds])
 
   const handleTagFilterChange = useCallback((nextTags: string[]) => {
-    setSelectedTagNames(nextTags)
+    setFilterState({ selectedTagNames: nextTags })
     setSelectedTaskIds([])
     setCurrent(1)
-  }, [setCurrent])
+  }, [setCurrent, setFilterState])
 
   const keyword = useTaskListQueryStore((state) => state.keyword)
   const setKeyword = useTaskListQueryStore((state) => state.setKeyword)

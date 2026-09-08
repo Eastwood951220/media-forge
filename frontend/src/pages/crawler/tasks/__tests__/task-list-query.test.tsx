@@ -35,6 +35,7 @@ const taskRow = {
 describe('useTaskListData', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    sessionStorage.clear()
     useCrawlerRuntimeStore.getState().reset()
     useTaskListQueryStore.getState().reset()
   })
@@ -89,5 +90,25 @@ describe('useTaskListData', () => {
 
     await waitFor(() => expect(result.current.current).toBe(1))
     expect(getCrawlTasks).toHaveBeenCalledWith(expect.objectContaining({ keyword: 'prestige' }))
+  })
+
+  it('keeps pagination when the task list hook is mounted again', async () => {
+    vi.mocked(getCrawlTasks).mockResolvedValue({ rows: [], total: 80, page: 1, size: 20 } as never)
+
+    const { result, unmount } = renderHook(() => useTaskListData(), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => {
+      result.current.setCurrent(3)
+      result.current.setPageSize(40)
+    })
+    await waitFor(() => expect(getCrawlTasks).toHaveBeenCalledWith(expect.objectContaining({ page: 3, size: 40 })))
+
+    unmount()
+    const remounted = renderHook(() => useTaskListData(), { wrapper })
+
+    await waitFor(() => expect(remounted.result.current.current).toBe(3))
+    expect(remounted.result.current.pageSize).toBe(40)
+    expect(getCrawlTasks).toHaveBeenLastCalledWith(expect.objectContaining({ page: 3, size: 40 }))
   })
 })

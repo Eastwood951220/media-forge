@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import {useCallback, useEffect, useMemo, useRef, type SetStateAction} from 'react'
 import {DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined} from '@ant-design/icons'
 import {useNavigate} from '@tanstack/react-router'
 import {Card, message, Progress, Table, Tag} from 'antd'
@@ -10,6 +10,7 @@ import {queryKeys} from '@/api/queryKeys'
 import {invalidateCrawlerTaskLists} from '@/api/queryInvalidation'
 import {StatusTag} from '@/components/common'
 import ResponsiveActions, {type ResponsiveAction} from '@/components/ResponsiveActions'
+import {useSessionListState} from '@/hooks/useSessionListState'
 import {useCrawlerRuntimeStore} from '@/stores/useCrawlerRuntimeStore'
 import {subscribeRealtime} from '@/realtime/eventSourceClient'
 import {useRouteActivationRefresh} from '@/hooks/useRouteActivationRefresh'
@@ -26,6 +27,7 @@ const statusLabels: Record<string, { text: string; color: string }> = {
 const PAGE_SIZE_OPTIONS = ['10', '20', '50']
 const CRAWLER_PROGRESS_COLUMN_WIDTH = 340
 const CRAWLER_RUN_TABLE_SCROLL_X = 1120
+const RUN_LIST_STATE_CACHE_KEY = 'media-forge:crawler-run-list-state'
 
 const runScopeColors: Record<string, string> = {
   task_full: 'default',
@@ -62,8 +64,24 @@ function getRunProgressStatus(run: CrawlRun, summary: RunTaskSummary): 'exceptio
 function RunListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [current, setCurrent] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [listState, setListState] = useSessionListState(RUN_LIST_STATE_CACHE_KEY, {
+    current: 1,
+    pageSize: 20,
+  })
+  const current = listState.current
+  const pageSize = listState.pageSize
+  const setCurrent = useCallback((value: SetStateAction<number>) => {
+    setListState((previous) => ({
+      ...previous,
+      current: typeof value === 'function' ? value(previous.current) : value,
+    }))
+  }, [setListState])
+  const setPageSize = useCallback((value: SetStateAction<number>) => {
+    setListState((previous) => ({
+      ...previous,
+      pageSize: typeof value === 'function' ? value(previous.pageSize) : value,
+    }))
+  }, [setListState])
 
   const listParams = useMemo(() => ({ page: current, size: pageSize }), [current, pageSize])
   const listQuery = useQuery({
@@ -208,7 +226,7 @@ function RunListPage() {
       setCurrent(nextPage)
     }
     await message.success('已删除运行记录')
-  }, [current, queryClient, refreshRuns, removeRunRuntime, runs.length])
+  }, [current, queryClient, refreshRuns, removeRunRuntime, runs.length, setCurrent])
 
   const columns: ColumnsType<CrawlRun> = [
     {

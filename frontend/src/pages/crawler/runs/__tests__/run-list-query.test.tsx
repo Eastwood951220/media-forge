@@ -49,6 +49,7 @@ function wrapper({ children }: PropsWithChildren) {
 describe('RunListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    sessionStorage.clear()
     realtimeMock.handlers = {}
     useCrawlerRuntimeStore.getState().reset()
   })
@@ -258,5 +259,26 @@ describe('RunListPage', () => {
 
     warningSpy.mockRestore()
     successSpy.mockRestore()
+  })
+
+  it('keeps pagination and refreshes that page when the run list is mounted again', async () => {
+    vi.mocked(getCrawlerRuns).mockResolvedValue({
+      rows: [buildRun('completed')],
+      total: 120,
+      page: 1,
+      size: 20,
+      has_more: true,
+    } as never)
+
+    const { unmount } = render(<RunListPage />, { wrapper })
+
+    await screen.findByText('Run Task')
+    fireEvent.click(screen.getByTitle('2'))
+    await waitFor(() => expect(getCrawlerRuns).toHaveBeenCalledWith({ page: 2, size: 20 }))
+
+    unmount()
+    render(<RunListPage />, { wrapper })
+
+    await waitFor(() => expect(getCrawlerRuns).toHaveBeenLastCalledWith({ page: 2, size: 20 }))
   })
 })

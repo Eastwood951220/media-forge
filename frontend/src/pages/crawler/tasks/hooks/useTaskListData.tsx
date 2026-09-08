@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type SetStateAction } from 'react'
+import { useCallback, useEffect, useMemo, type SetStateAction } from 'react'
 import { Modal, Select, Typography, message } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -14,6 +14,7 @@ import { restartCrawlerRun, runCrawlTask, stopCrawlerRun } from '@/api/crawler/c
 import type { CrawlMode } from '@/api/crawler/crawlerRun/types'
 import { queryKeys } from '@/api/queryKeys'
 import { invalidateCrawlerRunLists } from '@/api/queryInvalidation'
+import { useSessionListState } from '@/hooks/useSessionListState'
 import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import { useTaskListQueryStore } from '../useTaskListQueryStore'
 import styles from '../TaskPages.module.less'
@@ -23,6 +24,8 @@ const deleteModeOptions: Array<{ value: DeleteMode; label: string }> = [
   { value: 'task_and_movies', label: '删除任务和关联影片' },
   { value: 'task_movies_and_cloud', label: '删除任务、关联影片和云存储' },
 ]
+
+const TASK_LIST_STATE_CACHE_KEY = 'media-forge:crawler-task-list-state'
 
 function queuedSnapshot(taskId: string, runId: string | null) {
   const now = new Date().toISOString()
@@ -42,7 +45,7 @@ export function useTaskListData({ tagNames = [] }: { tagNames?: string[] } = {})
   const normalizedKeyword = keyword.trim()
   const tagKey = tagNames.join('\u0000')
   const searchKey = `${normalizedKeyword}\u0000${tagKey}`
-  const [pagination, setPagination] = useState({
+  const [pagination, setPagination] = useSessionListState(TASK_LIST_STATE_CACHE_KEY, {
     current: 1,
     pageSize: 20,
     searchKey,
@@ -55,14 +58,20 @@ export function useTaskListData({ tagNames = [] }: { tagNames?: string[] } = {})
       const nextCurrent = typeof value === 'function' ? value(previousCurrent) : value
       return { ...previous, current: nextCurrent, searchKey }
     })
-  }, [searchKey])
+  }, [searchKey, setPagination])
   const setPageSize = useCallback((value: SetStateAction<number>) => {
     setPagination((previous) => {
       const previousCurrent = previous.searchKey === searchKey ? previous.current : 1
       const nextPageSize = typeof value === 'function' ? value(previous.pageSize) : value
       return { current: previousCurrent, pageSize: nextPageSize, searchKey }
     })
-  }, [searchKey])
+  }, [searchKey, setPagination])
+
+  useEffect(() => {
+    if (pagination.searchKey !== searchKey) {
+      setPagination((previous) => ({ ...previous, current: 1, searchKey }))
+    }
+  }, [pagination.searchKey, searchKey, setPagination])
   const listParams = useMemo(
     () => ({
       page: current,
