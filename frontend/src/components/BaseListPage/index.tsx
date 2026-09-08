@@ -7,7 +7,7 @@ import styles from './index.module.less'
 const TABLE_SCROLL_OFFSET = 120
 const MIN_TABLE_SCROLL_Y = 160
 const COLUMN_SETTINGS_STORAGE_PREFIX = 'media-forge:list-columns:'
-const tableHeightCache = new Map<string, number>()
+const tableHeightCache = new Map<string, { height: number, signature: string }>()
 
 type ColumnSettings = {
   order: string[]
@@ -85,9 +85,30 @@ function writeColumnSettings(storageKey: string | undefined, settings: ColumnSet
   window.localStorage.setItem(storageKey, JSON.stringify(settings))
 }
 
-function useElementHeight<T extends HTMLElement>(cacheKey?: string) {
+function getLayoutSignature(layoutKey: string) {
+  if (typeof window === 'undefined') return layoutKey
+  return `${window.innerWidth}x${window.innerHeight}:${layoutKey}`
+}
+
+function useLayoutSignature(layoutKey: string) {
+  const [signature, setSignature] = useState(() => getLayoutSignature(layoutKey))
+
+  useEffect(() => {
+    const updateSignature = () => setSignature(getLayoutSignature(layoutKey))
+    updateSignature()
+    window.addEventListener('resize', updateSignature)
+    return () => window.removeEventListener('resize', updateSignature)
+  }, [layoutKey])
+
+  return signature
+}
+
+function useElementHeight<T extends HTMLElement>(cacheKey?: string, layoutSignature = 'default') {
   const ref = useRef<T | null>(null)
-  const [height, setHeight] = useState(() => cacheKey ? tableHeightCache.get(cacheKey) ?? 0 : 0)
+  const [height, setHeight] = useState(() => {
+    const cached = cacheKey ? tableHeightCache.get(cacheKey) : undefined
+    return cached?.signature === layoutSignature ? cached.height : 0
+  })
 
   useEffect(() => {
     const element = ref.current
@@ -101,14 +122,19 @@ function useElementHeight<T extends HTMLElement>(cacheKey?: string) {
       if (nextHeight <= 0) return
 
       if (cacheKey) {
-        tableHeightCache.set(cacheKey, nextHeight)
+        const cached = tableHeightCache.get(cacheKey)
+        if (cached && cached.signature === layoutSignature && cached.height !== nextHeight) {
+          return
+        }
+
+        tableHeightCache.set(cacheKey, { height: nextHeight, signature: layoutSignature })
       }
       setHeight((previousHeight) => (previousHeight === nextHeight ? previousHeight : nextHeight))
     })
 
     resizeObserver.observe(element)
     return () => resizeObserver.disconnect()
-  }, [cacheKey])
+  }, [cacheKey, layoutSignature])
 
   return { ref, height }
 }
@@ -129,7 +155,12 @@ export default function BaseListPage<T extends object>({
   columnSettingsKey,
 }: BaseListPageProps<T>) {
   const [queryVisible, setQueryVisible] = useState(queryVisibleDefault)
-  const { ref: tableWrapperRef, height: tableWrapperHeight } = useElementHeight<HTMLDivElement>(columnSettingsKey)
+  const layoutKey = queryNode && queryVisible ? 'query-visible' : 'query-hidden'
+  const layoutSignature = useLayoutSignature(layoutKey)
+  const { ref: tableWrapperRef, height: tableWrapperHeight } = useElementHeight<HTMLDivElement>(
+    columnSettingsKey,
+    layoutSignature,
+  )
   const columnItems = useMemo(() => createColumnItems(columns), [columns])
   const columnIds = useMemo(() => columnItems.map((item) => item.id), [columnItems])
   const columnStorageKey = columnSettingsKey

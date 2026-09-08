@@ -141,6 +141,90 @@ describe('BaseListPage', () => {
     }
   })
 
+  it('does not update cached table height on route return unless the viewport changes', () => {
+    const resizeCallbacks: ResizeObserverCallback[] = []
+    const OriginalResizeObserver = globalThis.ResizeObserver
+    const originalInnerWidth = window.innerWidth
+    const originalInnerHeight = window.innerHeight
+
+    globalThis.ResizeObserver = class ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback)
+      }
+
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+
+    try {
+      const { container, unmount } = render(
+        <BaseListPage<Row>
+          rowKey="id"
+          columnSettingsKey="height-return-list"
+          columns={columns}
+          dataSource={[{ id: 1, name: '影片A' }]}
+        />,
+      )
+
+      act(() => {
+        resizeCallbacks[0]?.([
+          { contentRect: { height: 520 } as DOMRectReadOnly } as ResizeObserverEntry,
+        ], {} as ResizeObserver)
+      })
+
+      const tableBody = container.querySelector('.ant-table-body') as HTMLElement | null
+      expect(tableBody?.style.maxHeight).toBe('400px')
+
+      unmount()
+      const remounted = render(
+        <BaseListPage<Row>
+          rowKey="id"
+          columnSettingsKey="height-return-list"
+          columns={columns}
+          dataSource={[{ id: 1, name: '影片A' }]}
+        />,
+      )
+
+      const remountedTableBody = remounted.container.querySelector('.ant-table-body') as HTMLElement | null
+      expect(remountedTableBody?.style.maxHeight).toBe('400px')
+
+      act(() => {
+        resizeCallbacks[1]?.([
+          { contentRect: { height: 500 } as DOMRectReadOnly } as ResizeObserverEntry,
+        ], {} as ResizeObserver)
+      })
+
+      expect(remountedTableBody?.style.maxHeight).toBe('400px')
+
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: originalInnerHeight + 1,
+      })
+      act(() => {
+        window.dispatchEvent(new Event('resize'))
+      })
+
+      act(() => {
+        resizeCallbacks[resizeCallbacks.length - 1]?.([
+          { contentRect: { height: 500 } as DOMRectReadOnly } as ResizeObserverEntry,
+        ], {} as ResizeObserver)
+      })
+
+      expect(remountedTableBody?.style.maxHeight).toBe('380px')
+    } finally {
+      globalThis.ResizeObserver = OriginalResizeObserver
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: originalInnerWidth,
+      })
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: originalInnerHeight,
+      })
+    }
+  })
+
   it('applies persisted column visibility and order when a settings key is provided', () => {
     localStorage.setItem(
       'media-forge:list-columns:test-list',
