@@ -10,6 +10,15 @@ function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : "请求失败";
 }
 
+function mergeMovieStorageFields(current: Movie, refreshed: Movie): Movie {
+    return {
+        ...current,
+        storage_status: refreshed.storage_status,
+        storage_locations: refreshed.storage_locations,
+        storage_summary: refreshed.storage_summary,
+    };
+}
+
 export function useMovieList(
     filterParams: MovieFilterParams | undefined,
     initialSort?: { sortBy: string; sortOrder: number },
@@ -88,6 +97,33 @@ export function useMovieList(
         void loadMovies();
     }, [loadMovies]);
 
+    const refreshStorageFields = useCallback(async () => {
+        if (!filterParams || data.items.length === 0) return;
+        const requestSeq = ++requestSeqRef.current;
+        try {
+            const result = await fetchMovies({
+                ...filterParams,
+                page,
+                limit: pageSize,
+                sort_by: sortBy,
+                sort_order: sortOrder,
+            });
+            if (requestSeq !== requestSeqRef.current) return;
+            const refreshedById = new Map(result.items.map((movie) => [movie._id, movie]));
+            setData((prev) => ({
+                ...prev,
+                items: prev.items.map((movie) => {
+                    const refreshed = refreshedById.get(movie._id);
+                    return refreshed ? mergeMovieStorageFields(movie, refreshed) : movie;
+                }),
+            }));
+        } catch (e: unknown) {
+            if (requestSeq !== requestSeqRef.current) return;
+            message.error(getErrorMessage(e));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- Refresh identity is filter CONTENT (filterKey), not object identity, matching loadMovies above.
+    }, [data.items.length, filterKey, message, page, pageSize, sortBy, sortOrder]);
+
     const handleShowSizeChange = useCallback((_current: number, size: number) => {
         setSelectedRowKeys([]);
         setPageSize(size);
@@ -140,7 +176,7 @@ export function useMovieList(
     return {
         data, page, pageSize, sortBy, sortOrder, loading, syncingStorage, selectedRowKeys,
         setPage, setPageSize, setSelectedRowKeys,
-        search, reload, syncStorageStatus, handlePageChange, handleShowSizeChange, handleSortChange, resetSort, updateMovie,
+        search, reload, refreshStorageFields, syncStorageStatus, handlePageChange, handleShowSizeChange, handleSortChange, resetSort, updateMovie,
     };
 }
 

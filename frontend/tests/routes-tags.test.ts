@@ -27,6 +27,15 @@ describe('route tag helpers', () => {
     expect(getRouteViewKey('/crawler/runs/run-b', '?status=failed')).toBe('/crawler/runs/:id')
   })
 
+  it('uses one singleton key for the movie list so search params do not drop cached state', () => {
+    expect(getRouteTagMeta('/content/movies')).toMatchObject({
+      title: '影片列表',
+      singletonKey: '/content/movies',
+    })
+    expect(getRouteViewKey('/content/movies', '')).toBe('/content/movies')
+    expect(getRouteViewKey('/content/movies', '?task_id=task-a')).toBe('/content/movies')
+  })
+
   it('returns backup route tag metadata', () => {
     expect(getRouteTagMeta('/backup')).toEqual({ title: '数据备份' })
   })

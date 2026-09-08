@@ -136,4 +136,85 @@ describe('useMovieList', () => {
     await act(async () => { resolvers[1](page2Result as never) })
     expect(result.current.data).toEqual(page3Result)
   })
+
+  it('refreshes storage fields for the current page without resetting pagination or sort', async () => {
+    const initialPage = {
+      items: [
+        {
+          _id: 'movie-1',
+          storage_status: 'not_stored',
+          storage_locations: [],
+          storage_summary: { storage_status: 'not_stored' },
+          code: 'AAA-001',
+        },
+      ],
+      total: 40,
+      page: 1,
+      limit: 20,
+      total_pages: 2,
+    }
+    const pageThree = {
+      ...initialPage,
+      items: [
+        {
+          ...initialPage.items[0],
+          _id: 'movie-1',
+          storage_status: 'not_stored',
+          storage_locations: [],
+          storage_summary: { storage_status: 'not_stored' },
+        },
+      ],
+      page: 3,
+    }
+    const refreshedPageThree = {
+      ...pageThree,
+      items: [
+        {
+          ...pageThree.items[0],
+          code: 'SHOULD-NOT-REPLACE',
+          storage_status: 'stored',
+          storage_locations: ['Movies/AAA-001'],
+          storage_summary: { storage_status: 'stored', synced_at: '2026-09-08T00:00:00Z' },
+        },
+      ],
+    }
+
+    vi.mocked(fetchMovies)
+      .mockResolvedValueOnce(initialPage as never)
+      .mockResolvedValueOnce(pageThree as never)
+      .mockResolvedValueOnce(refreshedPageThree as never)
+
+    const { result } = renderHook(
+      () => useMovieList({ search: 'abc' } as never, { sortBy: 'rating', sortOrder: -1 }),
+      { wrapper },
+    )
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => result.current.handlePageChange(3, 50))
+
+    await waitFor(() => expect(fetchMovies).toHaveBeenCalledWith(expect.objectContaining({
+      search: 'abc',
+      page: 3,
+      limit: 50,
+      sort_by: 'rating',
+      sort_order: -1,
+    })))
+
+    await act(async () => {
+      await result.current.refreshStorageFields()
+    })
+
+    expect(result.current.page).toBe(3)
+    expect(result.current.pageSize).toBe(50)
+    expect(result.current.sortBy).toBe('rating')
+    expect(result.current.sortOrder).toBe(-1)
+    expect(result.current.data.items[0]).toEqual(expect.objectContaining({
+      code: 'AAA-001',
+      storage_status: 'stored',
+      storage_locations: ['Movies/AAA-001'],
+      storage_summary: { storage_status: 'stored', synced_at: '2026-09-08T00:00:00Z' },
+    }))
+    expect(result.current.loading).toBe(false)
+  })
 })

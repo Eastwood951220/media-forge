@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { useRouterState } from '@tanstack/react-router'
 import { Button, Dropdown, Space } from 'antd'
 import { DatabaseOutlined, DownOutlined, SyncOutlined } from '@ant-design/icons'
 import type { StorageIndexRefreshMode } from '@/api/storage/storageIndex'
@@ -24,6 +25,9 @@ import { useStoragePush } from './hooks/useStoragePush'
 import styles from './MovieListPage.module.less'
 
 function MovieListPage() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const isActive = pathname === '/content/movies'
+  const wasActiveRef = useRef(isActive)
   const configHook = useMovieFilterConfig()
   const filterConfig = useMemo(
     () => configHook.config as Record<string, FilterItemConfig>,
@@ -39,6 +43,7 @@ function MovieListPage() {
     [listReady, filters.requestParams],
   )
   const list = useMovieList(effectiveParams)
+  const { refreshStorageFields } = list
   const detail = useMovieDetail()
   const push = useStoragePush(list.reload)
   const storageIndex = useMovieStorageIndexActions({ reload: list.reload })
@@ -61,6 +66,13 @@ function MovieListPage() {
   useMovieUrlDetail(detail.showDetail)
   useMovieTaskUrlSync({ selectedTask: filters.form.selectedTask })
   useMovieListRealtime(list.updateMovie)
+
+  useEffect(() => {
+    if (isActive && !wasActiveRef.current && listReady) {
+      void refreshStorageFields()
+    }
+    wasActiveRef.current = isActive
+  }, [isActive, listReady, refreshStorageFields])
 
   const columns = useMemo(
     () => createMovieColumns({
