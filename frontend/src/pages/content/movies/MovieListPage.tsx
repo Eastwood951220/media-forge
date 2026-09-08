@@ -19,6 +19,7 @@ import { useMovieListRealtime } from './hooks/useMovieListRealtime'
 import { useMoviePageSortDefault } from './hooks/useMoviePageSortDefault'
 import { useMovieStorageIndexActions } from './hooks/useMovieStorageIndexActions'
 import { useMovieUrlDetail } from './hooks/useMovieUrlDetail'
+import { useMovieUrlTaskPreset } from './hooks/useMovieUrlTaskPreset'
 import { useStoragePush } from './hooks/useStoragePush'
 import styles from './MovieListPage.module.less'
 
@@ -58,6 +59,7 @@ function MovieListPage() {
   })
 
   useMovieUrlDetail(detail.showDetail)
+  useMovieUrlTaskPreset({ enabled: filters.optionsLoaded, patchForm: filters.patchForm })
   useMovieListRealtime(list.updateMovie)
 
   const columns = useMemo(

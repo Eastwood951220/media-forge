@@ -152,6 +152,9 @@ const contentMoviesRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/content/movies',
   component: MovieListPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    task_id: typeof search.task_id === 'string' ? search.task_id : undefined,
+  }),
 })
 
 const backupRoute = createRoute({

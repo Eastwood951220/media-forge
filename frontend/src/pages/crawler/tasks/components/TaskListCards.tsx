@@ -1,6 +1,7 @@
 import {
   DeleteOutlined,
   EditOutlined,
+  EyeOutlined,
   PlayCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -35,6 +36,7 @@ type TaskListCardsProps = {
   onStop: (task: CrawlTask) => void
   onRestart: (task: CrawlTask) => void
   onUrlRun: (task: CrawlTask) => void
+  onViewMovies: (task: CrawlTask) => void
   onTemporaryTaskClick: () => void
   onBatchTaskClick: () => void
   current: number
@@ -197,6 +199,7 @@ function TaskCard({
   onStop,
   onRestart,
   onUrlRun,
+  onViewMovies,
 }: {
   task: CrawlTask
   runtime: CrawlTaskRuntimeSnapshot | undefined
@@ -210,6 +213,7 @@ function TaskCard({
   onStop: (task: CrawlTask) => void
   onRestart: (task: CrawlTask) => void
   onUrlRun: (task: CrawlTask) => void
+  onViewMovies: (task: CrawlTask) => void
 }) {
   const urlNames = getUrlNames(task)
   const runtimeStatus = runtime?.runtime_status ?? 'idle'
@@ -325,31 +329,40 @@ function TaskCard({
             </Button>
           )}
         </div>
-        {canEditOrDelete ? (
-          <div className={styles.taskCardMaintenanceActions}>
-            <Tooltip title="编辑">
-              <Button
-                aria-label={`编辑 ${task.name}`}
-                type="text"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => onEdit(task)}
-              />
-            </Tooltip>
-            <Tooltip title="删除">
-              <Button
-                aria-label={`删除 ${task.name}`}
-                type="text"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => onDelete(task)}
-              />
-            </Tooltip>
-          </div>
-        ) : (
-          <div className={styles.taskCardMaintenanceActions} aria-hidden="true" />
-        )}
+        <div className={styles.taskCardMaintenanceActions}>
+          <Tooltip title="查看影片">
+            <Button
+              aria-label={`查看 ${task.name} 的影片`}
+              type="text"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => onViewMovies(task)}
+            />
+          </Tooltip>
+          {canEditOrDelete && (
+            <>
+              <Tooltip title="编辑">
+                <Button
+                  aria-label={`编辑 ${task.name}`}
+                  type="text"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => onEdit(task)}
+                />
+              </Tooltip>
+              <Tooltip title="删除">
+                <Button
+                  aria-label={`删除 ${task.name}`}
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => onDelete(task)}
+                />
+              </Tooltip>
+            </>
+          )}
+        </div>
       </div>
     </article>
   )
@@ -377,6 +390,7 @@ function TaskListCards({
   onStop,
   onRestart,
   onUrlRun,
+  onViewMovies,
   onTemporaryTaskClick,
   onBatchTaskClick,
   current,
@@ -457,6 +471,7 @@ function TaskListCards({
                 onStop={onStop}
                 onRestart={onRestart}
                 onUrlRun={onUrlRun}
+                onViewMovies={onViewMovies}
               />
             ))}
           </div>

@@ -86,6 +86,7 @@ function renderCards(overrides: Partial<ComponentProps<typeof TaskListCards>> = 
       onStop={vi.fn()}
       onRestart={vi.fn()}
       onUrlRun={vi.fn()}
+      onViewMovies={vi.fn()}
       onTemporaryTaskClick={vi.fn()}
       onBatchTaskClick={vi.fn()}
       current={1}
@@ -143,6 +144,7 @@ describe('TaskListCards action alignment', () => {
         onStop={vi.fn()}
         onRestart={vi.fn()}
         onUrlRun={vi.fn()}
+        onViewMovies={vi.fn()}
         onTemporaryTaskClick={vi.fn()}
         onBatchTaskClick={vi.fn()}
         current={1}
@@ -157,6 +159,18 @@ describe('TaskListCards action alignment', () => {
     expect(screen.queryByRole('button', { name: /URL 爬取/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /编辑/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /删除/ })).not.toBeInTheDocument()
+    // The movie jump stays available regardless of runtime snapshot readiness.
+    expect(screen.getByRole('button', { name: /查看 Aligned Task 的影片/ })).toBeInTheDocument()
+  })
+
+  it('calls the view movies handler from the task card', () => {
+    const onViewMovies = vi.fn()
+    renderCards({ onViewMovies })
+
+    fireEvent.click(screen.getByRole('button', { name: /查看 Aligned Task 的影片/ }))
+
+    expect(onViewMovies).toHaveBeenCalledTimes(1)
+    expect(onViewMovies).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }))
   })
 
   it('calls batch create handler from the toolbar', () => {

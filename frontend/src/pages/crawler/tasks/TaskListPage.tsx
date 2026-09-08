@@ -247,6 +247,7 @@ function TaskListPage() {
           onStop={handleStop}
           onRestart={handleRestart}
           onUrlRun={taskUrlRun.openTaskUrlRun}
+          onViewMovies={(task) => navigate({ to: '/content/movies', search: { task_id: task.id } })}
           onTemporaryTaskClick={openTemporaryModal}
           onBatchTaskClick={() => setBatchDrawerOpen(true)}
           current={current}
