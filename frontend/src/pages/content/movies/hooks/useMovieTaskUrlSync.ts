@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 type UseMovieTaskUrlSyncOptions = {
+  active?: boolean
   selectedTask: string | undefined
 }
 
@@ -12,10 +13,12 @@ type UseMovieTaskUrlSyncOptions = {
  * refreshes) re-seed the filter instead of silently losing it. The parameter is
  * removed only when the user clears or changes the task filter.
  */
-export function useMovieTaskUrlSync({ selectedTask }: UseMovieTaskUrlSyncOptions) {
+export function useMovieTaskUrlSync({ active = true, selectedTask }: UseMovieTaskUrlSyncOptions) {
   const mountedRef = useRef(false)
 
   useEffect(() => {
+    if (!active) return
+
     const params = new URLSearchParams(window.location.search)
     const currentTaskId = params.get('task_id') ?? undefined
 
@@ -33,5 +36,5 @@ export function useMovieTaskUrlSync({ selectedTask }: UseMovieTaskUrlSyncOptions
       url.searchParams.delete('task_id')
     }
     window.history.replaceState({}, '', url.toString())
-  }, [selectedTask])
+  }, [active, selectedTask])
 }

@@ -73,4 +73,14 @@ describe('useMovieTaskUrlSync', () => {
     rerender({ selectedTask: undefined })
     expect(window.location.search).toBe('?foo=bar')
   })
+
+  it('does not rewrite the current URL while the movie list is inactive', () => {
+    resetSearch('/crawler/tasks')
+
+    renderHook(() => useMovieTaskUrlSync({ selectedTask: 'task-1', active: false }))
+
+    expect(replaceSpy).not.toHaveBeenCalled()
+    expect(window.location.pathname).toBe('/crawler/tasks')
+    expect(window.location.search).toBe('')
+  })
 })

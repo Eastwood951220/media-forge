@@ -19,16 +19,59 @@ function mergeMovieStorageFields(current: Movie, refreshed: Movie): Movie {
     };
 }
 
+type MovieListStateCache = {
+    data: MovieListResponse;
+    filterKey: string;
+    page: number;
+    pageSize: number;
+    sortBy: string;
+    sortOrder: number;
+}
+
+const MOVIE_LIST_STATE_CACHE_KEY = "media-forge:movie-list-state";
+
+function readMovieListStateCache(): MovieListStateCache | null {
+    if (typeof window === "undefined") return null;
+    try {
+        const raw = window.sessionStorage.getItem(MOVIE_LIST_STATE_CACHE_KEY);
+        return raw ? JSON.parse(raw) as MovieListStateCache : null;
+    } catch {
+        return null;
+    }
+}
+
+function writeMovieListStateCache(cache: MovieListStateCache): void {
+    if (typeof window === "undefined") return;
+    try {
+        window.sessionStorage.setItem(MOVIE_LIST_STATE_CACHE_KEY, JSON.stringify(cache));
+    } catch {
+        // Ignore storage quota/privacy errors; keep-alive still preserves state when available.
+    }
+}
+
+function cacheMatchesCurrentTaskSearch(cache: MovieListStateCache): boolean {
+    if (typeof window === "undefined") return true;
+    try {
+        const cachedTaskId = (JSON.parse(cache.filterKey) as MovieFilterParams).source_task_id;
+        const currentTaskId = new URLSearchParams(window.location.search).get("task_id") ?? undefined;
+        return cachedTaskId === currentTaskId;
+    } catch {
+        return true;
+    }
+}
+
 export function useMovieList(
     filterParams: MovieFilterParams | undefined,
     initialSort?: { sortBy: string; sortOrder: number },
 ) {
     const {message} = App.useApp();
-    const [data, setData] = useState<MovieListResponse>(INITIAL_MOVIE_LIST_RESPONSE);
-    const [page, setPage] = useState(DEFAULT_MOVIE_PAGE);
-    const [pageSize, setPageSize] = useState(DEFAULT_MOVIE_PAGE_SIZE);
-    const [sortBy, setSortBy] = useState(initialSort?.sortBy ?? DEFAULT_MOVIE_SORT_FIELD);
-    const [sortOrder, setSortOrder] = useState<number>(initialSort?.sortOrder ?? DEFAULT_MOVIE_SORT_ORDER);
+    const cachedState = readMovieListStateCache();
+    const initialCachedState = cachedState && cacheMatchesCurrentTaskSearch(cachedState) ? cachedState : null;
+    const [data, setData] = useState<MovieListResponse>(initialCachedState?.data ?? INITIAL_MOVIE_LIST_RESPONSE);
+    const [page, setPage] = useState(initialCachedState?.page ?? DEFAULT_MOVIE_PAGE);
+    const [pageSize, setPageSize] = useState(initialCachedState?.pageSize ?? DEFAULT_MOVIE_PAGE_SIZE);
+    const [sortBy, setSortBy] = useState(initialCachedState?.sortBy ?? initialSort?.sortBy ?? DEFAULT_MOVIE_SORT_FIELD);
+    const [sortOrder, setSortOrder] = useState<number>(initialCachedState?.sortOrder ?? initialSort?.sortOrder ?? DEFAULT_MOVIE_SORT_ORDER);
     const [loading, setLoading] = useState(false);
     const [syncingStorage, setSyncingStorage] = useState(false);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -36,6 +79,18 @@ export function useMovieList(
     const filterKey = filterParams === undefined ? "__not_ready__" : JSON.stringify(filterParams);
     const previousFilterKeyRef = useRef<string | null>(null);
     const requestSeqRef = useRef(0);
+
+    useEffect(() => {
+        if (!filterParams) return;
+        writeMovieListStateCache({
+            data,
+            filterKey,
+            page,
+            pageSize,
+            sortBy,
+            sortOrder,
+        });
+    }, [data, filterKey, filterParams, page, pageSize, sortBy, sortOrder]);
 
     const loadMovies = useCallback(async () => {
         if (!filterParams) return;

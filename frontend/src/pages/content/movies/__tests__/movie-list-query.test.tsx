@@ -23,6 +23,7 @@ function wrapper({ children }: PropsWithChildren) {
 describe('useMovieList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.sessionStorage.clear()
   })
   it('loads movie list through a query keyed by filters and pagination', async () => {
     vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0 } as never)
@@ -107,6 +108,42 @@ describe('useMovieList', () => {
     await act(async () => {})
     expect(result.current.page).toBe(3)
     expect(vi.mocked(fetchMovies).mock.calls.length).toBe(callsBeforeEqualContentRerender)
+  })
+
+  it('keeps the current page when the task filter id is unchanged', async () => {
+    vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, total_pages: 1 } as never)
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useMovieList(filters as never),
+      { wrapper, initialProps: { filters: { source_task_id: 'task-1' } } },
+    )
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    act(() => result.current.handlePageChange(3, 20))
+    await waitFor(() => expect(result.current.page).toBe(3))
+
+    rerender({ filters: { source_task_id: 'task-1' } })
+
+    await act(async () => {})
+    expect(result.current.page).toBe(3)
+  })
+
+  it('resets to the first page when the task filter id changes', async () => {
+    vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, total_pages: 1 } as never)
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useMovieList(filters as never),
+      { wrapper, initialProps: { filters: { source_task_id: 'task-1' } } },
+    )
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    act(() => result.current.handlePageChange(3, 20))
+    await waitFor(() => expect(result.current.page).toBe(3))
+
+    rerender({ filters: { source_task_id: 'task-2' } })
+
+    await waitFor(() => expect(result.current.page).toBe(1))
+    expect(fetchMovies).toHaveBeenCalledWith(expect.objectContaining({ source_task_id: 'task-2', page: 1 }))
   })
 
   it('discards responses from superseded requests that resolve out of order', async () => {

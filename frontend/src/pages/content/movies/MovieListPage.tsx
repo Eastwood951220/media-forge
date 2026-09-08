@@ -64,7 +64,7 @@ function MovieListPage() {
   })
 
   useMovieUrlDetail(detail.showDetail)
-  useMovieTaskUrlSync({ selectedTask: filters.form.selectedTask })
+  useMovieTaskUrlSync({ active: isActive, selectedTask: filters.form.selectedTask })
   useMovieListRealtime(list.updateMovie)
 
   useEffect(() => {

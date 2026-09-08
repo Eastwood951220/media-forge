@@ -7,7 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListPage from '../src/pages/crawler/tasks/TaskListPage'
 import MovieListPage from '../src/pages/content/movies/MovieListPage'
 import { RouteKeepAliveProvider, RouteKeepAliveOutlet } from '../src/layout/routeCache'
+import { TagsView } from '../src/layout/TagsView'
 import { useCrawlerRuntimeStore } from '../src/stores/useCrawlerRuntimeStore'
+import { useTagsViewStore } from '../src/stores/useTagsViewStore'
 import { getCrawlTasks, getTaskDict } from '@/api/crawler/crawlTask'
 import { fetchMovies } from '@/api/movie'
 
@@ -54,6 +56,7 @@ function TestShell() {
     <AntApp>
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <RouteKeepAliveProvider>
+          <TagsView />
           <RouteKeepAliveOutlet />
         </RouteKeepAliveProvider>
       </QueryClientProvider>
@@ -106,15 +109,47 @@ const idleTask = {
   last_run_status: null,
 }
 
+const movieRow = {
+  _id: 'movie-1',
+  id: 'movie-1',
+  code: 'AAA-001',
+  source_url: 'https://example.com/movie-1',
+  source_name: 'Movie One',
+  cover: '',
+  release_date: null,
+  duration: 120,
+  director: '',
+  maker: '',
+  series: '',
+  rating: null,
+  actors: [],
+  tags: [],
+  source_task_names: [],
+  storage_locations: [],
+  marked: false,
+  storage_status: 'not_stored',
+  storage_summary: { storage_status: 'not_stored' },
+  raw_detail: {},
+  created_at: null,
+  updated_at: null,
+}
+
 function lastFetchTaskId(): string | undefined {
   const calls = vi.mocked(fetchMovies).mock.calls
   return (calls.at(-1)?.[0] as { source_task_id?: string } | undefined)?.source_task_id
 }
 
+function lastFetchPage(): number | undefined {
+  const calls = vi.mocked(fetchMovies).mock.calls
+  return (calls.at(-1)?.[0] as { page?: number } | undefined)?.page
+}
+
 describe('task card to movie list jump', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.sessionStorage.clear()
     useCrawlerRuntimeStore.getState().reset()
+    useTagsViewStore.getState().resetViews()
     useCrawlerRuntimeStore.setState({
       taskSnapshotReady: true,
       taskRuntimeById: { [TASK_ID]: { task_id: TASK_ID, runtime_status: 'idle', latest_run_id: null, state_updated_at: '2026-09-04T00:00:00Z', last_run_at: null } },
@@ -122,7 +157,13 @@ describe('task card to movie list jump', () => {
     })
     vi.mocked(getCrawlTasks).mockResolvedValue({ rows: [idleTask], total: 1, page: 1, size: 20 } as never)
     vi.mocked(getTaskDict).mockResolvedValue([{ id: TASK_ID, name: idleTask.name }] as never)
-    vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, total_pages: 1 } as never)
+    vi.mocked(fetchMovies).mockImplementation(((params: { page?: number; limit?: number }) => Promise.resolve({
+      items: [{ ...movieRow, _id: `movie-${params.page ?? 1}`, id: `movie-${params.page ?? 1}` }],
+      total: 80,
+      page: params.page ?? 1,
+      limit: params.limit ?? 20,
+      total_pages: 4,
+    })) as never)
   })
 
   it('keeps the task preset applied across keep-alive remounts', async () => {
@@ -142,5 +183,38 @@ describe('task card to movie list jump', () => {
 
     expect(lastFetchTaskId()).toBe(TASK_ID)
     expect(window.location.search).toContain(`task_id=${TASK_ID}`)
+  })
+
+  it('keeps movie pagination when returning through top tags with the same task preset', async () => {
+    const { container } = renderRoutes()
+
+    const user = userEvent.setup()
+    await screen.findByText('任务一')
+    await user.click(screen.getByRole('button', { name: /查看 任务一 的影片/ }))
+
+    await vi.waitFor(() => {
+      expect(lastFetchTaskId()).toBe(TASK_ID)
+    })
+
+    const pageThree = await vi.waitFor(() => {
+      const item = container.querySelector('.ant-pagination-item-3')
+      expect(item).toBeTruthy()
+      return item as HTMLElement
+    })
+    await user.click(pageThree)
+
+    await vi.waitFor(() => {
+      expect(lastFetchPage()).toBe(3)
+    })
+
+    await user.click(container.querySelector('[data-cache-key="/crawler/tasks"]') as HTMLElement)
+    expect(await screen.findByText('任务一')).toBeInTheDocument()
+
+    await user.click(container.querySelector('[data-cache-key="/content/movies"]') as HTMLElement)
+
+    await vi.waitFor(() => {
+      expect(lastFetchTaskId()).toBe(TASK_ID)
+      expect(lastFetchPage()).toBe(3)
+    })
   })
 })
