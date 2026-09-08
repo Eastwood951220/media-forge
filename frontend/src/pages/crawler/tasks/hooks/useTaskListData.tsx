@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type SetStateAction } from 'react'
 import { Modal, Select, Typography, message } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -38,10 +38,31 @@ function queuedSnapshot(taskId: string, runId: string | null) {
 export function useTaskListData({ tagNames = [] }: { tagNames?: string[] } = {}) {
   const queryClient = useQueryClient()
 
-  const [current, setCurrent] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
   const keyword = useTaskListQueryStore((state) => state.keyword)
   const normalizedKeyword = keyword.trim()
+  const tagKey = tagNames.join('\u0000')
+  const searchKey = `${normalizedKeyword}\u0000${tagKey}`
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 20,
+    searchKey,
+  })
+  const current = pagination.searchKey === searchKey ? pagination.current : 1
+  const pageSize = pagination.pageSize
+  const setCurrent = useCallback((value: SetStateAction<number>) => {
+    setPagination((previous) => {
+      const previousCurrent = previous.searchKey === searchKey ? previous.current : 1
+      const nextCurrent = typeof value === 'function' ? value(previousCurrent) : value
+      return { ...previous, current: nextCurrent, searchKey }
+    })
+  }, [searchKey])
+  const setPageSize = useCallback((value: SetStateAction<number>) => {
+    setPagination((previous) => {
+      const previousCurrent = previous.searchKey === searchKey ? previous.current : 1
+      const nextPageSize = typeof value === 'function' ? value(previous.pageSize) : value
+      return { current: previousCurrent, pageSize: nextPageSize, searchKey }
+    })
+  }, [searchKey])
   const listParams = useMemo(
     () => ({
       page: current,
@@ -51,14 +72,6 @@ export function useTaskListData({ tagNames = [] }: { tagNames?: string[] } = {})
     }),
     [current, normalizedKeyword, pageSize, tagNames],
   )
-
-  // Keyword or tag changes start a new search: jump back to the first page.
-  // Deps are value-stable (joined string, trimmed keyword) so paginating to
-  // another page does not get immediately reset by a re-created array identity.
-  const tagKey = tagNames.join('\u0000')
-  useEffect(() => {
-    setCurrent((previous) => (previous === 1 ? previous : 1))
-  }, [normalizedKeyword, tagKey])
 
   const listQuery = useQuery({
     queryKey: queryKeys.crawlerTasks.list(listParams),

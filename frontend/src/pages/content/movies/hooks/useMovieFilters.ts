@@ -136,6 +136,7 @@ export function useMovieFilters(options: UseMovieFiltersOptions = {}) {
     } finally {
       setFiltersLoading(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Filter config is content-keyed so equal inline objects do not reload options forever.
   }, [enabled, configKey, message])
 
   useEffect(() => {
