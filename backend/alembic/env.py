@@ -15,8 +15,13 @@ from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl  # noqa: F401
 from backend.app.models.user import User  # noqa: F401
 from shared.database.models.content import Movie, MovieMagnet, MovieFilter  # noqa: F401
 from shared.database.models.base import Base
+from shared.runtime_config import load_runtime_config
 
 config = context.config
+runtime_values = load_runtime_config(override=True)
+database_url = runtime_values.get("DATABASE_URL")
+if database_url:
+    config.set_main_option("sqlalchemy.url", database_url.replace("+asyncpg", "+psycopg"))
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

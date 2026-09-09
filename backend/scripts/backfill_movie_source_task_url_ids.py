@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTaskUrl
 from shared.database.models.content import Movie
 from shared.database.session import get_session_factory
+from shared.runtime_config import load_runtime_config
 
 
 @dataclass
@@ -95,6 +102,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    load_runtime_config(override=True)
     db = get_session_factory()()
     try:
         result = backfill_movie_source_task_url_ids(db, dry_run=args.dry_run)

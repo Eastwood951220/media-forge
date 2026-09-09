@@ -2,6 +2,7 @@ from datetime import datetime
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
+from backend.scripts import backfill_movie_source_task_url_ids as backfill_script
 from backend.scripts.backfill_movie_source_task_url_ids import backfill_movie_source_task_url_ids
 from shared.database.models.content import Movie
 
@@ -75,3 +76,32 @@ def test_backfill_movie_source_task_url_ids_skips_unmatched_task_urls(db_session
     assert result.skipped_unmatched == 1
     assert result.skipped_examples[0]["task_url"] == "https://javdb.com/actors/missing"
     assert movie.source_task_url_ids == []
+
+
+def test_backfill_script_main_loads_runtime_config_before_connecting(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class FakeSession:
+        def close(self) -> None:
+            calls.append("close")
+
+    def fake_load_runtime_config(*, override: bool = False):
+        calls.append(f"load:{override}")
+        return {}
+
+    def fake_get_session_factory():
+        calls.append("factory")
+        return lambda: FakeSession()
+
+    def fake_backfill(db, *, dry_run: bool = False):
+        calls.append(f"backfill:{dry_run}")
+        return backfill_script.BackfillResult()
+
+    monkeypatch.setattr(backfill_script, "load_runtime_config", fake_load_runtime_config)
+    monkeypatch.setattr(backfill_script, "get_session_factory", fake_get_session_factory)
+    monkeypatch.setattr(backfill_script, "backfill_movie_source_task_url_ids", fake_backfill)
+    monkeypatch.setattr("sys.argv", ["backfill_movie_source_task_url_ids.py", "--dry-run"])
+
+    backfill_script.main()
+
+    assert calls == ["load:True", "factory", "backfill:True", "close"]
