@@ -19,8 +19,6 @@ function StorageTaskListPage() {
         pageSize={list.pageSize}
         tasks={list.tasks}
         total={list.total}
-        hasMore={list.hasMore}
-        countLoading={list.countLoading}
       />
     </div>
   )

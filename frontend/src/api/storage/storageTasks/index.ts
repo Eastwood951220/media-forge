@@ -6,7 +6,7 @@ import type {
   StorageSubTask,
   StorageTaskLog,
 } from './types'
-import type { CountResponse, FastListResponse, PaginatedResponse } from '@/api/crawler/crawlTask/types'
+import type { CountResponse, PagedListResponse, PaginatedResponse } from '@/api/crawler/crawlTask/types'
 
 const BASE_URL = '/api/storage/tasks'
 
@@ -27,8 +27,8 @@ export function listStorageMainTasks(params: {
   size: number
   status?: string
   keyword?: string
-}): Promise<FastListResponse<StorageMainTask>> {
-  return request.get<FastListResponse<StorageMainTask>>(BASE_URL, params)
+}): Promise<PagedListResponse<StorageMainTask>> {
+  return request.get<PagedListResponse<StorageMainTask>>(BASE_URL, params)
 }
 
 export function countStorageMainTasks(params?: {

@@ -13,7 +13,7 @@ function wrapper({ children }: PropsWithChildren) {
 }
 
 vi.mock('@/api/storage/storageTasks', () => ({
-  listStorageMainTasks: vi.fn().mockResolvedValue({ rows: [], page: 1, size: 20, has_more: false }),
+  listStorageMainTasks: vi.fn().mockResolvedValue({ rows: [], total: 0, page: 1, size: 20 }),
   countStorageMainTasks: vi.fn().mockResolvedValue({ total: 0 }),
   getStorageMainTask: vi.fn().mockResolvedValue({
     id: 'task-detail-1',
@@ -50,7 +50,7 @@ describe('StorageTaskListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     sessionStorage.clear()
-    vi.mocked(listStorageMainTasks).mockResolvedValue({ rows: [], page: 1, size: 20, has_more: false } as never)
+    vi.mocked(listStorageMainTasks).mockResolvedValue({ rows: [], total: 0, page: 1, size: 20 } as never)
     vi.mocked(countStorageMainTasks).mockResolvedValue({ total: 0 } as never)
   })
 
@@ -79,9 +79,9 @@ describe('StorageTaskListPage', () => {
         ],
         page: 1,
         size: 20,
-        has_more: false,
+        total: 1,
       } as never)
-      .mockResolvedValueOnce({ rows: [], page: 1, size: 20, has_more: false } as never)
+      .mockResolvedValueOnce({ rows: [], total: 0, page: 1, size: 20 } as never)
 
     render(<StorageTaskListPage />, { wrapper })
 
@@ -136,7 +136,7 @@ describe('StorageTaskListPage', () => {
       ],
       page: 1,
       size: 20,
-      has_more: false,
+      total: 1,
     } as never)
 
     render(<StorageTaskListPage />, { wrapper })
@@ -150,7 +150,6 @@ describe('StorageTaskListPage', () => {
   })
 
   it('keeps pagination and refreshes that page when the storage task list is mounted again', async () => {
-    vi.mocked(countStorageMainTasks).mockResolvedValue({ total: 120 } as never)
     vi.mocked(listStorageMainTasks).mockResolvedValue({
       rows: [{
         id: 'task-page-1',
@@ -167,12 +166,13 @@ describe('StorageTaskListPage', () => {
       }],
       page: 1,
       size: 20,
-      has_more: false,
+      total: 120,
     } as never)
 
     const { unmount } = render(<StorageTaskListPage />, { wrapper })
 
     await screen.findByText('云存储_分页测试')
+    expect(countStorageMainTasks).not.toHaveBeenCalled()
     fireEvent.click(screen.getByTitle('2'))
     await waitFor(() => expect(listStorageMainTasks).toHaveBeenCalledWith({ page: 2, size: 20 }))
 
@@ -233,7 +233,7 @@ describe('StorageTaskListPage', () => {
       }],
       page: 1,
       size: 20,
-      has_more: false,
+      total: 1,
     } as never)
 
     render(<StorageTaskListPage />, { wrapper })

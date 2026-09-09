@@ -376,7 +376,7 @@ def test_storage_main_task_list_is_scoped_to_owner(admin_user, other_user) -> No
     session.add_all([own_task, other_task])
     session.commit()
 
-    rows, has_more = StorageTaskRepository(session).list_main_tasks(
+    rows = StorageTaskRepository(session).list_main_tasks(
         created_by=admin_user.id,
         page=1,
         size=20,
@@ -384,19 +384,26 @@ def test_storage_main_task_list_is_scoped_to_owner(admin_user, other_user) -> No
         keyword=None,
     )
 
-    assert has_more is False
     assert [row.id for row in rows] == [own_task.id]
 
 
-def test_storage_task_list_uses_page_size_has_more_and_no_inline_total(client, db_session, auth_headers, test_user):
+def test_storage_task_list_returns_standard_paginated_response(client, db_session, auth_headers, test_user):
+    from backend.app.models.storage_task import StorageMainTask
+
     for index in range(3):
-        movie = _movie_with_source_and_magnet(db_session, test_user.id, code=f"page-{index}", location="A")
-        created = client.post(
-            "/api/storage/tasks/push",
-            json={"movie_id": str(movie.id), "storage_mode": "single", "selected_storage_location": "A"},
-            headers=auth_headers,
+        db_session.add(
+            StorageMainTask(
+                alias=f"page-task-{index}",
+                display_name=f"page-task-{index}",
+                source="single",
+                storage_mode="single",
+                status="completed",
+                total_count=1,
+                success_count=1,
+                created_by=test_user.id,
+            )
         )
-        assert created.status_code == 200
+    db_session.commit()
 
     response = client.get("/api/storage/tasks?page=1&size=2", headers=auth_headers)
 
@@ -404,9 +411,9 @@ def test_storage_task_list_uses_page_size_has_more_and_no_inline_total(client, d
     data = response.json()["data"]
     assert data["page"] == 1
     assert data["size"] == 2
-    assert data["has_more"] is True
+    assert data["total"] == 3
     assert len(data["rows"]) == 2
-    assert "total" not in data
+    assert "has_more" not in data
 
 
 def test_storage_task_count_endpoint_uses_filters(client, db_session, auth_headers, test_user):

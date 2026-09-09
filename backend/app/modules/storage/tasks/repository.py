@@ -58,15 +58,15 @@ class StorageTaskRepository:
         size: int,
         status: str | None,
         keyword: str | None,
-    ) -> tuple[list[StorageMainTask], bool]:
+    ) -> list[StorageMainTask]:
         rows = (
             self._main_task_query(created_by=created_by, status=status, keyword=keyword)
             .order_by(StorageMainTask.created_at.desc(), StorageMainTask.id.desc())
             .offset((page - 1) * size)
-            .limit(size + 1)
+            .limit(size)
             .all()
         )
-        return rows[:size], len(rows) > size
+        return rows
 
     def count_main_tasks(
         self,

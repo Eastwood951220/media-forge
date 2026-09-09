@@ -1,7 +1,6 @@
 import { useCallback, useMemo, type SetStateAction } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  countStorageMainTasks,
   deleteStorageMainTask,
   listStorageMainTasks,
   restartStorageMainTask,
@@ -36,7 +35,6 @@ export function useStorageTaskList() {
   }, [setListState])
 
   const listParams = useMemo(() => ({ page: current, size: pageSize }), [current, pageSize])
-  const countParams = useMemo(() => ({}), [])
 
   const listQuery = useQuery({
     queryKey: queryKeys.storageTasks.list(listParams),
@@ -44,16 +42,9 @@ export function useStorageTaskList() {
     placeholderData: (previousData) => previousData,
   })
 
-  const countQuery = useQuery({
-    queryKey: queryKeys.storageTasks.count(countParams),
-    queryFn: () => countStorageMainTasks(countParams),
-  })
-
   const tasks = listQuery.data?.rows ?? []
-  const total = countQuery.data?.total ?? 0
+  const total = listQuery.data?.total ?? 0
   const loading = listQuery.isLoading
-  const hasMore = listQuery.data?.has_more ?? false
-  const countLoading = countQuery.isLoading
 
   const refreshCurrentPage = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.storageTasks.list(listParams) })
@@ -87,18 +78,15 @@ export function useStorageTaskList() {
         return
       }
       refreshCurrentPage()
-      void queryClient.invalidateQueries({ queryKey: queryKeys.storageTasks.count(countParams) })
     } catch {
       // error handled by request interceptor
     }
-  }, [current, refreshCurrentPage, queryClient, tasks.length, countParams, setCurrent])
+  }, [current, refreshCurrentPage, tasks.length, setCurrent])
 
   return {
     current,
     pageSize,
-    hasMore,
     total,
-    countLoading,
     setCurrent,
     setPageSize,
     handleDelete,
