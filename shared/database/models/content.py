@@ -1,8 +1,8 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint, Uuid
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.database.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -19,6 +19,7 @@ class Movie(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Index("idx_movies_release_date", "release_date"),
         Index("idx_movies_rating", "rating"),
         Index("idx_movies_source_task_ids_gin", "source_task_ids", postgresql_using="gin"),
+        Index("idx_movies_source_task_url_ids_gin", "source_task_url_ids", postgresql_using="gin"),
         Index("idx_movies_actors_gin", "actors", postgresql_using="gin"),
         Index("idx_movies_tags_gin", "tags", postgresql_using="gin"),
         Index("idx_movies_storage_summary_gin", "storage_summary", postgresql_using="gin"),
@@ -38,6 +39,7 @@ class Movie(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     actors: Mapped[list[str]] = mapped_column(CompatibleARRAY(Text), nullable=False, default=list)
     tags: Mapped[list[str]] = mapped_column(CompatibleARRAY(Text), nullable=False, default=list)
     source_task_ids: Mapped[list[uuid.UUID]] = mapped_column(CompatibleARRAY(Uuid), nullable=False, default=list)
+    source_task_url_ids: Mapped[list[uuid.UUID]] = mapped_column(CompatibleARRAY(Uuid), nullable=False, default=list)
     cover: Mapped[str] = mapped_column(Text, nullable=False, default="")
     marked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     storage_summary: Mapped[dict] = mapped_column(CompatibleJSON, nullable=False, default=dict)
@@ -88,3 +90,42 @@ class MovieFilter(Base, UUIDPrimaryKeyMixin):
     type: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class ActressProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "actress_profiles"
+    __table_args__ = (
+        Index("idx_actress_profiles_display_name", "display_name"),
+        Index("idx_actress_profiles_source_url", "source_url"),
+        Index("idx_actress_profiles_source_task_ids_gin", "source_task_ids", postgresql_using="gin"),
+        Index("idx_actress_profiles_aliases_gin", "aliases", postgresql_using="gin"),
+        Index("idx_actress_profiles_canonical_names_gin", "canonical_names", postgresql_using="gin"),
+        UniqueConstraint("source_url", name="uq_actress_profiles_source_url"),
+    )
+
+    display_name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    reading: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    aliases: Mapped[list[str]] = mapped_column(CompatibleARRAY(Text), nullable=False, default=list)
+    canonical_names: Mapped[list[str]] = mapped_column(CompatibleARRAY(Text), nullable=False, default=list)
+    source_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    source_site: Mapped[str] = mapped_column(Text, nullable=False, default="avjoho")
+    source_task_ids: Mapped[list[uuid.UUID]] = mapped_column(CompatibleARRAY(Uuid), nullable=False, default=list)
+    source_task_url_ids: Mapped[list[uuid.UUID]] = mapped_column(CompatibleARRAY(Uuid), nullable=False, default=list)
+    image_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    debut_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    height_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bust_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    waist_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hip_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cup: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    birthplace: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    blood_type: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    hobbies: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    biography: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    exclusive_maker: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sns_links: Mapped[list[dict]] = mapped_column(CompatibleJSON, nullable=False, default=list)
+    representative_works: Mapped[list[dict]] = mapped_column(CompatibleJSON, nullable=False, default=list)
+    similar_actresses: Mapped[list[dict]] = mapped_column(CompatibleJSON, nullable=False, default=list)
+    raw_profile: Mapped[dict] = mapped_column(CompatibleJSON, nullable=False, default=dict)
+    last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
