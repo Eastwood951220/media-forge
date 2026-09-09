@@ -78,7 +78,7 @@ class CrawlerTaskService:
         keyword: str | None = None,
         tag_names: list[str] | None = None,
     ) -> dict:
-        rows, _ = self.repo.get_by_owner(owner_id, page=page, size=size, keyword=keyword, tag_names=tag_names)
+        rows = self.repo.get_by_owner(owner_id, page=page, size=size, keyword=keyword, tag_names=tag_names)
         total = self.repo.count_by_owner(owner_id, keyword=keyword, tag_names=tag_names)
         latest_runs = self.repo.get_latest_runs_by_task_ids([row.id for row in rows])
         data = CrawlTaskListResponse(

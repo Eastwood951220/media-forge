@@ -45,9 +45,8 @@ def test_keyword_matches_task_name_url_name_and_url_without_duplicating_rows(
     task_by_url = create_task(repo, test_user.id, "Plain task", URL_MATCH, url_name="Plain URL")
     create_task(repo, test_user.id, "Unrelated", NO_MATCH_URL, url_name="Other")
 
-    rows, has_more = repo.get_by_owner(test_user.id, page=1, size=20, keyword="prestige")
+    rows = repo.get_by_owner(test_user.id, page=1, size=20, keyword="prestige")
 
-    assert has_more is False
     assert {row.id for row in rows} == {task_by_name.id, task_by_url_name.id, task_by_url.id}
     assert repo.count_by_owner(test_user.id, keyword="prestige") == 3
 
@@ -66,9 +65,8 @@ def test_keyword_matches_each_matching_url_row_of_one_task_only_once(db_session,
     )
     create_task(repo, test_user.id, "Unrelated", NO_MATCH_URL)
 
-    rows, has_more = repo.get_by_owner(test_user.id, page=1, size=20, keyword="prestige")
+    rows = repo.get_by_owner(test_user.id, page=1, size=20, keyword="prestige")
 
-    assert has_more is False
     assert [row.id for row in rows] == [multi_url_task.id]
     assert repo.count_by_owner(test_user.id, keyword="prestige") == 1
 
@@ -78,15 +76,15 @@ def test_keyword_is_trimmed_case_insensitive_and_blank_matches_all(db_session, t
     task = create_task(repo, test_user.id, "Prestige cars", NO_MATCH_URL)
     unrelated = create_task(repo, test_user.id, "Unrelated", NO_MATCH_URL)
 
-    trimmed_rows, _ = repo.get_by_owner(test_user.id, page=1, size=20, keyword="  prestige  ")
+    trimmed_rows = repo.get_by_owner(test_user.id, page=1, size=20, keyword="  prestige  ")
     assert [row.id for row in trimmed_rows] == [task.id]
     assert repo.count_by_owner(test_user.id, keyword="  prestige  ") == 1
 
-    upper_rows, _ = repo.get_by_owner(test_user.id, page=1, size=20, keyword="PRESTIGE")
+    upper_rows = repo.get_by_owner(test_user.id, page=1, size=20, keyword="PRESTIGE")
     assert [row.id for row in upper_rows] == [task.id]
 
     # Blank keywords behave like no keyword at all.
-    blank_rows, _ = repo.get_by_owner(test_user.id, page=1, size=20, keyword="   ")
+    blank_rows = repo.get_by_owner(test_user.id, page=1, size=20, keyword="   ")
     assert {row.id for row in blank_rows} == {task.id, unrelated.id}
     assert repo.count_by_owner(test_user.id, keyword="   ") == 2
 
@@ -96,7 +94,7 @@ def test_keyword_does_not_leak_other_owners_tasks(db_session, test_user, other_u
     create_task(repo, other_user.id, "Prestige owned by someone else", NO_MATCH_URL)
     my_task = create_task(repo, test_user.id, "My prestige", NO_MATCH_URL)
 
-    rows, _ = repo.get_by_owner(test_user.id, page=1, size=20, keyword="prestige")
+    rows = repo.get_by_owner(test_user.id, page=1, size=20, keyword="prestige")
     assert [row.id for row in rows] == [my_task.id]
     assert repo.count_by_owner(test_user.id, keyword="prestige") == 1
 

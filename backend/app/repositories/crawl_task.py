@@ -72,12 +72,11 @@ class CrawlTaskRepository(BaseRepository):
         size: int,
         keyword: str | None = None,
         tag_names: list[str] | None = None,
-    ) -> tuple[list[CrawlTask], bool]:
+    ) -> list[CrawlTask]:
         query = self._owner_query(owner_id, keyword, tag_names).order_by(
             CrawlTask.created_at.desc()
         )
-        rows = query.offset((page - 1) * size).limit(size + 1).all()
-        return rows[:size], len(rows) > size
+        return query.offset((page - 1) * size).limit(size).all()
 
     def count_by_owner(
         self,
