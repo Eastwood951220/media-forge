@@ -34,6 +34,11 @@ export const queryKeys = {
   movies: {
     list: (params: Record<string, unknown>) => ['movies', params] as const,
   },
+  actresses: {
+    all: () => ['actresses'] as const,
+    list: (params: Record<string, unknown>) => ['actresses', 'list', params] as const,
+    detail: (id: string) => ['actresses', 'detail', id] as const,
+  },
   backup: {
     config: () => ['backup', 'config'] as const,
     files: () => ['backup', 'files'] as const,

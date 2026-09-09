@@ -6,6 +6,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   StopOutlined,
+  UserAddOutlined,
 } from '@ant-design/icons'
 import { Button, Checkbox, Dropdown, Empty, Input, Pagination, Popover, Select, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
 import type { MenuProps } from 'antd'
@@ -37,6 +38,8 @@ type TaskListCardsProps = {
   onRestart: (task: CrawlTask) => void
   onUrlRun: (task: CrawlTask) => void
   onViewMovies: (task: CrawlTask) => void
+  onFetchActresses: (task: CrawlTask) => void
+  fetchingActressTaskId?: string | null
   onTemporaryTaskClick: () => void
   onBatchTaskClick: () => void
   current: number
@@ -200,6 +203,8 @@ function TaskCard({
   onRestart,
   onUrlRun,
   onViewMovies,
+  onFetchActresses,
+  fetchingActressTaskId,
 }: {
   task: CrawlTask
   runtime: CrawlTaskRuntimeSnapshot | undefined
@@ -214,6 +219,8 @@ function TaskCard({
   onRestart: (task: CrawlTask) => void
   onUrlRun: (task: CrawlTask) => void
   onViewMovies: (task: CrawlTask) => void
+  onFetchActresses: (task: CrawlTask) => void
+  fetchingActressTaskId?: string | null
 }) {
   const urlNames = getUrlNames(task)
   const runtimeStatus = runtime?.runtime_status ?? 'idle'
@@ -226,6 +233,7 @@ function TaskCard({
   const isSelectable = runtimeReady && isIdle && !task.is_skip
   const canStop = runtimeReady && (runtimeStatus === 'queued' || runtimeStatus === 'running') && Boolean(runtime?.latest_run_id)
   const canRestart = runtimeReady && runtimeStatus === 'stopped' && Boolean(runtime?.latest_run_id)
+  const hasActorUrl = task.urls.some((url) => url.url_type === 'actors')
 
   const toggleSelected = (checked: boolean) => {
     onSelectedTaskIdsChange(
@@ -339,6 +347,18 @@ function TaskCard({
               onClick={() => onViewMovies(task)}
             />
           </Tooltip>
+          {hasActorUrl && (
+            <Tooltip title="获取女优资料">
+              <Button
+                aria-label={`获取 ${task.name} 的女优资料`}
+                type="text"
+                size="small"
+                icon={<UserAddOutlined />}
+                loading={fetchingActressTaskId === task.id}
+                onClick={() => onFetchActresses(task)}
+              />
+            </Tooltip>
+          )}
           {canEditOrDelete && (
             <>
               <Tooltip title="编辑">
@@ -391,6 +411,8 @@ function TaskListCards({
   onRestart,
   onUrlRun,
   onViewMovies,
+  onFetchActresses,
+  fetchingActressTaskId,
   onTemporaryTaskClick,
   onBatchTaskClick,
   current,
@@ -472,6 +494,8 @@ function TaskListCards({
                 onRestart={onRestart}
                 onUrlRun={onUrlRun}
                 onViewMovies={onViewMovies}
+                onFetchActresses={onFetchActresses}
+                fetchingActressTaskId={fetchingActressTaskId}
               />
             ))}
           </div>

@@ -87,6 +87,7 @@ function renderCards(overrides: Partial<ComponentProps<typeof TaskListCards>> = 
       onRestart={vi.fn()}
       onUrlRun={vi.fn()}
       onViewMovies={vi.fn()}
+      onFetchActresses={vi.fn()}
       onTemporaryTaskClick={vi.fn()}
       onBatchTaskClick={vi.fn()}
       current={1}
@@ -145,6 +146,7 @@ describe('TaskListCards action alignment', () => {
         onRestart={vi.fn()}
         onUrlRun={vi.fn()}
         onViewMovies={vi.fn()}
+        onFetchActresses={vi.fn()}
         onTemporaryTaskClick={vi.fn()}
         onBatchTaskClick={vi.fn()}
         current={1}
@@ -171,6 +173,50 @@ describe('TaskListCards action alignment', () => {
 
     expect(onViewMovies).toHaveBeenCalledTimes(1)
     expect(onViewMovies).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }))
+  })
+
+  it('shows actress fetch action only for actor URL tasks', () => {
+    const onFetchActresses = vi.fn()
+    const { rerender } = renderCards({ onFetchActresses })
+
+    fireEvent.click(screen.getByRole('button', { name: /获取 Aligned Task 的女优资料/ }))
+    expect(onFetchActresses).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }))
+
+    rerender(
+      <TaskListCards
+        tasks={[{ ...baseTask, urls: [{ id: 'url-search', url: 'https://javdb.com/search?q=a', url_type: 'search' }] } as never]}
+        loading={false}
+        total={1}
+        runtimeByTaskId={{ 'task-1': idleRuntime } as never}
+        runtimeReady={true}
+        tagOptions={[]}
+        selectedTagNames={[]}
+        onTagFilterChange={vi.fn()}
+        keyword=""
+        onKeywordChange={vi.fn()}
+        selectedTaskIds={[]}
+        onSelectedTaskIdsChange={vi.fn()}
+        onBatchRunClick={vi.fn()}
+        batchRunLoading={false}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleSkip={vi.fn()}
+        onRun={vi.fn()}
+        onStop={vi.fn()}
+        onRestart={vi.fn()}
+        onUrlRun={vi.fn()}
+        onViewMovies={vi.fn()}
+        onFetchActresses={vi.fn()}
+        onTemporaryTaskClick={vi.fn()}
+        onBatchTaskClick={vi.fn()}
+        current={1}
+        pageSize={20}
+        onPageChange={vi.fn()}
+        onPageSizeChange={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: /获取 Aligned Task 的女优资料/ })).not.toBeInTheDocument()
   })
 
   it('calls batch create handler from the toolbar', () => {

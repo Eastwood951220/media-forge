@@ -53,6 +53,8 @@ export interface Movie {
   rating: number | null
   actors: string[]
   tags: string[]
+  source_task_ids?: string[]
+  source_task_url_ids?: string[]
   source_task_name?: string
   source_task_names: string[]
   storage_locations?: string[]

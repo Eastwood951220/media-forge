@@ -1,0 +1,197 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+}
+
+.pageTitle,
+.detailTitle {
+  margin: 0 !important;
+}
+
+.searchInput {
+  width: min(360px, 100%);
+}
+
+.actressGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.actressCard {
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.actressCover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 3 / 4;
+  background: var(--ant-color-fill-tertiary);
+}
+
+.actressCover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.actressName,
+.actressReading {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paginationBar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 0;
+}
+
+.emptyState {
+  padding: 48px 0;
+}
+
+.detailHeader,
+.detailSection {
+  display: flex;
+  gap: 20px;
+  padding: 16px;
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+}
+
+.detailHeader {
+  align-items: flex-start;
+}
+
+.detailSection {
+  flex-direction: column;
+}
+
+.detailPortrait {
+  width: 160px;
+  flex: 0 0 160px;
+  overflow: hidden;
+  aspect-ratio: 3 / 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ant-color-fill-tertiary);
+  border-radius: 8px;
+}
+
+.detailPortrait :global(.ant-image),
+.detailPortrait :global(.ant-image-img) {
+  width: 100%;
+  height: 100%;
+}
+
+.detailPortrait :global(.ant-image-img) {
+  object-fit: cover;
+}
+
+.detailTitleBlock {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aliasList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.biography {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.movieGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.movieCard {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  background: var(--ant-color-bg-elevated);
+}
+
+.movieCover {
+  width: 84px;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--ant-color-fill-tertiary);
+}
+
+.movieCover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.movieFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+}
+
+.movieBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.movieCode,
+.movieTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 12px;
+  }
+
+  .toolbar,
+  .detailHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .searchInput,
+  .detailPortrait {
+    width: 100%;
+  }
+}

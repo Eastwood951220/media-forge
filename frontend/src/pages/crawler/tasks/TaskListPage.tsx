@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { App, Modal, Select } from 'antd'
+import { App, Input, Modal, Select } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -16,6 +16,7 @@ import type {
 } from '@/api/crawler/crawlTask/types'
 import { queryKeys } from '@/api/queryKeys'
 import { invalidateCrawlerRunLists, invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
+import { fetchActressesFromTask } from '@/api/content/actresses'
 import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
 import type { CrawlTask } from '@/api/crawler/crawlTask/types'
 import { useSessionListState } from '@/hooks/useSessionListState'
@@ -83,6 +84,7 @@ function TaskListPage() {
   const [batchFailedUrls, setBatchFailedUrls] = useState<string[]>([])
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [batchRunSubmitting, setBatchRunSubmitting] = useState(false)
+  const [fetchingActressTaskId, setFetchingActressTaskId] = useState<string | null>(null)
 
   const markBatchRunsQueued = useCallback((accepted: BatchCrawlTaskRunAcceptedItem[]) => {
     const now = new Date().toISOString()
@@ -214,6 +216,48 @@ function TaskListPage() {
     }
   }, [handleRunSubmitted, message])
 
+  const submitActressFetch = useCallback(async (task: CrawlTask, avjohoUrl?: string) => {
+    setFetchingActressTaskId(task.id)
+    try {
+      const result = await fetchActressesFromTask({ task_id: task.id, avjoho_url: avjohoUrl || undefined })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.actresses.all() })
+      if (result.matched) {
+        await message.success(`已获取 ${result.profiles.length} 位女优资料`)
+        return
+      }
+      if (avjohoUrl) {
+        await message.warning(result.message || '未匹配到 avjoho 资料')
+        return
+      }
+      let manualUrl = ''
+      Modal.confirm({
+        title: '填写 avjoho 资料页',
+        content: (
+          <Input
+            aria-label="avjoho 资料页 URL"
+            placeholder="https://db.avjoho.com/..."
+            onChange={(event) => {
+              manualUrl = event.target.value
+            }}
+          />
+        ),
+        okText: '获取',
+        cancelText: '取消',
+        onOk: async () => {
+          if (!manualUrl.trim()) {
+            await message.warning('请填写 avjoho URL')
+            throw new Error('avjoho_url_required')
+          }
+          await submitActressFetch(task, manualUrl.trim())
+        },
+      })
+    } catch (error) {
+      await message.error(error instanceof Error ? error.message : '获取女优资料失败')
+    } finally {
+      setFetchingActressTaskId(null)
+    }
+  }, [message, queryClient])
+
   const taskStats = useCrawlerRuntimeStore((state) => state.taskStats)
 
   return (
@@ -254,6 +298,8 @@ function TaskListPage() {
           onRestart={handleRestart}
           onUrlRun={taskUrlRun.openTaskUrlRun}
           onViewMovies={(task) => navigate({ to: '/content/movies', search: { task_id: task.id } })}
+          onFetchActresses={(task) => void submitActressFetch(task)}
+          fetchingActressTaskId={fetchingActressTaskId}
           onTemporaryTaskClick={openTemporaryModal}
           onBatchTaskClick={() => setBatchDrawerOpen(true)}
           current={current}

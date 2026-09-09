@@ -10,6 +10,7 @@ import {
   SearchOutlined,
   SettingOutlined,
   UnorderedListOutlined,
+  UserOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons'
 import { Layout, Menu } from 'antd'
@@ -79,6 +80,11 @@ const menuItems: MenuProps['items'] = [
         icon: <VideoCameraOutlined />,
         label: '电影列表',
       },
+      {
+        key: '/content/actresses',
+        icon: <UserOutlined />,
+        label: '女优列表',
+      },
     ],
   },
   {
@@ -110,7 +116,9 @@ export function SideMenu({ collapsed }: SideMenuProps) {
             ? '/storage/config'
             : pathname.startsWith('/content/movies')
               ? '/content/movies'
-              : pathname
+              : pathname.startsWith('/content/actresses')
+                ? '/content/actresses'
+                : pathname
   const selectedKeys = useMemo(() => [selectedKey === '/' ? '/' : selectedKey], [selectedKey])
   const openKeys = useMemo(() => {
     const keys: string[] = []

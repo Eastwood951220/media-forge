@@ -32,6 +32,15 @@ const ROUTE_TAGS: Array<{ pattern: RegExp; meta: RouteTagMeta }> = [
   },
   { pattern: /^\/crawler\/schedules$/, meta: { title: '定时任务', activeMenu: '/crawler/schedules' } },
   { pattern: /^\/content\/movies$/, meta: { title: '影片列表', singletonKey: '/content/movies' } },
+  { pattern: /^\/content\/actresses$/, meta: { title: '女优列表', singletonKey: '/content/actresses' } },
+  {
+    pattern: /^\/content\/actresses\/[^/]+$/,
+    meta: {
+      title: '女优详情',
+      activeMenu: '/content/actresses',
+      singletonKey: '/content/actresses/:id',
+    },
+  },
   { pattern: /^\/backup$/, meta: { title: '数据备份' } },
   { pattern: /^\/storage\/config$/, meta: { title: '存储配置' } },
   { pattern: /^\/storage\/tasks$/, meta: { title: '存储任务' } },
