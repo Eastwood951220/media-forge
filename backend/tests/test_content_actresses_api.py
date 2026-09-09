@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from urllib.error import HTTPError
 
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.content.actresses import service as actress_service
@@ -134,6 +135,88 @@ def test_fetch_actress_from_actor_task_uses_javdb_aliases_to_match_avjoho(
     assert data["matched"] is True
     assert data["profiles"][0]["display_name"] == "蘭華"
     assert data["profiles"][0]["source_task_url_ids"] == [str(task_url.id)]
+
+
+def test_fetch_actress_from_actor_task_falls_back_to_avjoho_search(
+    client,
+    auth_headers,
+    db_session,
+    admin_user,
+    monkeypatch,
+) -> None:
+    task, task_url = _seed_actor_task(db_session, admin_user, url_name="七瀨愛麗絲")
+    attempted_urls: list[str] = []
+
+    monkeypatch.setattr(actress_service, "_fetch_javdb_actor_metadata", lambda _url: {
+        "primary_names": ["七瀨愛麗絲"],
+        "aliases": ["七瀬アリス"],
+    })
+    monkeypatch.setattr(actress_service, "_find_avjoho_profile_urls_by_search", lambda name: (
+        ["https://db.avjoho.com/nanase-alice/"] if name == "七瀬アリス" else []
+    ))
+
+    def fake_fetch_avjoho_profile(url: str) -> AvjohoProfilePayload:
+        attempted_urls.append(url)
+        if url != "https://db.avjoho.com/nanase-alice/":
+            raise HTTPError(url, 404, "Not Found", hdrs=None, fp=None)
+        return AvjohoProfilePayload(
+            display_name="七瀬アリス",
+            reading="ななせありす",
+            source_url=url,
+            image_url="https://example.test/nanase.jpg",
+            aliases=["七瀨愛麗絲"],
+        )
+
+    monkeypatch.setattr(actress_service, "_fetch_avjoho_profile", fake_fetch_avjoho_profile)
+
+    response = client.post(
+        "/api/content/actresses/fetch-from-task",
+        json={"task_id": str(task.id)},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["matched"] is True
+    assert data["profiles"][0]["display_name"] == "七瀬アリス"
+    assert data["profiles"][0]["source_task_url_ids"] == [str(task_url.id)]
+    assert attempted_urls[:2] == [
+        "https://db.avjoho.com/%E4%B8%83%E7%80%A8%E6%84%9B%E9%BA%97%E7%B5%B2/",
+        "https://db.avjoho.com/%E4%B8%83%E7%80%AC%E3%82%A2%E3%83%AA%E3%82%B9/",
+    ]
+    assert attempted_urls[-1] == "https://db.avjoho.com/nanase-alice/"
+
+
+def test_fetch_actress_from_actor_task_logs_404_without_traceback(
+    client,
+    auth_headers,
+    db_session,
+    admin_user,
+    monkeypatch,
+    caplog,
+) -> None:
+    task, _task_url = _seed_actor_task(db_session, admin_user, url_name="不存在")
+
+    monkeypatch.setattr(actress_service, "_fetch_javdb_actor_metadata", lambda _url: {
+        "primary_names": ["不存在"],
+        "aliases": [],
+    })
+    monkeypatch.setattr(actress_service, "_find_avjoho_profile_urls_by_search", lambda _name: [])
+    monkeypatch.setattr(actress_service, "_fetch_avjoho_profile", lambda url: (
+        (_ for _ in ()).throw(HTTPError(url, 404, "Not Found", hdrs=None, fp=None))
+    ))
+
+    response = client.post(
+        "/api/content/actresses/fetch-from-task",
+        json={"task_id": str(task.id)},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["matched"] is False
+    assert "Traceback" not in caplog.text
+    assert "HTTPError" not in caplog.text
 
 
 def test_fetch_actress_rejects_non_actor_tasks(client, auth_headers, db_session, admin_user) -> None:

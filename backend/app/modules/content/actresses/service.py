@@ -3,10 +3,12 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime
+from urllib.error import HTTPError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from fastapi import HTTPException, status
+from scrapling.parser import Adaptor
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -50,6 +52,14 @@ def _build_avjoho_candidates(names: list[str]) -> list[str]:
     return [f"https://db.avjoho.com/{quote(name)}/" for name in _dedupe_text(names)]
 
 
+def _build_avjoho_search_names(names: list[str]) -> list[str]:
+    variants: list[str] = []
+    for name in names:
+        variants.append(name)
+        variants.append(str(name or "").replace("瀨", "瀬"))
+    return _dedupe_text(variants)
+
+
 def _validate_avjoho_url(url: str) -> str:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or parsed.netloc != "db.avjoho.com":
@@ -67,11 +77,42 @@ def _page_to_html(page) -> str:
     return str(page)
 
 
-def _fetch_avjoho_profile(url: str) -> AvjohoProfilePayload | None:
+def _fetch_url_html(url: str) -> str:
     request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urlopen(request, timeout=30) as response:
-        html = response.read().decode("utf-8", errors="ignore")
+        return response.read().decode("utf-8", errors="ignore")
+
+
+def _fetch_avjoho_profile(url: str) -> AvjohoProfilePayload | None:
+    html = _fetch_url_html(url)
     return parse_avjoho_profile(html, url)
+
+
+def _is_avjoho_profile_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or parsed.netloc != "db.avjoho.com":
+        return False
+    path = parsed.path.strip("/")
+    if not path:
+        return False
+    excluded_prefixes = ("category/", "tag/", "page/", "search/", "feed/", "wp-", "sitemap")
+    return not path.startswith(excluded_prefixes)
+
+
+def _parse_avjoho_search_result_urls(html: str) -> list[str]:
+    page = Adaptor(html)
+    urls = []
+    for anchor in page.css("#list .entry-title a"):
+        href = str(anchor.attrib.get("href") or "").strip()
+        if _is_avjoho_profile_url(href):
+            urls.append(href)
+    return _dedupe_text(urls)
+
+
+def _find_avjoho_profile_urls_by_search(name: str) -> list[str]:
+    search_url = f"https://db.avjoho.com/?s={quote(name)}"
+    html = _fetch_url_html(search_url)
+    return _parse_avjoho_search_result_urls(html)
 
 
 def _profile_matches_names(payload: AvjohoProfilePayload, names: list[str]) -> bool:
@@ -164,13 +205,33 @@ def fetch_actresses_from_task(db: Session, task_id: uuid.UUID, avjoho_url: str |
     for task_url in actor_urls:
         metadata = _fetch_javdb_actor_metadata(task_url.final_url or task_url.url)
         names = _dedupe_text([*metadata.get("primary_names", []), *metadata.get("aliases", []), task_url.url_name, task.name])
-        url_candidates = [_validate_avjoho_url(avjoho_url)] if avjoho_url else _build_avjoho_candidates(names)
+        if avjoho_url:
+            url_candidates = [_validate_avjoho_url(avjoho_url)]
+        else:
+            search_candidates: list[str] = []
+            for name in _build_avjoho_search_names(names):
+                try:
+                    search_candidates.extend(_find_avjoho_profile_urls_by_search(name))
+                except HTTPError as exc:
+                    if exc.code == 404:
+                        logger.info("avjoho profile search not found: %s", name)
+                    else:
+                        logger.info("avjoho profile search failed: %s", name, exc_info=True)
+                except Exception:
+                    logger.info("avjoho profile search failed: %s", name, exc_info=True)
+            url_candidates = _dedupe_text([*_build_avjoho_candidates(names), *search_candidates])
         candidates.extend(url_candidates)
         for candidate_url in url_candidates:
             try:
                 payload = _fetch_avjoho_profile(candidate_url)
             except HTTPException:
                 raise
+            except HTTPError as exc:
+                if exc.code == 404:
+                    logger.info("avjoho profile candidate not found: %s", candidate_url)
+                else:
+                    logger.info("avjoho profile candidate failed: %s", candidate_url, exc_info=True)
+                continue
             except Exception:
                 logger.info("avjoho profile candidate failed: %s", candidate_url, exc_info=True)
                 continue
