@@ -22,7 +22,8 @@
 - Actress list uses cards, not a table.
 - Actress list page sizes must be multiples of 8: default `24`, options `8`, `16`, `24`, `40`.
 - Actress detail is a standalone route at `/content/actresses/$id`, not a drawer.
-- Detail `最近影片` shows 10 local movies matched through associated `source_task_ids` and `source_task_url_ids`, sorted by `release_date` descending with missing dates last; do not match recent movies by actress names.
+- Detail `最近影片` shows 10 local movies matched directly through `Movie.source_task_url_ids` and the actress profile's associated `source_task_url_ids`, sorted by `release_date` descending with missing dates last; do not match recent movies by actress names.
+- Add `Movie.source_task_url_ids` and keep it updated for new crawls and backfilled for existing crawl history.
 - Store remote image URLs; do not add storage integration for actress images.
 
 ---
@@ -31,10 +32,19 @@
 
 Backend/shared files:
 
-- Modify `shared/database/models/content.py`: add `ActressProfile`.
-- Create `sql/20260909_add_actress_profiles.sql`: create `actress_profiles` and its indexes.
-- Create `backend/alembic/versions/20260909_0001_add_actress_profiles.py`: matching Alembic migration for `actress_profiles`.
+- Modify `shared/database/models/content.py`: add `ActressProfile` and `Movie.source_task_url_ids`.
+- Create `sql/20260909_add_actress_profiles.sql`: create `actress_profiles`, alter `movies`, and add indexes.
+- Create `backend/alembic/versions/20260909_0001_add_actress_profiles.py`: matching Alembic migration for `actress_profiles` and `movies.source_task_url_ids`.
 - Modify `backend/tests/test_content_models_metadata.py`: assert the table is registered.
+- Modify `backend/app/modules/content/movies/movie_persistence.py`: merge source task URL IDs while inserting or updating movies.
+- Modify `backend/app/modules/content/movies/schemas.py`: expose `source_task_url_ids`.
+- Modify `backend/app/modules/content/movies/serializers.py`: serialize `source_task_url_ids`.
+- Modify `backend/app/modules/crawler/runtime/callbacks.py`: pass task URL IDs into movie persistence.
+- Modify `backend/app/modules/crawler/runtime/threaded.py`: pass task URL IDs into movie persistence.
+- Modify `backend/app/modules/crawler/agent/runtime.py`: pass task URL IDs into movie persistence.
+- Create `backend/scripts/backfill_movie_source_task_url_ids.py`: backfill existing movies from crawl run detail history.
+- Create or modify `backend/tests/test_movie_persistence.py`: test source task URL ID merging.
+- Create `backend/tests/test_backfill_movie_source_task_url_ids.py`: test dry-run, idempotency, and skipped unmatched URLs.
 - Modify `scraper/spiders/javdb/javdb_parser.py`: add actor metadata parser while keeping `parse_page_section_name` stable.
 - Modify or create `scraper/tests/test_javdb_actor_metadata.py`: parser tests for JavDB actor names and aliases.
 - Create `backend/app/modules/content/actresses/avjoho_parser.py`: parse avjoho HTML into a normalized payload.
@@ -65,7 +75,7 @@ Frontend files:
 
 ---
 
-### Task 1: Actress Profile Model and SQL Table Script
+### Task 1: Actress and Movie Source URL-ID Model, SQL, and Alembic
 
 **Files:**
 - Modify: `shared/database/models/content.py`
@@ -75,11 +85,12 @@ Frontend files:
 
 **Interfaces:**
 - Produces: SQLAlchemy model `ActressProfile`.
-- Produces: SQL script and Alembic migration for table `actress_profiles` with stable column names consumed by later backend tasks.
+- Produces: `Movie.source_task_url_ids: list[uuid.UUID]`.
+- Produces: SQL script and Alembic migration for table `actress_profiles`, `movies.source_task_url_ids`, and required indexes.
 
 - [ ] **Step 1: Write the failing model metadata test**
 
-Add `actress_profiles` to the expected table set in `backend/tests/test_content_models_metadata.py`:
+Add `actress_profiles` to the expected table set and verify the new movie column in `backend/tests/test_content_models_metadata.py`:
 
 ```python
 def test_crawler_run_and_content_tables_registered() -> None:
@@ -92,17 +103,21 @@ def test_crawler_run_and_content_tables_registered() -> None:
         "actress_profiles",
     }
     assert expected.issubset(set(Base.metadata.tables))
+
+
+def test_movies_source_task_url_ids_column_registered() -> None:
+    assert "source_task_url_ids" in Base.metadata.tables["movies"].columns
 ```
 
 - [ ] **Step 2: Run the metadata test to verify it fails**
 
 Run: `python -m pytest backend/tests/test_content_models_metadata.py -v`
 
-Expected: FAIL because `actress_profiles` is missing from `Base.metadata.tables`.
+Expected: FAIL because `actress_profiles` is missing from `Base.metadata.tables` and `movies.source_task_url_ids` is missing.
 
 - [ ] **Step 3: Add the SQLAlchemy model**
 
-In `shared/database/models/content.py`, import `DateTime` and add this model after `MovieFilter`:
+In `shared/database/models/content.py`, import `DateTime`, add the movie index, add the movie column, and add the actress model after `MovieFilter`:
 
 ```python
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint, Uuid
@@ -152,6 +167,18 @@ Also import `datetime`:
 
 ```python
 from datetime import date, datetime
+```
+
+Add this index to `Movie.__table_args__`:
+
+```python
+Index("idx_movies_source_task_url_ids_gin", "source_task_url_ids", postgresql_using="gin"),
+```
+
+Add this column next to `Movie.source_task_ids`:
+
+```python
+source_task_url_ids: Mapped[list[uuid.UUID]] = mapped_column(CompatibleARRAY(Uuid), nullable=False, default=list)
 ```
 
 - [ ] **Step 4: Add the SQL table script**
@@ -207,6 +234,12 @@ CREATE INDEX idx_actress_profiles_aliases_gin
 
 CREATE INDEX idx_actress_profiles_canonical_names_gin
     ON actress_profiles USING gin (canonical_names);
+
+ALTER TABLE movies
+    ADD COLUMN source_task_url_ids UUID[] NOT NULL DEFAULT '{}';
+
+CREATE INDEX idx_movies_source_task_url_ids_gin
+    ON movies USING gin (source_task_url_ids);
 ```
 
 - [ ] **Step 5: Run the metadata test**
@@ -273,9 +306,17 @@ def upgrade() -> None:
     op.create_index("idx_actress_profiles_source_task_ids_gin", "actress_profiles", ["source_task_ids"], postgresql_using="gin")
     op.create_index("idx_actress_profiles_aliases_gin", "actress_profiles", ["aliases"], postgresql_using="gin")
     op.create_index("idx_actress_profiles_canonical_names_gin", "actress_profiles", ["canonical_names"], postgresql_using="gin")
+    op.add_column(
+        "movies",
+        sa.Column("source_task_url_ids", sa.ARRAY(sa.Uuid()), nullable=False, server_default=sa.text("'{}'::uuid[]")),
+    )
+    op.create_index("idx_movies_source_task_url_ids_gin", "movies", ["source_task_url_ids"], postgresql_using="gin")
+    op.alter_column("movies", "source_task_url_ids", server_default=None)
 
 
 def downgrade() -> None:
+    op.drop_index("idx_movies_source_task_url_ids_gin", table_name="movies")
+    op.drop_column("movies", "source_task_url_ids")
     op.drop_index("idx_actress_profiles_canonical_names_gin", table_name="actress_profiles")
     op.drop_index("idx_actress_profiles_aliases_gin", table_name="actress_profiles")
     op.drop_index("idx_actress_profiles_source_task_ids_gin", table_name="actress_profiles")
@@ -300,7 +341,334 @@ git commit -m "Add actress profile model"
 
 ---
 
-### Task 2: JavDB Actor Metadata Parser
+### Task 2: Movie Source Task URL-ID Persistence and Backfill
+
+**Files:**
+- Modify: `backend/app/modules/content/movies/movie_persistence.py`
+- Modify: `backend/app/modules/content/movies/schemas.py`
+- Modify: `backend/app/modules/content/movies/serializers.py`
+- Modify: `backend/app/modules/crawler/runtime/callbacks.py`
+- Modify: `backend/app/modules/crawler/runtime/threaded.py`
+- Modify: `backend/app/modules/crawler/agent/runtime.py`
+- Create: `backend/scripts/backfill_movie_source_task_url_ids.py`
+- Modify: `backend/tests/test_movie_persistence.py`
+- Create: `backend/tests/test_backfill_movie_source_task_url_ids.py`
+
+**Interfaces:**
+- Consumes: `Movie.source_task_url_ids` from Task 1.
+- Produces: `append_source_task_url_id(session: Session, code: str | None, task_url_id: UUID | None) -> bool`.
+- Produces: `append_source_task_ids_for_codes(session: Session, codes: Iterable[str | None], task_id: UUID, task_url_id: UUID | None = None) -> set[str]` with a backward-compatible optional argument.
+- Produces: executable script `python backend/scripts/backfill_movie_source_task_url_ids.py [--dry-run]`.
+
+- [ ] **Step 1: Write failing persistence tests**
+
+Extend `backend/tests/test_movie_persistence.py`:
+
+```python
+def test_upsert_movie_stores_source_task_url_ids(db_session) -> None:
+    task_id = uuid.uuid4()
+    task_url_id = uuid.uuid4()
+
+    movie_id = upsert_movie(db_session, {
+        "code": "URLID-001",
+        "source_name": "URL ID Movie",
+        "source_task_ids": [task_id],
+        "source_task_url_ids": [task_url_id],
+    })
+
+    movie = db_session.get(Movie, movie_id)
+    assert [str(value) for value in movie.source_task_url_ids] == [str(task_url_id)]
+
+
+def test_append_source_task_ids_for_codes_merges_task_url_id(db_session) -> None:
+    task_id = uuid.uuid4()
+    task_url_id = uuid.uuid4()
+    movie_id = upsert_movie(db_session, {"code": "URLID-002", "source_name": "Existing", "source_task_ids": []})
+    db_session.commit()
+
+    changed = append_source_task_ids_for_codes(db_session, ["URLID-002"], task_id, task_url_id=task_url_id)
+    changed_again = append_source_task_ids_for_codes(db_session, ["URLID-002"], task_id, task_url_id=task_url_id)
+
+    movie = db_session.get(Movie, movie_id)
+    assert changed == {"URLID-002"}
+    assert changed_again == set()
+    assert [str(value) for value in movie.source_task_ids] == [str(task_id)]
+    assert [str(value) for value in movie.source_task_url_ids] == [str(task_url_id)]
+```
+
+- [ ] **Step 2: Write failing backfill tests**
+
+Create `backend/tests/test_backfill_movie_source_task_url_ids.py`:
+
+```python
+from datetime import datetime
+
+from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
+from backend.scripts.backfill_movie_source_task_url_ids import backfill_movie_source_task_url_ids
+from shared.database.models.content import Movie
+
+
+def test_backfill_movie_source_task_url_ids_dry_run_does_not_write(db_session, admin_user) -> None:
+    task = CrawlTask(name="Actor", storage_location="Actor", owner_id=admin_user.id)
+    db_session.add(task)
+    db_session.flush()
+    task_url = CrawlTaskUrl(task_id=task.id, position=0, url="https://javdb.com/actors/a", url_type="actors", source="javdb", final_url="https://javdb.com/actors/a?page=1")
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="completed", crawl_mode="incremental")
+    movie = Movie(code="BF-001", source_name="Backfill", source_task_ids=[task.id], source_task_url_ids=[])
+    db_session.add_all([task_url, run, movie])
+    db_session.flush()
+    db_session.add(CrawlRunDetailTask(run_id=run.id, task_name=task.name, code=movie.code, source_url="https://javdb.com/v/bf001", source_name=movie.source_name, task_url=task_url.url, task_url_type="actors", status="saved", movie_id=movie.id, created_at=datetime.utcnow()))
+    db_session.commit()
+
+    result = backfill_movie_source_task_url_ids(db_session, dry_run=True)
+    db_session.refresh(movie)
+
+    assert result.movies_to_update == 1
+    assert result.links_to_add == 1
+    assert movie.source_task_url_ids == []
+
+
+def test_backfill_movie_source_task_url_ids_updates_idempotently(db_session, admin_user) -> None:
+    task = CrawlTask(name="Actor", storage_location="Actor", owner_id=admin_user.id)
+    db_session.add(task)
+    db_session.flush()
+    task_url = CrawlTaskUrl(task_id=task.id, position=0, url="https://javdb.com/actors/a", url_type="actors", source="javdb", final_url="https://javdb.com/actors/a?page=1")
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="completed", crawl_mode="incremental")
+    movie = Movie(code="BF-002", source_name="Backfill", source_task_ids=[task.id], source_task_url_ids=[])
+    db_session.add_all([task_url, run, movie])
+    db_session.flush()
+    db_session.add(CrawlRunDetailTask(run_id=run.id, task_name=task.name, code=movie.code, source_url="https://javdb.com/v/bf002", source_name=movie.source_name, task_url=task_url.url, task_url_type="actors", status="saved", movie_id=movie.id, created_at=datetime.utcnow()))
+    db_session.commit()
+
+    first = backfill_movie_source_task_url_ids(db_session, dry_run=False)
+    second = backfill_movie_source_task_url_ids(db_session, dry_run=False)
+    db_session.refresh(movie)
+
+    assert first.movies_updated == 1
+    assert first.links_added == 1
+    assert second.movies_updated == 0
+    assert second.links_added == 0
+    assert [str(value) for value in movie.source_task_url_ids] == [str(task_url.id)]
+```
+
+- [ ] **Step 3: Run tests to verify they fail**
+
+Run:
+
+```bash
+python -m pytest backend/tests/test_movie_persistence.py backend/tests/test_backfill_movie_source_task_url_ids.py -v
+```
+
+Expected: FAIL because persistence and script code do not exist.
+
+- [ ] **Step 4: Update movie persistence**
+
+In `backend/app/modules/content/movies/movie_persistence.py`, add helper:
+
+```python
+def _merge_uuid_values(existing: Iterable, incoming: Iterable) -> list:
+    values: list = []
+    seen: set[str] = set()
+    for value in [*(existing or []), *(incoming or [])]:
+        if value is None:
+            continue
+        key = str(value)
+        if key in seen:
+            continue
+        seen.add(key)
+        values.append(value)
+    return values
+```
+
+When creating `Movie`, pass:
+
+```python
+source_task_url_ids=item.get("source_task_url_ids", []),
+```
+
+When `upsert_movie` finds an existing movie, merge mutable source arrays before returning:
+
+```python
+existing.source_task_ids = _merge_uuid_values(existing.source_task_ids, item.get("source_task_ids", []))
+existing.source_task_url_ids = _merge_uuid_values(existing.source_task_url_ids, item.get("source_task_url_ids", []))
+session.flush()
+return existing.id
+```
+
+Add:
+
+```python
+def append_source_task_url_id(session: Session, code: str | None, task_url_id: UUID | None) -> bool:
+    if not code or task_url_id is None:
+        return False
+    movie = session.scalar(select(Movie).where(Movie.code == code))
+    if movie is None:
+        return False
+    merged = _merge_uuid_values(movie.source_task_url_ids, [task_url_id])
+    if [str(value) for value in merged] == [str(value) for value in (movie.source_task_url_ids or [])]:
+        return False
+    movie.source_task_url_ids = merged
+    session.flush()
+    return True
+```
+
+Change `append_source_task_ids_for_codes` signature:
+
+```python
+def append_source_task_ids_for_codes(session: Session, codes: Iterable[str | None], task_id: UUID, task_url_id: UUID | None = None) -> set[str]:
+```
+
+Inside its loop, merge both arrays and mark the code changed if either changed.
+
+- [ ] **Step 5: Pass source task URL IDs from crawler runtimes**
+
+In `backend/app/modules/crawler/runtime/callbacks.py`, derive the current URL ID from active detail context. Use the active detail's `task_url` and `ctx.task.urls`:
+
+```python
+def _task_url_id_for_detail(task, detail) -> uuid.UUID | None:
+    if detail is None or not detail.task_url:
+        return None
+    for url_entry in task.urls:
+        if url_entry.url == detail.task_url:
+            return url_entry.id
+    return None
+```
+
+When saving item data, pass:
+
+```python
+task_url_id = _task_url_id_for_detail(ctx.task, detail)
+item_data_with_task_ids = {**item_data, "source_task_ids": [ctx.task.id], "source_task_url_ids": [task_url_id] if task_url_id else []}
+```
+
+When appending existing source IDs from list duplicate checks, pass the URL ID for that list URL into `append_source_task_ids_for_codes`.
+
+In `backend/app/modules/crawler/runtime/threaded.py` and `backend/app/modules/crawler/agent/runtime.py`, use the current detail row's `task_url` to find the matching `task.urls` entry and pass `source_task_url_ids` into `upsert_movie_with_magnets`.
+
+- [ ] **Step 6: Expose source task URL IDs in movie schemas and serializers**
+
+In `backend/app/modules/content/movies/schemas.py`, add:
+
+```python
+source_task_url_ids: list[uuid.UUID] = Field(default_factory=list)
+```
+
+next to `source_task_ids`.
+
+In `backend/app/modules/content/movies/serializers.py`, add:
+
+```python
+source_task_url_ids = [str(tid) for tid in (movie.source_task_url_ids or [])]
+```
+
+and include `"source_task_url_ids": source_task_url_ids` anywhere movie payloads include `source_task_ids`.
+
+- [ ] **Step 7: Add backfill script**
+
+Create `backend/scripts/backfill_movie_source_task_url_ids.py`:
+
+```python
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass, field
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+from backend.app.models.crawl_task import CrawlTaskUrl
+from shared.database.models.content import Movie
+from shared.database.session import get_session_factory
+
+
+@dataclass
+class BackfillResult:
+    movies_to_update: int = 0
+    movies_updated: int = 0
+    links_to_add: int = 0
+    links_added: int = 0
+    skipped_unmatched: int = 0
+    skipped_examples: list[dict] = field(default_factory=list)
+
+
+def _merge(existing, value):
+    current = list(existing or [])
+    if str(value) in {str(item) for item in current}:
+        return current, False
+    return [*current, value], True
+
+
+def backfill_movie_source_task_url_ids(db: Session, *, dry_run: bool = False) -> BackfillResult:
+    result = BackfillResult()
+    rows = db.execute(
+        select(CrawlRunDetailTask, CrawlRun.task_id)
+        .join(CrawlRun, CrawlRun.id == CrawlRunDetailTask.run_id)
+        .where(CrawlRunDetailTask.movie_id.is_not(None), CrawlRunDetailTask.task_url.is_not(None), CrawlRun.task_id.is_not(None))
+    ).all()
+    changed_movies = set()
+    for detail, task_id in rows:
+        task_url = db.scalar(select(CrawlTaskUrl).where(CrawlTaskUrl.task_id == task_id, CrawlTaskUrl.url == detail.task_url))
+        if task_url is None:
+            result.skipped_unmatched += 1
+            if len(result.skipped_examples) < 5:
+                result.skipped_examples.append({"movie_id": str(detail.movie_id), "task_id": str(task_id), "task_url": detail.task_url})
+            continue
+        movie = db.get(Movie, detail.movie_id)
+        if movie is None:
+            continue
+        merged, changed = _merge(movie.source_task_url_ids, task_url.id)
+        if not changed:
+            continue
+        result.links_to_add += 1
+        changed_movies.add(movie.id)
+        if not dry_run:
+            movie.source_task_url_ids = merged
+            result.links_added += 1
+    result.movies_to_update = len(changed_movies)
+    if not dry_run:
+        result.movies_updated = len(changed_movies)
+        db.commit()
+    return result
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+    db = get_session_factory()()
+    try:
+        result = backfill_movie_source_task_url_ids(db, dry_run=args.dry_run)
+        print(result)
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- [ ] **Step 8: Run tests**
+
+Run:
+
+```bash
+python -m pytest backend/tests/test_movie_persistence.py backend/tests/test_backfill_movie_source_task_url_ids.py -v
+```
+
+Expected: PASS.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add backend/app/modules/content/movies/movie_persistence.py backend/app/modules/content/movies/schemas.py backend/app/modules/content/movies/serializers.py backend/app/modules/crawler/runtime/callbacks.py backend/app/modules/crawler/runtime/threaded.py backend/app/modules/crawler/agent/runtime.py backend/scripts/backfill_movie_source_task_url_ids.py backend/tests/test_movie_persistence.py backend/tests/test_backfill_movie_source_task_url_ids.py
+git diff --cached --name-only
+git commit -m "Track movie source task URLs"
+```
+
+---
+
+### Task 3: JavDB Actor Metadata Parser
 
 **Files:**
 - Modify: `scraper/spiders/javdb/javdb_parser.py`
@@ -309,7 +677,7 @@ git commit -m "Add actress profile model"
 **Interfaces:**
 - Produces: `parse_actor_section_metadata(page) -> dict[str, list[str]]`.
 - Produces payload: `{"primary_names": list[str], "aliases": list[str]}`.
-- Consumed by Task 4 service candidate extraction.
+- Consumed by Task 5 service candidate extraction.
 
 - [ ] **Step 1: Write failing parser tests**
 
@@ -423,7 +791,7 @@ git commit -m "Parse JavDB actor aliases"
 
 ---
 
-### Task 3: Avjoho Profile Parser
+### Task 4: Avjoho Profile Parser
 
 **Files:**
 - Create: `backend/app/modules/content/actresses/__init__.py`
@@ -433,7 +801,7 @@ git commit -m "Parse JavDB actor aliases"
 **Interfaces:**
 - Produces dataclass `AvjohoProfilePayload`.
 - Produces function `parse_avjoho_profile(html: str, source_url: str) -> AvjohoProfilePayload | None`.
-- Consumed by Task 4 service upsert.
+- Consumed by Task 5 service upsert.
 
 - [ ] **Step 1: Write failing avjoho parser tests**
 
@@ -616,7 +984,7 @@ git commit -m "Parse avjoho actress profiles"
 
 ---
 
-### Task 4: Actress Backend API and Fetch Service
+### Task 5: Actress Backend API and Fetch Service
 
 **Files:**
 - Create: `backend/app/modules/content/actresses/schemas.py`
@@ -632,7 +1000,7 @@ git commit -m "Parse avjoho actress profiles"
 - Produces: `GET /api/content/actresses/{profile_id}`
 - Produces: `POST /api/content/actresses/fetch-from-task`
 - Produces: `ActressFetchFromTaskRequest(task_id: uuid.UUID, avjoho_url: str | None = None)`
-- Consumes: `ActressProfile` from Task 1, `parse_actor_section_metadata` from Task 2, `parse_avjoho_profile` from Task 3.
+- Consumes: `ActressProfile` and `Movie.source_task_url_ids` from Task 1, movie source URL-ID persistence from Task 2, `parse_actor_section_metadata` from Task 3, and `parse_avjoho_profile` from Task 4.
 
 - [ ] **Step 1: Write failing API tests**
 
@@ -645,7 +1013,6 @@ from http import HTTPStatus
 
 from fastapi.testclient import TestClient
 
-from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.tests.conftest import TestingSessionLocal
 from shared.database.models.content import ActressProfile, Movie
@@ -713,37 +1080,12 @@ def test_get_actress_detail_includes_recent_movies(client: TestClient, admin_use
         source="javdb",
         final_url="https://javdb.com/actors/a?page=1",
     )
-    run = CrawlRun(task_id=task.id, task_name=task.name, status="completed", crawl_mode="incremental")
-    old_movie = Movie(code="OLD-001", source_name="旧影片", actors=["No Name"], release_date=date(2025, 1, 1), cover="old.jpg", source_task_ids=[task.id])
-    new_movie = Movie(code="NEW-001", source_name="新影片", actors=["Other Name"], release_date=date(2026, 1, 1), cover="new.jpg", source_task_ids=[task.id])
-    session.add_all([task_url, run, old_movie, new_movie])
+    session.add(task_url)
     session.flush()
-    session.add_all([
-        CrawlRunDetailTask(
-            run_id=run.id,
-            task_name=task.name,
-            code="OLD-001",
-            source_url="https://javdb.com/v/old",
-            source_name="旧影片",
-            task_url=task_url.url,
-            task_url_type="actors",
-            status="completed",
-            movie_id=old_movie.id,
-            created_at=datetime(2026, 9, 9, 1, 0, 0),
-        ),
-        CrawlRunDetailTask(
-            run_id=run.id,
-            task_name=task.name,
-            code="NEW-001",
-            source_url="https://javdb.com/v/new",
-            source_name="新影片",
-            task_url=task_url.url,
-            task_url_type="actors",
-            status="completed",
-            movie_id=new_movie.id,
-            created_at=datetime(2026, 9, 9, 1, 1, 0),
-        ),
-    ])
+    old_movie = Movie(code="OLD-001", source_name="旧影片", actors=["No Name"], release_date=date(2025, 1, 1), cover="old.jpg", source_task_ids=[task.id], source_task_url_ids=[task_url.id])
+    new_movie = Movie(code="NEW-001", source_name="新影片", actors=["Other Name"], release_date=date(2026, 1, 1), cover="new.jpg", source_task_ids=[task.id], source_task_url_ids=[task_url.id])
+    unrelated_movie = Movie(code="SKIP-001", source_name="不相关影片", actors=["宮上唯依花"], release_date=date(2027, 1, 1), cover="skip.jpg", source_task_ids=[], source_task_url_ids=[])
+    session.add_all([old_movie, new_movie, unrelated_movie])
     session.commit()
     profile_id = seed_profile(task.id, task_url.id)
     session.close()
@@ -898,8 +1240,6 @@ import uuid
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
-from backend.app.models.crawl_task import CrawlTaskUrl
 from shared.database.models.content import ActressProfile, Movie
 
 
@@ -930,19 +1270,14 @@ def list_recent_movies_for_profile(db: Session, profile: ActressProfile, *, limi
     task_url_ids = [uuid.UUID(str(value)) for value in (profile.source_task_url_ids or [])]
     if not task_ids or not task_url_ids:
         return []
-    task_urls = db.scalars(select(CrawlTaskUrl.url).where(CrawlTaskUrl.id.in_(task_url_ids))).all()
-    if not task_urls:
-        return []
-    movie_ids = select(CrawlRunDetailTask.movie_id).join(CrawlRun).where(
-        CrawlRun.task_id.in_(task_ids),
-        CrawlRunDetailTask.task_url.in_(list(task_urls)),
-        CrawlRunDetailTask.movie_id.is_not(None),
+    query = select(Movie).where(
+        or_(*[Movie.source_task_ids.any(task_id) for task_id in task_ids]),
+        or_(*[Movie.source_task_url_ids.any(task_url_id) for task_url_id in task_url_ids]),
     )
-    query = select(Movie).where(Movie.id.in_(movie_ids))
     return list(db.scalars(query.order_by(Movie.release_date.desc().nullslast(), Movie.created_at.desc()).limit(limit)).all())
 ```
 
-If the focused API test fails under SQLite because `CompatibleARRAY` stores arrays as JSON text, replace `ActressProfile.source_task_ids.any(uuid_value)` with the same dialect-specific helper pattern used by existing movie query tests in `backend/tests/test_content_movie_queries_sql.py`. Keep the public function signatures unchanged.
+If the focused API test fails under SQLite because `CompatibleARRAY` stores arrays as JSON text, replace `ActressProfile.source_task_ids.any(uuid_value)`, `Movie.source_task_ids.any(task_id)`, and `Movie.source_task_url_ids.any(task_url_id)` with the same dialect-specific helper pattern used by existing movie query tests in `backend/tests/test_content_movie_queries_sql.py`. Keep the public function signatures unchanged.
 
 - [ ] **Step 5: Add service orchestration**
 
@@ -1097,7 +1432,7 @@ git commit -m "Add actress profile API"
 
 ---
 
-### Task 5: Frontend Actress API, Routes, Card List, and Detail Page
+### Task 6: Frontend Actress API, Routes, Card List, and Detail Page
 
 **Files:**
 - Create: `frontend/src/api/content/actresses/types.ts`
@@ -1112,7 +1447,7 @@ git commit -m "Add actress profile API"
 - Modify: `frontend/src/layout/Sidebar/index.tsx`
 
 **Interfaces:**
-- Consumes backend endpoints from Task 4.
+- Consumes backend endpoints from Task 5.
 - Produces route `/content/actresses`.
 - Produces route `/content/actresses/$id`.
 - Produces query keys `queryKeys.actresses.list(params)` and `queryKeys.actresses.detail(id)`.
@@ -1395,7 +1730,7 @@ git commit -m "Add actress profile pages"
 
 ---
 
-### Task 6: Crawler Task One-Click Actress Fetch Action
+### Task 7: Crawler Task One-Click Actress Fetch Action
 
 **Files:**
 - Modify: `frontend/src/pages/crawler/tasks/components/TaskListCards.tsx`
@@ -1403,7 +1738,7 @@ git commit -m "Add actress profile pages"
 - Modify: `frontend/src/pages/crawler/tasks/__tests__/task-list-card-actions.test.tsx`
 
 **Interfaces:**
-- Consumes: `fetchActressFromTask({ task_id, avjoho_url? })` from Task 5.
+- Consumes: `fetchActressFromTask({ task_id, avjoho_url? })` from Task 6.
 - Produces: task-card action `获取女优资料` for actor tasks only.
 - Produces: manual URL modal after automatic not-found errors.
 
@@ -1565,7 +1900,7 @@ git commit -m "Add task actress fetch action"
 
 ---
 
-### Task 7: Full Verification and Documentation Check
+### Task 8: Full Verification and Documentation Check
 
 **Files:**
 - Modify: `frontend/README.md` only if route/module conventions changed in a way the README documents.
@@ -1580,7 +1915,7 @@ git commit -m "Add task actress fetch action"
 Run:
 
 ```bash
-python -m pytest backend/tests/test_content_models_metadata.py backend/tests/test_avjoho_parser.py backend/tests/test_content_actresses_api.py -v
+python -m pytest backend/tests/test_content_models_metadata.py backend/tests/test_movie_persistence.py backend/tests/test_backfill_movie_source_task_url_ids.py backend/tests/test_avjoho_parser.py backend/tests/test_content_actresses_api.py -v
 ```
 
 Expected: PASS.

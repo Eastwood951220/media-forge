@@ -6,6 +6,8 @@ Media Forge currently has a content movie list, and movie rows store actress nam
 
 Crawler task URLs already carry a `url_type`. JavDB actor URLs are recognized as `actors`, and the task list can already run a full task, run selected URLs, and jump to movies filtered by task. The requested first version should add a task-card action that is available only when a task has at least one actor URL, fetch actress profile data from `https://db.avjoho.com/`, and show saved profiles in content management.
 
+Movies currently store `source_task_ids`, but not the source task URL IDs that produced them. This feature should add `Movie.source_task_url_ids` so actress details can find recent movies by task URL association instead of name matching.
+
 The pasted avjoho sample page uses stable content areas:
 
 - `h1.entry-title` for display name and kana in parentheses.
@@ -80,6 +82,29 @@ Recommended columns:
 Use array or JSON-compatible types through existing shared helpers where appropriate. `aliases`, `canonical_names`, and source ID lists should stay queryable enough for list search and dedupe. Complex page-derived structures such as SNS links, works, similar actresses, and raw parsed fields can live in JSON.
 
 Add indexes on `display_name`, `source_url`, `source_task_ids`, and a GIN-style index for aliases/canonical names where supported. Put table creation and table modification statements in a versioned SQL script under `sql/`, and add the matching Alembic migration automatically so application migrations stay current.
+
+Also add `source_task_url_ids` to the existing `movies` table and `Movie` model:
+
+- Type: UUID array through the existing compatible array type.
+- Default: empty array.
+- Index: GIN index for URL-ID containment queries.
+- API exposure: include `source_task_url_ids` in movie serializers and schemas wherever `source_task_ids` is already exposed.
+
+Update crawler movie persistence so new or existing movies merge both `source_task_ids` and `source_task_url_ids`. Existing data should be backfilled by a repeatable script, not only by future crawls.
+
+### Existing Movie Backfill
+
+Add an executable script `backend/scripts/backfill_movie_source_task_url_ids.py`.
+
+The script should:
+
+1. Find `crawl_run_detail_tasks` rows with `movie_id IS NOT NULL` and `task_url IS NOT NULL`.
+2. Join to `crawl_runs` for `task_id`.
+3. Match `crawl_task_urls` by `task_id` and `url == crawl_run_detail_tasks.task_url`.
+4. Merge the matched `crawl_task_urls.id` into `Movie.source_task_url_ids`.
+5. Support `--dry-run`, printing the number of movies and URL links that would change.
+6. Be idempotent and safe to run multiple times.
+7. Print skipped counts and a few skipped examples when no task URL can be matched.
 
 ### JavDB Candidate Extraction
 
@@ -183,7 +208,7 @@ Clicking a card opens the standalone detail route `/content/actresses/$id`. The 
 - source URL
 - last fetched time
 
-The detail page should also include a `最近影片` section. It queries local `Movie` rows through the actress profile's associated `source_task_ids` and `source_task_url_ids`, not by actress name matching. Because `Movie` stores `source_task_ids` but does not directly store task URL IDs, use `source_task_url_ids` to load `crawl_task_urls.url`, then find `crawl_run_detail_tasks` with matching `task_url`, matching parent crawl run `task_id`, and non-empty `movie_id`. Sort matched movies by `release_date` descending with missing dates last, and return 10 rows. Each movie item shows cover image, `code`, and title. The first version does not need to add a new movie detail route; movie cards can link to the existing movie source URL when available or stay non-navigating when no URL exists.
+The detail page should also include a `最近影片` section. It queries local `Movie` rows through the actress profile's associated `source_task_ids` and `source_task_url_ids`, not by actress name matching. Because `Movie.source_task_url_ids` is added by this work, the query should directly require overlap with the profile's `source_task_url_ids`; it can also require overlap with `source_task_ids` for extra scoping. Sort matched movies by `release_date` descending with missing dates last, and return 10 rows. Each movie item shows cover image, `code`, and title. The first version does not need to add a new movie detail route; movie cards can link to the existing movie source URL when available or stay non-navigating when no URL exists.
 
 Add a task-card action such as `获取女优资料`. It should render only when the task has at least one URL whose `url_type` is `actors`; disabled state should follow the same runtime readiness and idle checks as other fetch-like actions.
 
@@ -211,7 +236,8 @@ Backend:
 
 - Add JavDB parser tests for actor primary names and aliases, including comma-separated Chinese/Japanese names and movie-count filtering.
 - Add avjoho parser tests using the pasted sample HTML for profile fields, SNS links, representative works, and similar actresses.
-- Add service tests for automatic candidate ordering, manual URL validation, source URL dedupe, alias dedupe, task URL ID based recent movie lookup, and task ownership/no-actor rejection.
+- Add service tests for automatic candidate ordering, manual URL validation, source URL dedupe, alias dedupe, direct `Movie.source_task_url_ids` recent movie lookup, and task ownership/no-actor rejection.
+- Add backfill script tests for dry-run, idempotent update, and skipped unmatched task URLs.
 - Add router tests for list pagination and fetch-from-task responses.
 
 Frontend:
