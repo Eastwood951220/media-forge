@@ -16,6 +16,7 @@ from backend.app.core.exception_handlers import register_exception_handlers
 from backend.app.modules.auth.router import router as auth_router
 from backend.app.modules.backup.router import router as backup_router
 from backend.app.modules.backup.scheduler import backup_scheduler
+from backend.app.modules.content.actresses.router import router as content_actresses_router
 from backend.app.modules.content.movies.router import router as content_movies_router
 from backend.app.modules.crawler.agent.router import router as crawler_agent_router
 from backend.app.modules.crawler.config.router import router as crawler_config_router
@@ -158,6 +159,7 @@ app.include_router(crawler_config_router)
 app.include_router(crawler_runs_router)
 app.include_router(crawler_schedules_router)
 app.include_router(crawler_agent_router)
+app.include_router(content_actresses_router)
 app.include_router(content_movies_router)
 app.include_router(backup_router)
 app.include_router(storage_config_router)
