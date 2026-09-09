@@ -24,7 +24,7 @@ JavDB actor listing pages provide matching candidates:
 ## Goals
 
 1. Add a persistent actress profile content entity.
-2. Add content management navigation and a `/content/actresses` list page.
+2. Add content management navigation, a `/content/actresses` card list page, and a standalone actress detail page.
 3. Add a task-card action that is available only for tasks containing `actors` task URLs.
 4. Implement one-click actress data fetching with automatic avjoho matching.
 5. Use JavDB actor names and aliases as avjoho matching candidates.
@@ -144,24 +144,46 @@ If no profile is found automatically, return a 404-style application error with 
 
 Add a content actress API module under `frontend/src/api/content/actresses`.
 
-Add a route and menu entry:
+Add routes and a menu entry:
 
 - Route: `/content/actresses`
+- Detail route: `/content/actresses/$id`
 - Tag title: `女优列表`
 - Sidebar item under content management: `女优列表`
 
-The list page should follow the existing movie-list style where practical: compact toolbar, keyword search, table/list results, and pagination. First-version columns:
+The list page should use a card grid rather than a table. It should follow the existing content-management density where practical: compact toolbar, keyword search, card results, and pagination. Pagination page sizes must be multiples of 8, with a default of 24 and selectable sizes of 8, 16, 24, and 40. First-version card content:
 
 - image
 - name
-- aliases
+- alias summary
 - debut date
 - birth date
 - body metrics
 - birthplace
 - exclusive maker
+- last fetched time
+
+Clicking a card opens the standalone detail route `/content/actresses/$id`. The detail page should show the complete saved avjoho profile:
+
+- image
+- display name and reading
+- aliases and canonical names
+- debut date
+- birth date
+- height and measurements
+- cup
+- birthplace
+- blood type
+- hobbies
+- biography
+- exclusive maker
+- SNS links
+- representative works
+- similar actresses
 - source URL
 - last fetched time
+
+The detail page should also include a `最近影片` section. It queries local `Movie` rows whose `actors` array matches the actress display name, canonical names, or aliases, orders by `release_date` descending with missing dates last, and returns 10 rows. Each movie item shows cover image, `code`, and title. The first version does not need to add a new movie detail route; movie cards can link to the existing movie source URL when available or stay non-navigating when no URL exists.
 
 Add a task-card action such as `获取女优资料`. It should render only when the task has at least one URL whose `url_type` is `actors`; disabled state should follow the same runtime readiness and idle checks as other fetch-like actions.
 
