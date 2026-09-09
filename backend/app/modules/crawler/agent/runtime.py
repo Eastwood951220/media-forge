@@ -39,7 +39,7 @@ from backend.app.modules.crawler.runtime.detail_queue import claim_next_pending_
 from backend.app.modules.crawler.runtime.events import append_run_log_for_run, publish_run_detail_updated
 from backend.app.modules.crawler.runtime.source_task_names import find_existing_movie_codes
 from backend.app.modules.crawler.runtime.threaded import build_pipeline
-from backend.app.modules.content.movies.persistence import upsert_movie_with_magnets
+from backend.app.modules.content.movies.persistence import append_source_task_ids_for_codes, upsert_movie_with_magnets
 
 
 def complete_work_item_from_snapshot(
@@ -135,15 +135,13 @@ def _should_persist_agent_list_item(run: CrawlRun, item: dict[str, Any]) -> bool
     return not (item.get("status") == "skipped" and item.get("reason") == "already_exists")
 
 
-def _append_existing_source_task_ids(db: Session, task: CrawlTask, items: list[dict[str, Any]]) -> None:
-    from backend.app.modules.content.movies.persistence import append_source_task_ids_for_codes
-
+def _append_existing_source_task_ids(db: Session, task: CrawlTask, items: list[dict[str, Any]], task_url_id: uuid.UUID) -> None:
     codes = [str(item.get("code")) for item in items if item.get("code")]
     if not codes:
         return
     existing_codes = find_existing_movie_codes(db, codes)
     if existing_codes:
-        append_source_task_ids_for_codes(db, existing_codes, task.id)
+        append_source_task_ids_for_codes(db, existing_codes, task.id, task_url_id=task_url_id)
 
 
 def _notify_work_item_available_sync(
@@ -212,7 +210,7 @@ def _run_agent_list_phase(
             task_info.setdefault("_task_url_type", url_entry.url_type)
             task_info.setdefault("_task_url_name", url_entry.url_name)
             task_info.setdefault("_task_source", url_entry.source)
-        _append_existing_source_task_ids(db, task, tasks)
+        _append_existing_source_task_ids(db, task, tasks, url_entry.id)
         persisted = []
         for task_info in tasks:
             if not _should_persist_agent_list_item(run, task_info):
@@ -262,7 +260,16 @@ def _process_agent_detail_result(
         detail.code = code
     cleaned = pipeline.process_item(item, task_name=task.name, task_id=str(task.id))
     if cleaned:
-        upsert_movie_with_magnets(db, {**cleaned, "source_task_ids": [task.id]})
+        task_url_id = _task_url_id_for_detail(task, detail)
+        movie_id = upsert_movie_with_magnets(
+            db,
+            {
+                **cleaned,
+                "source_task_ids": [task.id],
+                "source_task_url_ids": [task_url_id] if task_url_id else [],
+            },
+        )
+        detail.movie_id = movie_id
         detail.status = "saved"
         detail.item_data = cleaned
         detail.crawled_at = datetime.now()
@@ -271,6 +278,16 @@ def _process_agent_detail_result(
     else:
         detail.status = "save_failed"
         detail.error = "pipeline returned None"
+
+
+def _task_url_id_for_detail(task: CrawlTask, detail):
+    task_url = getattr(detail, "task_url", None)
+    if not task_url:
+        return None
+    for url_entry in task.urls:
+        if url_entry.url == task_url:
+            return url_entry.id
+    return None
 
 
 def _run_agent_detail_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime, config) -> None:

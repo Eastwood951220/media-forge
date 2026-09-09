@@ -75,6 +75,7 @@ def serialize_movie(
     storage_location_map: dict[str, list[str]] | None = None,
 ) -> dict:
     source_task_ids = [str(tid) for tid in (movie.source_task_ids or [])]
+    source_task_url_ids = [str(tid) for tid in (movie.source_task_url_ids or [])]
     payload = {
         "_id": str(movie.id),
         "id": str(movie.id),
@@ -91,6 +92,7 @@ def serialize_movie(
         "actors": list(movie.actors or []),
         "tags": list(movie.tags or []),
         "source_task_ids": source_task_ids,
+        "source_task_url_ids": source_task_url_ids,
         "storage_locations": movie_storage_locations(movie, db, storage_location_map),
         "marked": bool(movie.marked),
         "storage_status": normalized_movie_storage_status(movie),

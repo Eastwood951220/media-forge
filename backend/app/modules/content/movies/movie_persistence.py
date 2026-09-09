@@ -17,6 +17,24 @@ def _movie_unique_value(item: dict[str, Any]) -> tuple[str, str]:
     return "source_url", str(item.get("source_url") or "").strip()
 
 
+def _merge_uuid_values(existing: Iterable, incoming: Iterable) -> list:
+    values: list = []
+    seen: set[str] = set()
+    for value in [*(existing or []), *(incoming or [])]:
+        if value is None:
+            continue
+        key = str(value)
+        if key in seen:
+            continue
+        seen.add(key)
+        values.append(value)
+    return values
+
+
+def _uuid_values_changed(before: Iterable, after: Iterable) -> bool:
+    return [str(value) for value in (before or [])] != [str(value) for value in (after or [])]
+
+
 def upsert_movie(session: Session, item: dict[str, Any]) -> UUID:
     unique_field, unique_value = _movie_unique_value(item)
     if not unique_value:
@@ -27,6 +45,12 @@ def upsert_movie(session: Session, item: dict[str, Any]) -> UUID:
     else:
         existing = session.scalar(select(Movie).where(Movie.source_url == unique_value))
     if existing is not None:
+        existing.source_task_ids = _merge_uuid_values(existing.source_task_ids, item.get("source_task_ids", []))
+        existing.source_task_url_ids = _merge_uuid_values(
+            existing.source_task_url_ids,
+            item.get("source_task_url_ids", []),
+        )
+        session.flush()
         return existing.id
 
     release_date = item.get("release_date") or None
@@ -43,6 +67,7 @@ def upsert_movie(session: Session, item: dict[str, Any]) -> UUID:
         actors=item.get("actors", []),
         tags=item.get("tags", []),
         source_task_ids=item.get("source_task_ids", []),
+        source_task_url_ids=item.get("source_task_url_ids", []),
         cover=item.get("cover", ""),
         marked=item.get("marked", False),
         storage_summary=item.get("storage_summary", {}),
@@ -69,7 +94,27 @@ def append_source_task_id(session: Session, code: str | None, task_id: UUID) -> 
     return True
 
 
-def append_source_task_ids_for_codes(session: Session, codes: Iterable[str | None], task_id: UUID) -> set[str]:
+def append_source_task_url_id(session: Session, code: str | None, task_url_id: UUID | None) -> bool:
+    if not code or task_url_id is None:
+        return False
+    movie = session.scalar(select(Movie).where(Movie.code == code))
+    if movie is None:
+        return False
+
+    merged = _merge_uuid_values(movie.source_task_url_ids, [task_url_id])
+    if not _uuid_values_changed(movie.source_task_url_ids, merged):
+        return False
+    movie.source_task_url_ids = merged
+    session.flush()
+    return True
+
+
+def append_source_task_ids_for_codes(
+    session: Session,
+    codes: Iterable[str | None],
+    task_id: UUID,
+    task_url_id: UUID | None = None,
+) -> set[str]:
     cleaned_codes: list[str] = []
     seen_codes: set[str] = set()
     for code in codes:
@@ -85,10 +130,18 @@ def append_source_task_ids_for_codes(session: Session, codes: Iterable[str | Non
     changed_codes: set[str] = set()
 
     for movie in movies:
+        changed = False
         existing_ids = [str(value) for value in (movie.source_task_ids or [])]
-        if task_id_text in existing_ids:
+        if task_id_text not in existing_ids:
+            movie.source_task_ids = list(movie.source_task_ids or []) + [task_id]
+            changed = True
+        if task_url_id is not None:
+            merged_url_ids = _merge_uuid_values(movie.source_task_url_ids, [task_url_id])
+            if _uuid_values_changed(movie.source_task_url_ids, merged_url_ids):
+                movie.source_task_url_ids = merged_url_ids
+                changed = True
+        if not changed:
             continue
-        movie.source_task_ids = list(movie.source_task_ids or []) + [task_id]
         if movie.code:
             changed_codes.add(movie.code)
 

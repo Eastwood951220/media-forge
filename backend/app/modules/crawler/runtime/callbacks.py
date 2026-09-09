@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask
 from backend.app.modules.content.movies.persistence import (
-    append_source_task_id,
     append_source_task_ids_for_codes,
     upsert_movie_with_magnets,
 )
@@ -87,6 +86,14 @@ def build_crawl_callbacks(
             context["source_url_name"] = detail.source_url_name or context.get("source_url_name")
         return {key: value for key, value in context.items() if value is not None}
 
+    def task_url_id_for_url(task_url: str | None):
+        if not task_url:
+            return None
+        for url_entry in ctx.task.urls:
+            if url_entry.url == task_url:
+                return url_entry.id
+        return None
+
     def on_tasks_batch_created(items: list[dict[str, Any]]) -> None:
         skipped_count = 0
         created_details: list[CrawlRunDetailTask] = []
@@ -127,7 +134,8 @@ def build_crawl_callbacks(
             created_details.append(detail)
             if is_skipped:
                 skipped_count += 1
-                if append_source_task_id(ctx.db, item.get("code"), ctx.task.id):
+                task_url_id = task_url_id_for_url(item.get("_task_url"))
+                if append_source_task_ids_for_codes(ctx.db, [item.get("code")], ctx.task.id, task_url_id=task_url_id):
                     append_run_log_for_run(ctx.db, ctx.run, f"已存在影片追加任务ID: {item.get('code')} -> {ctx.task.id}", "INFO", code=item.get("code"))
         increment_progress(ctx.progress, "total", len(items))
         increment_progress(ctx.progress, "skipped", skipped_count)
@@ -148,8 +156,12 @@ def build_crawl_callbacks(
         detail = active_indexed_detail(task_info, item_data)
         code = item_data.get("code") or task_info.get("code") or "-"
         run_id_str = str(ctx.run.id)
-        # Inject source_task_ids into item_data for persistence
-        item_data_with_task_ids = {**item_data, "source_task_ids": [ctx.task.id]}
+        task_url_id = task_url_id_for_url(detail.task_url if detail is not None else task_info.get("_task_url"))
+        item_data_with_task_ids = {
+            **item_data,
+            "source_task_ids": [ctx.task.id],
+            "source_task_url_ids": [task_url_id] if task_url_id else [],
+        }
         try:
             movie_id = upsert_movie_with_magnets(ctx.db, item_data_with_task_ids)
             if detail:
@@ -212,12 +224,13 @@ def build_crawl_callbacks(
         detail = active_indexed_detail(task_info)
         code = task_info.get("code")
         was_skipped = detail is not None and detail.status == "skipped"
+        task_url_id = task_url_id_for_url(detail.task_url if detail is not None else task_info.get("_task_url"))
         if detail:
             detail.status = "skipped"
             detail.error = "already_exists"
             detail.crawled_at = detail.crawled_at or datetime.now()
             detail.saved_at = None
-        append_source_task_id(ctx.db, code, ctx.task.id)
+        append_source_task_ids_for_codes(ctx.db, [code], ctx.task.id, task_url_id=task_url_id)
         if detail is not None and not was_skipped:
             increment_progress(ctx.progress, "skipped")
         write_progress(ctx.runtime, str(ctx.run.id), ctx.progress)

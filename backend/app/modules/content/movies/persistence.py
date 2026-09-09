@@ -9,11 +9,17 @@ from backend.app.modules.content.movies.magnet_persistence import (
     upsert_movie_with_magnets,
 )
 from backend.app.modules.content.movies.magnet_scoring import compute_magnet_weight, has_chinese_sub, parse_size_mb
-from backend.app.modules.content.movies.movie_persistence import append_source_task_id, append_source_task_ids_for_codes, upsert_movie
+from backend.app.modules.content.movies.movie_persistence import (
+    append_source_task_id,
+    append_source_task_ids_for_codes,
+    append_source_task_url_id,
+    upsert_movie,
+)
 
 __all__ = [
     "append_source_task_id",
     "append_source_task_ids_for_codes",
+    "append_source_task_url_id",
     "auto_select_best_magnet",
     "build_magnet_dedupe_key",
     "compute_magnet_weight",

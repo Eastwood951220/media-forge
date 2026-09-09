@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from backend.app.modules.content.movies.persistence import (
     append_source_task_id,
+    append_source_task_url_id,
     append_source_task_ids_for_codes,
     compute_magnet_weight,
     extract_info_hash,
@@ -48,6 +49,31 @@ def test_upsert_movie_inserts_and_reuses_by_code() -> None:
     session.close()
 
 
+def test_upsert_movie_stores_and_merges_source_task_url_ids() -> None:
+    session = TestingSessionLocal()
+    task_id = uuid.uuid4()
+    task_url_id = uuid.uuid4()
+    next_task_url_id = uuid.uuid4()
+
+    movie_id = upsert_movie(session, {
+        "code": "URLID-001",
+        "source_name": "URL ID Movie",
+        "source_task_ids": [task_id],
+        "source_task_url_ids": [task_url_id],
+    })
+    same_id = upsert_movie(session, {
+        "code": "URLID-001",
+        "source_name": "URL ID Movie Again",
+        "source_task_url_ids": [task_url_id, next_task_url_id],
+    })
+
+    movie = session.get(Movie, movie_id)
+    assert same_id == movie_id
+    assert [str(value) for value in movie.source_task_url_ids] == [str(task_url_id), str(next_task_url_id)]
+
+    session.close()
+
+
 def test_append_source_task_id_adds_unique_id() -> None:
     session = TestingSessionLocal()
     movie_id = upsert_movie(session, {"code": "SRC-001", "source_url": "https://javdb.com/v/src001"})
@@ -58,6 +84,20 @@ def test_append_source_task_id_adds_unique_id() -> None:
 
     movie = session.get(Movie, movie_id)
     assert [str(value) for value in movie.source_task_ids] == [str(task_id)]
+
+    session.close()
+
+
+def test_append_source_task_url_id_adds_unique_id() -> None:
+    session = TestingSessionLocal()
+    movie_id = upsert_movie(session, {"code": "SRCURL-001", "source_url": "https://javdb.com/v/srcurl001"})
+    task_url_id = uuid.uuid4()
+
+    assert append_source_task_url_id(session, "SRCURL-001", task_url_id) is True
+    assert append_source_task_url_id(session, "SRCURL-001", task_url_id) is False
+
+    movie = session.get(Movie, movie_id)
+    assert [str(value) for value in movie.source_task_url_ids] == [str(task_url_id)]
 
     session.close()
 
@@ -167,6 +207,7 @@ def test_movie_persistence_facade_exports_existing_public_functions() -> None:
     assert persistence.upsert_magnets is magnet_persistence.upsert_magnets
     assert persistence.upsert_movie is movie_persistence.upsert_movie
     assert persistence.append_source_task_id is movie_persistence.append_source_task_id
+    assert persistence.append_source_task_url_id is movie_persistence.append_source_task_url_id
     assert persistence.append_source_task_ids_for_codes is movie_persistence.append_source_task_ids_for_codes
     assert persistence.sync_movie_filters is filter_sync.sync_movie_filters
 
@@ -174,6 +215,7 @@ def test_movie_persistence_facade_exports_existing_public_functions() -> None:
 def test_append_source_task_ids_for_codes_adds_unique_ids_to_existing_movies() -> None:
     session = TestingSessionLocal()
     task_id = uuid.uuid4()
+    task_url_id = uuid.uuid4()
     existing_task_id = uuid.uuid4()
     first_id = upsert_movie(session, {"code": "BULK-001", "source_url": "https://javdb.com/v/bulk001"})
     second_id = upsert_movie(session, {
@@ -187,6 +229,7 @@ def test_append_source_task_ids_for_codes_adds_unique_ids_to_existing_movies() -
         session,
         ["BULK-001", "BULK-002", "BULK-001", "MISSING-001", None, ""],
         task_id,
+        task_url_id=task_url_id,
     )
     session.commit()
 
@@ -196,8 +239,10 @@ def test_append_source_task_ids_for_codes_adds_unique_ids_to_existing_movies() -
     assert changed == {"BULK-001", "BULK-002"}
     assert [str(value) for value in first.source_task_ids] == [str(task_id)]
     assert [str(value) for value in second.source_task_ids] == [str(existing_task_id), str(task_id)]
+    assert [str(value) for value in first.source_task_url_ids] == [str(task_url_id)]
+    assert [str(value) for value in second.source_task_url_ids] == [str(task_url_id)]
 
-    changed_again = append_source_task_ids_for_codes(session, ["BULK-001", "BULK-002"], task_id)
+    changed_again = append_source_task_ids_for_codes(session, ["BULK-001", "BULK-002"], task_id, task_url_id=task_url_id)
     session.commit()
 
     assert changed_again == set()

@@ -18,7 +18,7 @@ from backend.app.modules.crawler.runtime.details import detail_row_to_task_info
 from backend.app.modules.crawler.runtime.events import append_run_log_for_run, publish_run_detail_updated
 from backend.app.modules.crawler.runtime.progress import new_progress, write_progress
 from backend.app.modules.crawler.runtime.source_task_names import find_existing_movie_codes, movie_code_exists
-from backend.app.modules.content.movies.persistence import append_source_task_id, append_source_task_ids_for_codes, upsert_movie_with_magnets
+from backend.app.modules.content.movies.persistence import append_source_task_ids_for_codes, upsert_movie_with_magnets
 from scraper.fetchers.site_fetcher import build_site_fetcher
 from scraper.pipelines.movie_pipeline import MoviePipeline
 from scraper.spiders.registry import get_site_spider
@@ -74,6 +74,7 @@ def _find_existing_movie_codes_in_worker_session(
     session_factory: sessionmaker,
     codes: list[str | None],
     task_id: Any,
+    task_url_id: Any,
     db_lock: threading.Lock,
 ) -> set[str]:
     with db_lock:
@@ -81,7 +82,7 @@ def _find_existing_movie_codes_in_worker_session(
         try:
             existing_codes = find_existing_movie_codes(worker_db, codes)
             if existing_codes:
-                append_source_task_ids_for_codes(worker_db, existing_codes, task_id)
+                append_source_task_ids_for_codes(worker_db, existing_codes, task_id, task_url_id=task_url_id)
                 worker_db.commit()
             return existing_codes
         except Exception:
@@ -121,6 +122,7 @@ def _handle_already_exists_in_worker_session(
     session_factory: sessionmaker,
     run_id: Any,
     task_id: Any,
+    task_url_id: Any,
     owner_id: str | None,
     task_info: dict,
     db_lock: threading.Lock,
@@ -128,7 +130,7 @@ def _handle_already_exists_in_worker_session(
     with db_lock:
         worker_db = session_factory()
         try:
-            _handle_already_exists(worker_db, run_id, task_id, owner_id, task_info)
+            _handle_already_exists(worker_db, run_id, task_id, task_url_id, owner_id, task_info)
             worker_db.commit()
         except Exception:
             worker_db.rollback()
@@ -234,12 +236,14 @@ def _run_list_phase(
                 worker_session_factory,
                 codes,
                 task_id,
+                url_entry.id,
                 list_db_lock,
             ),
             on_item_already_exists=lambda task_info: _handle_already_exists_in_worker_session(
                 worker_session_factory,
                 run_id,
                 task_id,
+                url_entry.id,
                 owner_id,
                 task_info,
                 list_db_lock,
@@ -267,11 +271,28 @@ def _run_list_phase(
     append_run_log_for_run(db, run, "列表收集完成，详情子任务已持久化", "INFO")
 
 
-def _handle_already_exists(db: Session, run_id: Any, task_id: Any, owner_id: str | None, task_info: dict) -> None:
+def _handle_already_exists(
+    db: Session,
+    run_id: Any,
+    task_id: Any,
+    task_url_id: Any,
+    owner_id: str | None,
+    task_info: dict,
+) -> None:
     code = task_info.get("code")
     if code:
-        append_source_task_id(db, code, task_id)
+        append_source_task_ids_for_codes(db, [code], task_id, task_url_id=task_url_id)
     _append_run_log_in_worker_session(run_id, owner_id, f"跳过已存在影片并追加任务ID: {code}", "INFO", code=code)
+
+
+def _task_url_id_for_detail(task: CrawlTask, detail: Any):
+    task_url = getattr(detail, "task_url", None)
+    if not task_url:
+        return None
+    for url_entry in task.urls:
+        if url_entry.url == task_url:
+            return url_entry.id
+    return None
 
 
 def _run_detail_phase(db: Session, run: CrawlRun, task: CrawlTask, runtime: Any, config: Any, progress: dict) -> None:
@@ -330,8 +351,9 @@ def _process_single_detail(db: Session, run: CrawlRun, task: CrawlTask, detail: 
 
     def handle_already_exists(task_info: dict) -> None:
         code = task_info.get("code") or detail.code
+        task_url_id = _task_url_id_for_detail(task, detail)
         if code:
-            append_source_task_id(db, code, task.id)
+            append_source_task_ids_for_codes(db, [code], task.id, task_url_id=task_url_id)
 
     result = spider.run_single_detail_task(
         detail_info,
@@ -355,7 +377,15 @@ def _process_single_detail(db: Session, run: CrawlRun, task: CrawlTask, detail: 
         cleaned = pipeline.process_item(item, task_name=task.name, task_id=str(task.id))
         if cleaned:
             _apply_cleaned_detail_display_fields(detail, cleaned)
-            movie_id = upsert_movie_with_magnets(db, {**cleaned, "source_task_ids": [task.id]})
+            task_url_id = _task_url_id_for_detail(task, detail)
+            movie_id = upsert_movie_with_magnets(
+                db,
+                {
+                    **cleaned,
+                    "source_task_ids": [task.id],
+                    "source_task_url_ids": [task_url_id] if task_url_id else [],
+                },
+            )
             detail.movie_id = movie_id
             detail.status = "saved"
             detail.item_data = cleaned
@@ -367,7 +397,8 @@ def _process_single_detail(db: Session, run: CrawlRun, task: CrawlTask, detail: 
     elif result.get("status") == "skipped":
         detail.code = detail.code or result.get("code")
         if detail.code:
-            append_source_task_id(db, detail.code, task.id)
+            task_url_id = _task_url_id_for_detail(task, detail)
+            append_source_task_ids_for_codes(db, [detail.code], task.id, task_url_id=task_url_id)
         detail.status = "skipped"
         detail.error = result.get("reason", "already_exists")
     else:
