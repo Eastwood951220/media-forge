@@ -79,7 +79,7 @@ Recommended columns:
 
 Use array or JSON-compatible types through existing shared helpers where appropriate. `aliases`, `canonical_names`, and source ID lists should stay queryable enough for list search and dedupe. Complex page-derived structures such as SNS links, works, similar actresses, and raw parsed fields can live in JSON.
 
-Add indexes on `display_name`, `source_url`, `source_task_ids`, and a GIN-style index for aliases/canonical names where supported. Add an Alembic migration for the new table.
+Add indexes on `display_name`, `source_url`, `source_task_ids`, and a GIN-style index for aliases/canonical names where supported. Put table creation and table modification statements in a versioned SQL script under `sql/`, and add the matching Alembic migration automatically so application migrations stay current.
 
 ### JavDB Candidate Extraction
 
@@ -183,7 +183,7 @@ Clicking a card opens the standalone detail route `/content/actresses/$id`. The 
 - source URL
 - last fetched time
 
-The detail page should also include a `最近影片` section. It queries local `Movie` rows whose `actors` array matches the actress display name, canonical names, or aliases, orders by `release_date` descending with missing dates last, and returns 10 rows. Each movie item shows cover image, `code`, and title. The first version does not need to add a new movie detail route; movie cards can link to the existing movie source URL when available or stay non-navigating when no URL exists.
+The detail page should also include a `最近影片` section. It queries local `Movie` rows through the actress profile's associated `source_task_ids` and `source_task_url_ids`, not by actress name matching. Because `Movie` stores `source_task_ids` but does not directly store task URL IDs, use `source_task_url_ids` to load `crawl_task_urls.url`, then find `crawl_run_detail_tasks` with matching `task_url`, matching parent crawl run `task_id`, and non-empty `movie_id`. Sort matched movies by `release_date` descending with missing dates last, and return 10 rows. Each movie item shows cover image, `code`, and title. The first version does not need to add a new movie detail route; movie cards can link to the existing movie source URL when available or stay non-navigating when no URL exists.
 
 Add a task-card action such as `获取女优资料`. It should render only when the task has at least one URL whose `url_type` is `actors`; disabled state should follow the same runtime readiness and idle checks as other fetch-like actions.
 
@@ -211,7 +211,7 @@ Backend:
 
 - Add JavDB parser tests for actor primary names and aliases, including comma-separated Chinese/Japanese names and movie-count filtering.
 - Add avjoho parser tests using the pasted sample HTML for profile fields, SNS links, representative works, and similar actresses.
-- Add service tests for automatic candidate ordering, manual URL validation, source URL dedupe, alias dedupe, and task ownership/no-actor rejection.
+- Add service tests for automatic candidate ordering, manual URL validation, source URL dedupe, alias dedupe, task URL ID based recent movie lookup, and task ownership/no-actor rejection.
 - Add router tests for list pagination and fetch-from-task responses.
 
 Frontend:
