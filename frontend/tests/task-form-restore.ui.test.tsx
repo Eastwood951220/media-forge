@@ -5,13 +5,12 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskFormPage from '../src/pages/crawler/tasks/TaskFormPage'
-import { createCrawlTask, extractTaskName, getCrawlTask, getCrawlTaskTags, updateCrawlTask } from '@/api/crawler/crawlTask'
+import { createCrawlTask, extractTaskName, getCrawlTask, updateCrawlTask } from '@/api/crawler/crawlTask'
 
 vi.mock('@/api/crawler/crawlTask', () => ({
   createCrawlTask: vi.fn(),
   extractTaskName: vi.fn(),
   getCrawlTask: vi.fn(),
-  getCrawlTaskTags: vi.fn(),
   updateCrawlTask: vi.fn(),
 }))
 
@@ -44,7 +43,6 @@ describe('TaskFormPage restored crawler task form', () => {
     vi.mocked(updateCrawlTask).mockResolvedValue({} as never)
     vi.mocked(getCrawlTask).mockResolvedValue({} as never)
     vi.mocked(extractTaskName).mockResolvedValue({ name: '演员 A' })
-    vi.mocked(getCrawlTaskTags).mockResolvedValue([])
   })
 
   it('creates a task with restored url entry payload', async () => {
@@ -62,6 +60,7 @@ describe('TaskFormPage restored crawler task form', () => {
     await waitFor(() => {
       expect(createCrawlTask).toHaveBeenCalledWith({
         name: '每日演员任务',
+        storage_location: '每日演员任务',
         is_skip: false,
         urls: [
           {
@@ -101,6 +100,7 @@ describe('TaskFormPage restored crawler task form', () => {
     await waitFor(() => {
       expect(createCrawlTask).toHaveBeenCalledWith({
         name: '巨乳',
+        storage_location: '巨乳',
         is_skip: false,
         urls: [
           {
@@ -136,6 +136,7 @@ describe('TaskFormPage restored crawler task form', () => {
       expect(extractTaskName).toHaveBeenCalledWith('https://javdb.com/actors/QV49G', 'actors')
       expect(createCrawlTask).toHaveBeenCalledWith({
         name: '巨乳',
+        storage_location: '巨乳',
         is_skip: false,
         urls: [
           {

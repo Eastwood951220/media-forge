@@ -6,6 +6,7 @@ import type {
   ActressProfile,
   ActressProfileDetail,
   ActressQueryParams,
+  ActressTag,
   ActressTagsUpdatePayload,
 } from './types'
 
@@ -18,6 +19,7 @@ export type {
   ActressQueryParams,
   ActressRecentMovie,
   ActressExternalLink,
+  ActressTag,
   ActressTagsUpdatePayload,
 } from './types'
 
@@ -44,6 +46,10 @@ export function fetchActresses(params: ActressQueryParams): Promise<ActressListR
 
 export function fetchActress(id: string): Promise<ActressProfileDetail> {
   return request.get<ActressProfileDetail>(`${BASE_URL}/${id}`)
+}
+
+export function getActressTags(): Promise<ActressTag[]> {
+  return request.get<ActressTag[]>(`${BASE_URL}/tags`)
 }
 
 export function fetchActressesFromTask(payload: ActressFetchFromTaskPayload): Promise<ActressFetchFromTaskResult> {

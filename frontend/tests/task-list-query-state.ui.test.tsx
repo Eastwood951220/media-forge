@@ -12,7 +12,6 @@ vi.mock('@/api/crawler/crawlTask', () => ({
   batchCreateCrawlTasks: vi.fn(),
   batchRunCrawlTasks: vi.fn(),
   createTemporaryCrawlRun: vi.fn(),
-  getCrawlTaskTags: vi.fn().mockResolvedValue([{ name: 'VR' }]),
   getCrawlTasks: vi.fn(),
   getTaskDict: vi.fn().mockResolvedValue([]),
   deleteCrawlTask: vi.fn(),
@@ -116,7 +115,7 @@ describe('TaskListPage routing', () => {
     expect(await screen.findByText('临时任务')).toBeInTheDocument()
   })
 
-  it('restores cached tag filters when entering the task list again', async () => {
+  it('ignores cached tag filters and sends no task tag filter', async () => {
     sessionStorage.setItem(
       'media-forge:crawler-task-list-filter-state',
       JSON.stringify({ selectedTagNames: ['VR'] }),
@@ -125,6 +124,8 @@ describe('TaskListPage routing', () => {
     renderTaskRoutes()
 
     await screen.findByText('临时任务')
-    expect(getCrawlTasks).toHaveBeenCalledWith(expect.objectContaining({ tag_names: ['VR'] }))
+    expect(screen.queryByLabelText('标签筛选')).not.toBeInTheDocument()
+    expect(getCrawlTasks).toHaveBeenCalled()
+    expect(vi.mocked(getCrawlTasks).mock.calls[0][0]).not.toHaveProperty('tag_names')
   })
 })

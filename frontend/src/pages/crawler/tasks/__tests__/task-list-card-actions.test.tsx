@@ -36,10 +36,6 @@ const baseTask = {
   id: 'task-1',
   name: 'Aligned Task',
   storage_location: 'Aligned Task',
-  tags: [
-    { id: 'tag-vr', name: 'VR' },
-    { id: 'tag-actor', name: '演员' },
-  ],
   urls: [{ id: 'url-1', url: 'https://javdb.com/actors/a', url_type: 'actors', url_name: 'A' }],
   is_skip: false,
   status: 'idle',
@@ -70,9 +66,6 @@ function renderCards(overrides: Partial<ComponentProps<typeof TaskListCards>> = 
       total={1}
       runtimeByTaskId={{ 'task-1': idleRuntime } as never}
       runtimeReady={true}
-      tagOptions={[{ id: 'tag-vr', name: 'VR' }]}
-      selectedTagNames={[]}
-      onTagFilterChange={vi.fn()}
       keyword=""
       onKeywordChange={vi.fn()}
       selectedTaskIds={[]}
@@ -114,11 +107,11 @@ describe('TaskListCards action alignment', () => {
     expect(container.querySelector('[class*="taskCardMaintenanceActions"]')).toBeTruthy()
   })
 
-  it('shows task tags on the card', () => {
+  it('does not render the removed task tag display or toolbar filter', () => {
     renderCards()
 
-    expect(screen.getByText('VR')).toBeInTheDocument()
-    expect(screen.getByText('演员')).toBeInTheDocument()
+    expect(screen.queryByText('任务标签')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('标签筛选')).not.toBeInTheDocument()
   })
 
   it('shows sync tag and disables actions when runtime is not ready', () => {
@@ -129,9 +122,6 @@ describe('TaskListCards action alignment', () => {
         total={1}
         runtimeByTaskId={{}}
         runtimeReady={false}
-        tagOptions={[]}
-        selectedTagNames={[]}
-        onTagFilterChange={vi.fn()}
         keyword=""
         onKeywordChange={vi.fn()}
         selectedTaskIds={[]}
@@ -189,9 +179,6 @@ describe('TaskListCards action alignment', () => {
         total={1}
         runtimeByTaskId={{ 'task-1': idleRuntime } as never}
         runtimeReady={true}
-        tagOptions={[]}
-        selectedTagNames={[]}
-        onTagFilterChange={vi.fn()}
         keyword=""
         onKeywordChange={vi.fn()}
         selectedTaskIds={[]}
@@ -228,21 +215,6 @@ describe('TaskListCards action alignment', () => {
     fireEvent.click(screen.getByRole('button', { name: /批量新建/ }))
 
     expect(onBatchTaskClick).toHaveBeenCalledTimes(1)
-  })
-
-  it('calls tag filter change from the toolbar', async () => {
-    const onTagFilterChange = vi.fn()
-    renderCards({ onTagFilterChange })
-
-    const filterInput = screen.getByLabelText('标签筛选') as HTMLInputElement
-    fireEvent.mouseDown(filterInput)
-    expect(await screen.findByRole('option', { name: 'VR' })).toBeInTheDocument()
-    fireEvent.keyDown(filterInput, { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40 })
-    fireEvent.keyDown(filterInput, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13 })
-
-    await waitFor(() => {
-      expect(onTagFilterChange).toHaveBeenCalledWith(['VR'], expect.anything())
-    })
   })
 
   it('renders the crawler task search input in the toolbar and reports keyword changes', () => {
@@ -406,7 +378,6 @@ describe('optimistic queued runtime updates after run submission', () => {
           name: 'Aligned Task',
           storage_location: 'Aligned Task',
           is_skip: false,
-          tags: [],
           urls: [],
         },
       ],

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ActressListPage from '../ActressListPage'
 import ActressDetailPage from '../ActressDetailPage'
 import { createTaskUrlRun } from '@/api/crawler/crawlTask'
-import { fetchActress, fetchActresses, updateActressTags } from '@/api/content/actresses'
+import { fetchActress, fetchActresses, getActressTags, updateActressTags } from '@/api/content/actresses'
 import { useImageBlurStore } from '@/stores/useImageBlurStore'
 
 const navigateMock = vi.hoisted(() => vi.fn())
@@ -19,6 +19,7 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/api/content/actresses', () => ({
   fetchActress: vi.fn(),
   fetchActresses: vi.fn(),
+  getActressTags: vi.fn(),
   updateActressTags: vi.fn(),
 }))
 
@@ -76,6 +77,10 @@ describe('Actress pages', () => {
     useImageBlurStore.setState({ enabled: true })
     vi.mocked(updateActressTags).mockResolvedValue(profile)
     vi.mocked(createTaskUrlRun).mockResolvedValue({ accepted: true, run_id: 'run-1' } as never)
+    vi.mocked(getActressTags).mockResolvedValue([
+      { id: 'tag-1', name: '清楚' },
+      { id: 'tag-2', name: '企划' },
+    ])
   })
 
   it('renders actress cards and requests the default 24 item page size', async () => {
@@ -221,6 +226,17 @@ describe('Actress pages', () => {
     await user.click(screen.getByRole('button', { name: /保\s*存/ }))
 
     expect(updateActressTags).toHaveBeenCalledWith('actress-1', { tags: ['单体', '清楚'] })
+  })
+
+  it('offers existing actress tags in the detail tag editor', async () => {
+    const user = userEvent.setup()
+    vi.mocked(fetchActress).mockResolvedValue({ ...profile, recent_movies: [] })
+
+    renderWithClient(<ActressDetailPage />)
+
+    await user.click(await screen.findByRole('button', { name: '编辑标签' }))
+    await user.click(screen.getByRole('combobox', { name: '编辑标签' }))
+    expect(await screen.findByRole('option', { name: '企划' })).toBeInTheDocument()
   })
 
   it('submits a movie crawl for the selected actress link', async () => {

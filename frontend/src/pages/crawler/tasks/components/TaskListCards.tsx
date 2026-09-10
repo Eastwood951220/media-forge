@@ -8,9 +8,9 @@ import {
   StopOutlined,
   UserAddOutlined,
 } from '@ant-design/icons'
-import { Button, Checkbox, Dropdown, Empty, Input, Pagination, Popover, Select, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
+import { Button, Checkbox, Dropdown, Empty, Input, Pagination, Popover, Space, Spin, Switch, Tag, Tooltip, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import type { CrawlTask, CrawlTaskRuntimeSnapshot, TaskRuntimeStatus, TaskTag } from '@/api/crawler/crawlTask/types'
+import type { CrawlTask, CrawlTaskRuntimeSnapshot, TaskRuntimeStatus } from '@/api/crawler/crawlTask/types'
 import type { CrawlMode } from '@/api/crawler/crawlerRun/types'
 import styles from '../TaskPages.module.less'
 import {useNavigate} from "@tanstack/react-router";
@@ -21,9 +21,6 @@ type TaskListCardsProps = {
   total: number
   runtimeByTaskId: Record<string, CrawlTaskRuntimeSnapshot>
   runtimeReady: boolean
-  tagOptions: TaskTag[]
-  selectedTagNames: string[]
-  onTagFilterChange: (tagNames: string[]) => void
   keyword: string
   onKeywordChange: (keyword: string) => void
   selectedTaskIds: string[]
@@ -106,49 +103,6 @@ function UrlNameTags({ urlNames }: { urlNames: string[] }) {
           </div>
         }
         title="全部 URL 名称"
-        trigger="hover"
-        placement="bottomLeft"
-      >
-        <Tag className={styles.urlNameMore}>+{hiddenCount}</Tag>
-      </Popover>
-    </div>
-  )
-}
-
-const MAX_VISIBLE_TAGS = 3
-
-function TaskTagTags({ tags }: { tags: TaskTag[] }) {
-  if (tags.length === 0) {
-    return <Typography.Text type="secondary">-</Typography.Text>
-  }
-
-  if (tags.length <= MAX_VISIBLE_TAGS) {
-    return (
-      <div className={styles.urlNameList}>
-        {tags.map((tag, index) => (
-          <Tag key={`${tag.name}-${index}`}>{tag.name}</Tag>
-        ))}
-      </div>
-    )
-  }
-
-  const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS)
-  const hiddenCount = tags.length - MAX_VISIBLE_TAGS
-
-  return (
-    <div className={styles.urlNameList}>
-      {visibleTags.map((tag, index) => (
-        <Tag key={`${tag.name}-${index}`}>{tag.name}</Tag>
-      ))}
-      <Popover
-        content={
-          <div className={styles.urlNamePopover}>
-            {tags.map((tag, index) => (
-              <Tag key={`${tag.name}-${index}`} className={styles.urlNamePopoverTag}>{tag.name}</Tag>
-            ))}
-          </div>
-        }
-        title="全部标签"
         trigger="hover"
         placement="bottomLeft"
       >
@@ -275,10 +229,6 @@ function TaskCard({
           <UrlNameTags urlNames={urlNames} />
         </div>
         <div className={styles.taskMetaRow}>
-          <span className={styles.taskMetaLabel}>任务标签</span>
-          <TaskTagTags tags={task.tags ?? []} />
-        </div>
-        <div className={styles.taskMetaRow}>
           <span className={styles.taskMetaLabel}>上次运行</span>
           <LatestRunSummary task={task} />
         </div>
@@ -394,9 +344,6 @@ function TaskListCards({
   total,
   runtimeByTaskId,
   runtimeReady,
-  tagOptions,
-  selectedTagNames,
-  onTagFilterChange,
   keyword,
   onKeywordChange,
   selectedTaskIds,
@@ -435,16 +382,6 @@ function TaskListCards({
             value={keyword}
             onChange={(event) => onKeywordChange(event.target.value)}
             className={styles.taskSearchInput}
-          />
-          <Select
-            aria-label="标签筛选"
-            mode="multiple"
-            allowClear
-            placeholder="标签筛选"
-            value={selectedTagNames}
-            options={tagOptions.map((tag) => ({ value: tag.name, label: tag.name }))}
-            onChange={onTagFilterChange}
-            className={styles.taskTagFilter}
           />
         </div>
         <div className={styles.taskListToolbarActions}>

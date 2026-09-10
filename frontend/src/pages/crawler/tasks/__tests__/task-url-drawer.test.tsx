@@ -9,7 +9,6 @@ import {
   createCrawlTask,
   extractTaskName,
   getCrawlTask,
-  getCrawlTaskTags,
   updateCrawlTask,
 } from '@/api/crawler/crawlTask'
 
@@ -27,7 +26,6 @@ vi.mock('@/api/crawler/crawlTask', () => ({
   createCrawlTask: vi.fn(),
   extractTaskName: vi.fn(),
   getCrawlTask: vi.fn(),
-  getCrawlTaskTags: vi.fn(),
   updateCrawlTask: vi.fn(),
 }))
 
@@ -145,7 +143,6 @@ describe('TaskFormPage URL table drawer', () => {
     vi.mocked(createCrawlTask).mockResolvedValue({ id: 'created-task' } as never)
     vi.mocked(updateCrawlTask).mockResolvedValue({ id: 'task-1' } as never)
     vi.mocked(extractTaskName).mockResolvedValue({ name: 'Fetched Name' })
-    vi.mocked(getCrawlTaskTags).mockResolvedValue([{ id: 'tag-vr', name: 'VR' }] as never)
   })
 
   it('opens a drawer from table-mode add and appends the saved URL row with an auto-fetched name', async () => {
@@ -282,36 +279,13 @@ describe('TaskFormPage URL table drawer', () => {
     expect(updateCrawlTask).not.toHaveBeenCalled()
   })
 
-  it('submits selected and custom tag names during task create', async () => {
+  it('no longer renders the removed task tag editor', async () => {
     paramsMock = {}
     render(<TaskFormPage />, { wrapper })
 
-    await userEvent.type(screen.getByLabelText('任务名称'), 'Tagged Task')
-    await userEvent.type(screen.getByLabelText('网盘路径'), 'Tagged Task')
+    await screen.findByLabelText('任务名称')
 
-    const tagInput = screen.getByLabelText('任务标签') as HTMLInputElement
-    fireEvent.mouseDown(tagInput)
-    // Existing tag options are offered from the tag dictionary.
-    expect(await screen.findByRole('option', { name: 'VR' })).toBeInTheDocument()
-
-    // Tags mode accepts typed tokens for existing and new tag names.
-    const typeTagToken = (tagName: string) => {
-      const liveInput = screen.getByLabelText('任务标签') as HTMLInputElement
-      fireEvent.change(liveInput, { target: { value: tagName } })
-      fireEvent.keyDown(liveInput, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13 })
-      fireEvent.blur(liveInput)
-    }
-    typeTagToken('VR')
-    typeTagToken('自定义')
-
-    await userEvent.type(screen.getByLabelText('URL'), 'https://javdb.com/actors/tagged-create')
-    fireEvent.click(await screen.findByText('创 建'))
-
-    await waitFor(() => {
-      expect(createCrawlTask).toHaveBeenCalledWith(expect.objectContaining({
-        tag_names: ['VR', '自定义'],
-      }))
-    })
+    expect(screen.queryByLabelText('任务标签')).not.toBeInTheDocument()
   })
 
   it('uses compact grids for task basics and URL entry fields', async () => {

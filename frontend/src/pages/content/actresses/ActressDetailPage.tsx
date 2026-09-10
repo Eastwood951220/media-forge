@@ -4,7 +4,7 @@ import { useNavigate, useParams } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Avatar, Button, Empty, Modal, Radio, Select, Spin, Tag, Typography } from 'antd'
 import { createTaskUrlRun } from '@/api/crawler/crawlTask'
-import { fetchActress, updateActressTags } from '@/api/content/actresses'
+import { fetchActress, getActressTags, updateActressTags } from '@/api/content/actresses'
 import type { ActressExternalLink } from '@/api/content/actresses'
 import { BlurredImage } from '@/components/BlurredImage'
 import { queryKeys } from '@/api/queryKeys'
@@ -61,6 +61,10 @@ function ActressDetailPage() {
     queryFn: () => fetchActress(params.id),
     enabled: Boolean(params.id),
   })
+  const tagOptionsQuery = useQuery({
+    queryKey: queryKeys.actresses.tags(),
+    queryFn: getActressTags,
+  })
   const actress = query.data
   const externalLinks = actress?.external_links ?? []
   const selectedCrawlLink = useMemo(
@@ -93,6 +97,7 @@ function ActressDetailPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.actresses.detail(actress.id) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.actresses.all() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.actresses.tags() }),
       ])
       message.success('标签已更新')
       setTagEditorOpen(false)
@@ -286,6 +291,8 @@ function ActressDetailPage() {
                 aria-label="编辑标签"
                 placeholder="输入标签"
                 value={tagDraft}
+                loading={tagOptionsQuery.isLoading}
+                options={(tagOptionsQuery.data ?? []).map((tag) => ({ value: tag.name, label: tag.name }))}
                 onChange={setTagDraft}
                 className={styles.tagEditorSelect}
               />

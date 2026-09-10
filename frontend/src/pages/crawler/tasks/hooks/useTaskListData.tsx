@@ -38,13 +38,12 @@ function queuedSnapshot(taskId: string, runId: string | null) {
   }
 }
 
-export function useTaskListData({ tagNames = [] }: { tagNames?: string[] } = {}) {
+export function useTaskListData() {
   const queryClient = useQueryClient()
 
   const keyword = useTaskListQueryStore((state) => state.keyword)
   const normalizedKeyword = keyword.trim()
-  const tagKey = tagNames.join('\u0000')
-  const searchKey = `${normalizedKeyword}\u0000${tagKey}`
+  const searchKey = normalizedKeyword
   const [pagination, setPagination] = useSessionListState(TASK_LIST_STATE_CACHE_KEY, {
     current: 1,
     pageSize: 20,
@@ -76,10 +75,9 @@ export function useTaskListData({ tagNames = [] }: { tagNames?: string[] } = {})
     () => ({
       page: current,
       size: pageSize,
-      ...(tagNames.length > 0 ? { tag_names: tagNames } : {}),
       ...(normalizedKeyword ? { keyword: normalizedKeyword } : {}),
     }),
-    [current, normalizedKeyword, pageSize, tagNames],
+    [current, normalizedKeyword, pageSize],
   )
 
   const listQuery = useQuery({

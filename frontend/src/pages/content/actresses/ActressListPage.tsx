@@ -4,7 +4,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { App, Avatar, Button, Card, Empty, Input, Modal, Pagination, Radio, Select, Spin, Tag, Typography } from 'antd'
 import { createTaskUrlRun } from '@/api/crawler/crawlTask'
-import { fetchActresses } from '@/api/content/actresses'
+import { fetchActresses, getActressTags } from '@/api/content/actresses'
 import type { ActressExternalLink, ActressProfile } from '@/api/content/actresses'
 import { BlurredImage } from '@/components/BlurredImage'
 import { queryKeys } from '@/api/queryKeys'
@@ -157,6 +157,11 @@ function ActressListPage() {
     queryFn: () => fetchActresses(params),
   })
 
+  const tagOptionsQuery = useQuery({
+    queryKey: queryKeys.actresses.tags(),
+    queryFn: getActressTags,
+  })
+
   const actresses = query.data?.items ?? []
   const total = query.data?.total ?? 0
   const crawlLinks = crawlTarget?.external_links ?? []
@@ -216,6 +221,8 @@ function ActressListPage() {
             aria-label="标签"
             placeholder="标签筛选"
             value={tagFilters}
+            loading={tagOptionsQuery.isLoading}
+            options={(tagOptionsQuery.data ?? []).map((tag) => ({ value: tag.name, label: tag.name }))}
             onChange={(values) => {
               setTagFilters(values)
               setPage(1)

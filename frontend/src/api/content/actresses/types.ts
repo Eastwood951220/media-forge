@@ -18,6 +18,11 @@ export interface ActressExternalLink {
   url_name: string
 }
 
+export interface ActressTag {
+  id: string
+  name: string
+}
+
 export interface ActressProfile {
   id: string
   _id?: string

@@ -1,12 +1,11 @@
 import { useCallback, useState } from 'react'
 import { App, Input, Modal, Select } from 'antd'
 import { useNavigate } from '@tanstack/react-router'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   batchCreateCrawlTasks,
   batchRunCrawlTasks,
   createTemporaryCrawlRun,
-  getCrawlTaskTags,
   getTaskDict,
 } from '@/api/crawler/crawlTask'
 import type {
@@ -19,7 +18,6 @@ import { invalidateCrawlerRunLists, invalidateCrawlerTaskLists } from '@/api/que
 import { fetchActressesFromTask } from '@/api/content/actresses'
 import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
 import type { CrawlTask, TaskUrlEntry } from '@/api/crawler/crawlTask/types'
-import { useSessionListState } from '@/hooks/useSessionListState'
 import BatchTaskCreateDrawer from './components/BatchTaskCreateDrawer'
 import type { BatchTaskCreateFormValues } from './components/BatchTaskCreateDrawer'
 import TaskUrlRunModal from './components/TaskUrlRunModal'
@@ -32,8 +30,6 @@ import { useCrawlerRuntimeStore } from '@/stores/useCrawlerRuntimeStore'
 import { useTaskListQueryStore } from './useTaskListQueryStore'
 import { MetricGrid } from '@/components/common'
 import styles from './TaskPages.module.less'
-
-const TASK_LIST_FILTER_STATE_CACHE_KEY = 'media-forge:crawler-task-list-filter-state'
 
 type ActorTaskUrl = TaskUrlEntry & { id: string }
 
@@ -50,15 +46,6 @@ function TaskListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
-
-  const [filterState, setFilterState] = useSessionListState(TASK_LIST_FILTER_STATE_CACHE_KEY, {
-    selectedTagNames: [] as string[],
-  })
-  const selectedTagNames = filterState.selectedTagNames
-  const tagOptionsQuery = useQuery({
-    queryKey: queryKeys.crawlerTasks.tags(),
-    queryFn: getCrawlTaskTags,
-  })
 
   const {
     current,
@@ -77,7 +64,7 @@ function TaskListPage() {
     runtimeByTaskId,
     taskSnapshotReady,
     tasks,
-  } = useTaskListData({ tagNames: selectedTagNames })
+  } = useTaskListData()
 
   useTaskListRealtime()
   useRouteActivationRefresh(refreshList)
@@ -152,12 +139,6 @@ function TaskListPage() {
       },
     })
   }, [markBatchRunsQueued, message, queryClient, selectedTaskIds])
-
-  const handleTagFilterChange = useCallback((nextTags: string[]) => {
-    setFilterState({ selectedTagNames: nextTags })
-    setSelectedTaskIds([])
-    setCurrent(1)
-  }, [setCurrent, setFilterState])
 
   const keyword = useTaskListQueryStore((state) => state.keyword)
   const setKeyword = useTaskListQueryStore((state) => state.setKeyword)
@@ -327,9 +308,6 @@ function TaskListPage() {
           total={total}
           runtimeByTaskId={runtimeByTaskId}
           runtimeReady={taskSnapshotReady}
-          tagOptions={tagOptionsQuery.data ?? []}
-          selectedTagNames={selectedTagNames}
-          onTagFilterChange={handleTagFilterChange}
           keyword={keyword}
           onKeywordChange={handleKeywordChange}
           selectedTaskIds={selectedTaskIds}
@@ -400,8 +378,6 @@ function TaskListPage() {
         open={batchDrawerOpen}
         submitting={batchSubmitting}
         failedUrls={batchFailedUrls}
-        tagOptions={tagOptionsQuery.data ?? []}
-        tagOptionsLoading={tagOptionsQuery.isLoading}
         onCancel={() => {
           if (batchSubmitting) return
           setBatchDrawerOpen(false)

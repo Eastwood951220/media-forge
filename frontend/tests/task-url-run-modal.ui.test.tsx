@@ -10,7 +10,6 @@ const task: CrawlTask = {
   _id: 'task-1',
   name: '任务A',
   storage_location: 'JP',
-  tags: [],
   urls: [
     {
       id: 'url-1',

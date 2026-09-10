@@ -1,8 +1,6 @@
 import { useEffect } from 'react'
 import { Button, Drawer, Form, Input, Select, Space, Switch } from 'antd'
-import type { TaskTag } from '@/api/crawler/crawlTask/types'
 import { SORT_OPTIONS } from '../taskUrlUtils'
-import TaskTagSelect from './TaskTagSelect'
 import styles from '../TaskPages.module.less'
 
 export interface BatchTaskCreateFormValues {
@@ -11,15 +9,12 @@ export interface BatchTaskCreateFormValues {
   has_chinese_sub: boolean
   sort_type: number
   is_skip: boolean
-  tag_names: string[]
 }
 
 interface BatchTaskCreateDrawerProps {
   open: boolean
   submitting: boolean
   failedUrls: string[]
-  tagOptions?: TaskTag[]
-  tagOptionsLoading?: boolean
   onCancel: () => void
   onSubmit: (values: BatchTaskCreateFormValues) => void | Promise<void>
 }
@@ -35,8 +30,6 @@ export default function BatchTaskCreateDrawer({
   open,
   submitting,
   failedUrls,
-  tagOptions = [],
-  tagOptionsLoading = false,
   onCancel,
   onSubmit,
 }: BatchTaskCreateDrawerProps) {
@@ -46,7 +39,6 @@ export default function BatchTaskCreateDrawer({
     has_chinese_sub: boolean
     sort_type: number
     is_skip: boolean
-    tag_names: string[]
   }>()
 
   useEffect(() => {
@@ -57,7 +49,6 @@ export default function BatchTaskCreateDrawer({
       has_chinese_sub: form.getFieldValue('has_chinese_sub') ?? false,
       sort_type: form.getFieldValue('sort_type') ?? 0,
       is_skip: form.getFieldValue('is_skip') ?? false,
-      tag_names: form.getFieldValue('tag_names') ?? [],
     })
   }, [failedUrls, form, open])
 
@@ -74,7 +65,6 @@ export default function BatchTaskCreateDrawer({
       has_chinese_sub: values.has_chinese_sub ?? false,
       sort_type: values.sort_type ?? 0,
       is_skip: values.is_skip ?? false,
-      tag_names: values.tag_names ?? [],
     })
   }
 
@@ -103,7 +93,6 @@ export default function BatchTaskCreateDrawer({
           has_chinese_sub: false,
           sort_type: 0,
           is_skip: false,
-          tag_names: [],
         }}
       >
         <Form.Item name="urlText" label="URL 列表" required>
@@ -122,9 +111,6 @@ export default function BatchTaskCreateDrawer({
         </Space>
         <Form.Item name="sort_type" label="排序方式">
           <Select options={SORT_OPTIONS} />
-        </Form.Item>
-        <Form.Item name="tag_names" label="任务标签">
-          <TaskTagSelect options={tagOptions} loading={tagOptionsLoading} />
         </Form.Item>
       </Form>
     </Drawer>

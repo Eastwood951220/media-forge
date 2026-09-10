@@ -16,7 +16,6 @@ import { fetchMovies } from '@/api/movie'
 vi.mock('@/api/crawler/crawlTask', () => ({
   getCrawlTasks: vi.fn(),
   getTaskDict: vi.fn(),
-  getCrawlTaskTags: vi.fn(),
   deleteCrawlTask: vi.fn(),
   updateCrawlTask: vi.fn(),
   batchRunCrawlTasks: vi.fn(),
@@ -94,7 +93,6 @@ const idleTask = {
   id: TASK_ID,
   name: '任务一',
   storage_location: 'P1',
-  tags: [],
   urls: [],
   is_skip: false,
   status: 'idle',
