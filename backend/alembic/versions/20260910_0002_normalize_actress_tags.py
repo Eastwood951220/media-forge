@@ -43,28 +43,28 @@ def upgrade() -> None:
 
     op.execute("""
         INSERT INTO actress_tags (id, owner_id, name, created_at)
-        SELECT gen_random_uuid(), owners.owner_id, trimmed.name, now()
+        SELECT gen_random_uuid(), pairs.owner_id, pairs.name, now()
         FROM (
-            SELECT DISTINCT ct.owner_id
-            FROM crawl_tasks ct
-            UNION
-            SELECT DISTINCT ctt.owner_id
-            FROM crawl_task_tags ctt
-        ) AS owners
-        CROSS JOIN LATERAL (
-            SELECT DISTINCT btrim(tag_value) AS name
+            SELECT DISTINCT ct.owner_id AS owner_id, btrim(tag_value) AS name
             FROM actress_profiles ap
+            JOIN crawl_tasks ct ON ct.id = ANY(ap.source_task_ids)
             CROSS JOIN LATERAL unnest(ap.tags) AS tag_value
             WHERE btrim(tag_value) <> ''
-        ) AS trimmed
+        ) AS pairs
         ON CONFLICT (owner_id, name) DO NOTHING
     """)
 
     op.execute("""
         INSERT INTO actress_tags (id, owner_id, name, created_at)
-        SELECT gen_random_uuid(), ctt.owner_id, ctt.name, now()
-        FROM crawl_task_tags ctt
-        WHERE btrim(ctt.name) <> ''
+        SELECT gen_random_uuid(), pairs.owner_id, pairs.name, now()
+        FROM (
+            SELECT DISTINCT ct.owner_id AS owner_id, btrim(ctt.name) AS name
+            FROM crawl_task_tag_links ctl
+            JOIN crawl_task_tags ctt ON ctt.id = ctl.tag_id
+            JOIN crawl_tasks ct ON ct.id = ctl.task_id
+            JOIN actress_profiles ap ON ctl.task_id = ANY(ap.source_task_ids)
+            WHERE btrim(ctt.name) <> ''
+        ) AS pairs
         ON CONFLICT (owner_id, name) DO NOTHING
     """)
 
@@ -88,7 +88,7 @@ def upgrade() -> None:
         JOIN crawl_task_tags ctt ON ctt.id = ctl.tag_id
         JOIN crawl_tasks ct ON ct.id = ctl.task_id
         JOIN actress_profiles ap ON ctl.task_id = ANY(ap.source_task_ids)
-        JOIN actress_tags at ON at.owner_id = ct.owner_id AND at.name = ctt.name
+        JOIN actress_tags at ON at.owner_id = ct.owner_id AND at.name = btrim(ctt.name)
         ON CONFLICT DO NOTHING
     """)
 

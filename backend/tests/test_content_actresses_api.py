@@ -22,11 +22,11 @@ def _link_actress_tags(db_session, owner_id, profile, names: list[str]) -> None:
 
 def _seed_actor_task(
     db_session,
-    admin_user,
+    owner,
     *,
     url_name: str = "宮上唯依花",
 ) -> tuple[CrawlTask, CrawlTaskUrl]:
-    task = CrawlTask(name="宮上唯依花 任务", storage_location="宮上唯依花", owner_id=admin_user.id)
+    task = CrawlTask(name="宮上唯依花 任务", storage_location="宮上唯依花", owner_id=owner.id)
     db_session.add(task)
     db_session.flush()
     task_url = CrawlTaskUrl(
@@ -302,6 +302,33 @@ def test_get_actress_detail_returns_external_task_url_links(client, auth_headers
     ]
 
 
+def test_get_actress_detail_tags_are_owner_scoped(
+    client,
+    auth_headers,
+    db_session,
+    test_user,
+    other_user,
+) -> None:
+    profile = ActressProfile(
+        display_name="Owner Scoped",
+        canonical_names=["Owner Scoped"],
+        source_url="https://db.avjoho.com/owner-scoped/",
+        image_url="https://example.test/owner-scoped.jpg",
+    )
+    my_tag = ActressTag(owner_id=test_user.id, name="我的标签")
+    other_tag = ActressTag(owner_id=other_user.id, name="别人标签")
+    db_session.add(profile)
+    db_session.add_all([my_tag, other_tag])
+    db_session.flush()
+    profile.tags = [my_tag, other_tag]
+    db_session.commit()
+
+    response = client.get(f"/api/content/actresses/{profile.id}", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["data"]["tags"] == ["我的标签"]
+
+
 def test_update_actress_tags(client, auth_headers, db_session, test_user) -> None:
     profile = ActressProfile(
         display_name="Tag Editable",
@@ -349,7 +376,7 @@ def test_update_actress_tags_keeps_other_users_tags(client, auth_headers, db_ses
     assert {tag.name for tag in profile.tags} == {"我的标签", "别人标签"}
 
 
-def test_update_actress_tags_creates_dictionary_rows_and_links(client, auth_headers, db_session) -> None:
+def test_update_actress_tags_creates_dictionary_rows_and_links(client, auth_headers, db_session, test_user) -> None:
     profile = ActressProfile(
         display_name="Tag Editable",
         canonical_names=["Tag Editable"],
@@ -368,7 +395,34 @@ def test_update_actress_tags_creates_dictionary_rows_and_links(client, auth_head
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["tags"] == ["企划", "新标签"]
-    assert db_session.query(ActressTag).filter(ActressTag.name.in_(["新标签", "企划"])).count() == 2
+    assert db_session.query(ActressTag).filter(
+        ActressTag.owner_id == test_user.id,
+        ActressTag.name.in_(["新标签", "企划"]),
+    ).count() == 2
+
+
+def test_update_actress_tags_reuses_existing_dictionary_row(client, auth_headers, db_session, test_user) -> None:
+    profile = ActressProfile(
+        display_name="Tag Reused",
+        canonical_names=["Tag Reused"],
+        source_url="https://db.avjoho.com/tag-reused/",
+        image_url="https://example.test/tag-reused.jpg",
+    )
+    db_session.add(profile)
+    db_session.commit()
+
+    for _ in range(2):
+        response = client.put(
+            f"/api/content/actresses/{profile.id}/tags",
+            json={"tags": ["复用标签"]},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["tags"] == ["复用标签"]
+
+    assert db_session.query(ActressTag).filter_by(owner_id=test_user.id, name="复用标签").count() == 1
+    db_session.refresh(profile)
+    assert [tag.name for tag in profile.tags] == ["复用标签"]
 
 
 def test_update_actress_tags_rejects_too_long_name(client, auth_headers, db_session) -> None:
@@ -413,10 +467,10 @@ def test_fetch_actress_from_actor_task_uses_javdb_aliases_to_match_avjoho(
     client,
     auth_headers,
     db_session,
-    admin_user,
+    test_user,
     monkeypatch,
 ) -> None:
-    task, task_url = _seed_actor_task(db_session, admin_user, url_name="咲乃柑菜")
+    task, task_url = _seed_actor_task(db_session, test_user, url_name="咲乃柑菜")
     _stub_site_fetchers(monkeypatch)
     monkeypatch.setattr(
         actress_service,
@@ -458,10 +512,10 @@ def test_fetch_existing_actress_only_merges_tags_and_source_links(
     client,
     auth_headers,
     db_session,
-    admin_user,
+    test_user,
     monkeypatch,
 ) -> None:
-    task, task_url = _seed_actor_task(db_session, admin_user, url_name="咲乃柑菜")
+    task, task_url = _seed_actor_task(db_session, test_user, url_name="咲乃柑菜")
     existing = ActressProfile(
         display_name="旧名称",
         reading="old",
@@ -472,7 +526,7 @@ def test_fetch_existing_actress_only_merges_tags_and_source_links(
     )
     db_session.add(existing)
     db_session.flush()
-    _link_actress_tags(db_session, admin_user.id, existing, ["旧标签"])
+    _link_actress_tags(db_session, test_user.id, existing, ["旧标签"])
     db_session.commit()
     _stub_site_fetchers(monkeypatch)
     monkeypatch.setattr(
@@ -517,10 +571,10 @@ def test_fetch_existing_actress_by_task_url_only_merges_tags_without_crawling(
     client,
     auth_headers,
     db_session,
-    admin_user,
+    test_user,
     monkeypatch,
 ) -> None:
-    task, task_url = _seed_actor_task(db_session, admin_user, url_name="吹石玲奈")
+    task, task_url = _seed_actor_task(db_session, test_user, url_name="吹石玲奈")
     existing = ActressProfile(
         display_name="吹石れな",
         reading="ふきいしれな",
@@ -532,7 +586,7 @@ def test_fetch_existing_actress_by_task_url_only_merges_tags_without_crawling(
     )
     db_session.add(existing)
     db_session.flush()
-    _link_actress_tags(db_session, admin_user.id, existing, ["已有标签"])
+    _link_actress_tags(db_session, test_user.id, existing, ["已有标签"])
     db_session.commit()
 
     def fail_fetch_actor_metadata(*_args, **_kwargs):
@@ -562,10 +616,10 @@ def test_fetch_actress_from_actor_task_passes_names_to_spider_and_returns_candid
     client,
     auth_headers,
     db_session,
-    admin_user,
+    test_user,
     monkeypatch,
 ) -> None:
-    task, task_url = _seed_actor_task(db_session, admin_user, url_name="七瀨愛麗絲")
+    task, task_url = _seed_actor_task(db_session, test_user, url_name="七瀨愛麗絲")
     seen_names: list[list[str]] = []
     _stub_site_fetchers(monkeypatch)
     monkeypatch.setattr(
@@ -617,11 +671,11 @@ def test_fetch_actress_from_actor_task_handles_missing_candidates_without_traceb
     client,
     auth_headers,
     db_session,
-    admin_user,
+    test_user,
     monkeypatch,
     caplog,
 ) -> None:
-    task, _task_url = _seed_actor_task(db_session, admin_user, url_name="不存在")
+    task, _task_url = _seed_actor_task(db_session, test_user, url_name="不存在")
 
     class NotFoundFetcher:
         def get(self, url: str):
@@ -655,10 +709,10 @@ def test_fetch_actress_from_task_only_fetches_selected_actor_url(
     client,
     auth_headers,
     db_session,
-    admin_user,
+    test_user,
     monkeypatch,
 ) -> None:
-    task, first_url = _seed_actor_task(db_session, admin_user, url_name="演员A")
+    task, first_url = _seed_actor_task(db_session, test_user, url_name="演员A")
     second_url = CrawlTaskUrl(
         task_id=task.id,
         position=1,
@@ -716,11 +770,11 @@ def test_fetch_actress_from_task_only_fetches_selected_actor_url(
 def test_fetch_actress_from_task_manual_avjoho_404_is_user_visible(
     client,
     db_session,
-    admin_user,
+    test_user,
     auth_headers,
     monkeypatch,
 ) -> None:
-    task, actor_url = _seed_actor_task(db_session, admin_user, url_name="七瀬アリス")
+    task, actor_url = _seed_actor_task(db_session, test_user, url_name="七瀬アリス")
     _stub_site_fetchers(monkeypatch)
     monkeypatch.setattr(
         actress_service,
@@ -747,8 +801,8 @@ def test_fetch_actress_from_task_manual_avjoho_404_is_user_visible(
     assert "manual avjoho profile not found" in response.text
 
 
-def test_fetch_actress_rejects_non_actor_tasks(client, auth_headers, db_session, admin_user) -> None:
-    task = CrawlTask(name="Search Task", storage_location="Search Task", owner_id=admin_user.id)
+def test_fetch_actress_rejects_non_actor_tasks(client, auth_headers, db_session, test_user) -> None:
+    task = CrawlTask(name="Search Task", storage_location="Search Task", owner_id=test_user.id)
     db_session.add(task)
     db_session.flush()
     task_url = CrawlTaskUrl(
@@ -769,3 +823,23 @@ def test_fetch_actress_rejects_non_actor_tasks(client, auth_headers, db_session,
     )
 
     assert response.status_code == 400
+
+
+def test_fetch_actress_rejects_other_users_task(
+    client,
+    auth_headers,
+    db_session,
+    other_user,
+    monkeypatch,
+) -> None:
+    task, task_url = _seed_actor_task(db_session, other_user, url_name="别人任务")
+    _stub_site_fetchers(monkeypatch)
+
+    response = client.post(
+        "/api/content/actresses/fetch-from-task",
+        json={"task_id": str(task.id), "task_url_id": str(task_url.id)},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["msg"] == "任务不存在"

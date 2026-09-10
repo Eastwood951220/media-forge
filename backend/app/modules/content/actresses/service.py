@@ -148,9 +148,14 @@ def fetch_actresses_from_task(
     db: Session,
     task_id: uuid.UUID,
     task_url_id: uuid.UUID,
+    owner_id: uuid.UUID,
     avjoho_url: str | None = None,
 ) -> dict:
-    task = db.get(CrawlTask, task_id, options=[selectinload(CrawlTask.urls)])
+    task = db.scalar(
+        select(CrawlTask)
+        .options(selectinload(CrawlTask.urls))
+        .where(CrawlTask.id == task_id, CrawlTask.owner_id == owner_id)
+    )
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
     actor_url = _selected_actor_url_for_task(task, task_url_id)
@@ -166,7 +171,7 @@ def fetch_actresses_from_task(
         db.refresh(profile)
         return {
             "matched": True,
-            "profiles": [serialize_actress_profile(profile, owner_id=task.owner_id)],
+            "profiles": [serialize_actress_profile(profile, owner_id=owner_id)],
             "candidates": [],
             "message": "女优资料已存在",
         }
@@ -222,7 +227,7 @@ def fetch_actresses_from_task(
         )
     return {
         "matched": bool(profiles),
-        "profiles": [serialize_actress_profile(profile, owner_id=task.owner_id) for profile in profiles],
+        "profiles": [serialize_actress_profile(profile, owner_id=owner_id) for profile in profiles],
         "candidates": dedupe_text(attempted_urls),
         "message": "已获取女优资料" if profiles else "未匹配到 avjoho 资料，可填写 avjoho URL 手动获取",
     }

@@ -37,17 +37,15 @@ def serialize_external_link(task_url: CrawlTaskUrl) -> dict:
     }
 
 
-def _profile_tag_names(profile: ActressProfile, owner_id: uuid.UUID | None) -> list[str]:
-    tags = list(profile.tags or [])
-    if owner_id is not None:
-        tags = [tag for tag in tags if str(tag.owner_id) == str(owner_id)]
+def _profile_tag_names(profile: ActressProfile, owner_id: uuid.UUID) -> list[str]:
+    tags = [tag for tag in (profile.tags or []) if str(tag.owner_id) == str(owner_id)]
     return [tag.name for tag in sorted(tags, key=lambda item: item.name)]
 
 
 def serialize_actress_profile(
     profile: ActressProfile,
     *,
-    owner_id: uuid.UUID | None = None,
+    owner_id: uuid.UUID,
     recent_movies: list[Movie] | None = None,
     external_links: list[CrawlTaskUrl] | None = None,
 ) -> dict:
