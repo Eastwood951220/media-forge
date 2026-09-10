@@ -179,6 +179,10 @@ Then adapt site implementations:
 
 Backend services such as `backend/app/modules/content/movies/magnet_refresh.py` should depend on the provider factory instead of constructing `JavdbSpider` directly. The threaded crawler runtime can remain unchanged until a later pass because it already uses site spiders for full task execution.
 
+`Movie` does not store a source field. Magnet refresh must determine the source from the movie/detail URL with `scraper.tasks.task_utils.determine_source`. Supported provider sources are `javdb` and `javbus`; unknown sources must fall back to JavDB to preserve the current magnet-refresh behavior, which always used `JavdbSpider` regardless of URL host.
+
+Graphify's current report marks `Movie`, `CrawlRun`, and `CrawlRunDetailTask` as high-degree bridge nodes. The magnet provider phase must avoid adding new model-level coupling or database fields. Keep the boundary change localized to `backend/app/modules/content/movies/magnet_refresh.py`, `scraper/magnets/`, and source-specific provider adapters under `scraper/spiders/*/`.
+
 ## Phasing
 
 ### Phase 1: Actress Scraper Provider Migration
@@ -216,12 +220,13 @@ Scraper tests:
 - Avjoho parser extracts current profile fields.
 - Avjoho spider direct candidate URLs, search result URLs, manual URL validation, and first-match behavior are unit-tested with fake fetchers.
 - JavDB and JavBus magnet provider adapters preserve current magnet payload shape.
+- Magnet refresh tests cover JavDB selection, JavBus selection, unknown-source fallback to JavDB, provider failure, no-magnet skip, and the existing invariant that refresh updates magnets only.
 
 Backend tests:
 
 - Actress fetch endpoint behavior stays stable after scraper migration.
 - Backend service no longer needs network monkeypatches on private avjoho functions; tests monkeypatch provider factory or fake provider methods.
-- Magnet refresh can select a provider based on movie/source metadata or explicit request source.
+- Magnet refresh can select a provider based on movie/detail URL source and preserves JavDB fallback for unknown sources.
 
 Verification commands:
 
