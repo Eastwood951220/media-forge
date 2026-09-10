@@ -11,19 +11,20 @@ from zipfile import ZipFile
 from sqlalchemy import Table, func, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.crawl_task import (
-    CrawlTask,
-    CrawlTaskTag,
-    CrawlTaskUrl,
-    crawl_task_tag_links,
-)
+from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.models.crawler_schedule import CrawlerSchedule, CrawlerScheduleTask
 from backend.app.modules.backup.format import write_jsonl
 from backend.app.modules.content.movies.filter_config import read_movie_filter_config
 from backend.app.modules.crawler.config.conf_reader import read_crawler_config_dict
 from backend.app.modules.storage.config.service import StorageConfigService
 from scraper.config import settings as scraper_settings
-from shared.database.models.content import Movie, MovieFilter, MovieMagnet
+from shared.database.models.content import (
+    ActressTag,
+    Movie,
+    MovieFilter,
+    MovieMagnet,
+    actress_tag_links,
+)
 
 Scope = Callable[[Any, uuid.UUID], Any]
 
@@ -47,20 +48,6 @@ TASK_EXPORTS: tuple[tuple[Any, str, Scope | None], ...] = (
         ),
     ),
     (
-        CrawlTaskTag,
-        "data/crawl_task_tags.jsonl",
-        lambda stmt, owner_id: stmt.where(CrawlTaskTag.owner_id == owner_id),
-    ),
-    (
-        crawl_task_tag_links,
-        "data/crawl_task_tag_links.jsonl",
-        lambda stmt, owner_id: stmt.where(
-            crawl_task_tag_links.c.task_id.in_(
-                select(CrawlTask.id).where(CrawlTask.owner_id == owner_id)
-            )
-        ),
-    ),
-    (
         CrawlerSchedule,
         "data/crawler_schedules.jsonl",
         lambda stmt, owner_id: stmt.where(CrawlerSchedule.owner_id == owner_id),
@@ -75,6 +62,23 @@ TASK_EXPORTS: tuple[tuple[Any, str, Scope | None], ...] = (
         ).where(
             CrawlerScheduleTask.task_id.in_(
                 select(CrawlTask.id).where(CrawlTask.owner_id == owner_id)
+            )
+        ),
+    ),
+)
+
+ACTRESS_EXPORTS: tuple[tuple[Any, str, Scope | None], ...] = (
+    (
+        ActressTag,
+        "data/actress_tags.jsonl",
+        lambda stmt, owner_id: stmt.where(ActressTag.owner_id == owner_id),
+    ),
+    (
+        actress_tag_links,
+        "data/actress_tag_links.jsonl",
+        lambda stmt, owner_id: stmt.where(
+            actress_tag_links.c.tag_id.in_(
+                select(ActressTag.id).where(ActressTag.owner_id == owner_id)
             )
         ),
     ),
@@ -117,7 +121,7 @@ def _scope_entity_rows(db: Session, entity: Any, owner_id: uuid.UUID | None) -> 
     ``owner_id`` may be ``None`` for automatic backups, which include every
     user's rows instead of one owner's rows.
     """
-    specs = [spec for spec in MOVIE_EXPORTS + TASK_EXPORTS if spec[0] is entity]
+    specs = [spec for spec in MOVIE_EXPORTS + TASK_EXPORTS + ACTRESS_EXPORTS if spec[0] is entity]
     scope: Scope | None = None
     if specs:
         scope = specs[0][2]

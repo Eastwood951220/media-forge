@@ -12,18 +12,20 @@ from zipfile import ZipFile
 from sqlalchemy import Date, DateTime, Numeric, Table, TypeDecorator, Uuid, delete, insert, select, update
 from sqlalchemy.orm import Session
 
-from backend.app.models.crawl_task import (
-    CrawlTask,
-    CrawlTaskTag,
-    CrawlTaskUrl,
-    crawl_task_tag_links,
-)
+from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.models.crawler_schedule import CrawlerSchedule, CrawlerScheduleTask
 from backend.app.modules.backup.format import read_jsonl
 from backend.app.modules.content.movies.filter_sync import sync_movie_filters
 from backend.app.modules.crawler.schedules.service import calculate_next_run_at
 from scraper.config import settings as scraper_settings
-from shared.database.models.content import Movie, MovieFilter, MovieMagnet
+from shared.database.models.content import (
+    ActressProfile,
+    ActressTag,
+    Movie,
+    MovieFilter,
+    MovieMagnet,
+    actress_tag_links,
+)
 
 
 @dataclass
@@ -251,8 +253,8 @@ def restore_tasks_and_schedules(
 
     task_id_map = _restore_tasks(db, zip_file, owner_id, stats, batch_size)
     _restore_task_urls(db, zip_file, task_id_map, stats, batch_size)
-    tag_id_map = _restore_task_tags(db, zip_file, owner_id, stats, batch_size)
-    _restore_task_tag_links(db, zip_file, task_id_map, tag_id_map, stats, batch_size)
+    actress_tag_id_map = _restore_actress_tags(db, zip_file, mode, owner_id, stats, batch_size)
+    _restore_actress_tag_links(db, zip_file, actress_tag_id_map, stats, batch_size)
     schedule_id_map = _restore_schedules(db, zip_file, owner_id, stats, batch_size)
     _restore_schedule_tasks(db, zip_file, schedule_id_map, task_id_map, stats, batch_size)
     db.commit()
@@ -273,22 +275,13 @@ def _clear_tasks_group(db: Session, owner_id: uuid.UUID) -> None:
         db.execute(
             delete(schedule_link_table).where(schedule_link_table.c.task_id.in_(task_ids))
         )
-        db.execute(
-            delete(crawl_task_tag_links).where(crawl_task_tag_links.c.task_id.in_(task_ids))
-        )
         db.execute(delete(CrawlTaskUrl).where(CrawlTaskUrl.task_id.in_(task_ids)))
     if schedule_ids:
         db.execute(
             delete(schedule_link_table).where(schedule_link_table.c.schedule_id.in_(schedule_ids))
         )
         db.execute(delete(CrawlerSchedule).where(CrawlerSchedule.id.in_(schedule_ids)))
-    owned_tag_ids = list(db.scalars(select(CrawlTaskTag.id).where(CrawlTaskTag.owner_id == owner_id)).all())
-    if owned_tag_ids:
-        db.execute(
-            delete(crawl_task_tag_links).where(crawl_task_tag_links.c.tag_id.in_(owned_tag_ids))
-        )
     db.execute(delete(CrawlTask).where(CrawlTask.owner_id == owner_id))
-    db.execute(delete(CrawlTaskTag).where(CrawlTaskTag.owner_id == owner_id))
     db.flush()
 
 
@@ -396,30 +389,42 @@ def _restore_task_urls(
     db.commit()
 
 
-def _restore_task_tags(
+def _restore_actress_tags(
     db: Session,
     zip_file: ZipFile,
+    mode: str,
     owner_id: uuid.UUID,
     stats: RestoreStats,
     batch_size: int,
 ) -> dict[uuid.UUID, uuid.UUID]:
+    """Restore actress tag rows and map archive tag ids to resolved tag ids."""
     archive_names = {info.filename for info in zip_file.infolist()}
     tag_id_map: dict[uuid.UUID, uuid.UUID] = {}
-    if "data/crawl_task_tags.jsonl" not in archive_names:
+    if "data/actress_tags.jsonl" not in archive_names:
+        # An old archive carries no actress tag data, so the user's existing
+        # actress tags are left untouched rather than cleared.
         return tag_id_map
-    tag_table = CrawlTaskTag.__table__
+    if mode == "overwrite":
+        owned_tag_ids = list(db.scalars(select(ActressTag.id).where(ActressTag.owner_id == owner_id)).all())
+        if owned_tag_ids:
+            db.execute(
+                delete(actress_tag_links).where(actress_tag_links.c.tag_id.in_(owned_tag_ids))
+            )
+        db.execute(delete(ActressTag).where(ActressTag.owner_id == owner_id))
+        db.flush()
+    tag_table = ActressTag.__table__
     processed = 0
-    for row in read_jsonl(zip_file, "data/crawl_task_tags.jsonl"):
+    for row in read_jsonl(zip_file, "data/actress_tags.jsonl"):
         try:
             incoming_id = row.get("id")
             incoming_uuid = uuid.UUID(str(incoming_id)) if incoming_id else None
             name = str(row.get("name") or "")
             existing = None
-            if incoming_uuid is not None and name:
+            if name:
                 existing = db.scalar(
-                    select(CrawlTaskTag).where(
-                        CrawlTaskTag.owner_id == owner_id,
-                        CrawlTaskTag.name == name,
+                    select(ActressTag).where(
+                        ActressTag.owner_id == owner_id,
+                        ActressTag.name == name,
                     )
                 )
             if existing is not None:
@@ -430,7 +435,7 @@ def _restore_task_tags(
                 values["owner_id"] = owner_id
                 values["name"] = name
                 values["id"] = incoming_uuid or uuid.uuid4()
-                db.execute(insert(CrawlTaskTag.__table__).values(**values))
+                db.execute(insert(ActressTag.__table__).values(**values))
                 resolved_id = values["id"]
                 stats.created += 1
             if incoming_uuid is not None:
@@ -445,44 +450,44 @@ def _restore_task_tags(
     return tag_id_map
 
 
-def _restore_task_tag_links(
+def _restore_actress_tag_links(
     db: Session,
     zip_file: ZipFile,
-    task_id_map: dict[uuid.UUID, uuid.UUID],
     tag_id_map: dict[uuid.UUID, uuid.UUID],
     stats: RestoreStats,
     batch_size: int,
 ) -> None:
+    """Restore actress tag links onto profiles that already exist in ``db``."""
     archive_names = {info.filename for info in zip_file.infolist()}
-    if "data/crawl_task_tag_links.jsonl" not in archive_names:
+    if "data/actress_tag_links.jsonl" not in archive_names:
         return
     processed = 0
-    for row in read_jsonl(zip_file, "data/crawl_task_tag_links.jsonl"):
+    for row in read_jsonl(zip_file, "data/actress_tag_links.jsonl"):
         try:
-            archive_task_id = row.get("task_id")
+            archive_profile_id = row.get("actress_profile_id")
             archive_tag_id = row.get("tag_id")
-            if archive_task_id is None or archive_tag_id is None:
+            if archive_profile_id is None or archive_tag_id is None:
                 stats.skipped += 1
                 continue
-            task_uuid = uuid.UUID(str(archive_task_id))
-            tag_uuid = uuid.UUID(str(archive_tag_id))
-            resolved_task_id = task_id_map.get(task_uuid)
-            resolved_tag_id = tag_id_map.get(tag_uuid)
-            if resolved_task_id is None or resolved_tag_id is None:
+            profile_uuid = uuid.UUID(str(archive_profile_id))
+            resolved_tag_id = tag_id_map.get(uuid.UUID(str(archive_tag_id)))
+            # Actress profiles are not part of a backup archive, so a link is
+            # only restorable when its profile already exists locally.
+            if resolved_tag_id is None or db.get(ActressProfile, profile_uuid) is None:
                 stats.skipped += 1
                 continue
             link_exists = db.scalar(
-                select(crawl_task_tag_links.c.task_id).where(
-                    crawl_task_tag_links.c.task_id == resolved_task_id,
-                    crawl_task_tag_links.c.tag_id == resolved_tag_id,
+                select(actress_tag_links.c.actress_profile_id).where(
+                    actress_tag_links.c.actress_profile_id == profile_uuid,
+                    actress_tag_links.c.tag_id == resolved_tag_id,
                 )
             )
             if link_exists is not None:
                 stats.skipped += 1
                 continue
             db.execute(
-                insert(crawl_task_tag_links).values(
-                    task_id=resolved_task_id,
+                insert(actress_tag_links).values(
+                    actress_profile_id=profile_uuid,
                     tag_id=resolved_tag_id,
                 )
             )

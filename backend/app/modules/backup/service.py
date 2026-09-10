@@ -21,6 +21,7 @@ from backend.app.modules.backup.groups import (
     BACKUP_FORMAT_VERSION,
 )
 from backend.app.modules.backup.exporters import (
+    ACTRESS_EXPORTS,
     MOVIE_EXPORTS,
     TASK_EXPORTS,
     export_config_files,
@@ -122,7 +123,7 @@ class BackupService:
                     export_db_group(
                         self.db,
                         zip_file,
-                        TASK_EXPORTS,
+                        TASK_EXPORTS + ACTRESS_EXPORTS,
                         owner_id,
                         on_progress=report_progress if job_id is not None else None,
                     )
