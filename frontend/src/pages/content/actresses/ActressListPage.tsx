@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { FilterOutlined, PlayCircleOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -62,6 +62,10 @@ function formatLinkLabel(link: ActressExternalLink) {
   return `${link.label}${link.url_name ? ` · ${link.url_name}` : ''}`
 }
 
+function mediaBackdropStyle(url: string): CSSProperties {
+  return { '--media-bg': `url("${url}")` } as CSSProperties
+}
+
 function ActressCard({
   actress,
   onCrawl,
@@ -80,7 +84,7 @@ function ActressCard({
       hoverable
       className={styles.actressCard}
       cover={
-        <div className={styles.actressCover}>
+        <div className={styles.actressCover} style={actress.image_url ? mediaBackdropStyle(actress.image_url) : undefined}>
           {actress.image_url ? (
             <img
               src={actress.image_url}

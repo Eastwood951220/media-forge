@@ -1,4 +1,5 @@
 import {Descriptions, Drawer, Image, Space, Tag, Typography} from "antd";
+import type {CSSProperties} from "react";
 import type {MovieMagnet} from "@/api/movie/types";
 import {useImageBlurStore} from "@/stores/useImageBlurStore";
 import {formatDateTime, getMagnetSizeText, uniqueStrings} from "../utils/movieDetailFormat";
@@ -28,6 +29,10 @@ function getMagnetDisplayText(magnet: MovieMagnet): string {
         .filter(Boolean)
         .join(" · ");
     return metadata ? `${metadata}\n${magnet.magnet}` : (magnet.magnet ?? "");
+}
+
+function mediaBackdropStyle(url: string): CSSProperties {
+    return {"--media-bg": `url("${url}")`} as CSSProperties;
 }
 
 function FilterValue({value, field, onClick}: {value: string; field: string; onClick?: (field: string, value: string) => void}) {
@@ -95,12 +100,13 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                     <Descriptions.Item label="大小">{detailSizeText}</Descriptions.Item>
                     <Descriptions.Item label="封面">
                         {detail.cover as string ? (
-                            <Image
-                                src={detail.cover as string}
-                                width={200}
-                                className={imageBlurEnabled ? "app-blurred-media" : undefined}
-                                referrerPolicy="no-referrer"
-                            />
+                            <div className={styles.movieDetailCover} style={mediaBackdropStyle(detail.cover as string)}>
+                                <Image
+                                    src={detail.cover as string}
+                                    className={imageBlurEnabled ? "app-blurred-media" : undefined}
+                                    referrerPolicy="no-referrer"
+                                />
+                            </div>
                         ) : "-"}
                     </Descriptions.Item>
                     <Descriptions.Item label="最佳磁力">

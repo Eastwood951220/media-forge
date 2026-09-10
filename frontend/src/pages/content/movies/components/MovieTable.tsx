@@ -1,4 +1,5 @@
 import { Space, Tag } from 'antd'
+import type { CSSProperties } from 'react'
 import type { ColumnsType } from 'antd/es/table'
 import type { Movie } from '@/api/movie/types'
 import ResponsiveActions, { type ResponsiveAction } from '@/components/ResponsiveActions'
@@ -35,11 +36,15 @@ function formatDateTime(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : '-'
 }
 
+function mediaBackdropStyle(url: string): CSSProperties {
+  return { '--media-bg': `url("${url}")` } as CSSProperties
+}
+
 function MovieCoverCell({ movie }: { movie: Movie }) {
   const blurEnabled = useImageBlurStore((state) => state.enabled)
   if (!movie.cover) return <span>-</span>
   return (
-    <div className={styles.movieCoverCell}>
+    <div className={styles.movieCoverCell} style={mediaBackdropStyle(movie.cover)}>
       <img
         src={movie.cover}
         alt={movie.code}

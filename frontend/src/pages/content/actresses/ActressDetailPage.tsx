@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { ArrowLeftOutlined, LinkOutlined, PlayCircleOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -42,6 +42,10 @@ type CrawlMode = 'incremental' | 'full'
 
 function formatLinkLabel(link: ActressExternalLink) {
   return `${link.label}${link.url_name ? ` · ${link.url_name}` : ''}`
+}
+
+function mediaBackdropStyle(url: string): CSSProperties {
+  return { '--media-bg': `url("${url}")` } as CSSProperties
 }
 
 function ActressDetailPage() {
@@ -143,7 +147,7 @@ function ActressDetailPage() {
         {actress ? (
           <>
             <section className={styles.detailHeader}>
-              <div className={styles.detailPortrait}>
+              <div className={styles.detailPortrait} style={actress.image_url ? mediaBackdropStyle(actress.image_url) : undefined}>
                 {actress.image_url ? (
                   <Image
                     src={actress.image_url}
@@ -259,7 +263,7 @@ function ActressDetailPage() {
                         }
                       }}
                     >
-                      <div className={styles.movieCover}>
+                      <div className={styles.movieCover} style={movie.cover ? mediaBackdropStyle(movie.cover) : undefined}>
                         {movie.cover ? (
                           <img
                             src={movie.cover}
