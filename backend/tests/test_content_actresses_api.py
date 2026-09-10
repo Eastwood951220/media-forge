@@ -4,7 +4,7 @@ from datetime import date, datetime
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.content.actresses import service as actress_service
 from scraper.profiles.actress import ActorMetadata, ActressProfileMatch, ActressProfilePayload
-from scraper.spiders.avjoho.avjoho_spider import AvjohoActressSpider
+from scraper.spiders.avjoho.avjoho_spider import AvjohoActressSpider, ProfileSourceNotFound
 from shared.database.models.content import ActressProfile, Movie
 
 
@@ -422,6 +422,40 @@ def test_fetch_actress_from_task_only_fetches_selected_actor_url(
     assert data["profiles"][0]["source_task_url_ids"] == [str(second_url.id)]
     assert fetched_javdb_urls == ["https://javdb.com/actors/b"]
     assert str(first_url.id) not in data["profiles"][0]["source_task_url_ids"]
+
+
+def test_fetch_actress_from_task_manual_avjoho_404_is_user_visible(
+    client,
+    db_session,
+    admin_user,
+    auth_headers,
+    monkeypatch,
+) -> None:
+    task, actor_url = _seed_actor_task(db_session, admin_user, url_name="七瀬アリス")
+    _stub_site_fetchers(monkeypatch)
+    monkeypatch.setattr(
+        actress_service,
+        "fetch_actor_metadata",
+        _javdb_metadata(primary_names=["七瀬アリス"], aliases=[]),
+    )
+
+    def fake_find_first_matching_profile(self, names, manual_url=None):
+        raise ProfileSourceNotFound("manual avjoho profile not found")
+
+    monkeypatch.setattr(AvjohoActressSpider, "find_first_matching_profile", fake_find_first_matching_profile)
+
+    response = client.post(
+        "/api/content/actresses/fetch-from-task",
+        json={
+            "task_id": str(task.id),
+            "task_url_id": str(actor_url.id),
+            "avjoho_url": "https://db.avjoho.com/missing/",
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 404
+    assert "manual avjoho profile not found" in response.text
 
 
 def test_fetch_actress_rejects_non_actor_tasks(client, auth_headers, db_session, admin_user) -> None:

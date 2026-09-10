@@ -12,7 +12,11 @@ from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.content.actresses.serializers import serialize_actress_profile
 from scraper.fetchers.site_fetcher import build_site_fetcher
 from scraper.profiles.actress import ActressProfilePayload, dedupe_text
-from scraper.spiders.avjoho.avjoho_spider import AvjohoActressSpider
+from scraper.spiders.avjoho.avjoho_spider import (
+    AvjohoActressSpider,
+    ProfileSourceInvalidUrl,
+    ProfileSourceNotFound,
+)
 from scraper.spiders.javdb.actor_profile import fetch_actor_metadata
 from shared.database.models.content import ActressProfile
 
@@ -130,11 +134,13 @@ def fetch_actresses_from_task(
         ])
         try:
             match = avjoho_spider.find_first_matching_profile(names, manual_url=avjoho_url)
-        except ValueError as exc:
+        except ProfileSourceInvalidUrl as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="avjoho_url 必须是 db.avjoho.com 的 HTTP(S) URL",
             ) from exc
+        except ProfileSourceNotFound as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
         attempted_urls.extend(match.attempted_urls)
         if match.profile is None:
