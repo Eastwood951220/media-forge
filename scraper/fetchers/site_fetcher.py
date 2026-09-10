@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from backend.app.modules.crawler.config.conf_reader import CrawlerRuntimeConfig, read_crawler_runtime_config
-from scraper.config.sites import JAVDB_SITE, SITE_CONFIGS
+from scraper.config.sites import AVJOHO_SITE, JAVBUS_SITE, JAVDB_SITE
 from scraper.cookies.cookie_manager import CookieManager
 from scraper.fetchers.scrapling_fetcher import ScraplingFetcher
+
+SITE_CONFIGS = {
+    "javdb": JAVDB_SITE,
+    "javbus": JAVBUS_SITE,
+    "avjoho": AVJOHO_SITE,
+}
 
 
 def build_site_fetcher(
@@ -11,7 +17,9 @@ def build_site_fetcher(
     runtime_config: CrawlerRuntimeConfig | None = None,
 ) -> ScraplingFetcher:
     active_config = runtime_config or read_crawler_runtime_config()
-    site_config = SITE_CONFIGS.get(source, JAVDB_SITE)
+    site_config = SITE_CONFIGS.get(source)
+    if site_config is None:
+        raise ValueError(f"不支持的站点来源: {source}")
     cookie_manager = CookieManager(site_config["cookie_file"])
     return ScraplingFetcher(
         headers=site_config["headers"],

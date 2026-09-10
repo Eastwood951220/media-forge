@@ -38,12 +38,6 @@ AVJOHO_SITE = {
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/120.0.0.0 Safari/537.36"
         ),
-        "Accept-Language": "ja,en;q=0.9",
+        "Accept-Language": "ja-JP,ja;q=0.9,zh-CN;q=0.8,en;q=0.7",
     },
-}
-
-SITE_CONFIGS = {
-    "javdb": JAVDB_SITE,
-    "javbus": JAVBUS_SITE,
-    "avjoho": AVJOHO_SITE,
 }
