@@ -388,6 +388,50 @@ def test_fetch_existing_actress_only_merges_tags_and_source_links(
     assert [str(value) for value in existing.source_task_url_ids] == [str(task_url.id)]
 
 
+def test_fetch_existing_actress_by_task_url_only_merges_tags_without_crawling(
+    client,
+    auth_headers,
+    db_session,
+    admin_user,
+    monkeypatch,
+) -> None:
+    task, task_url = _seed_actor_task(db_session, admin_user, url_name="吹石玲奈", tag_names=["新增标签"])
+    existing = ActressProfile(
+        display_name="吹石れな",
+        reading="ふきいしれな",
+        canonical_names=["吹石玲奈", "吹石れな"],
+        source_url="https://db.avjoho.com/%E5%90%B9%E7%9F%B3%E3%82%8C%E3%81%AA/",
+        image_url="https://example.test/fukiishi.jpg",
+        source_task_ids=[task.id],
+        source_task_url_ids=[task_url.id],
+        tags=["已有标签"],
+    )
+    db_session.add(existing)
+    db_session.commit()
+
+    def fail_fetch_actor_metadata(*_args, **_kwargs):
+        raise AssertionError("existing actress should not refetch JavDB metadata")
+
+    def fail_find_first_matching_profile(*_args, **_kwargs):
+        raise AssertionError("existing actress should not search avjoho")
+
+    monkeypatch.setattr(actress_service, "fetch_actor_metadata", fail_fetch_actor_metadata)
+    monkeypatch.setattr(AvjohoActressSpider, "find_first_matching_profile", fail_find_first_matching_profile)
+
+    response = client.post(
+        "/api/content/actresses/fetch-from-task",
+        json={"task_id": str(task.id), "task_url_id": str(task_url.id)},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["matched"] is True
+    assert data["profiles"][0]["id"] == str(existing.id)
+    assert data["profiles"][0]["tags"] == ["已有标签", "新增标签"]
+    assert data["message"] == "已更新女优标签"
+
+
 def test_fetch_actress_from_actor_task_passes_names_to_spider_and_returns_candidates(
     client,
     auth_headers,
