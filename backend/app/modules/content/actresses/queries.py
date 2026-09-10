@@ -36,12 +36,34 @@ def list_actress_profiles(
     limit: int,
     keyword: str | None = None,
     source_task_id: uuid.UUID | None = None,
+    cup: str | None = None,
+    height_min: int | None = None,
+    height_max: int | None = None,
+    bust_min: int | None = None,
+    bust_max: int | None = None,
+    waist_min: int | None = None,
+    waist_max: int | None = None,
+    hip_min: int | None = None,
+    hip_max: int | None = None,
 ) -> tuple[list[ActressProfile], int]:
     rows = list(db.scalars(select(ActressProfile).order_by(ActressProfile.created_at.desc(), ActressProfile.display_name.asc())))
     if keyword:
         rows = [row for row in rows if _matches_keyword(row, keyword)]
     if source_task_id is not None:
         rows = [row for row in rows if _contains_uuid(row.source_task_ids, source_task_id)]
+    if cup:
+        expected_cup = cup.strip().lower()
+        rows = [row for row in rows if (row.cup or "").strip().lower() == expected_cup]
+    for field_name, minimum, maximum in (
+        ("height_cm", height_min, height_max),
+        ("bust_cm", bust_min, bust_max),
+        ("waist_cm", waist_min, waist_max),
+        ("hip_cm", hip_min, hip_max),
+    ):
+        if minimum is not None:
+            rows = [row for row in rows if getattr(row, field_name) is not None and getattr(row, field_name) >= minimum]
+        if maximum is not None:
+            rows = [row for row in rows if getattr(row, field_name) is not None and getattr(row, field_name) <= maximum]
     total = len(rows)
     offset = (page - 1) * limit
     return rows[offset:offset + limit], total

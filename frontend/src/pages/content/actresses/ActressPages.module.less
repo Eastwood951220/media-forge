@@ -2,7 +2,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 20px;
 }
 
 .detailTopbar {
@@ -28,6 +27,39 @@
 
 .searchInput {
   width: min(360px, 100%);
+}
+
+.compactInput {
+  width: 112px;
+}
+
+.filterControls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: min(520px, 100%);
+}
+
+.advancedFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+}
+
+.rangeGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rangeLabel {
+  min-width: 28px;
+  color: var(--ant-color-text-secondary);
 }
 
 .actressGrid {
@@ -278,13 +310,16 @@
 }
 
 @media (max-width: 640px) {
-  .page {
-    padding: 12px;
-  }
-
   .toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .filterControls,
+  .advancedFilters,
+  .rangeGroup {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .detailHeader {
@@ -297,6 +332,8 @@
   }
 
   .searchInput,
+  .compactInput,
+  .rangeGroup :global(.ant-input-number),
   .detailPortrait {
     width: 100%;
   }

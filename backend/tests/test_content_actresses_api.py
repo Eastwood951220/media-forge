@@ -49,6 +49,58 @@ def test_list_actresses_returns_cards_with_page_size_multiple_of_8(client, auth_
     assert all(row["image_url"].startswith("https://example.test/") for row in payload["rows"])
 
 
+def test_list_actresses_filters_by_cup_height_and_measurements(client, auth_headers, db_session) -> None:
+    db_session.add_all([
+        ActressProfile(
+            display_name="Matched",
+            reading="",
+            canonical_names=["Matched"],
+            source_url="https://db.avjoho.com/matched/",
+            image_url="https://example.test/matched.jpg",
+            cup="E",
+            height_cm=165,
+            bust_cm=90,
+            waist_cm=58,
+            hip_cm=88,
+        ),
+        ActressProfile(
+            display_name="Wrong Cup",
+            reading="",
+            canonical_names=["Wrong Cup"],
+            source_url="https://db.avjoho.com/wrong-cup/",
+            image_url="https://example.test/wrong-cup.jpg",
+            cup="D",
+            height_cm=165,
+            bust_cm=90,
+            waist_cm=58,
+            hip_cm=88,
+        ),
+        ActressProfile(
+            display_name="Wrong Measurements",
+            reading="",
+            canonical_names=["Wrong Measurements"],
+            source_url="https://db.avjoho.com/wrong-measurements/",
+            image_url="https://example.test/wrong-measurements.jpg",
+            cup="E",
+            height_cm=158,
+            bust_cm=84,
+            waist_cm=63,
+            hip_cm=92,
+        ),
+    ])
+    db_session.commit()
+
+    response = client.get(
+        "/api/content/actresses?cup=E&height_min=160&height_max=170&bust_min=88&waist_max=60&hip_max=90",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert [row["display_name"] for row in payload["rows"]] == ["Matched"]
+
+
 def test_get_actress_detail_returns_recent_movies_by_task_url_id(client, auth_headers, db_session, admin_user) -> None:
     task, task_url = _seed_actor_task(db_session, admin_user)
     other_task_url_id = uuid.uuid4()

@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from 'antd'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -74,6 +75,36 @@ describe('Actress pages', () => {
     })
     expect(await screen.findByText('宮上唯依花')).toBeInTheDocument()
     expect(screen.getByText('みやうえゆいか')).toBeInTheDocument()
+  })
+
+  it('keeps advanced filters collapsed and sends measurement filters when expanded', async () => {
+    const user = userEvent.setup()
+    vi.mocked(fetchActresses).mockResolvedValue({ items: [], total: 0, page: 1, limit: 24, total_pages: 1 })
+
+    renderWithClient(<ActressListPage />)
+
+    expect(screen.queryByLabelText('罩杯')).not.toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: '更多筛选' }))
+    await user.type(screen.getByLabelText('罩杯'), 'E')
+    await user.type(screen.getByLabelText('最低身高'), '160')
+    await user.type(screen.getByLabelText('最高身高'), '170')
+    await user.type(screen.getByLabelText('最低胸围'), '88')
+    await user.type(screen.getByLabelText('最高腰围'), '60')
+    await user.type(screen.getByLabelText('最高臀围'), '90')
+
+    await waitFor(() => {
+      expect(fetchActresses).toHaveBeenLastCalledWith(expect.objectContaining({
+        page: 1,
+        limit: 24,
+        cup: 'E',
+        height_min: 160,
+        height_max: 170,
+        bust_min: 88,
+        waist_max: 60,
+        hip_max: 90,
+      }))
+    })
   })
 
   it('renders standalone detail with recent movies sorted by backend response', async () => {

@@ -69,6 +69,15 @@ export interface ActressQueryParams {
   limit?: 8 | 16 | 24 | 40
   keyword?: string
   source_task_id?: string
+  cup?: string
+  height_min?: number
+  height_max?: number
+  bust_min?: number
+  bust_max?: number
+  waist_min?: number
+  waist_max?: number
+  hip_min?: number
+  hip_max?: number
 }
 
 export interface ActressFetchFromTaskPayload {

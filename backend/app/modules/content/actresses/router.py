@@ -27,10 +27,34 @@ def list_actresses(
     limit: int = Query(default=24, ge=1, le=40),
     keyword: str | None = Query(default=None, max_length=200),
     source_task_id: uuid.UUID | None = Query(default=None),
+    cup: str | None = Query(default=None, max_length=20),
+    height_min: int | None = Query(default=None, ge=0),
+    height_max: int | None = Query(default=None, ge=0),
+    bust_min: int | None = Query(default=None, ge=0),
+    bust_max: int | None = Query(default=None, ge=0),
+    waist_min: int | None = Query(default=None, ge=0),
+    waist_max: int | None = Query(default=None, ge=0),
+    hip_min: int | None = Query(default=None, ge=0),
+    hip_max: int | None = Query(default=None, ge=0),
 ) -> dict:
     if limit not in VALID_PAGE_SIZES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="分页大小必须是 8、16、24 或 40")
-    rows, total = list_actress_profiles(db, page=page, limit=limit, keyword=keyword, source_task_id=source_task_id)
+    rows, total = list_actress_profiles(
+        db,
+        page=page,
+        limit=limit,
+        keyword=keyword,
+        source_task_id=source_task_id,
+        cup=cup,
+        height_min=height_min,
+        height_max=height_max,
+        bust_min=bust_min,
+        bust_max=bust_max,
+        waist_min=waist_min,
+        waist_max=waist_max,
+        hip_min=hip_min,
+        hip_max=hip_max,
+    )
     return paginated(rows=[serialize_actress_profile(row) for row in rows], total=total)
 
 
