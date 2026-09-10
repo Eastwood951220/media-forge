@@ -67,6 +67,14 @@ class FakeResponse:
         return self._html
 
 
+class FakeScraplingResponse:
+    html = None
+    text = ""
+
+    def __init__(self, html_content: str) -> None:
+        self.html_content = html_content
+
+
 class FakeFetcher:
     def __init__(self, pages: dict[str, str]) -> None:
         self.pages = pages
@@ -97,6 +105,12 @@ def test_avjoho_spider_builds_direct_profile_urls() -> None:
     assert spider.build_direct_profile_urls(["七瀬アリス"]) == [
         "https://db.avjoho.com/%E4%B8%83%E7%80%AC%E3%82%A2%E3%83%AA%E3%82%B9/"
     ]
+
+
+def test_avjoho_spider_reads_scrapling_html_content_when_text_is_empty() -> None:
+    html = "<h1 class='entry-title'>羽月乃蒼（はるなのあ）</h1><div class='database'><table></table></div>"
+
+    assert AvjohoActressSpider._page_to_html(FakeScraplingResponse(html)) == html
 
 
 def test_avjoho_spider_matches_manual_profile_url() -> None:

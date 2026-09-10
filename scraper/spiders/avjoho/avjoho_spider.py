@@ -46,6 +46,15 @@ class AvjohoActressSpider:
         html = getattr(page, "html", None)
         if html is not None:
             return html() if callable(html) else str(html)
+        html_content = getattr(page, "html_content", None)
+        if html_content is not None:
+            return html_content() if callable(html_content) else str(html_content)
+        body = getattr(page, "body", None)
+        if body is not None:
+            if isinstance(body, bytes):
+                encoding = str(getattr(page, "encoding", "") or "utf-8")
+                return body.decode(encoding, errors="replace")
+            return body() if callable(body) else str(body)
         text = getattr(page, "text", None)
         if text is not None:
             return text() if callable(text) else str(text)
