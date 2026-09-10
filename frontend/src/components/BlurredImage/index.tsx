@@ -1,4 +1,4 @@
-import { type CSSProperties, type ImgHTMLAttributes, type ReactNode, type SyntheticEvent } from 'react'
+import { type CSSProperties, type ImgHTMLAttributes, type ReactNode, type SyntheticEvent, useCallback, useEffect, useRef } from 'react'
 import { Image } from 'antd'
 import { clsx } from 'clsx'
 import { useImageBlurStore } from '@/stores/useImageBlurStore'
@@ -12,12 +12,52 @@ type BlurredImageProps = {
   fallback?: ReactNode
   preview?: boolean
   stopPropagation?: boolean
+  onPreviewVisibleChange?: (visible: boolean) => void
   loading?: 'eager' | 'lazy'
   referrerPolicy?: ImgHTMLAttributes<HTMLImageElement>['referrerPolicy']
 }
 
 function mediaBackdropStyle(url: string): CSSProperties {
   return { '--media-bg': `url("${url}")` } as CSSProperties
+}
+
+export function isImagePreviewEvent(event: Pick<SyntheticEvent, 'target'>) {
+  const target = event.target
+  return target instanceof Element && Boolean(target.closest('.ant-image-preview-root'))
+}
+
+export function useImagePreviewNavigationGuard() {
+  const previewOpenRef = useRef(false)
+  const suppressNextNavigationRef = useRef(false)
+  const clearSuppressionTimerRef = useRef<number | undefined>(undefined)
+
+  useEffect(() => () => {
+    if (clearSuppressionTimerRef.current !== undefined) {
+      window.clearTimeout(clearSuppressionTimerRef.current)
+    }
+  }, [])
+
+  const onPreviewVisibleChange = useCallback((visible: boolean) => {
+    if (!visible && previewOpenRef.current) {
+      suppressNextNavigationRef.current = true
+      if (clearSuppressionTimerRef.current !== undefined) {
+        window.clearTimeout(clearSuppressionTimerRef.current)
+      }
+      clearSuppressionTimerRef.current = window.setTimeout(() => {
+        suppressNextNavigationRef.current = false
+      }, 0)
+    }
+    previewOpenRef.current = visible
+  }, [])
+
+  const shouldIgnoreNavigation = useCallback((event: Pick<SyntheticEvent, 'target'>) => (
+    previewOpenRef.current || suppressNextNavigationRef.current || isImagePreviewEvent(event)
+  ), [])
+
+  return {
+    onPreviewVisibleChange,
+    shouldIgnoreNavigation,
+  }
 }
 
 export function BlurredImage({
@@ -28,6 +68,7 @@ export function BlurredImage({
   fallback = null,
   preview = true,
   stopPropagation = true,
+  onPreviewVisibleChange,
   loading = 'lazy',
   referrerPolicy,
 }: BlurredImageProps) {
@@ -52,7 +93,7 @@ export function BlurredImage({
         aria-label={preview ? `预览 ${alt}` : alt}
         className={clsx(blurEnabled && styles.blurred, imageClassName)}
         loading={loading}
-        preview={preview}
+        preview={preview ? { onOpenChange: onPreviewVisibleChange } : false}
         referrerPolicy={referrerPolicy}
         onClick={stopEventPropagation}
         onKeyDown={stopEventPropagation}

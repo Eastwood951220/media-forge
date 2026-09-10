@@ -5,8 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Avatar, Button, Empty, Modal, Radio, Select, Spin, Tag, Typography } from 'antd'
 import { createTaskUrlRun } from '@/api/crawler/crawlTask'
 import { fetchActress, getActressTags, updateActressTags } from '@/api/content/actresses'
-import type { ActressExternalLink } from '@/api/content/actresses'
-import { BlurredImage } from '@/components/BlurredImage'
+import type { ActressExternalLink, ActressRecentMovie } from '@/api/content/actresses'
+import { BlurredImage, useImagePreviewNavigationGuard } from '@/components/BlurredImage'
 import { queryKeys } from '@/api/queryKeys'
 import styles from './ActressPages.module.less'
 
@@ -42,6 +42,48 @@ type CrawlMode = 'incremental' | 'full'
 
 function formatLinkLabel(link: ActressExternalLink) {
   return `${link.label}${link.url_name ? ` · ${link.url_name}` : ''}`
+}
+
+function RecentMovieCard({
+  movie,
+  onOpen,
+}: {
+  movie: ActressRecentMovie
+  onOpen: (movie: ActressRecentMovie) => void
+}) {
+  const imagePreviewGuard = useImagePreviewNavigationGuard()
+
+  return (
+    <article
+      className={styles.movieCard}
+      role="button"
+      tabIndex={0}
+      onClick={(event) => {
+        if (imagePreviewGuard.shouldIgnoreNavigation(event)) return
+        onOpen(movie)
+      }}
+      onKeyDown={(event) => {
+        if (imagePreviewGuard.shouldIgnoreNavigation(event)) return
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen(movie)
+        }
+      }}
+    >
+      <BlurredImage
+        src={movie.cover}
+        alt={movie.title || movie.code}
+        className={styles.movieCover}
+        fallback={<VideoFallback />}
+        onPreviewVisibleChange={imagePreviewGuard.onPreviewVisibleChange}
+      />
+      <div className={styles.movieBody}>
+        <Typography.Text strong className={styles.movieCode}>{movie.code}</Typography.Text>
+        <Typography.Text className={styles.movieTitle}>{movie.title}</Typography.Text>
+        <Typography.Text type="secondary">{formatDate(movie.release_date)}</Typography.Text>
+      </div>
+    </article>
+  )
 }
 
 function ActressDetailPage() {
@@ -116,6 +158,10 @@ function ActressDetailPage() {
     setSelectedLinkId(externalLinks[0].id)
     setCrawlMode('incremental')
     setCrawlOpen(true)
+  }
+
+  const openRecentMovie = (movie: ActressRecentMovie) => {
+    navigate({ to: '/content/movies', search: { search: movie.code } })
   }
 
   const submitCrawl = async () => {
@@ -244,31 +290,11 @@ function ActressDetailPage() {
               {actress.recent_movies.length > 0 ? (
                 <div className={styles.movieGrid}>
                   {actress.recent_movies.map((movie) => (
-                    <article
+                    <RecentMovieCard
                       key={movie.id}
-                      className={styles.movieCard}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate({ to: '/content/movies', search: { search: movie.code } })}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          navigate({ to: '/content/movies', search: { search: movie.code } })
-                        }
-                      }}
-                    >
-                      <BlurredImage
-                        src={movie.cover}
-                        alt={movie.title || movie.code}
-                        className={styles.movieCover}
-                        fallback={<VideoFallback />}
-                      />
-                      <div className={styles.movieBody}>
-                        <Typography.Text strong className={styles.movieCode}>{movie.code}</Typography.Text>
-                        <Typography.Text className={styles.movieTitle}>{movie.title}</Typography.Text>
-                        <Typography.Text type="secondary">{formatDate(movie.release_date)}</Typography.Text>
-                      </div>
-                    </article>
+                      movie={movie}
+                      onOpen={openRecentMovie}
+                    />
                   ))}
                 </div>
               ) : (

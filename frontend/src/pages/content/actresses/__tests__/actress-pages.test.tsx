@@ -100,6 +100,23 @@ describe('Actress pages', () => {
     expect(screen.getByAltText('宮上唯依花').className).toMatch(/blurred/)
   })
 
+  it('does not open actress detail when closing a list card image preview', async () => {
+    const user = userEvent.setup()
+    vi.mocked(fetchActresses).mockResolvedValue({ items: [profile], total: 1, page: 1, limit: 24, total_pages: 1 })
+
+    renderWithClient(<ActressListPage />)
+
+    await user.click(await screen.findByRole('button', { name: '预览 宮上唯依花' }))
+    expect(await screen.findByRole('dialog', { name: '宮上唯依花' })).toHaveClass('ant-image-preview')
+
+    await user.click(await screen.findByRole('button', { name: /close/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '宮上唯依花' })).not.toBeInTheDocument()
+    })
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
   it('keeps advanced filters collapsed and sends dropdown range filters when expanded', async () => {
     const user = userEvent.setup()
     vi.mocked(fetchActresses).mockResolvedValue({ items: [], total: 0, page: 1, limit: 24, total_pages: 1 })
@@ -155,6 +172,28 @@ describe('Actress pages', () => {
 
     await user.click(screen.getByRole('button', { name: /NEW-001/ }))
     expect(navigateMock).toHaveBeenCalledWith({ to: '/content/movies', search: { search: 'NEW-001' } })
+  })
+
+  it('does not open movie list when closing a recent movie image preview', async () => {
+    const user = userEvent.setup()
+    vi.mocked(fetchActress).mockResolvedValue({
+      ...profile,
+      recent_movies: [
+        { id: 'movie-1', code: 'NEW-001', title: 'New Movie', cover: 'https://example.test/new.jpg', release_date: '2026-09-01' },
+      ],
+    })
+
+    renderWithClient(<ActressDetailPage />)
+
+    await user.click(await screen.findByRole('button', { name: '预览 New Movie' }))
+    expect(await screen.findByRole('dialog', { name: 'New Movie' })).toHaveClass('ant-image-preview')
+
+    await user.click(await screen.findByRole('button', { name: /close/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'New Movie' })).not.toBeInTheDocument()
+    })
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 
   it('renders profile metadata in a structured detail layout', async () => {

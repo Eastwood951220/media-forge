@@ -6,7 +6,7 @@ import { App, Avatar, Button, Card, Empty, Input, Modal, Pagination, Radio, Sele
 import { createTaskUrlRun } from '@/api/crawler/crawlTask'
 import { fetchActresses, getActressTags } from '@/api/content/actresses'
 import type { ActressExternalLink, ActressProfile } from '@/api/content/actresses'
-import { BlurredImage } from '@/components/BlurredImage'
+import { BlurredImage, useImagePreviewNavigationGuard } from '@/components/BlurredImage'
 import { queryKeys } from '@/api/queryKeys'
 import styles from './ActressPages.module.less'
 
@@ -73,6 +73,7 @@ function ActressCard({
 }) {
   const visibleTags = actress.tags.slice(0, 3)
   const hiddenTagCount = Math.max(0, actress.tags.length - visibleTags.length)
+  const imagePreviewGuard = useImagePreviewNavigationGuard()
 
   return (
     <Card
@@ -84,9 +85,13 @@ function ActressCard({
           alt={actress.display_name}
           className={styles.actressCover}
           fallback={<Avatar size={72} icon={<UserOutlined />} />}
+          onPreviewVisibleChange={imagePreviewGuard.onPreviewVisibleChange}
         />
       }
-      onClick={() => onOpen(actress)}
+      onClick={(event) => {
+        if (imagePreviewGuard.shouldIgnoreNavigation(event)) return
+        onOpen(actress)
+      }}
     >
       <Typography.Title level={5} className={styles.actressName}>
         {actress.display_name}
