@@ -18,7 +18,7 @@ import { queryKeys } from '@/api/queryKeys'
 import { invalidateCrawlerRunLists, invalidateCrawlerTaskLists } from '@/api/queryInvalidation'
 import { fetchActressesFromTask } from '@/api/content/actresses'
 import TaskListCards from '@/pages/crawler/tasks/components/TaskListCards'
-import type { CrawlTask } from '@/api/crawler/crawlTask/types'
+import type { CrawlTask, TaskUrlEntry } from '@/api/crawler/crawlTask/types'
 import { useSessionListState } from '@/hooks/useSessionListState'
 import BatchTaskCreateDrawer from './components/BatchTaskCreateDrawer'
 import type { BatchTaskCreateFormValues } from './components/BatchTaskCreateDrawer'
@@ -34,6 +34,17 @@ import { MetricGrid } from '@/components/common'
 import styles from './TaskPages.module.less'
 
 const TASK_LIST_FILTER_STATE_CACHE_KEY = 'media-forge:crawler-task-list-filter-state'
+
+type ActorTaskUrl = TaskUrlEntry & { id: string }
+
+function getActorUrls(task: CrawlTask): ActorTaskUrl[] {
+  return task.urls.filter((url): url is ActorTaskUrl => url.url_type === 'actors' && Boolean(url.id))
+}
+
+function formatActorUrlOption(url: ActorTaskUrl, index: number) {
+  const name = url.url_name?.trim()
+  return name ? `${name} - ${url.url}` : `演员 URL ${index + 1} - ${url.url}`
+}
 
 function TaskListPage() {
   const navigate = useNavigate()
@@ -85,6 +96,8 @@ function TaskListPage() {
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([])
   const [batchRunSubmitting, setBatchRunSubmitting] = useState(false)
   const [fetchingActressTaskId, setFetchingActressTaskId] = useState<string | null>(null)
+  const [actressPickerTask, setActressPickerTask] = useState<CrawlTask | null>(null)
+  const [selectedActressTaskUrlId, setSelectedActressTaskUrlId] = useState<string | undefined>()
 
   const markBatchRunsQueued = useCallback((accepted: BatchCrawlTaskRunAcceptedItem[]) => {
     const now = new Date().toISOString()
@@ -216,10 +229,14 @@ function TaskListPage() {
     }
   }, [handleRunSubmitted, message])
 
-  const submitActressFetch = useCallback(async (task: CrawlTask, avjohoUrl?: string) => {
+  const submitActressFetch = useCallback(async (task: CrawlTask, taskUrlId: string, avjohoUrl?: string) => {
     setFetchingActressTaskId(task.id)
     try {
-      const result = await fetchActressesFromTask({ task_id: task.id, avjoho_url: avjohoUrl || undefined })
+      const result = await fetchActressesFromTask({
+        task_id: task.id,
+        task_url_id: taskUrlId,
+        avjoho_url: avjohoUrl || undefined,
+      })
       await queryClient.invalidateQueries({ queryKey: queryKeys.actresses.all() })
       if (result.matched) {
         await message.success(`已获取 ${result.profiles.length} 位女优资料`)
@@ -248,7 +265,7 @@ function TaskListPage() {
             await message.warning('请填写 avjoho URL')
             throw new Error('avjoho_url_required')
           }
-          await submitActressFetch(task, manualUrl.trim())
+          await submitActressFetch(task, taskUrlId, manualUrl.trim())
         },
       })
     } catch (error) {
@@ -257,6 +274,35 @@ function TaskListPage() {
       setFetchingActressTaskId(null)
     }
   }, [message, queryClient])
+
+  const handleFetchActresses = useCallback((task: CrawlTask) => {
+    const actorUrls = getActorUrls(task)
+    if (actorUrls.length === 0) {
+      void message.warning('当前任务没有可获取资料的演员 URL')
+      return
+    }
+    if (actorUrls.length === 1 && actorUrls[0].id) {
+      void submitActressFetch(task, actorUrls[0].id)
+      return
+    }
+    setActressPickerTask(task)
+    setSelectedActressTaskUrlId(undefined)
+  }, [message, submitActressFetch])
+
+  const selectedActorUrls = actressPickerTask ? getActorUrls(actressPickerTask) : []
+
+  const handleActressPickerCancel = useCallback(() => {
+    setActressPickerTask(null)
+    setSelectedActressTaskUrlId(undefined)
+  }, [])
+
+  const handleActressPickerOk = useCallback(() => {
+    if (!actressPickerTask || !selectedActressTaskUrlId) return
+    const task = actressPickerTask
+    const taskUrlId = selectedActressTaskUrlId
+    handleActressPickerCancel()
+    void submitActressFetch(task, taskUrlId)
+  }, [actressPickerTask, handleActressPickerCancel, selectedActressTaskUrlId, submitActressFetch])
 
   const taskStats = useCrawlerRuntimeStore((state) => state.taskStats)
 
@@ -298,7 +344,7 @@ function TaskListPage() {
           onRestart={handleRestart}
           onUrlRun={taskUrlRun.openTaskUrlRun}
           onViewMovies={(task) => navigate({ to: '/content/movies', search: { task_id: task.id } })}
-          onFetchActresses={(task) => void submitActressFetch(task)}
+          onFetchActresses={handleFetchActresses}
           fetchingActressTaskId={fetchingActressTaskId}
           onTemporaryTaskClick={openTemporaryModal}
           onBatchTaskClick={() => setBatchDrawerOpen(true)}
@@ -327,6 +373,28 @@ function TaskListPage() {
         onCancel={taskUrlRun.closeTaskUrlRun}
         onSubmit={taskUrlRun.submitTaskUrlRun}
       />
+
+      <Modal
+        title="选择演员 URL"
+        open={Boolean(actressPickerTask)}
+        okText="获取"
+        cancelText="取消"
+        okButtonProps={{ disabled: !selectedActressTaskUrlId }}
+        onOk={handleActressPickerOk}
+        onCancel={handleActressPickerCancel}
+      >
+        <Select
+          aria-label="演员 URL"
+          placeholder="请选择演员 URL"
+          value={selectedActressTaskUrlId}
+          options={selectedActorUrls.map((url, index) => ({
+            value: url.id,
+            label: formatActorUrlOption(url, index),
+          }))}
+          onChange={setSelectedActressTaskUrlId}
+          style={{ width: '100%' }}
+        />
+      </Modal>
 
       <BatchTaskCreateDrawer
         open={batchDrawerOpen}

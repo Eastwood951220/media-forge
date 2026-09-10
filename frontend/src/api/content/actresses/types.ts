@@ -61,6 +61,7 @@ export interface ActressQueryParams {
 
 export interface ActressFetchFromTaskPayload {
   task_id: string
+  task_url_id: string
   avjoho_url?: string
 }
 

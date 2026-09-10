@@ -126,7 +126,7 @@ def test_fetch_actress_from_actor_task_uses_javdb_aliases_to_match_avjoho(
 
     response = client.post(
         "/api/content/actresses/fetch-from-task",
-        json={"task_id": str(task.id)},
+        json={"task_id": str(task.id), "task_url_id": str(task_url.id)},
         headers=auth_headers,
     )
 
@@ -171,7 +171,7 @@ def test_fetch_actress_from_actor_task_falls_back_to_avjoho_search(
 
     response = client.post(
         "/api/content/actresses/fetch-from-task",
-        json={"task_id": str(task.id)},
+        json={"task_id": str(task.id), "task_url_id": str(task_url.id)},
         headers=auth_headers,
     )
 
@@ -208,7 +208,7 @@ def test_fetch_actress_from_actor_task_logs_404_without_traceback(
 
     response = client.post(
         "/api/content/actresses/fetch-from-task",
-        json={"task_id": str(task.id)},
+        json={"task_id": str(task.id), "task_url_id": str(_task_url.id)},
         headers=auth_headers,
     )
 
@@ -219,23 +219,75 @@ def test_fetch_actress_from_actor_task_logs_404_without_traceback(
     assert "HTTPError" not in caplog.text
 
 
+def test_fetch_actress_from_task_only_fetches_selected_actor_url(
+    client,
+    auth_headers,
+    db_session,
+    admin_user,
+    monkeypatch,
+) -> None:
+    task, first_url = _seed_actor_task(db_session, admin_user, url_name="演员A")
+    second_url = CrawlTaskUrl(
+        task_id=task.id,
+        position=1,
+        url="https://javdb.com/actors/b",
+        url_type="actors",
+        source="javdb",
+        final_url="https://javdb.com/actors/b",
+        url_name="演员B",
+    )
+    db_session.add(second_url)
+    db_session.commit()
+    fetched_javdb_urls: list[str] = []
+
+    def fake_fetch_javdb_actor_metadata(url: str) -> dict[str, list[str]]:
+        fetched_javdb_urls.append(url)
+        return {
+            "primary_names": ["演员B"],
+            "aliases": [],
+        }
+
+    monkeypatch.setattr(actress_service, "_fetch_javdb_actor_metadata", fake_fetch_javdb_actor_metadata)
+    monkeypatch.setattr(actress_service, "_find_avjoho_profile_urls_by_search", lambda _name: [])
+    monkeypatch.setattr(actress_service, "_fetch_avjoho_profile", lambda url: AvjohoProfilePayload(
+        display_name="演员B",
+        reading="",
+        source_url=url,
+        image_url="https://example.test/b.jpg",
+    ))
+
+    response = client.post(
+        "/api/content/actresses/fetch-from-task",
+        json={"task_id": str(task.id), "task_url_id": str(second_url.id)},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["matched"] is True
+    assert data["profiles"][0]["source_task_url_ids"] == [str(second_url.id)]
+    assert fetched_javdb_urls == ["https://javdb.com/actors/b"]
+    assert str(first_url.id) not in data["profiles"][0]["source_task_url_ids"]
+
+
 def test_fetch_actress_rejects_non_actor_tasks(client, auth_headers, db_session, admin_user) -> None:
     task = CrawlTask(name="Search Task", storage_location="Search Task", owner_id=admin_user.id)
     db_session.add(task)
     db_session.flush()
-    db_session.add(CrawlTaskUrl(
+    task_url = CrawlTaskUrl(
         task_id=task.id,
         position=0,
         url="https://javdb.com/search?q=test",
         url_type="search",
         source="javdb",
         final_url="https://javdb.com/search?q=test",
-    ))
+    )
+    db_session.add(task_url)
     db_session.commit()
 
     response = client.post(
         "/api/content/actresses/fetch-from-task",
-        json={"task_id": str(task.id)},
+        json={"task_id": str(task.id), "task_url_id": str(task_url.id)},
         headers=auth_headers,
     )
 

@@ -35,8 +35,13 @@ def _dedupe_text(values) -> list[str]:
     return result
 
 
-def _actor_urls_for_task(task: CrawlTask) -> list[CrawlTaskUrl]:
-    return [url for url in task.urls if url.url_type == "actors" and url.source == "javdb"]
+def _selected_actor_url_for_task(task: CrawlTask, task_url_id: uuid.UUID) -> CrawlTaskUrl:
+    task_url = next((url for url in task.urls if url.id == task_url_id), None)
+    if task_url is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务 URL 不存在")
+    if task_url.url_type != "actors" or task_url.source != "javdb":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前仅支持 URL 类型为演员的 JavDB URL")
+    return task_url
 
 
 def _fetch_javdb_actor_metadata(url: str) -> dict[str, list[str]]:
@@ -192,17 +197,20 @@ def _upsert_profile(
     return profile
 
 
-def fetch_actresses_from_task(db: Session, task_id: uuid.UUID, avjoho_url: str | None = None) -> dict:
+def fetch_actresses_from_task(
+    db: Session,
+    task_id: uuid.UUID,
+    task_url_id: uuid.UUID,
+    avjoho_url: str | None = None,
+) -> dict:
     task = db.get(CrawlTask, task_id, options=[selectinload(CrawlTask.urls)])
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
-    actor_urls = _actor_urls_for_task(task)
-    if not actor_urls:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前仅支持 URL 类型为演员的任务")
+    actor_url = _selected_actor_url_for_task(task, task_url_id)
 
     profiles: list[ActressProfile] = []
     candidates: list[str] = []
-    for task_url in actor_urls:
+    for task_url in [actor_url]:
         metadata = _fetch_javdb_actor_metadata(task_url.final_url or task_url.url)
         names = _dedupe_text([*metadata.get("primary_names", []), *metadata.get("aliases", []), task_url.url_name, task.name])
         if avjoho_url:

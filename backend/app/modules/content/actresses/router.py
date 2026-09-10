@@ -44,4 +44,4 @@ def fetch_from_task(
     _current_user: CurrentUser,
     db: Session = Depends(get_db),
 ) -> dict:
-    return success(data=fetch_actresses_from_task(db, body.task_id, body.avjoho_url))
+    return success(data=fetch_actresses_from_task(db, body.task_id, body.task_url_id, body.avjoho_url))
