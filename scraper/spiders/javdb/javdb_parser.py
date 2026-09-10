@@ -8,6 +8,7 @@ from scraper.spiders.javdb.javdb_constants import (
     TASK_STATUS_PENDING,
     TASK_STATUS_SKIPPED,
 )
+from scraper.spiders.javdb.actor_profile import parse_actor_metadata
 from scraper.spiders.javdb.javdb_urls import build_detail_url
 
 
@@ -258,42 +259,12 @@ _SECTION_NAME_CONFIG: dict[str, dict[str, str | bool]] = {
     "video_codes": {"selector": ".section-title .section-name::text", "split_comma": False},
 }
 
-MOVIE_COUNT_RE = re.compile(r"^\d+\s*部影片$")
-
-
-def _split_comma_names(value: str) -> list[str]:
-    names: list[str] = []
-    seen: set[str] = set()
-    for part in value.split(","):
-        name = clean_text(part)
-        if not name or name in seen:
-            continue
-        seen.add(name)
-        names.append(name)
-    return names
-
-
 def parse_actor_section_metadata(page) -> dict[str, list[str]]:
-    primary_names: list[str] = []
-    aliases: list[str] = []
-    seen_primary: set[str] = set()
-    seen_aliases: set[str] = set()
-
-    for raw in _all_text(page, ".actor-section-name::text"):
-        for name in _split_comma_names(raw):
-            if name not in seen_primary:
-                seen_primary.add(name)
-                primary_names.append(name)
-
-    for raw in _all_text(page, ".section-title .section-meta::text"):
-        if MOVIE_COUNT_RE.match(raw):
-            continue
-        for name in _split_comma_names(raw):
-            if name not in seen_aliases and name not in seen_primary:
-                seen_aliases.add(name)
-                aliases.append(name)
-
-    return {"primary_names": primary_names, "aliases": aliases}
+    metadata = parse_actor_metadata(page)
+    return {
+        "primary_names": metadata.primary_names,
+        "aliases": metadata.aliases,
+    }
 
 
 def _extract_tags_name(page) -> str:
