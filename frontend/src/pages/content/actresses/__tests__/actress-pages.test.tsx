@@ -91,4 +91,25 @@ describe('Actress pages', () => {
     expect(screen.getByText('New Movie')).toBeInTheDocument()
     expect(screen.getByText('OLD-001')).toBeInTheDocument()
   })
+
+  it('renders profile metadata in a structured detail layout', async () => {
+    vi.mocked(fetchActress).mockResolvedValue({
+      ...profile,
+      aliases: ['Miyaue Yuika', '宮上ゆいか'],
+      recent_movies: [],
+    })
+
+    renderWithClient(<ActressDetailPage />)
+
+    expect(await screen.findByRole('heading', { name: '宮上唯依花' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看 avjoho 资料' })).toHaveAttribute('href', profile.source_url)
+    expect(screen.getByText('别名')).toBeInTheDocument()
+    expect(screen.getByText('Miyaue Yuika')).toBeInTheDocument()
+    expect(screen.getByText('宮上ゆいか')).toBeInTheDocument()
+    expect(screen.getByText('基础资料')).toBeInTheDocument()
+    expect(screen.getByText('身高')).toBeInTheDocument()
+    expect(screen.getByText('163cm')).toBeInTheDocument()
+    expect(screen.getByText('三围')).toBeInTheDocument()
+    expect(screen.getByText('B90 / W62 / H93')).toBeInTheDocument()
+  })
 })

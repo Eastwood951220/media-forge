@@ -5,6 +5,11 @@
   padding: 20px;
 }
 
+.detailTopbar {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -72,7 +77,7 @@
 .detailSection {
   display: flex;
   gap: 20px;
-  padding: 16px;
+  padding: 18px;
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 8px;
@@ -80,6 +85,8 @@
 
 .detailHeader {
   align-items: flex-start;
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
 }
 
 .detailSection {
@@ -87,8 +94,7 @@
 }
 
 .detailPortrait {
-  width: 160px;
-  flex: 0 0 160px;
+  width: 168px;
   overflow: hidden;
   aspect-ratio: 3 / 4;
   display: flex;
@@ -112,13 +118,97 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 18px;
+  align-self: stretch;
+}
+
+.detailNameRow {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.detailNameText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sourceButton {
+  flex: 0 0 auto;
+}
+
+.aliasPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.aliasLabel,
+.factLabel {
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
 }
 
 .aliasList {
   display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.aliasChip {
+  max-width: min(280px, 100%);
+  min-width: 0;
+  padding: 3px 9px;
+  overflow: hidden;
+  color: var(--ant-color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--ant-color-fill-secondary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 999px;
+  line-height: 1.5;
+}
+
+.factGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.factItem {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+}
+
+.factValue {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ant-color-text);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.biographyBox {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
+  padding: 12px;
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
 }
 
 .biography {
@@ -184,14 +274,26 @@
     padding: 12px;
   }
 
-  .toolbar,
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .detailHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .detailNameRow {
     flex-direction: column;
     align-items: stretch;
   }
 
   .searchInput,
   .detailPortrait {
+    width: 100%;
+  }
+
+  .sourceButton {
     width: 100%;
   }
 }
