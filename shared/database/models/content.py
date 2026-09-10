@@ -2,7 +2,21 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, Text, UniqueConstraint, Uuid
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.database.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -92,6 +106,33 @@ class MovieFilter(Base, UUIDPrimaryKeyMixin):
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+actress_tag_links = Table(
+    "actress_tag_links",
+    Base.metadata,
+    Column("actress_profile_id", ForeignKey("actress_profiles.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", ForeignKey("actress_tags.id", ondelete="CASCADE"), primary_key=True),
+    Index("idx_actress_tag_links_profile_id", "actress_profile_id"),
+    Index("idx_actress_tag_links_tag_id", "tag_id"),
+)
+
+
+class ActressTag(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "actress_tags"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "name", name="uq_actress_tags_owner_name"),
+        Index("idx_actress_tags_owner_name", "owner_id", "name"),
+    )
+
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    profiles: Mapped[list["ActressProfile"]] = relationship(
+        secondary=actress_tag_links,
+        back_populates="tags",
+        lazy="selectin",
+    )
+
+
 class ActressProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "actress_profiles"
     __table_args__ = (
@@ -100,7 +141,6 @@ class ActressProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Index("idx_actress_profiles_source_task_ids_gin", "source_task_ids", postgresql_using="gin"),
         Index("idx_actress_profiles_aliases_gin", "aliases", postgresql_using="gin"),
         Index("idx_actress_profiles_canonical_names_gin", "canonical_names", postgresql_using="gin"),
-        Index("idx_actress_profiles_tags_gin", "tags", postgresql_using="gin"),
         UniqueConstraint("source_url", name="uq_actress_profiles_source_url"),
     )
 
@@ -112,7 +152,12 @@ class ActressProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     source_site: Mapped[str] = mapped_column(Text, nullable=False, default="avjoho")
     source_task_ids: Mapped[list[uuid.UUID]] = mapped_column(CompatibleARRAY(Uuid), nullable=False, default=list)
     source_task_url_ids: Mapped[list[uuid.UUID]] = mapped_column(CompatibleARRAY(Uuid), nullable=False, default=list)
-    tags: Mapped[list[str]] = mapped_column(CompatibleARRAY(Text), nullable=False, default=list)
+    tags: Mapped[list[ActressTag]] = relationship(
+        secondary=actress_tag_links,
+        back_populates="profiles",
+        order_by="ActressTag.name",
+        lazy="selectin",
+    )
     image_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
     debut_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)

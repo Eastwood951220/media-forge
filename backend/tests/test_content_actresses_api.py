@@ -34,6 +34,13 @@ def _seed_actor_task(
     return task, task_url
 
 
+def test_actress_tag_metadata_contains_normalized_tables() -> None:
+    from shared.database.models.base import Base
+
+    assert "actress_tags" in Base.metadata.tables
+    assert "actress_tag_links" in Base.metadata.tables
+
+
 def test_list_actresses_returns_cards_with_page_size_multiple_of_8(client, auth_headers, db_session) -> None:
     for index in range(9):
         db_session.add(ActressProfile(
