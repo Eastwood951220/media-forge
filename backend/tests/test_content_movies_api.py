@@ -739,6 +739,7 @@ def test_execute_magnet_refresh_updates_only_magnets(db_session, test_user, monk
 
     from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
     from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies import magnet_refresh
     from backend.app.modules.content.movies.magnet_refresh import execute_magnet_refresh_run
     from shared.database.models.content import Movie, MovieMagnet
 
@@ -775,27 +776,26 @@ def test_execute_magnet_refresh_updates_only_magnets(db_session, test_user, monk
     db_session.add(detail)
     db_session.commit()
 
-    class Spider:
-        def run_single_detail_task(self, detail_info, **kwargs):
-            return {
-                "status": "completed",
-                "detail": {
-                    "code": "MAG-777",
-                    "source_name": "新标题不能覆盖",
-                    "actors": ["演员B"],
-                    "magnets": [
-                        {
-                            "magnet": "magnet:?xt=urn:btih:abcdef",
-                            "name": "MAG-777",
-                            "size_text": "1.2GB",
-                            "file_text": "1 file",
-                            "has_chinese_sub": True,
-                        }
-                    ],
-                },
-            }
+    class Provider:
+        source = "javdb"
 
-    monkeypatch.setattr("backend.app.modules.content.movies.magnet_refresh.build_spider", lambda: Spider())
+        def fetch_detail_with_magnets(self, request, **kwargs):
+            return magnet_refresh.MovieDetailPayload(data={
+                "code": "MAG-777",
+                "source_name": "新标题不能覆盖",
+                "actors": ["演员B"],
+                "magnets": [
+                    {
+                        "magnet": "magnet:?xt=urn:btih:abcdef",
+                        "name": "MAG-777",
+                        "size_text": "1.2GB",
+                        "file_text": "1 file",
+                        "has_chinese_sub": True,
+                    }
+                ],
+            })
+
+    monkeypatch.setattr(magnet_refresh, "build_magnet_provider", lambda source: Provider())
 
     result = execute_magnet_refresh_run(db_session, run, SimpleNamespace(is_stop_requested=lambda run_id: False))
 
@@ -816,6 +816,7 @@ def test_execute_magnet_refresh_marks_no_magnets_skipped(db_session, test_user, 
 
     from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
     from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies import magnet_refresh
     from backend.app.modules.content.movies.magnet_refresh import execute_magnet_refresh_run
     from shared.database.models.content import Movie
 
@@ -843,11 +844,13 @@ def test_execute_magnet_refresh_marks_no_magnets_skipped(db_session, test_user, 
     db_session.add(detail)
     db_session.commit()
 
-    class Spider:
-        def run_single_detail_task(self, detail_info, **kwargs):
-            return {"status": "completed", "detail": {"code": "NOMAG-1", "magnets": []}}
+    class Provider:
+        source = "javdb"
 
-    monkeypatch.setattr("backend.app.modules.content.movies.magnet_refresh.build_spider", lambda: Spider())
+        def fetch_detail_with_magnets(self, request, **kwargs):
+            return magnet_refresh.MovieDetailPayload(data={"code": "NOMAG-1", "magnets": []})
+
+    monkeypatch.setattr(magnet_refresh, "build_magnet_provider", lambda source: Provider())
 
     result = execute_magnet_refresh_run(db_session, run, SimpleNamespace(is_stop_requested=lambda run_id: False))
 
@@ -855,3 +858,291 @@ def test_execute_magnet_refresh_marks_no_magnets_skipped(db_session, test_user, 
     assert result["skipped"] == 1
     assert detail.status == "skipped"
     assert detail.error == "no_magnets_found"
+
+
+def test_magnet_refresh_uses_provider_registry_for_javdb(monkeypatch, db_session, test_user):
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies import magnet_refresh
+    from shared.database.models.content import Movie
+
+    task = CrawlTask(name="磁力更新", storage_location="", owner_id=test_user.id)
+    db_session.add(task)
+    db_session.flush()
+    movie = Movie(
+        code="ABC-001",
+        source_url="https://javdb.com/v/abc",
+        source_name="Example",
+        actors=[],
+        tags=[],
+        source_task_ids=[task.id],
+        source_task_url_ids=[],
+    )
+    db_session.add(movie)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="magnet_refresh", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    db_session.add(CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=movie.code,
+        source_url=movie.source_url,
+        source_name=movie.source_name,
+        source_url_name="磁力更新",
+        task_url=movie.source_url,
+        task_final_url=movie.source_url,
+        task_url_type="magnet_refresh",
+        status="pending_crawl",
+        item_data={"movie_id": str(movie.id)},
+        created_at=datetime.now(),
+    ))
+    db_session.commit()
+
+    calls = []
+
+    class FakeProvider:
+        source = "javdb"
+
+        def fetch_detail_with_magnets(self, request, **kwargs):
+            calls.append(request)
+            return magnet_refresh.MovieDetailPayload(data={
+                "code": "ABC-001",
+                "magnets": [{
+                    "magnet": "magnet:?xt=urn:btih:abc",
+                    "name": "ABC-001",
+                    "size": 100,
+                    "size_text": "100 MB",
+                    "file_count": 1,
+                    "file_text": "1 file",
+                    "tags": [],
+                    "has_chinese_sub": False,
+                    "date": "2026-09-10",
+                }],
+            })
+
+    monkeypatch.setattr(magnet_refresh, "build_magnet_provider", lambda source: FakeProvider())
+
+    result = magnet_refresh.execute_magnet_refresh_run(db_session, run, SimpleNamespace(is_stop_requested=lambda run_id: False))
+
+    assert result["saved"] == 1
+    assert calls[0].source == "javdb"
+    assert calls[0].url == "https://javdb.com/v/abc"
+    assert calls[0].name == "Example"
+    assert calls[0].task_url == "https://javdb.com/v/abc"
+    assert calls[0].task_final_url == "https://javdb.com/v/abc"
+
+
+def test_magnet_refresh_normalizes_unknown_source_to_javdb() -> None:
+    from backend.app.modules.content.movies import magnet_refresh
+
+    assert magnet_refresh.normalize_magnet_source("javdb") == "javdb"
+    assert magnet_refresh.normalize_magnet_source("javbus") == "javbus"
+    assert magnet_refresh.normalize_magnet_source("unknown") == "javdb"
+    assert magnet_refresh.normalize_magnet_source("") == "javdb"
+    assert magnet_refresh.normalize_magnet_source(None) == "javdb"
+
+
+def test_magnet_refresh_uses_javbus_provider_for_javbus_url(monkeypatch, db_session, test_user):
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies import magnet_refresh
+    from shared.database.models.content import Movie
+
+    task = CrawlTask(name="磁力更新", storage_location="", owner_id=test_user.id)
+    db_session.add(task)
+    db_session.flush()
+    movie = Movie(code="BUS-001", source_url="https://www.javbus.com/BUS-001", source_name="Bus Movie", source_task_ids=[task.id])
+    db_session.add(movie)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="magnet_refresh", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    db_session.add(CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=movie.code,
+        source_url=movie.source_url,
+        source_name=movie.source_name,
+        source_url_name="磁力更新",
+        task_url=movie.source_url,
+        task_final_url=movie.source_url,
+        task_url_type="magnet_refresh",
+        status="pending_crawl",
+        item_data={"movie_id": str(movie.id)},
+        created_at=datetime.now(),
+    ))
+    db_session.commit()
+
+    seen_sources = []
+
+    class Provider:
+        def fetch_detail_with_magnets(self, request, **kwargs):
+            seen_sources.append(request.source)
+            return magnet_refresh.MovieDetailPayload(data={
+                "code": "BUS-001",
+                "magnets": [{"magnet": "magnet:?xt=urn:btih:bus", "name": "BUS-001"}],
+            })
+
+    monkeypatch.setattr(magnet_refresh, "build_magnet_provider", lambda source: Provider())
+
+    result = magnet_refresh.execute_magnet_refresh_run(db_session, run, SimpleNamespace(is_stop_requested=lambda run_id: False))
+
+    assert result["saved"] == 1
+    assert seen_sources == ["javbus"]
+
+
+def test_magnet_refresh_falls_back_to_javdb_for_unknown_source(monkeypatch, db_session, test_user):
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies import magnet_refresh
+    from shared.database.models.content import Movie
+
+    task = CrawlTask(name="磁力更新", storage_location="", owner_id=test_user.id)
+    db_session.add(task)
+    db_session.flush()
+    movie = Movie(code="UNK-001", source_url="https://example.test/UNK-001", source_name="Unknown Movie", source_task_ids=[task.id])
+    db_session.add(movie)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="magnet_refresh", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    db_session.add(CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=movie.code,
+        source_url=movie.source_url,
+        source_name=movie.source_name,
+        source_url_name="磁力更新",
+        task_url=movie.source_url,
+        task_final_url=movie.source_url,
+        task_url_type="magnet_refresh",
+        status="pending_crawl",
+        item_data={"movie_id": str(movie.id)},
+        created_at=datetime.now(),
+    ))
+    db_session.commit()
+
+    seen_sources = []
+
+    class Provider:
+        def fetch_detail_with_magnets(self, request, **kwargs):
+            seen_sources.append(request.source)
+            return magnet_refresh.MovieDetailPayload(data={
+                "code": "UNK-001",
+                "magnets": [{"magnet": "magnet:?xt=urn:btih:unknown", "name": "UNK-001"}],
+            })
+
+    monkeypatch.setattr(magnet_refresh, "build_magnet_provider", lambda source: Provider())
+
+    result = magnet_refresh.execute_magnet_refresh_run(db_session, run, SimpleNamespace(is_stop_requested=lambda run_id: False))
+
+    assert result["saved"] == 1
+    assert seen_sources == ["javdb"]
+
+
+def test_magnet_refresh_marks_failed_provider_payload_as_crawl_failed(db_session, test_user, monkeypatch) -> None:
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies import magnet_refresh
+    from shared.database.models.content import Movie
+
+    task = CrawlTask(name="磁力更新", storage_location="", owner_id=test_user.id)
+    db_session.add(task)
+    db_session.flush()
+    movie = Movie(code="CRAWL-001", source_url="https://javdb.com/v/crawl", source_name="Crawl Movie", source_task_ids=[task.id])
+    db_session.add(movie)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="magnet_refresh", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=movie.code,
+        source_url=movie.source_url,
+        source_name=movie.source_name,
+        source_url_name="磁力更新",
+        task_url=movie.source_url,
+        task_final_url=movie.source_url,
+        task_url_type="magnet_refresh",
+        status="pending_crawl",
+        item_data={"movie_id": str(movie.id)},
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+
+    class Provider:
+        def fetch_detail_with_magnets(self, request, **kwargs):
+            return magnet_refresh.MovieDetailPayload(status="failed", reason="blocked", data={})
+
+    monkeypatch.setattr(magnet_refresh, "build_magnet_provider", lambda source: Provider())
+
+    result = magnet_refresh.execute_magnet_refresh_run(db_session, run, SimpleNamespace(is_stop_requested=lambda run_id: False))
+
+    db_session.refresh(detail)
+    assert result["failed"] == 1
+    assert detail.status == "crawl_failed"
+    assert detail.error == "blocked"
+
+
+def test_magnet_refresh_marks_provider_failure(db_session, test_user, monkeypatch) -> None:
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies import magnet_refresh
+    from shared.database.models.content import Movie
+
+    task = CrawlTask(name="磁力更新", storage_location="", owner_id=test_user.id)
+    db_session.add(task)
+    db_session.flush()
+    movie = Movie(code="FAIL-001", source_url="https://javdb.com/v/fail", source_name="Fail Movie", source_task_ids=[task.id])
+    db_session.add(movie)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="magnet_refresh", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=movie.code,
+        source_url=movie.source_url,
+        source_name=movie.source_name,
+        source_url_name="磁力更新",
+        task_url=movie.source_url,
+        task_final_url=movie.source_url,
+        task_url_type="magnet_refresh",
+        status="pending_crawl",
+        item_data={"movie_id": str(movie.id)},
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+
+    class Provider:
+        def fetch_detail_with_magnets(self, request, **kwargs):
+            raise RuntimeError("provider exploded")
+
+    monkeypatch.setattr(magnet_refresh, "build_magnet_provider", lambda source: Provider())
+
+    result = magnet_refresh.execute_magnet_refresh_run(db_session, run, SimpleNamespace(is_stop_requested=lambda run_id: False))
+
+    db_session.refresh(detail)
+    assert result["failed"] == 1
+    assert detail.status == "save_failed"
+    assert detail.error == "provider exploded"

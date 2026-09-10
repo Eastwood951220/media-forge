@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
 from backend.app.models.crawl_task import CrawlTask
-from backend.app.modules.crawler.runtime.details import detail_row_to_task_info
 from backend.app.modules.crawler.runtime.events import append_run_log_for_run, publish_run_detail_updated
 from backend.app.modules.crawler.runtime.service import get_runtime_state
 from backend.app.modules.crawler.runtime.worker import ensure_crawler_worker_started
@@ -96,11 +95,39 @@ def create_magnet_refresh_run(db: Session, owner_id: uuid.UUID, movie_ids: list[
 
 
 from scraper.fetchers.site_fetcher import build_site_fetcher
-from scraper.spiders.javdb.javdb_spider import JavdbSpider
+from scraper.magnets.provider import MovieDetailPayload, MovieDetailRequest, get_magnet_provider
+from scraper.tasks.task_utils import determine_source
+
+SUPPORTED_MAGNET_SOURCES = {"javdb", "javbus"}
 
 
-def build_spider() -> JavdbSpider:
-    return JavdbSpider(fetcher=build_site_fetcher("javdb"))
+def normalize_magnet_source(source: str | None) -> str:
+    value = str(source or "").strip()
+    return value if value in SUPPORTED_MAGNET_SOURCES else "javdb"
+
+
+def build_magnet_provider(source: str):
+    normalized = normalize_magnet_source(source)
+    return get_magnet_provider(normalized, fetcher=build_site_fetcher(normalized))
+
+
+def _movie_detail_request(movie: Movie, detail: CrawlRunDetailTask) -> MovieDetailRequest:
+    source_url = movie.source_url or detail.source_url or ""
+    source = normalize_magnet_source(determine_source(source_url))
+    return MovieDetailRequest(
+        source=source,
+        url=source_url,
+        code=movie.code or detail.code or "",
+        name=movie.source_name or detail.source_name or movie.code or detail.code or source_url,
+        task_url=detail.task_url or "",
+        task_final_url=detail.task_final_url or "",
+        task_url_type=detail.task_url_type or "",
+        task_url_name=detail.source_url_name or "",
+        extra={
+            "detail_task_id": str(detail.id),
+            "movie_id": str(movie.id),
+        },
+    )
 
 
 def execute_magnet_refresh_run(db: Session, run: CrawlRun, runtime) -> dict:
@@ -113,7 +140,6 @@ def execute_magnet_refresh_run(db: Session, run: CrawlRun, runtime) -> dict:
         .order_by(CrawlRunDetailTask.created_at.asc())
         .all()
     )
-    spider = build_spider()
     append_run_log_for_run(db, run, f"磁力更新开始: {len(details)} 条", "INFO")
     for detail in details:
         if runtime.is_stop_requested(str(run.id)):
@@ -126,8 +152,10 @@ def execute_magnet_refresh_run(db: Session, run: CrawlRun, runtime) -> dict:
                 detail.error = "movie_not_found"
                 skipped += 1
                 continue
-            result = spider.run_single_detail_task(
-                detail_row_to_task_info(detail),
+            request = _movie_detail_request(movie, detail)
+            provider = build_magnet_provider(request.source)
+            payload = provider.fetch_detail_with_magnets(
+                request,
                 task_name=run.task_name,
                 on_detail_completed=lambda task: None,
                 on_detail_failed=lambda task, err: None,
@@ -136,12 +164,12 @@ def execute_magnet_refresh_run(db: Session, run: CrawlRun, runtime) -> dict:
                 on_detail_check_callback=lambda code: False,
                 on_item_already_exists=lambda task_info: None,
             )
-            if result.get("status") != "completed":
+            if payload.status != "completed":
                 detail.status = "crawl_failed"
-                detail.error = str(result.get("reason") or "detail fetch failed")[:500]
+                detail.error = str(payload.reason or "detail fetch failed")[:500]
                 failed += 1
                 continue
-            detail_data = result.get("detail") or {}
+            detail_data = payload.data
             magnets = list(detail_data.get("magnets") or [])
             if not magnets:
                 detail.status = "skipped"
