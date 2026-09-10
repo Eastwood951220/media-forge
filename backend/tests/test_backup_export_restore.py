@@ -4,9 +4,7 @@ from zipfile import ZipFile
 
 from backend.app.models.crawl_task import (
     CrawlTask,
-    CrawlTaskTag,
     CrawlTaskUrl,
-    crawl_task_tag_links,
 )
 from backend.app.models.user import User
 from backend.app.modules.backup.format import (
@@ -181,8 +179,6 @@ def test_restore_reads_actress_tags_and_ignores_legacy_task_tag_files(
     db_session.expire_all()
     restored = db_session.get(ActressProfile, profile.id)
     assert [tag.name for tag in restored.tags] == ["企划"]
-    assert db_session.query(CrawlTaskTag).count() == 0
-    assert db_session.query(crawl_task_tag_links).count() == 0
 
 
 def test_restore_accepts_archive_with_only_legacy_task_tag_files(
@@ -191,6 +187,10 @@ def test_restore_accepts_archive_with_only_legacy_task_tag_files(
     archive = tmp_path / "old-format.mfbackup"
     _write_legacy_task_tag_archive(archive, owner_id=test_user.id)
 
+    with ZipFile(archive) as zip_file:
+        assert "data/crawl_task_tags.jsonl" in zip_file.namelist()
+        assert "data/crawl_task_tag_links.jsonl" in zip_file.namelist()
+
     result = BackupService(db_session).restore_from_file(
         archive,
         BackupRestoreRequest(mode="merge", groups=["tasks"]),
@@ -198,8 +198,6 @@ def test_restore_accepts_archive_with_only_legacy_task_tag_files(
     )
 
     assert result["tasks"]["errors"] == 0
-    assert db_session.query(CrawlTaskTag).count() == 0
-    assert db_session.query(crawl_task_tag_links).count() == 0
     assert db_session.query(ActressTag).count() == 0
 
 

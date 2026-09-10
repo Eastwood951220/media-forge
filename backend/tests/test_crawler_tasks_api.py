@@ -286,11 +286,11 @@ def test_batch_create_keeps_successes_when_some_urls_fail(client, auth_headers, 
     ]
 
 
-def test_crawler_task_tag_tables_are_registered():
+def test_crawler_task_metadata_has_no_task_tag_tables() -> None:
     from shared.database.models.base import Base
 
-    assert "crawl_task_tags" in Base.metadata.tables
-    assert "crawl_task_tag_links" in Base.metadata.tables
+    assert "crawl_task_tags" not in Base.metadata.tables
+    assert "crawl_task_tag_links" not in Base.metadata.tables
 
 
 def _create_task(client, headers, name, *, is_skip: bool = False):
