@@ -328,12 +328,15 @@ class JavbusSpider(BaseSpider):
 
             if not gid or not uc or not img:
                 missing = [k for k, v in {"gid": gid, "uc": uc, "img": img}.items() if not v]
-                task["status"] = TASK_STATUS_FAILED
                 task["reason"] = f"missing ajax params: {', '.join(missing)}"
-                msg = f"{detail_prefix} 失败: 缺少 Ajax 参数: {', '.join(missing)}"
-                self._emit(msg, log_callback, "ERROR")
-                if on_detail_failed:
-                    on_detail_failed(task, task["reason"])
+                detail["magnets"] = []
+                _apply_list_item_fallbacks(detail, task)
+                task["detail"] = detail
+                task["status"] = TASK_STATUS_COMPLETED
+                msg = f"{detail_prefix} 磁力链接跳过: 缺少 Ajax 参数: {', '.join(missing)}"
+                self._emit(msg, log_callback, "WARNING")
+                if on_detail_completed:
+                    on_detail_completed(task)
                 return task
 
             ajax_query = urlencode(

@@ -35,6 +35,22 @@ def _uuid_values_changed(before: Iterable, after: Iterable) -> bool:
     return [str(value) for value in (before or [])] != [str(value) for value in (after or [])]
 
 
+def _is_javbus_item(item: dict[str, Any]) -> bool:
+    source = str(item.get("source") or "").strip().lower()
+    source_url = str(item.get("source_url") or "").strip().lower()
+    return source == "javbus" or "javbus.com/" in source_url
+
+
+def _backfill_javbus_cover(existing: Movie, item: dict[str, Any]) -> None:
+    if str(existing.cover or "").strip():
+        return
+    if not _is_javbus_item(item):
+        return
+    cover = str(item.get("cover") or item.get("cover_url") or "").strip()
+    if cover:
+        existing.cover = cover
+
+
 def upsert_movie(session: Session, item: dict[str, Any]) -> UUID:
     unique_field, unique_value = _movie_unique_value(item)
     if not unique_value:
@@ -50,6 +66,7 @@ def upsert_movie(session: Session, item: dict[str, Any]) -> UUID:
             existing.source_task_url_ids,
             item.get("source_task_url_ids", []),
         )
+        _backfill_javbus_cover(existing, item)
         session.flush()
         return existing.id
 

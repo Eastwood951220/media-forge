@@ -151,7 +151,7 @@ def test_javbus_spider_detail_task_requests_detail_and_ajax() -> None:
     assert len(fetcher.requested_urls) == 2
 
 
-def test_javbus_spider_detail_fails_when_ajax_params_missing() -> None:
+def test_javbus_spider_detail_saves_basic_fields_when_ajax_params_missing() -> None:
     no_ajax_html = """
     <html><body>
     <div class="screencap"><img title="No Ajax" src="https://pics.example/cover.jpg" /></div>
@@ -160,7 +160,7 @@ def test_javbus_spider_detail_fails_when_ajax_params_missing() -> None:
     fetcher = FakeFetcher({"NoAjax": no_ajax_html})
     spider = JavbusSpider(fetcher=fetcher)
 
-    failed = []
+    completed = []
     result = spider.run_single_detail_task(
         {
             "url": "https://www.javbus.com/NoAjax",
@@ -169,11 +169,15 @@ def test_javbus_spider_detail_fails_when_ajax_params_missing() -> None:
             "_task_source": "javbus",
         },
         task_name="test",
-        on_detail_failed=lambda t, e: failed.append((t, e)),
+        on_detail_completed=completed.append,
     )
 
-    assert result["status"] == "failed"
+    assert result["status"] == "completed"
     assert "missing ajax params" in result["reason"]
+    assert result["detail"]["source_name"] == "No Ajax"
+    assert result["detail"]["cover_url"] == "https://pics.example/cover.jpg"
+    assert result["detail"]["magnets"] == []
+    assert completed == [result]
 
 
 def test_get_site_spider_returns_correct_types() -> None:

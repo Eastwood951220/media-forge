@@ -74,6 +74,77 @@ def test_upsert_movie_stores_and_merges_source_task_url_ids() -> None:
     session.close()
 
 
+def test_upsert_movie_backfills_empty_cover_for_existing_javbus_movie() -> None:
+    session = TestingSessionLocal()
+    movie_id = upsert_movie(session, {
+        "code": "BUSCOVER-001",
+        "source_url": "https://www.javbus.com/BUSCOVER-001",
+        "source": "javbus",
+        "source_name": "JavBus Empty Cover",
+        "cover": "",
+    })
+
+    same_id = upsert_movie(session, {
+        "code": "BUSCOVER-001",
+        "source_url": "https://www.javbus.com/BUSCOVER-001",
+        "source": "javbus",
+        "source_name": "JavBus Empty Cover",
+        "cover": "https://www.javbus.com/pics/cover/buscover_b.jpg",
+    })
+
+    movie = session.get(Movie, movie_id)
+    assert same_id == movie_id
+    assert movie.cover == "https://www.javbus.com/pics/cover/buscover_b.jpg"
+
+    session.close()
+
+
+def test_upsert_movie_does_not_overwrite_existing_javbus_cover() -> None:
+    session = TestingSessionLocal()
+    movie_id = upsert_movie(session, {
+        "code": "BUSCOVER-002",
+        "source_url": "https://www.javbus.com/BUSCOVER-002",
+        "source": "javbus",
+        "source_name": "JavBus Existing Cover",
+        "cover": "https://cdn.example/existing.jpg",
+    })
+
+    upsert_movie(session, {
+        "code": "BUSCOVER-002",
+        "source_url": "https://www.javbus.com/BUSCOVER-002",
+        "source": "javbus",
+        "source_name": "JavBus Existing Cover",
+        "cover": "https://www.javbus.com/pics/cover/new_b.jpg",
+    })
+
+    assert session.get(Movie, movie_id).cover == "https://cdn.example/existing.jpg"
+
+    session.close()
+
+
+def test_upsert_movie_does_not_backfill_empty_cover_for_existing_non_javbus_movie() -> None:
+    session = TestingSessionLocal()
+    movie_id = upsert_movie(session, {
+        "code": "JAVDB-COVER-001",
+        "source_url": "https://javdb.com/v/javdbcover001",
+        "source": "javdb",
+        "source_name": "JavDB Empty Cover",
+        "cover": "",
+    })
+
+    upsert_movie(session, {
+        "code": "JAVDB-COVER-001",
+        "source_url": "https://javdb.com/v/javdbcover001",
+        "source": "javdb",
+        "source_name": "JavDB Empty Cover",
+        "cover": "https://cdn.example/javdb-cover.jpg",
+    })
+
+    assert session.get(Movie, movie_id).cover == ""
+
+    session.close()
+
+
 def test_append_source_task_id_adds_unique_id() -> None:
     session = TestingSessionLocal()
     movie_id = upsert_movie(session, {"code": "SRC-001", "source_url": "https://javdb.com/v/src001"})
