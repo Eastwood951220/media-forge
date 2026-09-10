@@ -39,11 +39,13 @@
 }
 
 .tagFilterSelect {
+  width: 200px;
   min-width: 180px;
 }
 
 .filterControls {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
   min-width: min(520px, 100%);
@@ -78,11 +80,21 @@
 }
 
 .actressCard {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border-radius: 8px;
 }
 
+.actressCard :global(.ant-card-cover) {
+  flex: 0 0 auto;
+}
+
 .actressCard :global(.ant-card-body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   padding: 12px;
 }
 
@@ -108,12 +120,27 @@
   white-space: nowrap;
 }
 
+.actressName {
+  min-height: 24px;
+}
+
+.actressReading {
+  min-height: 22px;
+}
+
 .cardTags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  min-height: 24px;
+  align-content: flex-start;
+  min-height: 52px;
+  max-height: 52px;
   margin: 8px 0;
+  overflow: hidden;
+}
+
+.cardAction {
+  margin-top: auto;
 }
 
 .paginationBar {

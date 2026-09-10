@@ -7,6 +7,7 @@ import { createTaskUrlRun } from '@/api/crawler/crawlTask'
 import { fetchActress, updateActressTags } from '@/api/content/actresses'
 import type { ActressExternalLink } from '@/api/content/actresses'
 import { queryKeys } from '@/api/queryKeys'
+import { useImageBlurStore } from '@/stores/useImageBlurStore'
 import styles from './ActressPages.module.less'
 
 function formatDate(value: string | null) {
@@ -47,6 +48,7 @@ function ActressDetailPage() {
   const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const imageBlurEnabled = useImageBlurStore((state) => state.enabled)
   const params = useParams({ strict: false }) as { id: string }
   const [tagEditorOpen, setTagEditorOpen] = useState(false)
   const [tagDraft, setTagDraft] = useState<string[]>([])
@@ -143,7 +145,12 @@ function ActressDetailPage() {
             <section className={styles.detailHeader}>
               <div className={styles.detailPortrait}>
                 {actress.image_url ? (
-                  <Image src={actress.image_url} alt={actress.display_name} preview={false} />
+                  <Image
+                    src={actress.image_url}
+                    alt={actress.display_name}
+                    className={imageBlurEnabled ? 'app-blurred-media' : undefined}
+                    preview={false}
+                  />
                 ) : (
                   <Avatar size={96} icon={<UserOutlined />} />
                 )}
@@ -253,7 +260,14 @@ function ActressDetailPage() {
                       }}
                     >
                       <div className={styles.movieCover}>
-                        {movie.cover ? <img src={movie.cover} alt={movie.title || movie.code} loading="lazy" /> : <VideoFallback />}
+                        {movie.cover ? (
+                          <img
+                            src={movie.cover}
+                            alt={movie.title || movie.code}
+                            className={imageBlurEnabled ? 'app-blurred-media' : undefined}
+                            loading="lazy"
+                          />
+                        ) : <VideoFallback />}
                       </div>
                       <div className={styles.movieBody}>
                         <Typography.Text strong className={styles.movieCode}>{movie.code}</Typography.Text>

@@ -7,6 +7,7 @@ import ActressListPage from '../ActressListPage'
 import ActressDetailPage from '../ActressDetailPage'
 import { createTaskUrlRun } from '@/api/crawler/crawlTask'
 import { fetchActress, fetchActresses, updateActressTags } from '@/api/content/actresses'
+import { useImageBlurStore } from '@/stores/useImageBlurStore'
 
 const navigateMock = vi.hoisted(() => vi.fn())
 
@@ -72,6 +73,7 @@ function renderWithClient(ui: React.ReactElement) {
 describe('Actress pages', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useImageBlurStore.setState({ enabled: true })
     vi.mocked(updateActressTags).mockResolvedValue(profile)
     vi.mocked(createTaskUrlRun).mockResolvedValue({ accepted: true, run_id: 'run-1' } as never)
   })
@@ -88,6 +90,8 @@ describe('Actress pages', () => {
     expect(screen.getByText('みやうえゆいか')).toBeInTheDocument()
     expect(screen.getByText('单体')).toBeInTheDocument()
     expect(screen.getByText('清楚')).toBeInTheDocument()
+    expect(screen.getByLabelText('标签')).toBeInTheDocument()
+    expect(screen.getByAltText('宮上唯依花')).toHaveClass('app-blurred-media')
   })
 
   it('keeps advanced filters collapsed and sends dropdown range filters when expanded', async () => {

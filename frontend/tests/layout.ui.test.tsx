@@ -7,6 +7,7 @@ import AppLayout from '../src/layout'
 import headerStyles from '../src/layout/Header/Header.module.less'
 import layoutStyles from '../src/layout/index.module.less'
 import { useAuthStore } from '../src/stores/useAuthStore'
+import { useImageBlurStore } from '../src/stores/useImageBlurStore'
 import { useTagsViewStore } from '../src/stores/useTagsViewStore'
 import { useThemeStore } from '../src/stores/useThemeStore'
 
@@ -71,6 +72,9 @@ describe('modern console layout', () => {
       darkMode: false,
       primaryColor: '#006AFF',
     })
+    useImageBlurStore.setState({
+      enabled: true,
+    })
     useTagsViewStore.getState().resetViews()
     useTagsViewStore.setState({
       visitedViews: [
@@ -122,6 +126,21 @@ describe('modern console layout', () => {
     const header = await screen.findByRole('banner')
     expect(header).toHaveClass(headerStyles.header)
     expect(header).toHaveClass(headerStyles.dark)
+  })
+
+  it('places the image blur toggle beside the theme toggle', async () => {
+    renderLayout()
+
+    const header = await screen.findByRole('banner')
+    const blurToggle = within(header).getByRole('button', { name: '关闭图片模糊' })
+    expect(blurToggle).toBeInTheDocument()
+
+    act(() => {
+      blurToggle.click()
+    })
+
+    expect(useImageBlurStore.getState().enabled).toBe(false)
+    expect(within(header).getByRole('button', { name: '开启图片模糊' })).toBeInTheDocument()
   })
 
   it('keeps route cache wrappers constrained inside the content viewport', async () => {

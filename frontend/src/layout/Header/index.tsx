@@ -1,6 +1,7 @@
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import { Button, Layout, Space } from 'antd'
+import { ImageBlurToggle } from '@/components/ImageBlurToggle'
 import { ThemeModeToggle } from '@/components/ThemeModeToggle'
 import { logout as logoutApi } from '@/api/login'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -52,6 +53,7 @@ export function LayoutHeader({ darkMode, collapsed, onCollapse }: LayoutHeaderPr
 
       <Space size={12} className={styles.right}>
         <ThemeModeToggle size="middle" variant="header" />
+        <ImageBlurToggle />
         <div className={styles.user}>
           <span className={styles.avatar}>
             {displayName.slice(0, 1).toUpperCase()}

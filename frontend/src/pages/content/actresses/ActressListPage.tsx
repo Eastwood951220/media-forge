@@ -7,6 +7,7 @@ import { createTaskUrlRun } from '@/api/crawler/crawlTask'
 import { fetchActresses } from '@/api/content/actresses'
 import type { ActressExternalLink, ActressProfile } from '@/api/content/actresses'
 import { queryKeys } from '@/api/queryKeys'
+import { useImageBlurStore } from '@/stores/useImageBlurStore'
 import styles from './ActressPages.module.less'
 
 const PAGE_SIZE_OPTIONS = ['8', '16', '24', '40']
@@ -70,6 +71,10 @@ function ActressCard({
   onCrawl: (actress: ActressProfile) => void
   onOpen: (actress: ActressProfile) => void
 }) {
+  const imageBlurEnabled = useImageBlurStore((state) => state.enabled)
+  const visibleTags = actress.tags.slice(0, 3)
+  const hiddenTagCount = Math.max(0, actress.tags.length - visibleTags.length)
+
   return (
     <Card
       hoverable
@@ -77,7 +82,12 @@ function ActressCard({
       cover={
         <div className={styles.actressCover}>
           {actress.image_url ? (
-            <img src={actress.image_url} alt={actress.display_name} loading="lazy" />
+            <img
+              src={actress.image_url}
+              alt={actress.display_name}
+              className={imageBlurEnabled ? 'app-blurred-media' : undefined}
+              loading="lazy"
+            />
           ) : (
             <Avatar size={72} icon={<UserOutlined />} />
           )}
@@ -91,15 +101,15 @@ function ActressCard({
       <Typography.Text type="secondary" className={styles.actressReading}>
         {actress.reading || actress.aliases[0] || '未记录读音'}
       </Typography.Text>
-      {actress.tags.length > 0 && (
-        <div className={styles.cardTags}>
-          {actress.tags.slice(0, 4).map((tag) => (
-            <Tag key={tag}>{tag}</Tag>
-          ))}
-        </div>
-      )}
+      <div className={styles.cardTags}>
+        {visibleTags.map((tag) => (
+          <Tag key={tag}>{tag}</Tag>
+        ))}
+        {hiddenTagCount > 0 && <Tag>+{hiddenTagCount}</Tag>}
+      </div>
       <Button
         block
+        className={styles.cardAction}
         icon={<PlayCircleOutlined />}
         disabled={(actress.external_links ?? []).length === 0}
         onClick={(event) => {
@@ -207,6 +217,18 @@ function ActressListPage() {
             }}
             className={styles.searchInput}
           />
+          <Select
+            mode="tags"
+            allowClear
+            aria-label="标签"
+            placeholder="标签筛选"
+            value={tagFilters}
+            onChange={(values) => {
+              setTagFilters(values)
+              setPage(1)
+            }}
+            className={styles.tagFilterSelect}
+          />
           <Button
             icon={<FilterOutlined />}
             aria-label="更多筛选"
@@ -289,18 +311,6 @@ function ActressListPage() {
               className={styles.filterSelect}
             />
           </div>
-          <Select
-            mode="tags"
-            allowClear
-            aria-label="标签"
-            placeholder="标签"
-            value={tagFilters}
-            onChange={(values) => {
-              setTagFilters(values)
-              setPage(1)
-            }}
-            className={styles.tagFilterSelect}
-          />
         </section>
       )}
 

@@ -1,5 +1,6 @@
 import {Descriptions, Drawer, Image, Space, Tag, Typography} from "antd";
 import type {MovieMagnet} from "@/api/movie/types";
+import {useImageBlurStore} from "@/stores/useImageBlurStore";
 import {formatDateTime, getMagnetSizeText, uniqueStrings} from "../utils/movieDetailFormat";
 import styles from "../MovieListPage.module.less";
 
@@ -38,6 +39,7 @@ function FilterValue({value, field, onClick}: {value: string; field: string; onC
 }
 
 export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}: MovieDetailDrawerProps) {
+    const imageBlurEnabled = useImageBlurStore((state) => state.enabled);
     const detailMagnets = getDetailMagnets(detail?.magnets);
     const detailMagnetLinks = detailMagnets.filter((m) => typeof m.magnet === "string" && m.magnet.trim());
     const detailHasChineseSub = Boolean(detail?.has_chinese_sub) || detailMagnets.some((m) => Boolean(m.has_chinese_sub));
@@ -93,7 +95,12 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                     <Descriptions.Item label="大小">{detailSizeText}</Descriptions.Item>
                     <Descriptions.Item label="封面">
                         {detail.cover as string ? (
-                            <Image src={detail.cover as string} width={200} referrerPolicy="no-referrer"/>
+                            <Image
+                                src={detail.cover as string}
+                                width={200}
+                                className={imageBlurEnabled ? "app-blurred-media" : undefined}
+                                referrerPolicy="no-referrer"
+                            />
                         ) : "-"}
                     </Descriptions.Item>
                     <Descriptions.Item label="最佳磁力">

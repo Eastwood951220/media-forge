@@ -2,6 +2,8 @@ import { Space, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { Movie } from '@/api/movie/types'
 import ResponsiveActions, { type ResponsiveAction } from '@/components/ResponsiveActions'
+import { useImageBlurStore } from '@/stores/useImageBlurStore'
+import styles from '../MovieListPage.module.less'
 
 export interface MovieColumnsOptions {
   onViewDetail: (id: string) => void
@@ -33,8 +35,31 @@ function formatDateTime(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : '-'
 }
 
+function MovieCoverCell({ movie }: { movie: Movie }) {
+  const blurEnabled = useImageBlurStore((state) => state.enabled)
+  if (!movie.cover) return <span>-</span>
+  return (
+    <div className={styles.movieCoverCell}>
+      <img
+        src={movie.cover}
+        alt={movie.code}
+        className={blurEnabled ? 'app-blurred-media' : undefined}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+      />
+    </div>
+  )
+}
+
 export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, onRefreshMagnets, cd2SyncingId, magnetRefreshingId }: MovieColumnsOptions): ColumnsType<Movie> {
   return [
+    {
+      title: '封面',
+      dataIndex: 'cover',
+      key: 'cover',
+      width: 76,
+      render: (_cover: string, record) => <MovieCoverCell movie={record} />,
+    },
     { title: '番号',
       dataIndex: 'code',
       key: 'code',
