@@ -55,7 +55,7 @@ describe('BackupPage', () => {
     expect(screen.getByText('恢复备份')).toBeInTheDocument()
     expect(screen.getByText('自动备份')).toBeInTheDocument()
     expect(screen.getAllByText('电影数据').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('任务与定时').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('任务、定时与女优标签').length).toBeGreaterThan(0)
     expect(screen.getAllByText('配置').length).toBeGreaterThan(0)
   })
 
