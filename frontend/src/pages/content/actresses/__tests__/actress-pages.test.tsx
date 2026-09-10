@@ -91,7 +91,8 @@ describe('Actress pages', () => {
     expect(screen.getByText('单体')).toBeInTheDocument()
     expect(screen.getByText('清楚')).toBeInTheDocument()
     expect(screen.getByLabelText('标签')).toBeInTheDocument()
-    expect(screen.getByAltText('宮上唯依花')).toHaveClass('app-blurred-media')
+    expect(screen.getByRole('button', { name: '预览 宮上唯依花' })).toBeInTheDocument()
+    expect(screen.getByAltText('宮上唯依花').className).toMatch(/blurred/)
   })
 
   it('keeps advanced filters collapsed and sends dropdown range filters when expanded', async () => {

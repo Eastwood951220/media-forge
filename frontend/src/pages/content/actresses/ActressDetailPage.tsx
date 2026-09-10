@@ -1,13 +1,13 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowLeftOutlined, LinkOutlined, PlayCircleOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Avatar, Button, Empty, Image, Modal, Radio, Select, Spin, Tag, Typography } from 'antd'
+import { App, Avatar, Button, Empty, Modal, Radio, Select, Spin, Tag, Typography } from 'antd'
 import { createTaskUrlRun } from '@/api/crawler/crawlTask'
 import { fetchActress, updateActressTags } from '@/api/content/actresses'
 import type { ActressExternalLink } from '@/api/content/actresses'
+import { BlurredImage } from '@/components/BlurredImage'
 import { queryKeys } from '@/api/queryKeys'
-import { useImageBlurStore } from '@/stores/useImageBlurStore'
 import styles from './ActressPages.module.less'
 
 function formatDate(value: string | null) {
@@ -44,15 +44,10 @@ function formatLinkLabel(link: ActressExternalLink) {
   return `${link.label}${link.url_name ? ` · ${link.url_name}` : ''}`
 }
 
-function mediaBackdropStyle(url: string): CSSProperties {
-  return { '--media-bg': `url("${url}")` } as CSSProperties
-}
-
 function ActressDetailPage() {
   const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const imageBlurEnabled = useImageBlurStore((state) => state.enabled)
   const params = useParams({ strict: false }) as { id: string }
   const [tagEditorOpen, setTagEditorOpen] = useState(false)
   const [tagDraft, setTagDraft] = useState<string[]>([])
@@ -147,18 +142,12 @@ function ActressDetailPage() {
         {actress ? (
           <>
             <section className={styles.detailHeader}>
-              <div className={styles.detailPortrait} style={actress.image_url ? mediaBackdropStyle(actress.image_url) : undefined}>
-                {actress.image_url ? (
-                  <Image
-                    src={actress.image_url}
-                    alt={actress.display_name}
-                    className={imageBlurEnabled ? 'app-blurred-media' : undefined}
-                    preview={false}
-                  />
-                ) : (
-                  <Avatar size={96} icon={<UserOutlined />} />
-                )}
-              </div>
+              <BlurredImage
+                src={actress.image_url}
+                alt={actress.display_name}
+                className={styles.detailPortrait}
+                fallback={<Avatar size={96} icon={<UserOutlined />} />}
+              />
               <div className={styles.detailTitleBlock}>
                 <div className={styles.detailNameRow}>
                   <div className={styles.detailNameText}>
@@ -263,16 +252,12 @@ function ActressDetailPage() {
                         }
                       }}
                     >
-                      <div className={styles.movieCover} style={movie.cover ? mediaBackdropStyle(movie.cover) : undefined}>
-                        {movie.cover ? (
-                          <img
-                            src={movie.cover}
-                            alt={movie.title || movie.code}
-                            className={imageBlurEnabled ? 'app-blurred-media' : undefined}
-                            loading="lazy"
-                          />
-                        ) : <VideoFallback />}
-                      </div>
+                      <BlurredImage
+                        src={movie.cover}
+                        alt={movie.title || movie.code}
+                        className={styles.movieCover}
+                        fallback={<VideoFallback />}
+                      />
                       <div className={styles.movieBody}>
                         <Typography.Text strong className={styles.movieCode}>{movie.code}</Typography.Text>
                         <Typography.Text className={styles.movieTitle}>{movie.title}</Typography.Text>

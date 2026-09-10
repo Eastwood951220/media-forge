@@ -66,13 +66,3 @@ select {
   align-items: center;
   height: 100vh;
 }
-
-.app-blurred-media {
-  filter: blur(10px);
-  transition: filter 180ms ease;
-}
-
-.app-blurred-media:hover,
-.app-blurred-media:focus-visible {
-  filter: none;
-}

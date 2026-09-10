@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useState } from 'react'
 import { FilterOutlined, PlayCircleOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -6,8 +6,8 @@ import { App, Avatar, Button, Card, Empty, Input, Modal, Pagination, Radio, Sele
 import { createTaskUrlRun } from '@/api/crawler/crawlTask'
 import { fetchActresses } from '@/api/content/actresses'
 import type { ActressExternalLink, ActressProfile } from '@/api/content/actresses'
+import { BlurredImage } from '@/components/BlurredImage'
 import { queryKeys } from '@/api/queryKeys'
-import { useImageBlurStore } from '@/stores/useImageBlurStore'
 import styles from './ActressPages.module.less'
 
 const PAGE_SIZE_OPTIONS = ['8', '16', '24', '40']
@@ -62,10 +62,6 @@ function formatLinkLabel(link: ActressExternalLink) {
   return `${link.label}${link.url_name ? ` · ${link.url_name}` : ''}`
 }
 
-function mediaBackdropStyle(url: string): CSSProperties {
-  return { '--media-bg': `url("${url}")` } as CSSProperties
-}
-
 function ActressCard({
   actress,
   onCrawl,
@@ -75,7 +71,6 @@ function ActressCard({
   onCrawl: (actress: ActressProfile) => void
   onOpen: (actress: ActressProfile) => void
 }) {
-  const imageBlurEnabled = useImageBlurStore((state) => state.enabled)
   const visibleTags = actress.tags.slice(0, 3)
   const hiddenTagCount = Math.max(0, actress.tags.length - visibleTags.length)
 
@@ -84,18 +79,12 @@ function ActressCard({
       hoverable
       className={styles.actressCard}
       cover={
-        <div className={styles.actressCover} style={actress.image_url ? mediaBackdropStyle(actress.image_url) : undefined}>
-          {actress.image_url ? (
-            <img
-              src={actress.image_url}
-              alt={actress.display_name}
-              className={imageBlurEnabled ? 'app-blurred-media' : undefined}
-              loading="lazy"
-            />
-          ) : (
-            <Avatar size={72} icon={<UserOutlined />} />
-          )}
-        </div>
+        <BlurredImage
+          src={actress.image_url}
+          alt={actress.display_name}
+          className={styles.actressCover}
+          fallback={<Avatar size={72} icon={<UserOutlined />} />}
+        />
       }
       onClick={() => onOpen(actress)}
     >

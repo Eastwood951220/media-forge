@@ -1,9 +1,8 @@
 import { Space, Tag } from 'antd'
-import type { CSSProperties } from 'react'
 import type { ColumnsType } from 'antd/es/table'
 import type { Movie } from '@/api/movie/types'
+import { BlurredImage } from '@/components/BlurredImage'
 import ResponsiveActions, { type ResponsiveAction } from '@/components/ResponsiveActions'
-import { useImageBlurStore } from '@/stores/useImageBlurStore'
 import styles from '../MovieListPage.module.less'
 
 export interface MovieColumnsOptions {
@@ -36,23 +35,15 @@ function formatDateTime(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : '-'
 }
 
-function mediaBackdropStyle(url: string): CSSProperties {
-  return { '--media-bg': `url("${url}")` } as CSSProperties
-}
-
 function MovieCoverCell({ movie }: { movie: Movie }) {
-  const blurEnabled = useImageBlurStore((state) => state.enabled)
   if (!movie.cover) return <span>-</span>
   return (
-    <div className={styles.movieCoverCell} style={mediaBackdropStyle(movie.cover)}>
-      <img
-        src={movie.cover}
-        alt={movie.code}
-        className={blurEnabled ? 'app-blurred-media' : undefined}
-        loading="lazy"
-        referrerPolicy="no-referrer"
-      />
-    </div>
+    <BlurredImage
+      src={movie.cover}
+      alt={movie.code}
+      className={styles.movieCoverCell}
+      referrerPolicy="no-referrer"
+    />
   )
 }
 

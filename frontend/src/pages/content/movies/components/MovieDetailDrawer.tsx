@@ -1,7 +1,6 @@
-import {Descriptions, Drawer, Image, Space, Tag, Typography} from "antd";
-import type {CSSProperties} from "react";
+import {Descriptions, Drawer, Space, Tag, Typography} from "antd";
 import type {MovieMagnet} from "@/api/movie/types";
-import {useImageBlurStore} from "@/stores/useImageBlurStore";
+import {BlurredImage} from "@/components/BlurredImage";
 import {formatDateTime, getMagnetSizeText, uniqueStrings} from "../utils/movieDetailFormat";
 import styles from "../MovieListPage.module.less";
 
@@ -31,10 +30,6 @@ function getMagnetDisplayText(magnet: MovieMagnet): string {
     return metadata ? `${metadata}\n${magnet.magnet}` : (magnet.magnet ?? "");
 }
 
-function mediaBackdropStyle(url: string): CSSProperties {
-    return {"--media-bg": `url("${url}")`} as CSSProperties;
-}
-
 function FilterValue({value, field, onClick}: {value: string; field: string; onClick?: (field: string, value: string) => void}) {
     if (!value || value === "-") return <>{value || "-"}</>;
     if (onClick) {
@@ -44,7 +39,6 @@ function FilterValue({value, field, onClick}: {value: string; field: string; onC
 }
 
 export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}: MovieDetailDrawerProps) {
-    const imageBlurEnabled = useImageBlurStore((state) => state.enabled);
     const detailMagnets = getDetailMagnets(detail?.magnets);
     const detailMagnetLinks = detailMagnets.filter((m) => typeof m.magnet === "string" && m.magnet.trim());
     const detailHasChineseSub = Boolean(detail?.has_chinese_sub) || detailMagnets.some((m) => Boolean(m.has_chinese_sub));
@@ -100,13 +94,12 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                     <Descriptions.Item label="大小">{detailSizeText}</Descriptions.Item>
                     <Descriptions.Item label="封面">
                         {detail.cover as string ? (
-                            <div className={styles.movieDetailCover} style={mediaBackdropStyle(detail.cover as string)}>
-                                <Image
-                                    src={detail.cover as string}
-                                    className={imageBlurEnabled ? "app-blurred-media" : undefined}
-                                    referrerPolicy="no-referrer"
-                                />
-                            </div>
+                            <BlurredImage
+                                src={detail.cover as string}
+                                alt={(detail.code as string) || "封面"}
+                                className={styles.movieDetailCover}
+                                referrerPolicy="no-referrer"
+                            />
                         ) : "-"}
                     </Descriptions.Item>
                     <Descriptions.Item label="最佳磁力">
