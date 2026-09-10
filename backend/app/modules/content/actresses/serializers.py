@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+from backend.app.models.crawl_task import CrawlTaskUrl
 from shared.database.models.content import ActressProfile, Movie
+
+
+SOURCE_LABELS = {
+    "javdb": "JavDB",
+    "javbus": "JavBus",
+}
 
 
 def serialize_recent_movie(movie: Movie) -> dict:
@@ -14,7 +21,25 @@ def serialize_recent_movie(movie: Movie) -> dict:
     }
 
 
-def serialize_actress_profile(profile: ActressProfile, *, recent_movies: list[Movie] | None = None) -> dict:
+def serialize_external_link(task_url: CrawlTaskUrl) -> dict:
+    source = task_url.source or ""
+    return {
+        "id": str(task_url.id),
+        "_id": str(task_url.id),
+        "source": source,
+        "label": SOURCE_LABELS.get(source, source),
+        "url": task_url.final_url or task_url.url or "",
+        "url_type": task_url.url_type or "",
+        "url_name": task_url.url_name or "",
+    }
+
+
+def serialize_actress_profile(
+    profile: ActressProfile,
+    *,
+    recent_movies: list[Movie] | None = None,
+    external_links: list[CrawlTaskUrl] | None = None,
+) -> dict:
     payload = {
         "id": str(profile.id),
         "_id": str(profile.id),
@@ -49,4 +74,6 @@ def serialize_actress_profile(profile: ActressProfile, *, recent_movies: list[Mo
     }
     if recent_movies is not None:
         payload["recent_movies"] = [serialize_recent_movie(movie) for movie in recent_movies]
+    if external_links is not None:
+        payload["external_links"] = [serialize_external_link(link) for link in external_links]
     return payload

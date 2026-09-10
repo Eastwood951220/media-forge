@@ -27,6 +27,7 @@ const profile = {
   source_site: 'avjoho',
   source_task_ids: ['task-1'],
   source_task_url_ids: ['url-1'],
+  external_links: [],
   image_url: 'https://example.test/cover.jpg',
   debut_date: '2026-09-03',
   birth_date: '1977-12-01',
@@ -111,5 +112,36 @@ describe('Actress pages', () => {
     expect(screen.getByText('163cm')).toBeInTheDocument()
     expect(screen.getByText('三围')).toBeInTheDocument()
     expect(screen.getByText('B90 / W62 / H93')).toBeInTheDocument()
+  })
+
+  it('renders avjoho and external site links in the detail header', async () => {
+    vi.mocked(fetchActress).mockResolvedValue({
+      ...profile,
+      external_links: [
+        {
+          id: 'url-1',
+          source: 'javdb',
+          label: 'JavDB',
+          url: 'https://javdb.com/actors/yuika',
+          url_type: 'actors',
+          url_name: '宮上唯依花',
+        },
+        {
+          id: 'url-2',
+          source: 'javbus',
+          label: 'JavBus',
+          url: 'https://www.javbus.com/star/abc',
+          url_type: 'actors',
+          url_name: '宮上唯依花',
+        },
+      ],
+      recent_movies: [],
+    })
+
+    renderWithClient(<ActressDetailPage />)
+
+    expect(await screen.findByRole('link', { name: '查看 avjoho 资料' })).toHaveAttribute('href', profile.source_url)
+    expect(screen.getByRole('link', { name: '查看 JavDB 关联' })).toHaveAttribute('href', 'https://javdb.com/actors/yuika')
+    expect(screen.getByRole('link', { name: '查看 JavBus 关联' })).toHaveAttribute('href', 'https://www.javbus.com/star/abc')
   })
 })

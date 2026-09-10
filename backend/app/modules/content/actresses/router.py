@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.dependencies import CurrentUser, get_db
-from backend.app.modules.content.actresses.queries import VALID_PAGE_SIZES, list_actress_profiles, recent_movies_for_profile
+from backend.app.modules.content.actresses.queries import (
+    VALID_PAGE_SIZES,
+    external_links_for_profile,
+    list_actress_profiles,
+    recent_movies_for_profile,
+)
 from backend.app.modules.content.actresses.schemas import ActressFetchFromTaskRequest
 from backend.app.modules.content.actresses.serializers import serialize_actress_profile
 from backend.app.modules.content.actresses.service import fetch_actresses_from_task
@@ -35,7 +40,8 @@ def get_actress(profile_id: uuid.UUID, _current_user: CurrentUser, db: Session =
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="女优资料不存在")
     recent_movies = recent_movies_for_profile(db, profile, limit=10)
-    return success(data=serialize_actress_profile(profile, recent_movies=recent_movies))
+    external_links = external_links_for_profile(db, profile)
+    return success(data=serialize_actress_profile(profile, recent_movies=recent_movies, external_links=external_links))
 
 
 @router.post("/fetch-from-task")

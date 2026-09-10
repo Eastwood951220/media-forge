@@ -100,6 +100,57 @@ def test_get_actress_detail_returns_recent_movies_by_task_url_id(client, auth_he
     assert [movie["code"] for movie in data["recent_movies"]] == ["RECENT-NEW", "RECENT-OLD"]
 
 
+def test_get_actress_detail_returns_external_task_url_links(client, auth_headers, db_session, admin_user) -> None:
+    task, task_url = _seed_actor_task(db_session, admin_user)
+    javbus_url = CrawlTaskUrl(
+        task_id=task.id,
+        position=1,
+        url="https://www.javbus.com/star/abc",
+        url_type="actors",
+        source="javbus",
+        final_url="https://www.javbus.com/star/abc/2",
+        url_name="宮上唯依花",
+    )
+    db_session.add(javbus_url)
+    db_session.flush()
+    profile = ActressProfile(
+        display_name="宮上唯依花",
+        reading="みやうえゆいか",
+        canonical_names=["宮上唯依花"],
+        source_url="https://db.avjoho.com/宮上唯依花/",
+        source_task_ids=[task.id],
+        source_task_url_ids=[task_url.id, javbus_url.id],
+        image_url="https://example.test/cover.jpg",
+    )
+    db_session.add(profile)
+    db_session.commit()
+
+    response = client.get(f"/api/content/actresses/{profile.id}", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["external_links"] == [
+        {
+            "id": str(task_url.id),
+            "_id": str(task_url.id),
+            "source": "javdb",
+            "label": "JavDB",
+            "url": "https://javdb.com/actors/yuika",
+            "url_type": "actors",
+            "url_name": "宮上唯依花",
+        },
+        {
+            "id": str(javbus_url.id),
+            "_id": str(javbus_url.id),
+            "source": "javbus",
+            "label": "JavBus",
+            "url": "https://www.javbus.com/star/abc/2",
+            "url_type": "actors",
+            "url_name": "宮上唯依花",
+        },
+    ]
+
+
 def test_fetch_actress_from_actor_task_uses_javdb_aliases_to_match_avjoho(
     client,
     auth_headers,

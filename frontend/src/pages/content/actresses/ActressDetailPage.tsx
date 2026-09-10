@@ -28,6 +28,7 @@ function ActressDetailPage() {
     enabled: Boolean(params.id),
   })
   const actress = query.data
+  const externalLinks = actress?.external_links ?? []
   const profileFacts = actress ? [
     { label: '出道日期', value: formatDate(actress.debut_date) },
     { label: '出生日期', value: formatDate(actress.birth_date) },
@@ -65,18 +66,33 @@ function ActressDetailPage() {
                     <Typography.Title level={3} className={styles.detailTitle}>{actress.display_name}</Typography.Title>
                     <Typography.Text type="secondary">{actress.reading || '未记录读音'}</Typography.Text>
                   </div>
-                  {actress.source_url && (
-                    <Button
-                      className={styles.sourceButton}
-                      aria-label="查看 avjoho 资料"
-                      icon={<LinkOutlined />}
-                      href={actress.source_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      查看 avjoho 资料
-                    </Button>
-                  )}
+                  <div className={styles.sourceActions}>
+                    {actress.source_url && (
+                      <Button
+                        className={styles.sourceButton}
+                        aria-label="查看 avjoho 资料"
+                        icon={<LinkOutlined />}
+                        href={actress.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        avjoho
+                      </Button>
+                    )}
+                    {externalLinks.map((link) => (
+                      <Button
+                        key={link.id}
+                        className={styles.sourceButton}
+                        aria-label={`查看 ${link.label} 关联`}
+                        icon={<LinkOutlined />}
+                        href={link.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {link.label}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
                 <div className={styles.aliasPanel}>
                   <Typography.Text className={styles.aliasLabel}>别名</Typography.Text>

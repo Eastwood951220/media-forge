@@ -7,6 +7,16 @@ export interface ActressRecentMovie {
   release_date: string | null
 }
 
+export interface ActressExternalLink {
+  id: string
+  _id?: string
+  source: string
+  label: string
+  url: string
+  url_type: string
+  url_name: string
+}
+
 export interface ActressProfile {
   id: string
   _id?: string
@@ -18,6 +28,7 @@ export interface ActressProfile {
   source_site: string
   source_task_ids: string[]
   source_task_url_ids: string[]
+  external_links?: ActressExternalLink[]
   image_url: string
   debut_date: string | null
   birth_date: string | null
@@ -42,6 +53,7 @@ export interface ActressProfile {
 
 export interface ActressProfileDetail extends ActressProfile {
   recent_movies: ActressRecentMovie[]
+  external_links: ActressExternalLink[]
 }
 
 export interface ActressListResponse {

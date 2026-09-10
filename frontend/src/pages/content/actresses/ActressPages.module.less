@@ -141,6 +141,14 @@
   flex: 0 0 auto;
 }
 
+.sourceActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
 .aliasPanel {
   display: flex;
   flex-direction: column;
@@ -295,5 +303,9 @@
 
   .sourceButton {
     width: 100%;
+  }
+
+  .sourceActions {
+    justify-content: stretch;
   }
 }

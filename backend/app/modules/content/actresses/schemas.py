@@ -19,6 +19,15 @@ class ActressRecentMovieRead(BaseModel):
     release_date: date | None
 
 
+class ActressExternalLinkRead(BaseModel):
+    id: uuid.UUID
+    source: str
+    label: str
+    url: str
+    url_type: str
+    url_name: str
+
+
 class ActressProfileRead(BaseModel):
     id: uuid.UUID
     display_name: str
@@ -53,6 +62,7 @@ class ActressProfileRead(BaseModel):
 
 class ActressProfileDetailRead(ActressProfileRead):
     recent_movies: list[ActressRecentMovieRead]
+    external_links: list[ActressExternalLinkRead]
 
 
 class ActressFetchFromTaskResponse(BaseModel):

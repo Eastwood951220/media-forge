@@ -6,6 +6,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.models.crawl_task import CrawlTaskUrl
 from shared.database.models.content import ActressProfile, Movie
 
 
@@ -60,3 +61,14 @@ def recent_movies_for_profile(db: Session, profile: ActressProfile, *, limit: in
         key=lambda movie: (movie.release_date is not None, movie.release_date or date.min),
         reverse=True,
     )[:limit]
+
+
+def external_links_for_profile(db: Session, profile: ActressProfile) -> list[CrawlTaskUrl]:
+    source_task_url_ids = [uuid.UUID(str(value)) for value in (profile.source_task_url_ids or []) if value]
+    if not source_task_url_ids:
+        return []
+    return list(db.scalars(
+        select(CrawlTaskUrl)
+        .where(CrawlTaskUrl.id.in_(source_task_url_ids), CrawlTaskUrl.source.in_(("javdb", "javbus")))
+        .order_by(CrawlTaskUrl.position.asc(), CrawlTaskUrl.created_at.asc())
+    ))
