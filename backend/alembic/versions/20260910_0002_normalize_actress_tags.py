@@ -49,7 +49,10 @@ def upgrade() -> None:
             FROM actress_profiles ap
             JOIN crawl_tasks ct ON ct.id = ANY(ap.source_task_ids)
             CROSS JOIN LATERAL unnest(ap.tags) AS tag_value
+            -- Legacy array tags longer than 50 characters are skipped because the
+            -- application rejects names above 50 characters.
             WHERE btrim(tag_value) <> ''
+              AND char_length(btrim(tag_value)) <= 50
         ) AS pairs
         ON CONFLICT (owner_id, name) DO NOTHING
     """)
@@ -77,7 +80,10 @@ def upgrade() -> None:
         JOIN actress_tags at
             ON at.owner_id = ct.owner_id
            AND at.name = btrim(tag_value)
+        -- Legacy array tags longer than 50 characters are skipped because the
+        -- application rejects names above 50 characters.
         WHERE btrim(tag_value) <> ''
+          AND char_length(btrim(tag_value)) <= 50
         ON CONFLICT DO NOTHING
     """)
 

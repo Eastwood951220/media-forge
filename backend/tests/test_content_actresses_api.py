@@ -445,6 +445,26 @@ def test_update_actress_tags_rejects_too_long_name(client, auth_headers, db_sess
     assert "标签长度不能超过 50 个字符" in response.json()["msg"]
 
 
+def test_update_actress_tags_rejects_comma_in_name(client, auth_headers, db_session) -> None:
+    profile = ActressProfile(
+        display_name="Tag Comma",
+        canonical_names=["Tag Comma"],
+        source_url="https://db.avjoho.com/tag-comma/",
+        image_url="https://example.test/tag-comma.jpg",
+    )
+    db_session.add(profile)
+    db_session.commit()
+
+    response = client.put(
+        f"/api/content/actresses/{profile.id}/tags",
+        json={"tags": ["标签,含逗号"]},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    assert "标签不能包含逗号" in response.json()["msg"]
+
+
 def _stub_site_fetchers(monkeypatch) -> None:
     """Keep provider calls hermetic; these tests patch the provider functions themselves."""
     monkeypatch.setattr(

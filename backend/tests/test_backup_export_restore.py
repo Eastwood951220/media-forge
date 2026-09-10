@@ -157,6 +157,32 @@ def test_export_writes_actress_tags_instead_of_task_tags(db_session, test_user: 
     assert links == [{"actress_profile_id": str(profile.id), "tag_id": str(tag.id)}]
 
 
+def test_export_scopes_actress_tags_and_links_to_the_requesting_user(
+    db_session, test_user: User, other_user: User, tmp_path: Path
+):
+    """Per-user export keeps only the requester's tags and links on a shared profile."""
+    shared_profile = _seed_actress_profile(db_session)
+    my_tag = ActressTag(owner_id=test_user.id, name="我的标签")
+    other_tag = ActressTag(owner_id=other_user.id, name="别人标签")
+    db_session.add_all([my_tag, other_tag])
+    db_session.flush()
+    shared_profile.tags.extend([my_tag, other_tag])
+    db_session.commit()
+
+    path = BackupService(db_session).export_to_file(
+        BackupExportRequest(groups=["tasks"], include_sensitive=False),
+        output_dir=tmp_path,
+        owner_id=test_user.id,
+    )
+
+    with ZipFile(path) as zip_file:
+        tags = list(read_jsonl(zip_file, "data/actress_tags.jsonl"))
+        links = list(read_jsonl(zip_file, "data/actress_tag_links.jsonl"))
+
+    assert [(row["name"], row["owner_id"]) for row in tags] == [("我的标签", str(test_user.id))]
+    assert links == [{"actress_profile_id": str(shared_profile.id), "tag_id": str(my_tag.id)}]
+
+
 def test_restore_reads_actress_tags_and_ignores_legacy_task_tag_files(
     db_session, test_user: User, tmp_path: Path
 ):

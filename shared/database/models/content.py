@@ -129,7 +129,7 @@ class ActressTag(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     profiles: Mapped[list["ActressProfile"]] = relationship(
         secondary=actress_tag_links,
         back_populates="tags",
-        lazy="selectin",
+        lazy="select",
     )
 
 

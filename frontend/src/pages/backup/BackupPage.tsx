@@ -38,13 +38,13 @@ import styles from './BackupPage.module.less'
 
 const GROUP_OPTIONS: Array<{ label: string; value: BackupGroup }> = [
   { label: '电影数据', value: 'movies' },
-  { label: '任务与定时', value: 'tasks' },
+  { label: '任务、定时与女优标签', value: 'tasks' },
   { label: '配置', value: 'config' },
 ]
 
 const GROUP_LABELS: Record<BackupGroup, string> = {
   movies: '电影数据',
-  tasks: '任务与定时',
+  tasks: '任务、定时与女优标签',
   config: '配置',
 }
 

@@ -471,8 +471,10 @@ def _restore_actress_tag_links(
                 continue
             profile_uuid = uuid.UUID(str(archive_profile_id))
             resolved_tag_id = tag_id_map.get(uuid.UUID(str(archive_tag_id)))
-            # Actress profiles are not part of a backup archive, so a link is
-            # only restorable when its profile already exists locally.
+            # Actress profiles are not exported by the backup feature, so a link
+            # whose profile is absent from the target database is skipped.
+            # Restoring onto a fresh database therefore yields actress tag
+            # dictionary rows without any links.
             if resolved_tag_id is None or db.get(ActressProfile, profile_uuid) is None:
                 stats.skipped += 1
                 continue

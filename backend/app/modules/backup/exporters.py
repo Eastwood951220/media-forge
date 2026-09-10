@@ -67,6 +67,7 @@ TASK_EXPORTS: tuple[tuple[Any, str, Scope | None], ...] = (
     ),
 )
 
+# Actress tag entries ride in the tasks backup group (see BackupService).
 ACTRESS_EXPORTS: tuple[tuple[Any, str, Scope | None], ...] = (
     (
         ActressTag,

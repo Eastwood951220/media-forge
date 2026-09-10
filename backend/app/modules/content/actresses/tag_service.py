@@ -18,6 +18,8 @@ def normalize_actress_tag_names(tag_names: list[str] | None) -> list[str]:
             continue
         if len(name) > 50:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="标签长度不能超过 50 个字符")
+        if "," in name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="标签不能包含逗号")
         seen.add(name)
         normalized.append(name)
     return normalized
