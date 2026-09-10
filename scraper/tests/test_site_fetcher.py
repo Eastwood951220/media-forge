@@ -30,3 +30,21 @@ def test_build_site_fetcher_keeps_javbus_static(monkeypatch) -> None:
     assert getattr(fetcher, "dynamic", False) is False
     assert fetcher.timeout == 20
     assert fetcher.cookies == {"existmag": "mag"}
+
+
+def test_build_site_fetcher_reads_avjoho_cookies_not_javdb_cookies(monkeypatch) -> None:
+    opened_cookie_files: list[str] = []
+
+    class RecordingCookieManager:
+        def __init__(self, filepath) -> None:
+            opened_cookie_files.append(str(filepath))
+
+        def load(self) -> dict:
+            return {"javdb_session": "secret"} if "javdb" in opened_cookie_files[-1] else {}
+
+    monkeypatch.setattr("scraper.fetchers.site_fetcher.CookieManager", RecordingCookieManager)
+
+    fetcher = build_site_fetcher("avjoho", CrawlerRuntimeConfig(JAVDB_FETCH_MODE="agent"))
+
+    assert opened_cookie_files == ["avjoho_cookies.json"]
+    assert fetcher.cookies == {}
