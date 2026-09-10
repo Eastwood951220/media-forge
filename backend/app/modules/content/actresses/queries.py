@@ -3,7 +3,8 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import Uuid, select
+from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_task import CrawlTaskUrl
@@ -144,6 +145,13 @@ def recent_movies_for_profile(db: Session, profile: ActressProfile, *, limit: in
     source_task_url_ids = {str(value) for value in (profile.source_task_url_ids or [])}
     if not source_task_url_ids:
         return []
+    if db.get_bind().dialect.name == "postgresql":
+        return list(db.scalars(
+            select(Movie)
+            .where(Movie.source_task_url_ids.op("&&")(array(profile.source_task_url_ids, type_=Uuid)))
+            .order_by(Movie.release_date.desc().nullslast())
+            .limit(limit)
+        ))
     movies = [
         movie
         for movie in db.scalars(select(Movie)).all()
