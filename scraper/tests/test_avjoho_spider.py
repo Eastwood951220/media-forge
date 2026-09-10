@@ -51,7 +51,11 @@ from urllib.parse import quote
 
 import pytest
 
-from scraper.spiders.avjoho.avjoho_spider import AvjohoActressSpider
+from scraper.spiders.avjoho.avjoho_spider import (
+    AvjohoActressSpider,
+    ProfileSourceInvalidUrl,
+    ProfileSourceNotFound,
+)
 
 
 class FakeResponse:
@@ -73,6 +77,10 @@ class FakeFetcher:
         if url not in self.pages:
             raise FileNotFoundError(url)
         return FakeResponse(self.pages[url])
+
+
+class MissingPageError(Exception):
+    pass
 
 
 NANASE_PROFILE_HTML = """
@@ -102,14 +110,14 @@ def test_avjoho_spider_matches_manual_profile_url() -> None:
     assert result.matched_url == "https://db.avjoho.com/nanase/"
 
 
-def test_avjoho_spider_rejects_manual_url_on_other_host() -> None:
+def test_avjoho_spider_rejects_manual_url_outside_avjoho() -> None:
     spider = AvjohoActressSpider(fetcher=FakeFetcher({}))
 
-    with pytest.raises(ValueError):
-        spider.find_first_matching_profile(["七瀬アリス"], manual_url="https://example.test/nanase/")
+    with pytest.raises(ProfileSourceInvalidUrl):
+        spider.find_first_matching_profile(["七瀬アリス"], manual_url="https://javdb.com/actors/X301")
 
 
-def test_avjoho_spider_parses_search_result_urls_and_skips_non_profile_links() -> None:
+def test_avjoho_spider_extracts_search_result_profile_urls() -> None:
     html = """
     <div id="list">
       <article><h2 class="entry-title"><a href="https://db.avjoho.com/nanase-alice/">七瀬アリス</a></h2></article>
@@ -123,6 +131,41 @@ def test_avjoho_spider_parses_search_result_urls_and_skips_non_profile_links() -
     assert AvjohoActressSpider.parse_search_result_urls(html) == [
         "https://db.avjoho.com/nanase-alice/"
     ]
+
+
+def test_avjoho_spider_tries_direct_candidates_before_search_results() -> None:
+    profile_html = "<h1 class='entry-title'>七瀬アリス（ななせありす）</h1><div class='database'><table></table></div>"
+    search_html = """
+      <div id="list">
+        <h2 class="entry-title"><a href="https://db.avjoho.com/nanase-alice/">七瀬アリス</a></h2>
+      </div>
+    """
+    fetcher = FakeFetcher({
+        "https://db.avjoho.com/?s=%E4%B8%83%E7%80%AC%E3%82%A2%E3%83%AA%E3%82%B9": search_html,
+        "https://db.avjoho.com/nanase-alice/": profile_html,
+    })
+    spider = AvjohoActressSpider(fetcher=fetcher)
+
+    result = spider.find_first_matching_profile(["七瀬アリス"])
+
+    assert result.profile is not None
+    assert result.matched_url == "https://db.avjoho.com/nanase-alice/"
+    assert result.attempted_urls == [
+        "https://db.avjoho.com/%E4%B8%83%E7%80%AC%E3%82%A2%E3%83%AA%E3%82%B9/",
+        "https://db.avjoho.com/nanase-alice/",
+    ]
+
+
+def test_avjoho_spider_raises_for_missing_manual_url() -> None:
+    class MissingFetcher(FakeFetcher):
+        def get(self, url: str):
+            self.requested.append(url)
+            raise MissingPageError(url)
+
+    spider = AvjohoActressSpider(fetcher=MissingFetcher({}))
+
+    with pytest.raises(ProfileSourceNotFound):
+        spider.find_first_matching_profile(["七瀬アリス"], manual_url="https://db.avjoho.com/missing/")
 
 
 def test_avjoho_spider_falls_back_to_search_after_direct_candidates_miss() -> None:

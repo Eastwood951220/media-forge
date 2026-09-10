@@ -8,6 +8,14 @@ from scraper.profiles.actress import ActressProfileMatch, ActressProfilePayload,
 from scraper.spiders.avjoho.avjoho_parser import parse_avjoho_profile
 
 
+class ProfileSourceInvalidUrl(ValueError):
+    pass
+
+
+class ProfileSourceNotFound(RuntimeError):
+    pass
+
+
 class AvjohoActressSpider:
     source = "avjoho"
 
@@ -18,7 +26,7 @@ class AvjohoActressSpider:
     def validate_profile_url(url: str) -> str:
         parsed = urlparse(url)
         if parsed.scheme not in {"http", "https"} or parsed.netloc != "db.avjoho.com":
-            raise ValueError("avjoho_url must be an HTTP(S) URL on db.avjoho.com")
+            raise ProfileSourceInvalidUrl("avjoho_url must be an HTTP(S) URL on db.avjoho.com")
         return url
 
     @staticmethod
@@ -96,7 +104,9 @@ class AvjohoActressSpider:
             attempted_urls.append(url)
             try:
                 payload = self.fetch_profile(url)
-            except Exception:
+            except Exception as exc:
+                if manual_url:
+                    raise ProfileSourceNotFound(str(exc)) from exc
                 continue
             if payload is None:
                 continue
