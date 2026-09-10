@@ -103,6 +103,7 @@ def _matches_number_range(value: int | None, ranges: dict[str, tuple[int | None,
 def list_actress_profiles(
     db: Session,
     *,
+    owner_id: uuid.UUID,
     page: int,
     limit: int,
     keyword: str | None = None,
@@ -125,7 +126,10 @@ def list_actress_profiles(
         rows = [row for row in rows if (row.cup or "").strip().lower() == expected_cup]
     expected_tags = set(_split_csv(tags))
     if expected_tags:
-        rows = [row for row in rows if expected_tags.issubset(set(row.tags or []))]
+        rows = [
+            row for row in rows
+            if expected_tags.issubset({tag.name for tag in (row.tags or []) if str(tag.owner_id) == str(owner_id)})
+        ]
     rows = [row for row in rows if _matches_number_range(row.height_cm, HEIGHT_RANGES, height_range)]
     rows = [row for row in rows if _matches_number_range(_age_from_birth_date(row.birth_date), AGE_RANGES, age_range)]
     rows = [row for row in rows if _matches_number_range(row.bust_cm, BUST_RANGES, bust_range)]

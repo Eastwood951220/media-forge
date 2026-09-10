@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from backend.app.models.crawl_task import CrawlTaskUrl
 from shared.database.models.content import ActressProfile, Movie
 
@@ -35,9 +37,17 @@ def serialize_external_link(task_url: CrawlTaskUrl) -> dict:
     }
 
 
+def _profile_tag_names(profile: ActressProfile, owner_id: uuid.UUID | None) -> list[str]:
+    tags = list(profile.tags or [])
+    if owner_id is not None:
+        tags = [tag for tag in tags if str(tag.owner_id) == str(owner_id)]
+    return [tag.name for tag in sorted(tags, key=lambda item: item.name)]
+
+
 def serialize_actress_profile(
     profile: ActressProfile,
     *,
+    owner_id: uuid.UUID | None = None,
     recent_movies: list[Movie] | None = None,
     external_links: list[CrawlTaskUrl] | None = None,
 ) -> dict:
@@ -52,7 +62,7 @@ def serialize_actress_profile(
         "source_site": profile.source_site or "",
         "source_task_ids": [str(value) for value in (profile.source_task_ids or [])],
         "source_task_url_ids": [str(value) for value in (profile.source_task_url_ids or [])],
-        "tags": list(profile.tags or []),
+        "tags": _profile_tag_names(profile, owner_id),
         "image_url": profile.image_url or "",
         "debut_date": profile.debut_date.isoformat() if profile.debut_date else None,
         "birth_date": profile.birth_date.isoformat() if profile.birth_date else None,

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.content.actresses.serializers import serialize_actress_profile
+from backend.app.modules.content.actresses.tag_service import replace_actress_tags
 from scraper.fetchers.site_fetcher import build_site_fetcher
 from scraper.profiles.actress import ActressProfilePayload, dedupe_text
 from scraper.spiders.avjoho.avjoho_spider import (
@@ -61,10 +62,6 @@ def _merge_uuid_values(existing, incoming) -> list:
     return values
 
 
-def _task_tag_names(task: CrawlTask) -> list[str]:
-    return dedupe_text(sorted(tag.name for tag in (task.tags or []) if tag.name))
-
-
 def _find_existing_profile_by_task_url(db: Session, task_url_id: uuid.UUID) -> ActressProfile | None:
     expected = str(task_url_id)
     for profile in db.scalars(select(ActressProfile)):
@@ -73,17 +70,15 @@ def _find_existing_profile_by_task_url(db: Session, task_url_id: uuid.UUID) -> A
     return None
 
 
-def _merge_existing_profile_tags(
+def _merge_existing_profile_source_links(
     db: Session,
     profile: ActressProfile,
     *,
     task_id: uuid.UUID,
     task_url_id: uuid.UUID,
-    tag_names: list[str],
 ) -> ActressProfile:
     profile.source_task_ids = _merge_uuid_values(profile.source_task_ids, [task_id])
     profile.source_task_url_ids = _merge_uuid_values(profile.source_task_url_ids, [task_url_id])
-    profile.tags = _merge_values(profile.tags, tag_names)
     db.flush()
     return profile
 
@@ -95,7 +90,6 @@ def _upsert_profile(
     canonical_names: list[str],
     task_id: uuid.UUID,
     task_url_id: uuid.UUID,
-    tag_names: list[str],
 ) -> ActressProfile:
     profile = _find_existing_profile(db, payload, canonical_names)
     now = datetime.now()
@@ -104,12 +98,11 @@ def _upsert_profile(
         profile = ActressProfile(source_url=payload.source_url)
         db.add(profile)
 
-    _merge_existing_profile_tags(
+    _merge_existing_profile_source_links(
         db,
         profile,
         task_id=task_id,
         task_url_id=task_url_id,
-        tag_names=tag_names,
     )
     if existing_profile:
         return profile
@@ -141,11 +134,11 @@ def _upsert_profile(
     return profile
 
 
-def update_actress_tags(db: Session, profile_id: uuid.UUID, tags: list[str]) -> ActressProfile:
+def update_actress_tags(db: Session, profile_id: uuid.UUID, owner_id: uuid.UUID, tags: list[str]) -> ActressProfile:
     profile = db.get(ActressProfile, profile_id)
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="女优资料不存在")
-    profile.tags = dedupe_text(tags)
+    replace_actress_tags(db, profile, owner_id, tags)
     db.commit()
     db.refresh(profile)
     return profile
@@ -157,26 +150,25 @@ def fetch_actresses_from_task(
     task_url_id: uuid.UUID,
     avjoho_url: str | None = None,
 ) -> dict:
-    task = db.get(CrawlTask, task_id, options=[selectinload(CrawlTask.urls), selectinload(CrawlTask.tags)])
+    task = db.get(CrawlTask, task_id, options=[selectinload(CrawlTask.urls)])
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
     actor_url = _selected_actor_url_for_task(task, task_url_id)
     existing_profile = _find_existing_profile_by_task_url(db, actor_url.id)
     if existing_profile is not None and not avjoho_url:
-        profile = _merge_existing_profile_tags(
+        profile = _merge_existing_profile_source_links(
             db,
             existing_profile,
             task_id=task.id,
             task_url_id=actor_url.id,
-            tag_names=_task_tag_names(task),
         )
         db.commit()
         db.refresh(profile)
         return {
             "matched": True,
-            "profiles": [serialize_actress_profile(profile)],
+            "profiles": [serialize_actress_profile(profile, owner_id=task.owner_id)],
             "candidates": [],
-            "message": "已更新女优标签",
+            "message": "女优资料已存在",
         }
 
     javdb_fetcher = build_site_fetcher("javdb")
@@ -216,7 +208,6 @@ def fetch_actresses_from_task(
             canonical_names=dedupe_text([*names, match.profile.display_name, *match.profile.aliases]),
             task_id=task.id,
             task_url_id=task_url.id,
-            tag_names=_task_tag_names(task),
         )
         profiles.append(profile)
 
@@ -231,7 +222,7 @@ def fetch_actresses_from_task(
         )
     return {
         "matched": bool(profiles),
-        "profiles": [serialize_actress_profile(profile) for profile in profiles],
+        "profiles": [serialize_actress_profile(profile, owner_id=task.owner_id) for profile in profiles],
         "candidates": dedupe_text(attempted_urls),
         "message": "已获取女优资料" if profiles else "未匹配到 avjoho 资料，可填写 avjoho URL 手动获取",
     }
