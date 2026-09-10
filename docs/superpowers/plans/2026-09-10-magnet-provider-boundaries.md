@@ -25,6 +25,8 @@
 - Unknown movie/detail sources must fall back to `javdb` to preserve current behavior.
 - Graphify marks `Movie`, `CrawlRun`, and `CrawlRunDetailTask` as bridge/god nodes, so do not add columns or model relationships for this provider boundary.
 - Keep the implementation localized to `backend/app/modules/content/movies/magnet_refresh.py`, `scraper/magnets/`, `scraper/spiders/javdb/magnet_provider.py`, and `scraper/spiders/javbus/magnet_provider.py`.
+- Provider adapters must pass `stop_check`, callbacks, and task URL context through to the underlying spiders.
+- Spider `status != "completed"` results must stay crawl failures and map to `detail.status = "crawl_failed"`, not provider exceptions and not `save_failed`.
 
 ---
 
@@ -49,9 +51,9 @@
 - Create: `scraper/tests/test_magnet_provider_registry.py`
 
 **Interfaces:**
-- Produces: `MovieDetailRequest(source: str, url: str, code: str = "", name: str = "", task_url_type: str = "", task_url_name: str = "")`.
-- Produces: `MovieDetailPayload(data: dict[str, Any])`.
-- Produces: `MagnetProvider` protocol with `fetch_detail_with_magnets(request: MovieDetailRequest) -> MovieDetailPayload`.
+- Produces: `MovieDetailRequest(source: str, url: str, code: str = "", name: str = "", task_url: str = "", task_final_url: str = "", task_url_type: str = "", task_url_name: str = "")`.
+- Produces: `MovieDetailPayload(status: str, data: dict[str, Any], reason: str = "")`.
+- Produces: `MagnetProvider` protocol with `fetch_detail_with_magnets(request: MovieDetailRequest, **kwargs) -> MovieDetailPayload`.
 - Produces: `get_magnet_provider(source: str, *, fetcher) -> MagnetProvider`.
 
 - [ ] **Step 1: Write failing registry tests**
@@ -75,6 +77,8 @@ def test_movie_detail_request_carries_source_context() -> None:
         url="https://javdb.com/v/abc",
         code="ABC-001",
         name="Example",
+        task_url="https://javdb.com/actors/a",
+        task_final_url="https://javdb.com/actors/a?page=1",
         task_url_type="actors",
         task_url_name="Actor",
     )
@@ -82,14 +86,43 @@ def test_movie_detail_request_carries_source_context() -> None:
     assert request.source == "javdb"
     assert request.url == "https://javdb.com/v/abc"
     assert request.code == "ABC-001"
+    assert request.task_url == "https://javdb.com/actors/a"
+    assert request.task_final_url == "https://javdb.com/actors/a?page=1"
     assert request.task_url_name == "Actor"
 
 
-def test_movie_detail_payload_wraps_existing_detail_shape() -> None:
+def test_movie_detail_payload_wraps_existing_detail_status_and_shape() -> None:
     payload = MovieDetailPayload(data={"code": "ABC-001", "magnets": [{"name": "m"}]})
 
+    assert payload.status == "completed"
+    assert payload.reason == ""
     assert payload.data["code"] == "ABC-001"
     assert payload.data["magnets"] == [{"name": "m"}]
+
+
+def test_movie_detail_payload_can_represent_failed_crawl_without_exception() -> None:
+    payload = MovieDetailPayload(status="failed", reason="blocked", data={})
+
+    assert payload.status == "failed"
+    assert payload.reason == "blocked"
+    assert payload.data == {}
+
+
+def test_movie_detail_payload_builds_from_spider_result() -> None:
+    completed = MovieDetailPayload.from_spider_result(
+        {"status": "completed", "detail": {"code": "ABC-001"}},
+        default_reason="detail fetch failed",
+    )
+    failed = MovieDetailPayload.from_spider_result(
+        {"status": "failed", "reason": "blocked", "detail": {"ignored": True}},
+        default_reason="detail fetch failed",
+    )
+
+    assert completed.status == "completed"
+    assert completed.data == {"code": "ABC-001"}
+    assert failed.status == "failed"
+    assert failed.reason == "blocked"
+    assert failed.data == {}
 
 
 def test_get_magnet_provider_returns_javdb_and_javbus_providers() -> None:
@@ -125,6 +158,8 @@ class MovieDetailRequest:
     url: str
     code: str = ""
     name: str = ""
+    task_url: str = ""
+    task_final_url: str = ""
     task_url_type: str = ""
     task_url_name: str = ""
     extra: dict[str, Any] = field(default_factory=dict)
@@ -133,12 +168,23 @@ class MovieDetailRequest:
 @dataclass(slots=True)
 class MovieDetailPayload:
     data: dict[str, Any]
+    status: str = "completed"
+    reason: str = ""
+
+    @classmethod
+    def from_spider_result(cls, result: dict[str, Any], default_reason: str) -> "MovieDetailPayload":
+        status = str(result.get("status") or "")
+        data = result.get("detail") or {}
+        reason = str(result.get("reason") or "")
+        if status != "completed":
+            return cls(status=status or "failed", data={}, reason=reason or default_reason)
+        return cls(status="completed", data=data, reason="")
 
 
 class MagnetProvider(Protocol):
     source: str
 
-    def fetch_detail_with_magnets(self, request: MovieDetailRequest) -> MovieDetailPayload:
+    def fetch_detail_with_magnets(self, request: MovieDetailRequest, **kwargs) -> MovieDetailPayload:
         ...
 
 
@@ -183,7 +229,7 @@ class JavdbMagnetProvider:
     def __init__(self, fetcher):
         self.fetcher = fetcher
 
-    def fetch_detail_with_magnets(self, request: MovieDetailRequest) -> MovieDetailPayload:
+    def fetch_detail_with_magnets(self, request: MovieDetailRequest, **kwargs) -> MovieDetailPayload:
         raise NotImplementedError("JavDB magnet provider adapter is added in the next task")
 ```
 
@@ -201,7 +247,7 @@ class JavbusMagnetProvider:
     def __init__(self, fetcher):
         self.fetcher = fetcher
 
-    def fetch_detail_with_magnets(self, request: MovieDetailRequest) -> MovieDetailPayload:
+    def fetch_detail_with_magnets(self, request: MovieDetailRequest, **kwargs) -> MovieDetailPayload:
         raise NotImplementedError("JavBus magnet provider adapter is added in a later task")
 ```
 
@@ -228,7 +274,7 @@ git commit -m "Add magnet provider registry"
 
 **Interfaces:**
 - Consumes: `JavdbSpider.run_single_detail_task(task: dict, **kwargs) -> dict`.
-- Produces: `JavdbMagnetProvider.fetch_detail_with_magnets(request) -> MovieDetailPayload`.
+- Produces: `JavdbMagnetProvider.fetch_detail_with_magnets(request, **kwargs) -> MovieDetailPayload`.
 
 - [ ] **Step 1: Write failing JavDB provider adapter test**
 
@@ -244,6 +290,7 @@ def test_javdb_magnet_provider_returns_detail_payload(monkeypatch) -> None:
 
     def fake_run_single_detail_task(self, task, **kwargs):
         captured["task"] = task
+        captured["kwargs"] = kwargs
         return {
             **task,
             "status": "completed",
@@ -265,18 +312,25 @@ def test_javdb_magnet_provider_returns_detail_payload(monkeypatch) -> None:
         url="https://javdb.com/v/abc",
         code="ABC-001",
         name="Example",
+        task_url="https://javdb.com/actors/a",
+        task_final_url="https://javdb.com/actors/a?page=1",
         task_url_type="actors",
         task_url_name="Actor",
-    ))
+    ), task_name="磁力更新", stop_check=lambda: False)
 
     assert captured["task"]["url"] == "https://javdb.com/v/abc"
     assert captured["task"]["code"] == "ABC-001"
+    assert captured["task"]["_task_url"] == "https://javdb.com/actors/a"
+    assert captured["task"]["_task_final_url"] == "https://javdb.com/actors/a?page=1"
     assert captured["task"]["_task_url_type"] == "actors"
+    assert captured["kwargs"]["task_name"] == "磁力更新"
+    assert captured["kwargs"]["stop_check"]() is False
+    assert payload.status == "completed"
     assert payload.data["code"] == "ABC-001"
     assert payload.data["magnets"][0]["name"] == "magnet"
 
 
-def test_javdb_magnet_provider_raises_when_spider_fails(monkeypatch) -> None:
+def test_javdb_magnet_provider_returns_failed_payload_when_spider_fails(monkeypatch) -> None:
     def fake_run_single_detail_task(self, task, **kwargs):
         return {**task, "status": "failed", "reason": "blocked"}
 
@@ -287,15 +341,18 @@ def test_javdb_magnet_provider_raises_when_spider_fails(monkeypatch) -> None:
 
     provider = JavdbMagnetProvider(fetcher=DummyFetcher())
 
-    with pytest.raises(RuntimeError, match="blocked"):
-        provider.fetch_detail_with_magnets(MovieDetailRequest(
-            source="javdb",
-            url="https://javdb.com/v/abc",
-            code="ABC-001",
-        ))
+    payload = provider.fetch_detail_with_magnets(MovieDetailRequest(
+        source="javdb",
+        url="https://javdb.com/v/abc",
+        code="ABC-001",
+    ))
+
+    assert payload.status == "failed"
+    assert payload.reason == "blocked"
+    assert payload.data == {}
 
 
-def test_javdb_magnet_provider_raises_when_detail_is_empty(monkeypatch) -> None:
+def test_javdb_magnet_provider_keeps_completed_empty_detail_for_no_magnet_handling(monkeypatch) -> None:
     def fake_run_single_detail_task(self, task, **kwargs):
         return {**task, "status": "completed", "detail": {}}
 
@@ -306,12 +363,14 @@ def test_javdb_magnet_provider_raises_when_detail_is_empty(monkeypatch) -> None:
 
     provider = JavdbMagnetProvider(fetcher=DummyFetcher())
 
-    with pytest.raises(RuntimeError, match="javdb detail fetch failed"):
-        provider.fetch_detail_with_magnets(MovieDetailRequest(
-            source="javdb",
-            url="https://javdb.com/v/empty",
-            code="EMPTY-001",
-        ))
+    payload = provider.fetch_detail_with_magnets(MovieDetailRequest(
+        source="javdb",
+        url="https://javdb.com/v/empty",
+        code="EMPTY-001",
+    ))
+
+    assert payload.status == "completed"
+    assert payload.data == {}
 ```
 
 - [ ] **Step 2: Run the test and verify it fails**
@@ -329,22 +388,20 @@ from scraper.spiders.javdb.javdb_spider import JavdbSpider
 ```
 
 ```python
-    def fetch_detail_with_magnets(self, request: MovieDetailRequest) -> MovieDetailPayload:
+    def fetch_detail_with_magnets(self, request: MovieDetailRequest, **kwargs) -> MovieDetailPayload:
         spider = JavdbSpider(fetcher=self.fetcher)
         task = {
             "url": request.url,
             "name": request.name or request.code or request.url,
             "code": request.code,
+            "_task_url": request.task_url,
+            "_task_final_url": request.task_final_url,
             "_task_url_type": request.task_url_type,
             "_task_url_name": request.task_url_name,
             "_task_source": request.source,
         }
-        result = spider.run_single_detail_task(task)
-        detail = result.get("detail") or {}
-        if result.get("status") != "completed" or not detail:
-            reason = result.get("reason") or "javdb detail fetch failed"
-            raise RuntimeError(str(reason))
-        return MovieDetailPayload(data=detail)
+        result = spider.run_single_detail_task(task, **kwargs)
+        return MovieDetailPayload.from_spider_result(result, default_reason="javdb detail fetch failed")
 ```
 
 - [ ] **Step 4: Run provider tests**
@@ -427,7 +484,7 @@ def test_magnet_refresh_uses_provider_registry_for_javdb(monkeypatch, db_session
     class FakeProvider:
         source = "javdb"
 
-        def fetch_detail_with_magnets(self, request):
+        def fetch_detail_with_magnets(self, request, **kwargs):
             calls.append(request)
             return magnet_refresh.MovieDetailPayload(data={
                 "code": "ABC-001",
@@ -452,6 +509,8 @@ def test_magnet_refresh_uses_provider_registry_for_javdb(monkeypatch, db_session
     assert calls[0].source == "javdb"
     assert calls[0].url == "https://javdb.com/v/abc"
     assert calls[0].name == "Example"
+    assert calls[0].task_url == "https://javdb.com/v/abc"
+    assert calls[0].task_final_url == "https://javdb.com/v/abc"
 ```
 
 - [ ] **Step 1b: Add helper-level source tests**
@@ -518,13 +577,13 @@ def _movie_detail_request(movie: Movie, detail: CrawlRunDetailTask) -> MovieDeta
         url=source_url,
         code=movie.code or detail.code or "",
         name=movie.source_name or detail.source_name or movie.code or detail.code or source_url,
+        task_url=detail.task_url or "",
+        task_final_url=detail.task_final_url or "",
         task_url_type=detail.task_url_type or "",
         task_url_name=detail.source_url_name or "",
         extra={
             "detail_task_id": str(detail.id),
             "movie_id": str(movie.id),
-            "task_url": detail.task_url or "",
-            "task_final_url": detail.task_final_url or "",
         },
     )
 ```
@@ -538,7 +597,21 @@ Replace direct `spider.run_single_detail_task` use with:
 ```python
 request = _movie_detail_request(movie, detail)
 provider = build_magnet_provider(request.source)
-payload = provider.fetch_detail_with_magnets(request)
+payload = provider.fetch_detail_with_magnets(
+    request,
+    task_name=run.task_name,
+    on_detail_completed=lambda task: None,
+    on_detail_failed=lambda task, err: None,
+    stop_check=lambda: runtime.is_stop_requested(str(run.id)),
+    log_callback=lambda msg, level="INFO": None,
+    on_detail_check_callback=lambda code: False,
+    on_item_already_exists=lambda task_info: None,
+)
+if payload.status != "completed":
+    detail.status = "crawl_failed"
+    detail.error = str(payload.reason or "detail fetch failed")[:500]
+    failed += 1
+    continue
 detail_data = payload.data
 magnets = list(detail_data.get("magnets") or [])
 ```
@@ -549,7 +622,7 @@ Keep the existing persistence call:
 upsert_magnets(db, movie.id, {"code": movie.code}, magnets)
 ```
 
-When provider execution raises an exception, preserve the existing outer `except Exception as exc` path, which sets `detail.status = "save_failed"`, stores the truncated error text, increments `failed`, and appends a run log.
+When provider execution raises an exception, preserve the existing outer `except Exception as exc` path, which sets `detail.status = "save_failed"`, stores the truncated error text, increments `failed`, and appends a run log. This exception path is only for unexpected provider/runtime errors. Spider crawl failures must be represented by `payload.status != "completed"` and continue to map to `crawl_failed`.
 
 - [ ] **Step 6: Convert existing magnet refresh tests to provider monkeypatches**
 
@@ -559,7 +632,7 @@ In `test_execute_magnet_refresh_updates_only_magnets`, replace the local `Spider
 class Provider:
     source = "javdb"
 
-    def fetch_detail_with_magnets(self, request):
+    def fetch_detail_with_magnets(self, request, **kwargs):
         return magnet_refresh.MovieDetailPayload(data={
             "code": "MAG-777",
             "source_name": "新标题不能覆盖",
@@ -584,7 +657,7 @@ In `test_execute_magnet_refresh_marks_no_magnets_skipped`, replace the local `Sp
 class Provider:
     source = "javdb"
 
-    def fetch_detail_with_magnets(self, request):
+    def fetch_detail_with_magnets(self, request, **kwargs):
         return magnet_refresh.MovieDetailPayload(data={"code": "NOMAG-1", "magnets": []})
 
 monkeypatch.setattr(magnet_refresh, "build_magnet_provider", lambda source: Provider())
@@ -632,7 +705,7 @@ def test_magnet_refresh_uses_javbus_provider_for_javbus_url(monkeypatch, db_sess
     seen_sources = []
 
     class Provider:
-        def fetch_detail_with_magnets(self, request):
+        def fetch_detail_with_magnets(self, request, **kwargs):
             seen_sources.append(request.source)
             return magnet_refresh.MovieDetailPayload(data={
                 "code": "BUS-001",
@@ -689,7 +762,7 @@ def test_magnet_refresh_falls_back_to_javdb_for_unknown_source(monkeypatch, db_s
     seen_sources = []
 
     class Provider:
-        def fetch_detail_with_magnets(self, request):
+        def fetch_detail_with_magnets(self, request, **kwargs):
             seen_sources.append(request.source)
             return magnet_refresh.MovieDetailPayload(data={
                 "code": "UNK-001",
@@ -704,7 +777,61 @@ def test_magnet_refresh_falls_back_to_javdb_for_unknown_source(monkeypatch, db_s
     assert seen_sources == ["javdb"]
 ```
 
-- [ ] **Step 9: Add provider failure test**
+- [ ] **Step 9: Add crawl-failed payload test**
+
+Add this backend test:
+
+```python
+def test_magnet_refresh_marks_failed_provider_payload_as_crawl_failed(db_session, test_user, monkeypatch) -> None:
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.content.movies import magnet_refresh
+    from shared.database.models.content import Movie
+
+    task = CrawlTask(name="磁力更新", storage_location="", owner_id=test_user.id)
+    db_session.add(task)
+    db_session.flush()
+    movie = Movie(code="CRAWL-001", source_url="https://javdb.com/v/crawl", source_name="Crawl Movie", source_task_ids=[task.id])
+    db_session.add(movie)
+    db_session.flush()
+    run = CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="magnet_refresh", queued_at=datetime.now())
+    db_session.add(run)
+    db_session.flush()
+    detail = CrawlRunDetailTask(
+        run_id=run.id,
+        task_name=task.name,
+        code=movie.code,
+        source_url=movie.source_url,
+        source_name=movie.source_name,
+        source_url_name="磁力更新",
+        task_url=movie.source_url,
+        task_final_url=movie.source_url,
+        task_url_type="magnet_refresh",
+        status="pending_crawl",
+        item_data={"movie_id": str(movie.id)},
+        created_at=datetime.now(),
+    )
+    db_session.add(detail)
+    db_session.commit()
+
+    class Provider:
+        def fetch_detail_with_magnets(self, request, **kwargs):
+            return magnet_refresh.MovieDetailPayload(status="failed", reason="blocked", data={})
+
+    monkeypatch.setattr(magnet_refresh, "build_magnet_provider", lambda source: Provider())
+
+    result = magnet_refresh.execute_magnet_refresh_run(db_session, run, SimpleNamespace(is_stop_requested=lambda run_id: False))
+
+    db_session.refresh(detail)
+    assert result["failed"] == 1
+    assert detail.status == "crawl_failed"
+    assert detail.error == "blocked"
+```
+
+- [ ] **Step 9b: Add provider exception test**
 
 Add this backend test:
 
@@ -745,7 +872,7 @@ def test_magnet_refresh_marks_provider_failure(db_session, test_user, monkeypatc
     db_session.commit()
 
     class Provider:
-        def fetch_detail_with_magnets(self, request):
+        def fetch_detail_with_magnets(self, request, **kwargs):
             raise RuntimeError("provider exploded")
 
     monkeypatch.setattr(magnet_refresh, "build_magnet_provider", lambda source: Provider())
@@ -802,7 +929,7 @@ git commit -m "Use magnet provider registry in refresh"
 
 **Interfaces:**
 - Consumes: `JavbusSpider.run_single_detail_task(task: dict, **kwargs) -> dict`.
-- Produces: `JavbusMagnetProvider.fetch_detail_with_magnets(request) -> MovieDetailPayload`.
+- Produces: `JavbusMagnetProvider.fetch_detail_with_magnets(request, **kwargs) -> MovieDetailPayload`.
 
 - [ ] **Step 1: Write failing JavBus provider adapter test**
 
@@ -813,7 +940,11 @@ from scraper.spiders.javbus.magnet_provider import JavbusMagnetProvider
 
 
 def test_javbus_magnet_provider_returns_detail_payload(monkeypatch) -> None:
+    captured = {}
+
     def fake_run_single_detail_task(self, task, **kwargs):
+        captured["task"] = task
+        captured["kwargs"] = kwargs
         return {
             **task,
             "status": "completed",
@@ -836,13 +967,23 @@ def test_javbus_magnet_provider_returns_detail_payload(monkeypatch) -> None:
         url="https://www.javbus.com/ABC-001",
         code="ABC-001",
         name="Example",
-    ))
+        task_url="https://www.javbus.com/ABC-001",
+        task_final_url="https://www.javbus.com/ABC-001?gid=1",
+        task_url_type="magnet_refresh",
+        task_url_name="磁力更新",
+    ), task_name="磁力更新", stop_check=lambda: False)
 
     assert payload.data["source"] == "javbus"
     assert payload.data["magnets"][0]["name"] == "bus magnet"
+    assert captured["task"]["_task_url"] == "https://www.javbus.com/ABC-001"
+    assert captured["task"]["_task_final_url"] == "https://www.javbus.com/ABC-001?gid=1"
+    assert captured["task"]["_task_url_type"] == "magnet_refresh"
+    assert captured["task"]["_task_url_name"] == "磁力更新"
+    assert captured["kwargs"]["task_name"] == "磁力更新"
+    assert captured["kwargs"]["stop_check"]() is False
 
 
-def test_javbus_magnet_provider_raises_when_spider_fails(monkeypatch) -> None:
+def test_javbus_magnet_provider_returns_failed_payload_when_spider_fails(monkeypatch) -> None:
     def fake_run_single_detail_task(self, task, **kwargs):
         return {**task, "status": "failed", "reason": "missing ajax params: gid"}
 
@@ -853,12 +994,15 @@ def test_javbus_magnet_provider_raises_when_spider_fails(monkeypatch) -> None:
 
     provider = JavbusMagnetProvider(fetcher=DummyFetcher())
 
-    with pytest.raises(RuntimeError, match="missing ajax params"):
-        provider.fetch_detail_with_magnets(MovieDetailRequest(
-            source="javbus",
-            url="https://www.javbus.com/ABC-001",
-            code="ABC-001",
-        ))
+    payload = provider.fetch_detail_with_magnets(MovieDetailRequest(
+        source="javbus",
+        url="https://www.javbus.com/ABC-001",
+        code="ABC-001",
+    ))
+
+    assert payload.status == "failed"
+    assert payload.reason == "missing ajax params: gid"
+    assert payload.data == {}
 
 
 def test_javbus_magnet_provider_passes_task_context(monkeypatch) -> None:
@@ -886,11 +1030,15 @@ def test_javbus_magnet_provider_passes_task_context(monkeypatch) -> None:
         source="javbus",
         url="https://www.javbus.com/ABC-001",
         code="ABC-001",
+        task_url="https://www.javbus.com/ABC-001",
+        task_final_url="https://www.javbus.com/ABC-001?gid=1",
         task_url_type="magnet_refresh",
         task_url_name="磁力更新",
     ))
 
     assert captured["task"]["_task_source"] == "javbus"
+    assert captured["task"]["_task_url"] == "https://www.javbus.com/ABC-001"
+    assert captured["task"]["_task_final_url"] == "https://www.javbus.com/ABC-001?gid=1"
     assert captured["task"]["_task_url_type"] == "magnet_refresh"
     assert captured["task"]["_task_url_name"] == "磁力更新"
 ```
@@ -910,22 +1058,20 @@ from scraper.spiders.javbus.javbus_spider import JavbusSpider
 ```
 
 ```python
-    def fetch_detail_with_magnets(self, request: MovieDetailRequest) -> MovieDetailPayload:
+    def fetch_detail_with_magnets(self, request: MovieDetailRequest, **kwargs) -> MovieDetailPayload:
         spider = JavbusSpider(fetcher=self.fetcher)
         task = {
             "url": request.url,
             "name": request.name or request.code or request.url,
             "code": request.code,
+            "_task_url": request.task_url,
+            "_task_final_url": request.task_final_url,
             "_task_url_type": request.task_url_type,
             "_task_url_name": request.task_url_name,
             "_task_source": request.source,
         }
-        result = spider.run_single_detail_task(task)
-        detail = result.get("detail") or {}
-        if result.get("status") != "completed" or not detail:
-            reason = result.get("reason") or "javbus detail fetch failed"
-            raise RuntimeError(str(reason))
-        return MovieDetailPayload(data=detail)
+        result = spider.run_single_detail_task(task, **kwargs)
+        return MovieDetailPayload.from_spider_result(result, default_reason="javbus detail fetch failed")
 ```
 
 - [ ] **Step 4: Run provider tests**

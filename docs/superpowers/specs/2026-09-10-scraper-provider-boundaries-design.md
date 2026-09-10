@@ -170,7 +170,7 @@ Create a small source-neutral protocol in `scraper/magnets/provider.py`:
 
 - `MovieDetailRequest`: source, detail URL, optional code, optional source task metadata.
 - `MovieDetailPayload`: existing movie detail shape plus magnets.
-- `MagnetProvider`: protocol with `fetch_detail_with_magnets(request) -> MovieDetailPayload`.
+- `MagnetProvider`: protocol with `fetch_detail_with_magnets(request, **kwargs) -> MovieDetailPayload`.
 
 Then adapt site implementations:
 
@@ -180,6 +180,8 @@ Then adapt site implementations:
 Backend services such as `backend/app/modules/content/movies/magnet_refresh.py` should depend on the provider factory instead of constructing `JavdbSpider` directly. The threaded crawler runtime can remain unchanged until a later pass because it already uses site spiders for full task execution.
 
 `Movie` does not store a source field. Magnet refresh must determine the source from the movie/detail URL with `scraper.tasks.task_utils.determine_source`. Supported provider sources are `javdb` and `javbus`; unknown sources must fall back to JavDB to preserve the current magnet-refresh behavior, which always used `JavdbSpider` regardless of URL host.
+
+Provider adapters must preserve current detail-task semantics. They must pass `stop_check`, callbacks, and task URL context through to the underlying site spider. A spider result with `status != "completed"` is a crawl failure payload, not a provider exception; backend magnet refresh must continue to mark those details as `crawl_failed` so retry remains available. Provider exceptions are reserved for unexpected adapter/runtime errors and may still become `save_failed`.
 
 Graphify's current report marks `Movie`, `CrawlRun`, and `CrawlRunDetailTask` as high-degree bridge nodes. The magnet provider phase must avoid adding new model-level coupling or database fields. Keep the boundary change localized to `backend/app/modules/content/movies/magnet_refresh.py`, `scraper/magnets/`, and source-specific provider adapters under `scraper/spiders/*/`.
 
