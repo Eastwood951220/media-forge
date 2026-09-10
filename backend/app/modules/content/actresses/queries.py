@@ -11,6 +11,48 @@ from shared.database.models.content import ActressProfile, Movie
 
 
 VALID_PAGE_SIZES = {8, 16, 24, 40}
+HEIGHT_RANGES = {
+    "149_under": (None, 149),
+    "150_153": (150, 153),
+    "154_157": (154, 157),
+    "158_161": (158, 161),
+    "162_165": (162, 165),
+    "166_169": (166, 169),
+    "170_over": (170, None),
+}
+BUST_RANGES = {
+    "79_under": (None, 79),
+    "80_84": (80, 84),
+    "85_89": (85, 89),
+    "90_94": (90, 94),
+    "95_99": (95, 99),
+    "100_over": (100, None),
+}
+WAIST_RANGES = {
+    "55_under": (None, 55),
+    "56_59": (56, 59),
+    "60_63": (60, 63),
+    "64_67": (64, 67),
+    "68_69": (68, 69),
+    "70_over": (70, None),
+}
+HIP_RANGES = {
+    "80_under": (None, 80),
+    "81_84": (81, 84),
+    "85_88": (85, 88),
+    "89_92": (89, 92),
+    "93_95": (93, 95),
+    "96_over": (96, None),
+}
+AGE_RANGES = {
+    "20_under": (None, 29),
+    "30s": (30, 39),
+    "40s": (40, 49),
+    "50s": (50, 59),
+    "60s": (60, 69),
+    "70s": (70, 79),
+    "80s": (80, 89),
+}
 
 
 def _contains_uuid(values, expected: uuid.UUID) -> bool:
@@ -29,6 +71,29 @@ def _matches_keyword(profile: ActressProfile, keyword: str) -> bool:
     return any(needle in value.lower() for value in values)
 
 
+def _age_from_birth_date(birth_date: date | None, *, today: date | None = None) -> int | None:
+    if birth_date is None:
+        return None
+    current = today or date.today()
+    age = current.year - birth_date.year
+    if (current.month, current.day) < (birth_date.month, birth_date.day):
+        age -= 1
+    return age
+
+
+def _matches_number_range(value: int | None, ranges: dict[str, tuple[int | None, int | None]], key: str | None) -> bool:
+    if not key:
+        return True
+    if value is None or key not in ranges:
+        return False
+    minimum, maximum = ranges[key]
+    if minimum is not None and value < minimum:
+        return False
+    if maximum is not None and value > maximum:
+        return False
+    return True
+
+
 def list_actress_profiles(
     db: Session,
     *,
@@ -37,14 +102,11 @@ def list_actress_profiles(
     keyword: str | None = None,
     source_task_id: uuid.UUID | None = None,
     cup: str | None = None,
-    height_min: int | None = None,
-    height_max: int | None = None,
-    bust_min: int | None = None,
-    bust_max: int | None = None,
-    waist_min: int | None = None,
-    waist_max: int | None = None,
-    hip_min: int | None = None,
-    hip_max: int | None = None,
+    height_range: str | None = None,
+    age_range: str | None = None,
+    bust_range: str | None = None,
+    waist_range: str | None = None,
+    hip_range: str | None = None,
 ) -> tuple[list[ActressProfile], int]:
     rows = list(db.scalars(select(ActressProfile).order_by(ActressProfile.created_at.desc(), ActressProfile.display_name.asc())))
     if keyword:
@@ -54,16 +116,11 @@ def list_actress_profiles(
     if cup:
         expected_cup = cup.strip().lower()
         rows = [row for row in rows if (row.cup or "").strip().lower() == expected_cup]
-    for field_name, minimum, maximum in (
-        ("height_cm", height_min, height_max),
-        ("bust_cm", bust_min, bust_max),
-        ("waist_cm", waist_min, waist_max),
-        ("hip_cm", hip_min, hip_max),
-    ):
-        if minimum is not None:
-            rows = [row for row in rows if getattr(row, field_name) is not None and getattr(row, field_name) >= minimum]
-        if maximum is not None:
-            rows = [row for row in rows if getattr(row, field_name) is not None and getattr(row, field_name) <= maximum]
+    rows = [row for row in rows if _matches_number_range(row.height_cm, HEIGHT_RANGES, height_range)]
+    rows = [row for row in rows if _matches_number_range(_age_from_birth_date(row.birth_date), AGE_RANGES, age_range)]
+    rows = [row for row in rows if _matches_number_range(row.bust_cm, BUST_RANGES, bust_range)]
+    rows = [row for row in rows if _matches_number_range(row.waist_cm, WAIST_RANGES, waist_range)]
+    rows = [row for row in rows if _matches_number_range(row.hip_cm, HIP_RANGES, hip_range)]
     total = len(rows)
     offset = (page - 1) * limit
     return rows[offset:offset + limit], total

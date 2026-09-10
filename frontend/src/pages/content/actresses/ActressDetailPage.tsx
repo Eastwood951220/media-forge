@@ -19,6 +19,21 @@ function formatMeasurements(actress: {
   return `B${actress.bust_cm ?? '-'} / W${actress.waist_cm ?? '-'} / H${actress.hip_cm ?? '-'}`
 }
 
+function formatAge(value: string | null) {
+  if (!value) return '-'
+  const birthDate = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(birthDate.getTime())) return '-'
+  const today = new Date()
+  let age = today.getFullYear() - birthDate.getFullYear()
+  if (
+    today.getMonth() < birthDate.getMonth()
+    || (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())
+  ) {
+    age -= 1
+  }
+  return `${age}岁`
+}
+
 function ActressDetailPage() {
   const navigate = useNavigate()
   const params = useParams({ strict: false }) as { id: string }
@@ -32,6 +47,7 @@ function ActressDetailPage() {
   const profileFacts = actress ? [
     { label: '出道日期', value: formatDate(actress.debut_date) },
     { label: '出生日期', value: formatDate(actress.birth_date) },
+    { label: '年龄', value: formatAge(actress.birth_date) },
     { label: '身高', value: actress.height_cm ? `${actress.height_cm}cm` : '-' },
     { label: '三围', value: formatMeasurements(actress) },
     { label: '罩杯', value: actress.cup || '-' },

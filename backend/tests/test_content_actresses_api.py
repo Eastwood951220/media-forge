@@ -50,6 +50,7 @@ def test_list_actresses_returns_cards_with_page_size_multiple_of_8(client, auth_
 
 
 def test_list_actresses_filters_by_cup_height_and_measurements(client, auth_headers, db_session) -> None:
+    today = date.today()
     db_session.add_all([
         ActressProfile(
             display_name="Matched",
@@ -62,6 +63,7 @@ def test_list_actresses_filters_by_cup_height_and_measurements(client, auth_head
             bust_cm=90,
             waist_cm=58,
             hip_cm=88,
+            birth_date=date(today.year - 35, 1, 1),
         ),
         ActressProfile(
             display_name="Wrong Cup",
@@ -74,6 +76,7 @@ def test_list_actresses_filters_by_cup_height_and_measurements(client, auth_head
             bust_cm=90,
             waist_cm=58,
             hip_cm=88,
+            birth_date=date(today.year - 35, 1, 1),
         ),
         ActressProfile(
             display_name="Wrong Measurements",
@@ -86,12 +89,13 @@ def test_list_actresses_filters_by_cup_height_and_measurements(client, auth_head
             bust_cm=84,
             waist_cm=63,
             hip_cm=92,
+            birth_date=date(today.year - 45, 1, 1),
         ),
     ])
     db_session.commit()
 
     response = client.get(
-        "/api/content/actresses?cup=E&height_min=160&height_max=170&bust_min=88&waist_max=60&hip_max=90",
+        "/api/content/actresses?cup=E&height_range=162_165&bust_range=90_94&waist_range=56_59&hip_range=85_88&age_range=30s",
         headers=auth_headers,
     )
 

@@ -77,7 +77,7 @@ describe('Actress pages', () => {
     expect(screen.getByText('みやうえゆいか')).toBeInTheDocument()
   })
 
-  it('keeps advanced filters collapsed and sends measurement filters when expanded', async () => {
+  it('keeps advanced filters collapsed and sends dropdown range filters when expanded', async () => {
     const user = userEvent.setup()
     vi.mocked(fetchActresses).mockResolvedValue({ items: [], total: 0, page: 1, limit: 24, total_pages: 1 })
 
@@ -86,23 +86,29 @@ describe('Actress pages', () => {
     expect(screen.queryByLabelText('罩杯')).not.toBeInTheDocument()
 
     await user.click(await screen.findByRole('button', { name: '更多筛选' }))
-    await user.type(screen.getByLabelText('罩杯'), 'E')
-    await user.type(screen.getByLabelText('最低身高'), '160')
-    await user.type(screen.getByLabelText('最高身高'), '170')
-    await user.type(screen.getByLabelText('最低胸围'), '88')
-    await user.type(screen.getByLabelText('最高腰围'), '60')
-    await user.type(screen.getByLabelText('最高臀围'), '90')
+    await user.click(screen.getByLabelText('罩杯'))
+    await user.click(await screen.findByText('E杯'))
+    await user.click(screen.getByLabelText('身高'))
+    await user.click(await screen.findByText('162-165cm'))
+    await user.click(screen.getByLabelText('年龄'))
+    await user.click(await screen.findByText('30代'))
+    await user.click(screen.getByLabelText('胸围'))
+    await user.click(await screen.findByText('B90-94cm'))
+    await user.click(screen.getByLabelText('腰围'))
+    await user.click(await screen.findByText('W56-59cm'))
+    await user.click(screen.getByLabelText('臀围'))
+    await user.click(await screen.findByText('H85-88cm'))
 
     await waitFor(() => {
       expect(fetchActresses).toHaveBeenLastCalledWith(expect.objectContaining({
         page: 1,
         limit: 24,
         cup: 'E',
-        height_min: 160,
-        height_max: 170,
-        bust_min: 88,
-        waist_max: 60,
-        hip_max: 90,
+        height_range: '162_165',
+        age_range: '30s',
+        bust_range: '90_94',
+        waist_range: '56_59',
+        hip_range: '85_88',
       }))
     })
   })
@@ -125,8 +131,11 @@ describe('Actress pages', () => {
   })
 
   it('renders profile metadata in a structured detail layout', async () => {
+    const today = new Date()
+    const birthDate = `${today.getFullYear() - 48}-01-01`
     vi.mocked(fetchActress).mockResolvedValue({
       ...profile,
+      birth_date: birthDate,
       aliases: ['Miyaue Yuika', '宮上ゆいか'],
       recent_movies: [],
     })
@@ -139,6 +148,8 @@ describe('Actress pages', () => {
     expect(screen.getByText('Miyaue Yuika')).toBeInTheDocument()
     expect(screen.getByText('宮上ゆいか')).toBeInTheDocument()
     expect(screen.getByText('基础资料')).toBeInTheDocument()
+    expect(screen.getByText('年龄')).toBeInTheDocument()
+    expect(screen.getByText('48岁')).toBeInTheDocument()
     expect(screen.getByText('身高')).toBeInTheDocument()
     expect(screen.getByText('163cm')).toBeInTheDocument()
     expect(screen.getByText('三围')).toBeInTheDocument()
