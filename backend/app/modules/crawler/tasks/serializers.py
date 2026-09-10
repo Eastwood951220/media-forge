@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.schemas.crawl_task import CrawlTaskListItem, CrawlTaskRead, TaskTagRead, TaskUrlListItem
+from backend.app.schemas.crawl_task import CrawlTaskListItem, CrawlTaskRead, TaskUrlListItem
 
 
 def _latest_run_counts(latest_run) -> tuple[int | None, int | None]:
@@ -58,7 +58,6 @@ def serialize_task_list_item(task, latest_run=None) -> CrawlTaskListItem:
             )
             for u in task.urls
         ],
-        tags=[TaskTagRead.model_validate(tag) for tag in task.tags],
         last_run_status=latest_run.status if latest_run is not None else None,
         last_run_at=latest_run.created_at if latest_run is not None else None,
         last_run_total=last_run_total,

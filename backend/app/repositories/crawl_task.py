@@ -4,7 +4,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.models.crawl_run import CrawlRun
-from backend.app.models.crawl_task import CrawlTask, CrawlTaskTag, CrawlTaskUrl
+from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.models.enums import TaskStatus
 from backend.app.repositories.base import BaseRepository
 from backend.app.schemas.crawl_task import TaskUrlEntryCreate
@@ -34,35 +34,13 @@ class CrawlTaskRepository(BaseRepository):
         self,
         owner_id: uuid.UUID,
         keyword: str | None = None,
-        tag_names: list[str] | None = None,
     ):
         query = (
             self.session.query(CrawlTask)
-            .options(selectinload(CrawlTask.urls), selectinload(CrawlTask.tags))
+            .options(selectinload(CrawlTask.urls))
             .filter(CrawlTask.owner_id == owner_id)
         )
-        query = self._apply_keyword_filter(query, keyword)
-        return self._apply_tag_filter(query, owner_id, tag_names)
-
-    def _apply_tag_filter(
-        self,
-        query,
-        owner_id: uuid.UUID,
-        tag_names: list[str] | None,
-    ):
-        normalized_tags = [name.strip() for name in tag_names or [] if name.strip()]
-        if not normalized_tags:
-            return query
-        tag_count = len(set(normalized_tags))
-        matching_task_ids = (
-            self.session.query(CrawlTask.id)
-            .join(CrawlTask.tags)
-            .filter(CrawlTask.owner_id == owner_id, CrawlTaskTag.name.in_(set(normalized_tags)))
-            .group_by(CrawlTask.id)
-            .having(func.count(func.distinct(CrawlTaskTag.name)) == tag_count)
-            .subquery()
-        )
-        return query.filter(CrawlTask.id.in_(self.session.query(matching_task_ids.c.id)))
+        return self._apply_keyword_filter(query, keyword)
 
     def get_by_owner(
         self,
@@ -71,9 +49,8 @@ class CrawlTaskRepository(BaseRepository):
         page: int,
         size: int,
         keyword: str | None = None,
-        tag_names: list[str] | None = None,
     ) -> list[CrawlTask]:
-        query = self._owner_query(owner_id, keyword, tag_names).order_by(
+        query = self._owner_query(owner_id, keyword).order_by(
             CrawlTask.created_at.desc()
         )
         return query.offset((page - 1) * size).limit(size).all()
@@ -82,40 +59,10 @@ class CrawlTaskRepository(BaseRepository):
         self,
         owner_id: uuid.UUID,
         keyword: str | None = None,
-        tag_names: list[str] | None = None,
     ) -> int:
         query = self.session.query(CrawlTask).filter(CrawlTask.owner_id == owner_id)
         query = self._apply_keyword_filter(query, keyword)
-        query = self._apply_tag_filter(query, owner_id, tag_names)
         return query.with_entities(func.count(CrawlTask.id)).scalar() or 0
-
-    def get_tags_by_owner(self, owner_id: uuid.UUID) -> list[CrawlTaskTag]:
-        return (
-            self.session.query(CrawlTaskTag)
-            .filter(CrawlTaskTag.owner_id == owner_id)
-            .order_by(CrawlTaskTag.name.asc())
-            .all()
-        )
-
-    def get_or_create_tags(self, owner_id: uuid.UUID, tag_names: list[str]) -> list[CrawlTaskTag]:
-        if not tag_names:
-            return []
-        existing = (
-            self.session.query(CrawlTaskTag)
-            .filter(CrawlTaskTag.owner_id == owner_id, CrawlTaskTag.name.in_(tag_names))
-            .all()
-        )
-        by_name = {tag.name: tag for tag in existing}
-        for name in tag_names:
-            if name not in by_name:
-                tag = CrawlTaskTag(owner_id=owner_id, name=name)
-                self.session.add(tag)
-                self.session.flush()
-                by_name[name] = tag
-        return [by_name[name] for name in tag_names]
-
-    def replace_task_tags(self, task: CrawlTask, tags: list[CrawlTaskTag]) -> None:
-        task.tags = tags
 
     def get_owned(self, task_id: uuid.UUID, owner_id: uuid.UUID) -> CrawlTask | None:
         return (

@@ -87,8 +87,8 @@ def test_crawler_task_list_returns_total_and_static_list_fields(client, auth_hea
     assert data["size"] == 2
     assert data["total"] == 3
     assert len(data["rows"]) == 2
-    assert set(data["rows"][0]) == {"id", "name", "storage_location", "is_skip", "urls", "tags"}
-    assert data["rows"][0]["tags"] == []
+    assert set(data["rows"][0]) == {"id", "name", "storage_location", "is_skip", "urls"}
+    assert "tags" not in data["rows"][0]
     assert set(data["rows"][0]["urls"][0]) == {
         "id",
         "position",
@@ -104,6 +104,28 @@ def test_removed_task_aggregate_routes_return_404(client, auth_headers):
     for path in ("count", "stats", "statuses"):
         response = client.get(f"/api/crawler/tasks/{path}", headers=auth_headers)
         assert response.status_code == 404
+
+
+def test_task_tags_route_removed(client, auth_headers):
+    response = client.get("/api/crawler/tasks/tags", headers=auth_headers)
+    assert response.status_code == 404
+
+
+def test_task_create_ignores_removed_tag_names_field(client, auth_headers):
+    response = client.post(
+        "/api/crawler/tasks",
+        json={
+            "name": "no-tag-task",
+            "storage_location": "no-tag-task",
+            "is_skip": False,
+            "tag_names": ["旧字段"],
+            "urls": [{"url": "https://javdb.com/actors/no-tag", "url_type": "actors"}],
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201
+    assert "tags" not in response.json()["data"]
 
 
 def test_extract_javbus_star_task_name(monkeypatch) -> None:
@@ -271,31 +293,13 @@ def test_crawler_task_tag_tables_are_registered():
     assert "crawl_task_tag_links" in Base.metadata.tables
 
 
-def test_crawler_task_schemas_accept_tag_names():
-    from backend.app.schemas.crawl_task import CrawlTaskBatchCreate, CrawlTaskCreate, CrawlTaskUpdate
-
-    create = CrawlTaskCreate(
-        name="tag schema",
-        storage_location="tag schema",
-        tag_names=["VR", "演员"],
-        urls=[{"url": "https://javdb.com/actors/schema", "url_type": "actors"}],
-    )
-    update = CrawlTaskUpdate(tag_names=[])
-    batch = CrawlTaskBatchCreate(urls=["https://javdb.com/actors/schema"], tag_names=["VR"])
-
-    assert create.tag_names == ["VR", "演员"]
-    assert update.tag_names == []
-    assert batch.tag_names == ["VR"]
-
-
-def create_tagged_task(client, headers, name, tags):
+def _create_task(client, headers, name, *, is_skip: bool = False):
     response = client.post(
         "/api/crawler/tasks",
         json={
             "name": name,
             "storage_location": name,
-            "tag_names": tags,
-            "is_skip": False,
+            "is_skip": is_skip,
             "urls": [{"url": f"https://javdb.com/actors/{name}", "url_type": "actors"}],
         },
         headers=headers,
@@ -304,109 +308,11 @@ def create_tagged_task(client, headers, name, tags):
     return response.json()["data"]
 
 
-def test_create_task_with_tags_returns_tags(client, auth_headers):
-    task = create_tagged_task(client, auth_headers, "tagged-task", ["VR", " 演员 ", "VR", ""])
-
-    assert [tag["name"] for tag in task["tags"]] == ["VR", "演员"]
-
-
-def test_task_list_includes_tags(client, auth_headers):
-    create_tagged_task(client, auth_headers, "listed-tagged-task", ["VR"])
-
-    response = client.get("/api/crawler/tasks", headers=auth_headers)
-
-    assert response.status_code == 200
-    row = response.json()["data"]["rows"][0]
-    assert row["name"] == "listed-tagged-task"
-    assert row["tags"][0]["name"] == "VR"
-
-
-def test_tag_dictionary_returns_current_user_tags(client, auth_headers, other_user):
-    create_tagged_task(client, auth_headers, "dict-a", ["VR", "演员"])
-    create_tagged_task(client, auth_headers, "dict-b", ["VR", "系列"])
-
-    response = client.get("/api/crawler/tasks/tags", headers=auth_headers)
-
-    assert response.status_code == 200
-    assert [item["name"] for item in response.json()["data"]] == ["VR", "演员", "系列"]
-
-
-def test_update_task_replaces_and_clears_tags(client, auth_headers):
-    task = create_tagged_task(client, auth_headers, "replace-tags", ["VR", "演员"])
-
-    replaced = client.put(
-        f"/api/crawler/tasks/{task['id']}",
-        json={
-            "name": "replace-tags",
-            "tag_names": ["系列"],
-            "urls": [{"url": "https://javdb.com/actors/replace-tags", "url_type": "actors"}],
-            "is_skip": False,
-        },
-        headers=auth_headers,
-    )
-    assert replaced.status_code == 200
-    assert [tag["name"] for tag in replaced.json()["data"]["tags"]] == ["系列"]
-
-    cleared = client.put(
-        f"/api/crawler/tasks/{task['id']}",
-        json={"tag_names": []},
-        headers=auth_headers,
-    )
-    assert cleared.status_code == 200
-    assert cleared.json()["data"]["tags"] == []
-
-
-def test_update_task_omitting_tag_names_keeps_existing_tags(client, auth_headers):
-    task = create_tagged_task(client, auth_headers, "keep-tags", ["VR"])
-
-    response = client.put(
-        f"/api/crawler/tasks/{task['id']}",
-        json={"name": "keep-tags-renamed"},
-        headers=auth_headers,
-    )
-
-    assert response.status_code == 200
-    assert [tag["name"] for tag in response.json()["data"]["tags"]] == ["VR"]
-
-
-def test_task_list_filters_by_all_selected_tags(client, auth_headers):
-    create_tagged_task(client, auth_headers, "vr-actor", ["VR", "演员"])
-    create_tagged_task(client, auth_headers, "vr-only", ["VR"])
-    create_tagged_task(client, auth_headers, "actor-only", ["演员"])
-
-    response = client.get(
-        "/api/crawler/tasks?tag_names=VR&tag_names=演员",
-        headers=auth_headers,
-    )
-
-    assert response.status_code == 200
-    data = response.json()["data"]
-    assert data["total"] == 1
-    assert data["rows"][0]["name"] == "vr-actor"
-
-
-def test_create_task_rejects_too_long_tag_name(client, auth_headers):
-    response = client.post(
-        "/api/crawler/tasks",
-        json={
-            "name": "long-tag",
-            "storage_location": "long-tag",
-            "tag_names": ["标" * 51],
-            "is_skip": False,
-            "urls": [{"url": "https://javdb.com/actors/long-tag", "url_type": "actors"}],
-        },
-        headers=auth_headers,
-    )
-
-    assert response.status_code == 400
-    assert "标签长度不能超过 50 个字符" in response.json()["msg"]
-
-
 def test_batch_run_creates_one_run_per_idle_task(client, auth_headers, monkeypatch):
     from backend.app.modules.crawler.tasks import service as task_service
 
-    task_a = create_tagged_task(client, auth_headers, "batch-run-a", ["VR"])
-    task_b = create_tagged_task(client, auth_headers, "batch-run-b", ["VR"])
+    task_a = _create_task(client, auth_headers, "batch-run-a")
+    task_b = _create_task(client, auth_headers, "batch-run-b")
 
     class FakeRun:
         def __init__(self, run_id):
@@ -442,18 +348,8 @@ def test_batch_run_creates_one_run_per_idle_task(client, auth_headers, monkeypat
 def test_batch_run_returns_per_task_failures(client, auth_headers, monkeypatch):
     from backend.app.modules.crawler.tasks import service as task_service
 
-    runnable = create_tagged_task(client, auth_headers, "batch-run-ok", ["VR"])
-    skipped = client.post(
-        "/api/crawler/tasks",
-        json={
-            "name": "batch-run-skipped",
-            "storage_location": "batch-run-skipped",
-            "tag_names": ["VR"],
-            "is_skip": True,
-            "urls": [{"url": "https://javdb.com/actors/batch-run-skipped", "url_type": "actors"}],
-        },
-        headers=auth_headers,
-    ).json()["data"]
+    runnable = _create_task(client, auth_headers, "batch-run-ok")
+    skipped = _create_task(client, auth_headers, "batch-run-skipped", is_skip=True)
 
     class FakeRun:
         id = "run-ok"
