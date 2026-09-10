@@ -100,6 +100,7 @@ class ActressProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Index("idx_actress_profiles_source_task_ids_gin", "source_task_ids", postgresql_using="gin"),
         Index("idx_actress_profiles_aliases_gin", "aliases", postgresql_using="gin"),
         Index("idx_actress_profiles_canonical_names_gin", "canonical_names", postgresql_using="gin"),
+        Index("idx_actress_profiles_tags_gin", "tags", postgresql_using="gin"),
         UniqueConstraint("source_url", name="uq_actress_profiles_source_url"),
     )
 
@@ -111,6 +112,7 @@ class ActressProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     source_site: Mapped[str] = mapped_column(Text, nullable=False, default="avjoho")
     source_task_ids: Mapped[list[uuid.UUID]] = mapped_column(CompatibleARRAY(Uuid), nullable=False, default=list)
     source_task_url_ids: Mapped[list[uuid.UUID]] = mapped_column(CompatibleARRAY(Uuid), nullable=False, default=list)
+    tags: Mapped[list[str]] = mapped_column(CompatibleARRAY(Text), nullable=False, default=list)
     image_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
     debut_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)

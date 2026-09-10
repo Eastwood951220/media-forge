@@ -21,6 +21,7 @@ class ActressRecentMovieRead(BaseModel):
 
 class ActressExternalLinkRead(BaseModel):
     id: uuid.UUID
+    task_id: uuid.UUID
     source: str
     label: str
     url: str
@@ -38,6 +39,7 @@ class ActressProfileRead(BaseModel):
     source_site: str
     source_task_ids: list[uuid.UUID]
     source_task_url_ids: list[uuid.UUID]
+    tags: list[str]
     image_url: str
     debut_date: date | None
     birth_date: date | None
@@ -70,3 +72,7 @@ class ActressFetchFromTaskResponse(BaseModel):
     profiles: list[ActressProfileRead]
     candidates: list[str]
     message: str
+
+
+class ActressTagsUpdateRequest(BaseModel):
+    tags: list[str] = Field(default_factory=list, max_length=50)

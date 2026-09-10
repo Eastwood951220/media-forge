@@ -10,9 +10,9 @@ from backend.app.modules.content.actresses.queries import (
     list_actress_profiles,
     recent_movies_for_profile,
 )
-from backend.app.modules.content.actresses.schemas import ActressFetchFromTaskRequest
+from backend.app.modules.content.actresses.schemas import ActressFetchFromTaskRequest, ActressTagsUpdateRequest
 from backend.app.modules.content.actresses.serializers import serialize_actress_profile
-from backend.app.modules.content.actresses.service import fetch_actresses_from_task
+from backend.app.modules.content.actresses.service import fetch_actresses_from_task, update_actress_tags
 from shared.database.models.content import ActressProfile
 from shared.schemas.common import paginated, success
 
@@ -33,6 +33,7 @@ def list_actresses(
     bust_range: str | None = Query(default=None, max_length=20),
     waist_range: str | None = Query(default=None, max_length=20),
     hip_range: str | None = Query(default=None, max_length=20),
+    tags: str | None = Query(default=None, max_length=500),
 ) -> dict:
     if limit not in VALID_PAGE_SIZES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="分页大小必须是 8、16、24 或 40")
@@ -48,8 +49,15 @@ def list_actresses(
         bust_range=bust_range,
         waist_range=waist_range,
         hip_range=hip_range,
+        tags=tags,
     )
-    return paginated(rows=[serialize_actress_profile(row) for row in rows], total=total)
+    return paginated(
+        rows=[
+            serialize_actress_profile(row, external_links=external_links_for_profile(db, row))
+            for row in rows
+        ],
+        total=total,
+    )
 
 
 @router.get("/{profile_id}")
@@ -60,6 +68,16 @@ def get_actress(profile_id: uuid.UUID, _current_user: CurrentUser, db: Session =
     recent_movies = recent_movies_for_profile(db, profile, limit=10)
     external_links = external_links_for_profile(db, profile)
     return success(data=serialize_actress_profile(profile, recent_movies=recent_movies, external_links=external_links))
+
+
+@router.put("/{profile_id}/tags")
+def update_tags(
+    profile_id: uuid.UUID,
+    body: ActressTagsUpdateRequest,
+    _current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    return success(data=serialize_actress_profile(update_actress_tags(db, profile_id, body.tags)))
 
 
 @router.post("/fetch-from-task")

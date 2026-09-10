@@ -156,3 +156,9 @@ export function taskPresetFromSearch(search: string): string | undefined {
     const taskId = params.get("task_id");
     return taskId ? taskId : undefined;
 }
+
+export function textPresetFromSearch(search: string): string | undefined {
+    const params = new URLSearchParams(search);
+    const text = params.get("search") || params.get("code");
+    return text?.trim() || undefined;
+}

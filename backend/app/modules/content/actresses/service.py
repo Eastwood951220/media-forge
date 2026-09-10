@@ -61,6 +61,10 @@ def _merge_uuid_values(existing, incoming) -> list:
     return values
 
 
+def _task_tag_names(task: CrawlTask) -> list[str]:
+    return dedupe_text(sorted(tag.name for tag in (task.tags or []) if tag.name))
+
+
 def _upsert_profile(
     db: Session,
     payload: ActressProfilePayload,
@@ -68,20 +72,27 @@ def _upsert_profile(
     canonical_names: list[str],
     task_id: uuid.UUID,
     task_url_id: uuid.UUID,
+    tag_names: list[str],
 ) -> ActressProfile:
     profile = _find_existing_profile(db, payload, canonical_names)
     now = datetime.now()
+    existing_profile = profile is not None
     if profile is None:
         profile = ActressProfile(source_url=payload.source_url)
         db.add(profile)
+
+    profile.source_task_ids = _merge_uuid_values(profile.source_task_ids, [task_id])
+    profile.source_task_url_ids = _merge_uuid_values(profile.source_task_url_ids, [task_url_id])
+    profile.tags = _merge_values(profile.tags, tag_names)
+    if existing_profile:
+        db.flush()
+        return profile
 
     profile.display_name = payload.display_name
     profile.reading = payload.reading
     profile.aliases = _merge_values(profile.aliases, payload.aliases)
     profile.canonical_names = _merge_values(profile.canonical_names, canonical_names)
     profile.source_site = "avjoho"
-    profile.source_task_ids = _merge_uuid_values(profile.source_task_ids, [task_id])
-    profile.source_task_url_ids = _merge_uuid_values(profile.source_task_url_ids, [task_url_id])
     profile.image_url = payload.image_url
     profile.debut_date = payload.debut_date
     profile.birth_date = payload.birth_date
@@ -104,13 +115,23 @@ def _upsert_profile(
     return profile
 
 
+def update_actress_tags(db: Session, profile_id: uuid.UUID, tags: list[str]) -> ActressProfile:
+    profile = db.get(ActressProfile, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="女优资料不存在")
+    profile.tags = dedupe_text(tags)
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
 def fetch_actresses_from_task(
     db: Session,
     task_id: uuid.UUID,
     task_url_id: uuid.UUID,
     avjoho_url: str | None = None,
 ) -> dict:
-    task = db.get(CrawlTask, task_id, options=[selectinload(CrawlTask.urls)])
+    task = db.get(CrawlTask, task_id, options=[selectinload(CrawlTask.urls), selectinload(CrawlTask.tags)])
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
     actor_url = _selected_actor_url_for_task(task, task_url_id)
@@ -152,6 +173,7 @@ def fetch_actresses_from_task(
             canonical_names=dedupe_text([*names, match.profile.display_name, *match.profile.aliases]),
             task_id=task.id,
             task_url_id=task_url.id,
+            tag_names=_task_tag_names(task),
         )
         profiles.append(profile)
 

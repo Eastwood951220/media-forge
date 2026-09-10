@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
-import { FilterOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons'
+import { FilterOutlined, PlayCircleOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Avatar, Button, Card, Empty, Input, Pagination, Select, Spin, Typography } from 'antd'
+import { App, Avatar, Button, Card, Empty, Input, Modal, Pagination, Radio, Select, Spin, Tag, Typography } from 'antd'
+import { createTaskUrlRun } from '@/api/crawler/crawlTask'
 import { fetchActresses } from '@/api/content/actresses'
-import type { ActressProfile } from '@/api/content/actresses'
+import type { ActressExternalLink, ActressProfile } from '@/api/content/actresses'
 import { queryKeys } from '@/api/queryKeys'
 import styles from './ActressPages.module.less'
 
@@ -54,7 +55,21 @@ const HIP_OPTIONS = [
   { value: '96_over', label: 'H96cm以上' },
 ]
 
-function ActressCard({ actress, onOpen }: { actress: ActressProfile; onOpen: (actress: ActressProfile) => void }) {
+type CrawlMode = 'incremental' | 'full'
+
+function formatLinkLabel(link: ActressExternalLink) {
+  return `${link.label}${link.url_name ? ` · ${link.url_name}` : ''}`
+}
+
+function ActressCard({
+  actress,
+  onCrawl,
+  onOpen,
+}: {
+  actress: ActressProfile
+  onCrawl: (actress: ActressProfile) => void
+  onOpen: (actress: ActressProfile) => void
+}) {
   return (
     <Card
       hoverable
@@ -76,11 +91,30 @@ function ActressCard({ actress, onOpen }: { actress: ActressProfile; onOpen: (ac
       <Typography.Text type="secondary" className={styles.actressReading}>
         {actress.reading || actress.aliases[0] || '未记录读音'}
       </Typography.Text>
+      {actress.tags.length > 0 && (
+        <div className={styles.cardTags}>
+          {actress.tags.slice(0, 4).map((tag) => (
+            <Tag key={tag}>{tag}</Tag>
+          ))}
+        </div>
+      )}
+      <Button
+        block
+        icon={<PlayCircleOutlined />}
+        disabled={(actress.external_links ?? []).length === 0}
+        onClick={(event) => {
+          event.stopPropagation()
+          onCrawl(actress)
+        }}
+      >
+        爬取影片
+      </Button>
     </Card>
   )
 }
 
 function ActressListPage() {
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState<8 | 16 | 24 | 40>(24)
@@ -92,6 +126,11 @@ function ActressListPage() {
   const [bustRange, setBustRange] = useState<string | undefined>()
   const [waistRange, setWaistRange] = useState<string | undefined>()
   const [hipRange, setHipRange] = useState<string | undefined>()
+  const [tagFilters, setTagFilters] = useState<string[]>([])
+  const [crawlTarget, setCrawlTarget] = useState<ActressProfile | null>(null)
+  const [crawlMode, setCrawlMode] = useState<CrawlMode>('incremental')
+  const [selectedLinkId, setSelectedLinkId] = useState<string>()
+  const [submittingCrawl, setSubmittingCrawl] = useState(false)
   const params = useMemo(() => ({
     page,
     limit,
@@ -102,7 +141,8 @@ function ActressListPage() {
     bust_range: bustRange,
     waist_range: waistRange,
     hip_range: hipRange,
-  }), [ageRange, bustRange, cup, heightRange, hipRange, keyword, limit, page, waistRange])
+    tags: tagFilters.length > 0 ? tagFilters.join(',') : undefined,
+  }), [ageRange, bustRange, cup, heightRange, hipRange, keyword, limit, page, tagFilters, waistRange])
 
   const setRangeFilter = (setter: (value: string | undefined) => void) => (value: string | undefined) => {
     setter(value)
@@ -116,6 +156,36 @@ function ActressListPage() {
 
   const actresses = query.data?.items ?? []
   const total = query.data?.total ?? 0
+  const crawlLinks = crawlTarget?.external_links ?? []
+  const selectedCrawlLink = crawlLinks.find((link) => link.id === selectedLinkId) ?? crawlLinks[0]
+
+  const openCrawlModal = (actress: ActressProfile) => {
+    const links = actress.external_links ?? []
+    if (links.length === 0) {
+      message.warning('当前女优没有可爬取的关联 URL')
+      return
+    }
+    setCrawlTarget(actress)
+    setSelectedLinkId(links[0].id)
+    setCrawlMode('incremental')
+  }
+
+  const submitCrawl = async () => {
+    if (!selectedCrawlLink) return
+    setSubmittingCrawl(true)
+    try {
+      await createTaskUrlRun(selectedCrawlLink.task_id, {
+        url_ids: [selectedCrawlLink.id],
+        crawl_mode: crawlMode,
+      })
+      message.success('已提交影片爬取任务')
+      setCrawlTarget(null)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '提交爬取任务失败')
+    } finally {
+      setSubmittingCrawl(false)
+    }
+  }
 
   return (
     <div className={styles.page}>
@@ -219,6 +289,18 @@ function ActressListPage() {
               className={styles.filterSelect}
             />
           </div>
+          <Select
+            mode="tags"
+            allowClear
+            aria-label="标签"
+            placeholder="标签"
+            value={tagFilters}
+            onChange={(values) => {
+              setTagFilters(values)
+              setPage(1)
+            }}
+            className={styles.tagFilterSelect}
+          />
         </section>
       )}
 
@@ -229,6 +311,7 @@ function ActressListPage() {
               <ActressCard
                 key={actress.id}
                 actress={actress}
+                onCrawl={openCrawlModal}
                 onOpen={(item) => navigate({ to: '/content/actresses/$id', params: { id: item.id } })}
               />
             ))}
@@ -256,6 +339,38 @@ function ActressListPage() {
           />
         </div>
       )}
+
+      <Modal
+        title={crawlTarget ? `爬取 ${crawlTarget.display_name} 的影片` : '爬取影片'}
+        open={Boolean(crawlTarget)}
+        okText="开始爬取"
+        cancelText="取消"
+        confirmLoading={submittingCrawl}
+        onOk={() => void submitCrawl()}
+        onCancel={() => setCrawlTarget(null)}
+      >
+        <div className={styles.crawlModalBody}>
+          {crawlLinks.length > 1 && (
+            <Select
+              aria-label="选择爬取 URL"
+              value={selectedLinkId}
+              options={crawlLinks.map((link) => ({ value: link.id, label: formatLinkLabel(link) }))}
+              onChange={setSelectedLinkId}
+            />
+          )}
+          {crawlLinks.length === 1 && selectedCrawlLink && (
+            <Typography.Text>{formatLinkLabel(selectedCrawlLink)}</Typography.Text>
+          )}
+          <Radio.Group
+            aria-label="爬取模式"
+            value={crawlMode}
+            onChange={(event) => setCrawlMode(event.target.value)}
+          >
+            <Radio.Button value="incremental">增量</Radio.Button>
+            <Radio.Button value="full">全量</Radio.Button>
+          </Radio.Group>
+        </div>
+      </Modal>
     </div>
   )
 }

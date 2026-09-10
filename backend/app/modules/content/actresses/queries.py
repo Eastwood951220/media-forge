@@ -71,6 +71,12 @@ def _matches_keyword(profile: ActressProfile, keyword: str) -> bool:
     return any(needle in value.lower() for value in values)
 
 
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 def _age_from_birth_date(birth_date: date | None, *, today: date | None = None) -> int | None:
     if birth_date is None:
         return None
@@ -107,6 +113,7 @@ def list_actress_profiles(
     bust_range: str | None = None,
     waist_range: str | None = None,
     hip_range: str | None = None,
+    tags: str | None = None,
 ) -> tuple[list[ActressProfile], int]:
     rows = list(db.scalars(select(ActressProfile).order_by(ActressProfile.created_at.desc(), ActressProfile.display_name.asc())))
     if keyword:
@@ -116,6 +123,9 @@ def list_actress_profiles(
     if cup:
         expected_cup = cup.strip().lower()
         rows = [row for row in rows if (row.cup or "").strip().lower() == expected_cup]
+    expected_tags = set(_split_csv(tags))
+    if expected_tags:
+        rows = [row for row in rows if expected_tags.issubset(set(row.tags or []))]
     rows = [row for row in rows if _matches_number_range(row.height_cm, HEIGHT_RANGES, height_range)]
     rows = [row for row in rows if _matches_number_range(_age_from_birth_date(row.birth_date), AGE_RANGES, age_range)]
     rows = [row for row in rows if _matches_number_range(row.bust_cm, BUST_RANGES, bust_range)]

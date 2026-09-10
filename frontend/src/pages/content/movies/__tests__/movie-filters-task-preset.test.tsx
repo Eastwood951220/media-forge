@@ -48,4 +48,15 @@ describe('useMovieFilters URL task preset seeding', () => {
     await waitFor(() => expect(result.current.optionsLoaded).toBe(true))
     expect(result.current.form.selectedTask).toBeUndefined()
   })
+
+  it('seeds the text search from the URL search parameter immediately on mount', async () => {
+    setSearch('/content/movies?search=NEW-001')
+
+    const { result } = renderHook(() => useMovieFilters({ enabled: true, filterConfig: {} }), { wrapper })
+
+    expect(result.current.form.search).toBe('NEW-001')
+
+    await waitFor(() => expect(result.current.optionsLoaded).toBe(true))
+    expect(result.current.form.search).toBe('NEW-001')
+  })
 })

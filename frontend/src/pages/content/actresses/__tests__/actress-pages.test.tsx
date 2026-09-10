@@ -5,16 +5,24 @@ import { App } from 'antd'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ActressListPage from '../ActressListPage'
 import ActressDetailPage from '../ActressDetailPage'
-import { fetchActress, fetchActresses } from '@/api/content/actresses'
+import { createTaskUrlRun } from '@/api/crawler/crawlTask'
+import { fetchActress, fetchActresses, updateActressTags } from '@/api/content/actresses'
+
+const navigateMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigateMock,
   useParams: () => ({ id: 'actress-1' }),
 }))
 
 vi.mock('@/api/content/actresses', () => ({
   fetchActress: vi.fn(),
   fetchActresses: vi.fn(),
+  updateActressTags: vi.fn(),
+}))
+
+vi.mock('@/api/crawler/crawlTask', () => ({
+  createTaskUrlRun: vi.fn(),
 }))
 
 const profile = {
@@ -29,6 +37,7 @@ const profile = {
   source_task_ids: ['task-1'],
   source_task_url_ids: ['url-1'],
   external_links: [],
+  tags: ['单体', '清楚'],
   image_url: 'https://example.test/cover.jpg',
   debut_date: '2026-09-03',
   birth_date: '1977-12-01',
@@ -63,6 +72,8 @@ function renderWithClient(ui: React.ReactElement) {
 describe('Actress pages', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(updateActressTags).mockResolvedValue(profile)
+    vi.mocked(createTaskUrlRun).mockResolvedValue({ accepted: true, run_id: 'run-1' } as never)
   })
 
   it('renders actress cards and requests the default 24 item page size', async () => {
@@ -75,6 +86,8 @@ describe('Actress pages', () => {
     })
     expect(await screen.findByText('宮上唯依花')).toBeInTheDocument()
     expect(screen.getByText('みやうえゆいか')).toBeInTheDocument()
+    expect(screen.getByText('单体')).toBeInTheDocument()
+    expect(screen.getByText('清楚')).toBeInTheDocument()
   })
 
   it('keeps advanced filters collapsed and sends dropdown range filters when expanded', async () => {
@@ -114,6 +127,7 @@ describe('Actress pages', () => {
   })
 
   it('renders standalone detail with recent movies sorted by backend response', async () => {
+    const user = userEvent.setup()
     vi.mocked(fetchActress).mockResolvedValue({
       ...profile,
       recent_movies: [
@@ -128,6 +142,9 @@ describe('Actress pages', () => {
     expect(screen.getByText('NEW-001')).toBeInTheDocument()
     expect(screen.getByText('New Movie')).toBeInTheDocument()
     expect(screen.getByText('OLD-001')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /NEW-001/ }))
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/content/movies', search: { search: 'NEW-001' } })
   })
 
   it('renders profile metadata in a structured detail layout', async () => {
@@ -162,6 +179,7 @@ describe('Actress pages', () => {
       external_links: [
         {
           id: 'url-1',
+          task_id: 'task-1',
           source: 'javdb',
           label: 'JavDB',
           url: 'https://javdb.com/actors/yuika',
@@ -170,6 +188,7 @@ describe('Actress pages', () => {
         },
         {
           id: 'url-2',
+          task_id: 'task-1',
           source: 'javbus',
           label: 'JavBus',
           url: 'https://www.javbus.com/star/abc',
@@ -185,5 +204,46 @@ describe('Actress pages', () => {
     expect(await screen.findByRole('link', { name: '查看 avjoho 资料' })).toHaveAttribute('href', profile.source_url)
     expect(screen.getByRole('link', { name: '查看 JavDB 关联' })).toHaveAttribute('href', 'https://javdb.com/actors/yuika')
     expect(screen.getByRole('link', { name: '查看 JavBus 关联' })).toHaveAttribute('href', 'https://www.javbus.com/star/abc')
+  })
+
+  it('updates tags from the detail page', async () => {
+    const user = userEvent.setup()
+    vi.mocked(fetchActress).mockResolvedValue({ ...profile, recent_movies: [] })
+
+    renderWithClient(<ActressDetailPage />)
+
+    await user.click(await screen.findByRole('button', { name: '编辑标签' }))
+    await user.click(screen.getByRole('button', { name: /保\s*存/ }))
+
+    expect(updateActressTags).toHaveBeenCalledWith('actress-1', { tags: ['单体', '清楚'] })
+  })
+
+  it('submits a movie crawl for the selected actress link', async () => {
+    const user = userEvent.setup()
+    vi.mocked(fetchActress).mockResolvedValue({
+      ...profile,
+      external_links: [
+        {
+          id: 'url-1',
+          task_id: 'task-1',
+          source: 'javdb',
+          label: 'JavDB',
+          url: 'https://javdb.com/actors/yuika',
+          url_type: 'actors',
+          url_name: '宮上唯依花',
+        },
+      ],
+      recent_movies: [],
+    })
+
+    renderWithClient(<ActressDetailPage />)
+
+    await user.click(await screen.findByRole('button', { name: /爬取影片/ }))
+    await user.click(screen.getByRole('button', { name: /开始爬取/ }))
+
+    expect(createTaskUrlRun).toHaveBeenCalledWith('task-1', {
+      url_ids: ['url-1'],
+      crawl_mode: 'incremental',
+    })
   })
 })

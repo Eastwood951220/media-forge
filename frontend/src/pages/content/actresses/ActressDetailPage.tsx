@@ -1,8 +1,11 @@
-import { ArrowLeftOutlined, LinkOutlined, UserOutlined } from '@ant-design/icons'
+import { useMemo, useState } from 'react'
+import { ArrowLeftOutlined, LinkOutlined, PlayCircleOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { Avatar, Button, Empty, Image, Spin, Typography } from 'antd'
-import { fetchActress } from '@/api/content/actresses'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { App, Avatar, Button, Empty, Image, Modal, Radio, Select, Spin, Tag, Typography } from 'antd'
+import { createTaskUrlRun } from '@/api/crawler/crawlTask'
+import { fetchActress, updateActressTags } from '@/api/content/actresses'
+import type { ActressExternalLink } from '@/api/content/actresses'
 import { queryKeys } from '@/api/queryKeys'
 import styles from './ActressPages.module.less'
 
@@ -34,9 +37,24 @@ function formatAge(value: string | null) {
   return `${age}岁`
 }
 
+type CrawlMode = 'incremental' | 'full'
+
+function formatLinkLabel(link: ActressExternalLink) {
+  return `${link.label}${link.url_name ? ` · ${link.url_name}` : ''}`
+}
+
 function ActressDetailPage() {
+  const { message } = App.useApp()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const params = useParams({ strict: false }) as { id: string }
+  const [tagEditorOpen, setTagEditorOpen] = useState(false)
+  const [tagDraft, setTagDraft] = useState<string[]>([])
+  const [savingTags, setSavingTags] = useState(false)
+  const [crawlOpen, setCrawlOpen] = useState(false)
+  const [crawlMode, setCrawlMode] = useState<CrawlMode>('incremental')
+  const [selectedLinkId, setSelectedLinkId] = useState<string>()
+  const [submittingCrawl, setSubmittingCrawl] = useState(false)
   const query = useQuery({
     queryKey: queryKeys.actresses.detail(params.id),
     queryFn: () => fetchActress(params.id),
@@ -44,6 +62,10 @@ function ActressDetailPage() {
   })
   const actress = query.data
   const externalLinks = actress?.external_links ?? []
+  const selectedCrawlLink = useMemo(
+    () => externalLinks.find((link) => link.id === selectedLinkId) ?? externalLinks[0],
+    [externalLinks, selectedLinkId],
+  )
   const profileFacts = actress ? [
     { label: '出道日期', value: formatDate(actress.debut_date) },
     { label: '出生日期', value: formatDate(actress.birth_date) },
@@ -56,6 +78,56 @@ function ActressDetailPage() {
     { label: '专属厂商', value: actress.exclusive_maker || '-' },
     { label: '兴趣特长', value: actress.hobbies || '-' },
   ] : []
+
+  const openTagEditor = () => {
+    setTagDraft(actress?.tags ?? [])
+    setTagEditorOpen(true)
+  }
+
+  const saveTags = async () => {
+    if (!actress) return
+    setSavingTags(true)
+    try {
+      await updateActressTags(actress.id, { tags: tagDraft })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.actresses.detail(actress.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.actresses.all() }),
+      ])
+      message.success('标签已更新')
+      setTagEditorOpen(false)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '更新标签失败')
+    } finally {
+      setSavingTags(false)
+    }
+  }
+
+  const openCrawlModal = () => {
+    if (externalLinks.length === 0) {
+      message.warning('当前女优没有可爬取的关联 URL')
+      return
+    }
+    setSelectedLinkId(externalLinks[0].id)
+    setCrawlMode('incremental')
+    setCrawlOpen(true)
+  }
+
+  const submitCrawl = async () => {
+    if (!selectedCrawlLink) return
+    setSubmittingCrawl(true)
+    try {
+      await createTaskUrlRun(selectedCrawlLink.task_id, {
+        url_ids: [selectedCrawlLink.id],
+        crawl_mode: crawlMode,
+      })
+      message.success('已提交影片爬取任务')
+      setCrawlOpen(false)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '提交爬取任务失败')
+    } finally {
+      setSubmittingCrawl(false)
+    }
+  }
 
   return (
     <div className={styles.page}>
@@ -83,6 +155,14 @@ function ActressDetailPage() {
                     <Typography.Text type="secondary">{actress.reading || '未记录读音'}</Typography.Text>
                   </div>
                   <div className={styles.sourceActions}>
+                    <Button
+                      className={styles.sourceButton}
+                      icon={<PlayCircleOutlined />}
+                      disabled={externalLinks.length === 0}
+                      onClick={openCrawlModal}
+                    >
+                      爬取影片
+                    </Button>
                     {actress.source_url && (
                       <Button
                         className={styles.sourceButton}
@@ -120,6 +200,19 @@ function ActressDetailPage() {
                     )}
                   </div>
                 </div>
+                <div className={styles.aliasPanel}>
+                  <div className={styles.tagHeader}>
+                    <Typography.Text className={styles.aliasLabel}>标签</Typography.Text>
+                    <Button size="small" onClick={openTagEditor}>编辑标签</Button>
+                  </div>
+                  <div className={styles.aliasList}>
+                    {actress.tags.length > 0 ? actress.tags.map((tag) => (
+                      <Tag key={tag}>{tag}</Tag>
+                    )) : (
+                      <Typography.Text type="secondary">-</Typography.Text>
+                    )}
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -146,7 +239,19 @@ function ActressDetailPage() {
               {actress.recent_movies.length > 0 ? (
                 <div className={styles.movieGrid}>
                   {actress.recent_movies.map((movie) => (
-                    <article key={movie.id} className={styles.movieCard}>
+                    <article
+                      key={movie.id}
+                      className={styles.movieCard}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate({ to: '/content/movies', search: { search: movie.code } })}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          navigate({ to: '/content/movies', search: { search: movie.code } })
+                        }
+                      }}
+                    >
                       <div className={styles.movieCover}>
                         {movie.cover ? <img src={movie.cover} alt={movie.title || movie.code} loading="lazy" /> : <VideoFallback />}
                       </div>
@@ -162,6 +267,58 @@ function ActressDetailPage() {
                 <Empty description="暂无关联影片" />
               )}
             </section>
+
+            <Modal
+              title="编辑标签"
+              open={tagEditorOpen}
+              okText="保存"
+              cancelText="取消"
+              confirmLoading={savingTags}
+              onOk={() => void saveTags()}
+              onCancel={() => setTagEditorOpen(false)}
+            >
+              <Select
+                mode="tags"
+                allowClear
+                aria-label="编辑标签"
+                placeholder="输入标签"
+                value={tagDraft}
+                onChange={setTagDraft}
+                className={styles.tagEditorSelect}
+              />
+            </Modal>
+
+            <Modal
+              title={`爬取 ${actress.display_name} 的影片`}
+              open={crawlOpen}
+              okText="开始爬取"
+              cancelText="取消"
+              confirmLoading={submittingCrawl}
+              onOk={() => void submitCrawl()}
+              onCancel={() => setCrawlOpen(false)}
+            >
+              <div className={styles.crawlModalBody}>
+                {externalLinks.length > 1 && (
+                  <Select
+                    aria-label="选择爬取 URL"
+                    value={selectedLinkId}
+                    options={externalLinks.map((link) => ({ value: link.id, label: formatLinkLabel(link) }))}
+                    onChange={setSelectedLinkId}
+                  />
+                )}
+                {externalLinks.length === 1 && selectedCrawlLink && (
+                  <Typography.Text>{formatLinkLabel(selectedCrawlLink)}</Typography.Text>
+                )}
+                <Radio.Group
+                  aria-label="爬取模式"
+                  value={crawlMode}
+                  onChange={(event) => setCrawlMode(event.target.value)}
+                >
+                  <Radio.Button value="incremental">增量</Radio.Button>
+                  <Radio.Button value="full">全量</Radio.Button>
+                </Radio.Group>
+              </div>
+            </Modal>
           </>
         ) : (
           <Empty description={query.isError ? '女优资料加载失败' : '暂无资料'} className={styles.emptyState} />

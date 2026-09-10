@@ -4,7 +4,13 @@ import { fetchFilters } from '@/api/movie'
 import { getTaskDict } from '@/api/crawler/crawlTask'
 import { MOVIE_FILTER_OPTION_TYPE } from '../constants'
 import type { MovieFilterConfig, SelectOption } from '@/api/movie/types'
-import { buildMovieFilterDefaultState, buildMovieFilterParams, taskPresetFromSearch, type MovieFilterState } from '../utils/movieFilter'
+import {
+  buildMovieFilterDefaultState,
+  buildMovieFilterParams,
+  taskPresetFromSearch,
+  textPresetFromSearch,
+  type MovieFilterState,
+} from '../utils/movieFilter'
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '请求失败'
@@ -56,9 +62,11 @@ function filterReducer(state: MovieFilterState, action: FilterAction): MovieFilt
 
 function createInitialFilterState(initial: MovieFilterState): MovieFilterState {
   // Seed the task preset straight from the URL so every freshly mounted
-  // instance (including keep-alive remounts) starts filtered by ?task_id.
+  // instance (including keep-alive remounts) starts filtered by URL presets.
   const taskId = taskPresetFromSearch(window.location.search)
-  return taskId ? { ...initial, selectedTask: taskId } : initial
+  const search = textPresetFromSearch(window.location.search)
+  if (!taskId && !search) return initial
+  return { ...initial, selectedTask: taskId, search: search ?? initial.search }
 }
 
 function toOptions(values: string[]): SelectOption[] {

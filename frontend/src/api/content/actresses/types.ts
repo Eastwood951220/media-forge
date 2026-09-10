@@ -10,6 +10,7 @@ export interface ActressRecentMovie {
 export interface ActressExternalLink {
   id: string
   _id?: string
+  task_id: string
   source: string
   label: string
   url: string
@@ -29,6 +30,7 @@ export interface ActressProfile {
   source_task_ids: string[]
   source_task_url_ids: string[]
   external_links?: ActressExternalLink[]
+  tags: string[]
   image_url: string
   debut_date: string | null
   birth_date: string | null
@@ -75,6 +77,11 @@ export interface ActressQueryParams {
   bust_range?: string
   waist_range?: string
   hip_range?: string
+  tags?: string
+}
+
+export interface ActressTagsUpdatePayload {
+  tags: string[]
 }
 
 export interface ActressFetchFromTaskPayload {

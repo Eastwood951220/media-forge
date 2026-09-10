@@ -6,6 +6,7 @@ import type {
   ActressProfile,
   ActressProfileDetail,
   ActressQueryParams,
+  ActressTagsUpdatePayload,
 } from './types'
 
 export type {
@@ -16,6 +17,8 @@ export type {
   ActressProfileDetail,
   ActressQueryParams,
   ActressRecentMovie,
+  ActressExternalLink,
+  ActressTagsUpdatePayload,
 } from './types'
 
 const BASE_URL = '/api/content/actresses'
@@ -45,4 +48,8 @@ export function fetchActress(id: string): Promise<ActressProfileDetail> {
 
 export function fetchActressesFromTask(payload: ActressFetchFromTaskPayload): Promise<ActressFetchFromTaskResult> {
   return request.post<ActressFetchFromTaskResult>(`${BASE_URL}/fetch-from-task`, payload)
+}
+
+export function updateActressTags(id: string, payload: ActressTagsUpdatePayload): Promise<ActressProfile> {
+  return request.put<ActressProfile>(`${BASE_URL}/${id}/tags`, payload)
 }

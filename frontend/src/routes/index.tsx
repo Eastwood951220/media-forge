@@ -154,9 +154,12 @@ const contentMoviesRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/content/movies',
   component: MovieListPage,
-  validateSearch: (search: Record<string, unknown>) => ({
-    task_id: typeof search.task_id === 'string' ? search.task_id : undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>): { task_id?: string; search?: string } => {
+    const parsed: { task_id?: string; search?: string } = {}
+    if (typeof search.task_id === 'string') parsed.task_id = search.task_id
+    if (typeof search.search === 'string') parsed.search = search.search
+    return parsed
+  },
 })
 
 const contentActressesRoute = createRoute({

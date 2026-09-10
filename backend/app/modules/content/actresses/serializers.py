@@ -26,6 +26,7 @@ def serialize_external_link(task_url: CrawlTaskUrl) -> dict:
     return {
         "id": str(task_url.id),
         "_id": str(task_url.id),
+        "task_id": str(task_url.task_id),
         "source": source,
         "label": SOURCE_LABELS.get(source, source),
         "url": task_url.final_url or task_url.url or "",
@@ -51,6 +52,7 @@ def serialize_actress_profile(
         "source_site": profile.source_site or "",
         "source_task_ids": [str(value) for value in (profile.source_task_ids or [])],
         "source_task_url_ids": [str(value) for value in (profile.source_task_url_ids or [])],
+        "tags": list(profile.tags or []),
         "image_url": profile.image_url or "",
         "debut_date": profile.debut_date.isoformat() if profile.debut_date else None,
         "birth_date": profile.birth_date.isoformat() if profile.birth_date else None,

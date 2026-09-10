@@ -1,15 +1,23 @@
 import uuid
 from datetime import date, datetime
 
-from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
+from backend.app.models.crawl_task import CrawlTask, CrawlTaskTag, CrawlTaskUrl
 from backend.app.modules.content.actresses import service as actress_service
 from scraper.profiles.actress import ActorMetadata, ActressProfileMatch, ActressProfilePayload
 from scraper.spiders.avjoho.avjoho_spider import AvjohoActressSpider, ProfileSourceNotFound
 from shared.database.models.content import ActressProfile, Movie
 
 
-def _seed_actor_task(db_session, admin_user, *, url_name: str = "宮上唯依花") -> tuple[CrawlTask, CrawlTaskUrl]:
+def _seed_actor_task(
+    db_session,
+    admin_user,
+    *,
+    url_name: str = "宮上唯依花",
+    tag_names: list[str] | None = None,
+) -> tuple[CrawlTask, CrawlTaskUrl]:
     task = CrawlTask(name="宮上唯依花 任务", storage_location="宮上唯依花", owner_id=admin_user.id)
+    if tag_names:
+        task.tags = [CrawlTaskTag(owner_id=admin_user.id, name=name) for name in tag_names]
     db_session.add(task)
     db_session.flush()
     task_url = CrawlTaskUrl(
@@ -105,6 +113,34 @@ def test_list_actresses_filters_by_cup_height_and_measurements(client, auth_head
     assert [row["display_name"] for row in payload["rows"]] == ["Matched"]
 
 
+def test_list_actresses_filters_by_tags(client, auth_headers, db_session) -> None:
+    db_session.add_all([
+        ActressProfile(
+            display_name="Tagged A",
+            canonical_names=["Tagged A"],
+            source_url="https://db.avjoho.com/tagged-a/",
+            image_url="https://example.test/tagged-a.jpg",
+            tags=["清楚", "企划"],
+        ),
+        ActressProfile(
+            display_name="Tagged B",
+            canonical_names=["Tagged B"],
+            source_url="https://db.avjoho.com/tagged-b/",
+            image_url="https://example.test/tagged-b.jpg",
+            tags=["清楚"],
+        ),
+    ])
+    db_session.commit()
+
+    response = client.get("/api/content/actresses?tags=清楚,企划", headers=auth_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["rows"][0]["display_name"] == "Tagged A"
+    assert payload["rows"][0]["tags"] == ["清楚", "企划"]
+
+
 def test_get_actress_detail_returns_recent_movies_by_task_url_id(client, auth_headers, db_session, admin_user) -> None:
     task, task_url = _seed_actor_task(db_session, admin_user)
     other_task_url_id = uuid.uuid4()
@@ -191,6 +227,7 @@ def test_get_actress_detail_returns_external_task_url_links(client, auth_headers
             "_id": str(task_url.id),
             "source": "javdb",
             "label": "JavDB",
+            "task_id": str(task.id),
             "url": "https://javdb.com/actors/yuika",
             "url_type": "actors",
             "url_name": "宮上唯依花",
@@ -200,11 +237,34 @@ def test_get_actress_detail_returns_external_task_url_links(client, auth_headers
             "_id": str(javbus_url.id),
             "source": "javbus",
             "label": "JavBus",
+            "task_id": str(task.id),
             "url": "https://www.javbus.com/star/abc/2",
             "url_type": "actors",
             "url_name": "宮上唯依花",
         },
     ]
+
+
+def test_update_actress_tags(client, auth_headers, db_session) -> None:
+    profile = ActressProfile(
+        display_name="Tag Editable",
+        canonical_names=["Tag Editable"],
+        source_url="https://db.avjoho.com/tag-editable/",
+        image_url="https://example.test/tag-editable.jpg",
+        tags=["旧标签"],
+    )
+    db_session.add(profile)
+    db_session.commit()
+
+    response = client.put(
+        f"/api/content/actresses/{profile.id}/tags",
+        json={"tags": ["新标签", "  新标签  ", "企划"]},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["tags"] == ["新标签", "企划"]
 
 
 def _stub_site_fetchers(monkeypatch) -> None:
@@ -232,7 +292,7 @@ def test_fetch_actress_from_actor_task_uses_javdb_aliases_to_match_avjoho(
     admin_user,
     monkeypatch,
 ) -> None:
-    task, task_url = _seed_actor_task(db_session, admin_user, url_name="咲乃柑菜")
+    task, task_url = _seed_actor_task(db_session, admin_user, url_name="咲乃柑菜", tag_names=["清楚", "单体"])
     _stub_site_fetchers(monkeypatch)
     monkeypatch.setattr(
         actress_service,
@@ -267,6 +327,65 @@ def test_fetch_actress_from_actor_task_uses_javdb_aliases_to_match_avjoho(
     assert data["matched"] is True
     assert data["profiles"][0]["display_name"] == "蘭華"
     assert data["profiles"][0]["source_task_url_ids"] == [str(task_url.id)]
+    assert data["profiles"][0]["tags"] == ["单体", "清楚"]
+
+
+def test_fetch_existing_actress_only_merges_tags_and_source_links(
+    client,
+    auth_headers,
+    db_session,
+    admin_user,
+    monkeypatch,
+) -> None:
+    task, task_url = _seed_actor_task(db_session, admin_user, url_name="咲乃柑菜", tag_names=["新标签"])
+    existing = ActressProfile(
+        display_name="旧名称",
+        reading="old",
+        canonical_names=["咲乃柑菜"],
+        source_url="https://db.avjoho.com/existing/",
+        image_url="https://example.test/old.jpg",
+        birth_date=date(1999, 1, 1),
+        tags=["旧标签"],
+    )
+    db_session.add(existing)
+    db_session.commit()
+    _stub_site_fetchers(monkeypatch)
+    monkeypatch.setattr(
+        actress_service,
+        "fetch_actor_metadata",
+        _javdb_metadata(primary_names=["咲乃柑菜"], aliases=[]),
+    )
+    monkeypatch.setattr(
+        AvjohoActressSpider,
+        "find_first_matching_profile",
+        lambda self, names, manual_url=None: ActressProfileMatch(
+            profile=ActressProfilePayload(
+                display_name="新名称",
+                reading="new",
+                source_url="https://db.avjoho.com/existing/",
+                image_url="https://example.test/new.jpg",
+                birth_date=date(2001, 2, 3),
+            ),
+            attempted_urls=["https://db.avjoho.com/existing/"],
+            candidate_names=list(names),
+            matched_url="https://db.avjoho.com/existing/",
+        ),
+    )
+
+    response = client.post(
+        "/api/content/actresses/fetch-from-task",
+        json={"task_id": str(task.id), "task_url_id": str(task_url.id)},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(existing)
+    assert existing.display_name == "旧名称"
+    assert existing.reading == "old"
+    assert existing.image_url == "https://example.test/old.jpg"
+    assert existing.birth_date == date(1999, 1, 1)
+    assert existing.tags == ["旧标签", "新标签"]
+    assert [str(value) for value in existing.source_task_url_ids] == [str(task_url.id)]
 
 
 def test_fetch_actress_from_actor_task_passes_names_to_spider_and_returns_candidates(
