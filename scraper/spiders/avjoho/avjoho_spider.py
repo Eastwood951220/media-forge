@@ -86,38 +86,74 @@ class AvjohoActressSpider:
         haystack = {payload.display_name, *payload.aliases}
         return bool(set(dedupe_text(names)).intersection(haystack))
 
+    def _match_profile_url(
+        self,
+        url: str,
+        *,
+        candidate_names: list[str],
+        attempted_urls: list[str],
+        seen_urls: set[str],
+        manual_url: str | None = None,
+    ) -> ActressProfileMatch | None:
+        if url in seen_urls:
+            return None
+        seen_urls.add(url)
+        attempted_urls.append(url)
+        try:
+            payload = self.fetch_profile(url)
+        except Exception as exc:
+            if manual_url:
+                raise ProfileSourceNotFound(str(exc)) from exc
+            return None
+        if payload is None:
+            return None
+        if manual_url is None and not self.profile_matches_names(payload, candidate_names):
+            return None
+        return ActressProfileMatch(
+            profile=payload,
+            attempted_urls=attempted_urls,
+            candidate_names=candidate_names,
+            matched_url=url,
+        )
+
     def find_first_matching_profile(self, names: list[str], manual_url: str | None = None) -> ActressProfileMatch:
         candidate_names = dedupe_text(names)
         attempted_urls: list[str] = []
+        seen_urls: set[str] = set()
         if manual_url:
-            url_candidates = [self.validate_profile_url(manual_url)]
+            match = self._match_profile_url(
+                self.validate_profile_url(manual_url),
+                candidate_names=candidate_names,
+                attempted_urls=attempted_urls,
+                seen_urls=seen_urls,
+                manual_url=manual_url,
+            )
+            if match is not None:
+                return match
         else:
-            search_candidates: list[str] = []
+            for url in self.build_direct_profile_urls(candidate_names):
+                match = self._match_profile_url(
+                    url,
+                    candidate_names=candidate_names,
+                    attempted_urls=attempted_urls,
+                    seen_urls=seen_urls,
+                )
+                if match is not None:
+                    return match
             for name in self.build_search_names(candidate_names):
                 try:
-                    search_candidates.extend(self.find_profile_urls_by_search(name))
+                    search_candidates = self.find_profile_urls_by_search(name)
                 except Exception:
                     continue
-            url_candidates = dedupe_text([*self.build_direct_profile_urls(candidate_names), *search_candidates])
-
-        for url in url_candidates:
-            attempted_urls.append(url)
-            try:
-                payload = self.fetch_profile(url)
-            except Exception as exc:
-                if manual_url:
-                    raise ProfileSourceNotFound(str(exc)) from exc
-                continue
-            if payload is None:
-                continue
-            if manual_url is None and not self.profile_matches_names(payload, candidate_names):
-                continue
-            return ActressProfileMatch(
-                profile=payload,
-                attempted_urls=attempted_urls,
-                candidate_names=candidate_names,
-                matched_url=url,
-            )
+                for url in search_candidates:
+                    match = self._match_profile_url(
+                        url,
+                        candidate_names=candidate_names,
+                        attempted_urls=attempted_urls,
+                        seen_urls=seen_urls,
+                    )
+                    if match is not None:
+                        return match
 
         return ActressProfileMatch(
             profile=None,

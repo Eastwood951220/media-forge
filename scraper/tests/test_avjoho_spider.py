@@ -193,6 +193,31 @@ def test_avjoho_spider_falls_back_to_search_after_direct_candidates_miss() -> No
     ]
 
 
+def test_avjoho_spider_stops_searching_names_after_first_search_match() -> None:
+    profile_html = """
+    <h1 class="entry-title">命中名（めいちゅう）</h1>
+    <div class="database"><table><tbody><tr><th>別名</th><td>hit alias</td></tr></tbody></table></div>
+    """
+    search_html = """
+    <div id="list">
+      <article><h2 class="entry-title">
+        <a href="https://db.avjoho.com/hit-profile/">命中名</a>
+      </h2></article>
+    </div>
+    """
+    fetcher = FakeFetcher({
+        f"https://db.avjoho.com/?s={quote('hit alias')}": search_html,
+        "https://db.avjoho.com/hit-profile/": profile_html,
+    })
+    spider = AvjohoActressSpider(fetcher=fetcher)
+
+    result = spider.find_first_matching_profile(["missing alias", "hit alias", "later alias"])
+
+    assert result.profile is not None
+    assert result.matched_url == "https://db.avjoho.com/hit-profile/"
+    assert f"https://db.avjoho.com/?s={quote('later alias')}" not in fetcher.requested
+
+
 def test_avjoho_spider_skips_candidate_whose_profile_name_does_not_match() -> None:
     spider = AvjohoActressSpider(
         fetcher=FakeFetcher({
