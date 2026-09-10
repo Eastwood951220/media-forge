@@ -161,3 +161,110 @@ def test_javdb_magnet_provider_keeps_completed_empty_detail_for_no_magnet_handli
 
     assert payload.status == "completed"
     assert payload.data == {}
+
+
+from scraper.spiders.javbus.magnet_provider import JavbusMagnetProvider
+
+
+def test_javbus_magnet_provider_returns_detail_payload(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run_single_detail_task(self, task, **kwargs):
+        captured["task"] = task
+        captured["kwargs"] = kwargs
+        return {
+            **task,
+            "status": "completed",
+            "detail": {
+                "code": "ABC-001",
+                "source": "javbus",
+                "source_url": task["url"],
+                "magnets": [{"name": "bus magnet", "magnet": "magnet:?xt=urn:btih:def"}],
+            },
+        }
+
+    monkeypatch.setattr(
+        "scraper.spiders.javbus.javbus_spider.JavbusSpider.run_single_detail_task",
+        fake_run_single_detail_task,
+    )
+
+    provider = JavbusMagnetProvider(fetcher=DummyFetcher())
+    payload = provider.fetch_detail_with_magnets(MovieDetailRequest(
+        source="javbus",
+        url="https://www.javbus.com/ABC-001",
+        code="ABC-001",
+        name="Example",
+        task_url="https://www.javbus.com/ABC-001",
+        task_final_url="https://www.javbus.com/ABC-001?gid=1",
+        task_url_type="magnet_refresh",
+        task_url_name="磁力更新",
+    ), task_name="磁力更新", stop_check=lambda: False)
+
+    assert payload.data["source"] == "javbus"
+    assert payload.data["magnets"][0]["name"] == "bus magnet"
+    assert captured["task"]["_task_url"] == "https://www.javbus.com/ABC-001"
+    assert captured["task"]["_task_final_url"] == "https://www.javbus.com/ABC-001?gid=1"
+    assert captured["task"]["_task_url_type"] == "magnet_refresh"
+    assert captured["task"]["_task_url_name"] == "磁力更新"
+    assert captured["kwargs"]["task_name"] == "磁力更新"
+    assert captured["kwargs"]["stop_check"]() is False
+
+
+def test_javbus_magnet_provider_returns_failed_payload_when_spider_fails(monkeypatch) -> None:
+    def fake_run_single_detail_task(self, task, **kwargs):
+        return {**task, "status": "failed", "reason": "missing ajax params: gid"}
+
+    monkeypatch.setattr(
+        "scraper.spiders.javbus.javbus_spider.JavbusSpider.run_single_detail_task",
+        fake_run_single_detail_task,
+    )
+
+    provider = JavbusMagnetProvider(fetcher=DummyFetcher())
+
+    payload = provider.fetch_detail_with_magnets(MovieDetailRequest(
+        source="javbus",
+        url="https://www.javbus.com/ABC-001",
+        code="ABC-001",
+    ))
+
+    assert payload.status == "failed"
+    assert payload.reason == "missing ajax params: gid"
+    assert payload.data == {}
+
+
+def test_javbus_magnet_provider_passes_task_context(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run_single_detail_task(self, task, **kwargs):
+        captured["task"] = task
+        return {
+            **task,
+            "status": "completed",
+            "detail": {
+                "code": "ABC-001",
+                "source": "javbus",
+                "magnets": [{"name": "bus magnet", "magnet": "magnet:?xt=urn:btih:def"}],
+            },
+        }
+
+    monkeypatch.setattr(
+        "scraper.spiders.javbus.javbus_spider.JavbusSpider.run_single_detail_task",
+        fake_run_single_detail_task,
+    )
+
+    provider = JavbusMagnetProvider(fetcher=DummyFetcher())
+    provider.fetch_detail_with_magnets(MovieDetailRequest(
+        source="javbus",
+        url="https://www.javbus.com/ABC-001",
+        code="ABC-001",
+        task_url="https://www.javbus.com/ABC-001",
+        task_final_url="https://www.javbus.com/ABC-001?gid=1",
+        task_url_type="magnet_refresh",
+        task_url_name="磁力更新",
+    ))
+
+    assert captured["task"]["_task_source"] == "javbus"
+    assert captured["task"]["_task_url"] == "https://www.javbus.com/ABC-001"
+    assert captured["task"]["_task_final_url"] == "https://www.javbus.com/ABC-001?gid=1"
+    assert captured["task"]["_task_url_type"] == "magnet_refresh"
+    assert captured["task"]["_task_url_name"] == "磁力更新"
