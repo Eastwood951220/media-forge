@@ -1,10 +1,10 @@
 import uuid
 from datetime import date, datetime
-from urllib.error import HTTPError
 
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl
 from backend.app.modules.content.actresses import service as actress_service
-from backend.app.modules.content.actresses.avjoho_parser import AvjohoProfilePayload
+from scraper.profiles.actress import ActorMetadata, ActressProfileMatch, ActressProfilePayload
+from scraper.spiders.avjoho.avjoho_spider import AvjohoActressSpider
 from shared.database.models.content import ActressProfile, Movie
 
 
@@ -207,6 +207,24 @@ def test_get_actress_detail_returns_external_task_url_links(client, auth_headers
     ]
 
 
+def _stub_site_fetchers(monkeypatch) -> None:
+    """Keep provider calls hermetic; these tests patch the provider functions themselves."""
+    monkeypatch.setattr(
+        actress_service,
+        "build_site_fetcher",
+        lambda source="javdb", runtime_config=None: object(),
+    )
+
+
+def _javdb_metadata(*, primary_names: list[str], aliases: list[str]):
+    return lambda fetcher, url: ActorMetadata(
+        primary_names=list(primary_names),
+        aliases=list(aliases),
+        source_url=url,
+        source_site="javdb",
+    )
+
+
 def test_fetch_actress_from_actor_task_uses_javdb_aliases_to_match_avjoho(
     client,
     auth_headers,
@@ -215,21 +233,28 @@ def test_fetch_actress_from_actor_task_uses_javdb_aliases_to_match_avjoho(
     monkeypatch,
 ) -> None:
     task, task_url = _seed_actor_task(db_session, admin_user, url_name="咲乃柑菜")
-
-    monkeypatch.setattr(actress_service, "_fetch_javdb_actor_metadata", lambda _url: {
-        "primary_names": ["咲乃柑菜"],
-        "aliases": ["蘭華"],
-    })
-    monkeypatch.setattr(actress_service, "_build_avjoho_candidates", lambda names: [
-        "https://db.avjoho.com/%E8%98%AD%E8%8F%AF/",
-    ])
-    monkeypatch.setattr(actress_service, "_fetch_avjoho_profile", lambda url: AvjohoProfilePayload(
-        display_name="蘭華",
-        reading="らんか",
-        source_url=url,
-        image_url="https://example.test/ranka.jpg",
-        aliases=["咲乃柑菜"],
-    ))
+    _stub_site_fetchers(monkeypatch)
+    monkeypatch.setattr(
+        actress_service,
+        "fetch_actor_metadata",
+        _javdb_metadata(primary_names=["咲乃柑菜"], aliases=["蘭華"]),
+    )
+    monkeypatch.setattr(
+        AvjohoActressSpider,
+        "find_first_matching_profile",
+        lambda self, names, manual_url=None: ActressProfileMatch(
+            profile=ActressProfilePayload(
+                display_name="蘭華",
+                reading="らんか",
+                source_url="https://db.avjoho.com/%E8%98%AD%E8%8F%AF/",
+                image_url="https://example.test/ranka.jpg",
+                aliases=["咲乃柑菜"],
+            ),
+            attempted_urls=["https://db.avjoho.com/%E8%98%AD%E8%8F%AF/"],
+            candidate_names=list(names),
+            matched_url="https://db.avjoho.com/%E8%98%AD%E8%8F%AF/",
+        ),
+    )
 
     response = client.post(
         "/api/content/actresses/fetch-from-task",
@@ -244,7 +269,7 @@ def test_fetch_actress_from_actor_task_uses_javdb_aliases_to_match_avjoho(
     assert data["profiles"][0]["source_task_url_ids"] == [str(task_url.id)]
 
 
-def test_fetch_actress_from_actor_task_falls_back_to_avjoho_search(
+def test_fetch_actress_from_actor_task_passes_names_to_spider_and_returns_candidates(
     client,
     auth_headers,
     db_session,
@@ -252,29 +277,33 @@ def test_fetch_actress_from_actor_task_falls_back_to_avjoho_search(
     monkeypatch,
 ) -> None:
     task, task_url = _seed_actor_task(db_session, admin_user, url_name="七瀨愛麗絲")
-    attempted_urls: list[str] = []
+    seen_names: list[list[str]] = []
+    _stub_site_fetchers(monkeypatch)
+    monkeypatch.setattr(
+        actress_service,
+        "fetch_actor_metadata",
+        _javdb_metadata(primary_names=["七瀨愛麗絲"], aliases=["七瀬アリス"]),
+    )
 
-    monkeypatch.setattr(actress_service, "_fetch_javdb_actor_metadata", lambda _url: {
-        "primary_names": ["七瀨愛麗絲"],
-        "aliases": ["七瀬アリス"],
-    })
-    monkeypatch.setattr(actress_service, "_find_avjoho_profile_urls_by_search", lambda name: (
-        ["https://db.avjoho.com/nanase-alice/"] if name == "七瀬アリス" else []
-    ))
-
-    def fake_fetch_avjoho_profile(url: str) -> AvjohoProfilePayload:
-        attempted_urls.append(url)
-        if url != "https://db.avjoho.com/nanase-alice/":
-            raise HTTPError(url, 404, "Not Found", hdrs=None, fp=None)
-        return AvjohoProfilePayload(
-            display_name="七瀬アリス",
-            reading="ななせありす",
-            source_url=url,
-            image_url="https://example.test/nanase.jpg",
-            aliases=["七瀨愛麗絲"],
+    def fake_find_first_matching_profile(self, names, manual_url=None):
+        seen_names.append(list(names))
+        return ActressProfileMatch(
+            profile=ActressProfilePayload(
+                display_name="七瀬アリス",
+                reading="ななせありす",
+                source_url="https://db.avjoho.com/nanase-alice/",
+                image_url="https://example.test/nanase.jpg",
+                aliases=["七瀨愛麗絲"],
+            ),
+            attempted_urls=[
+                "https://db.avjoho.com/%E4%B8%83%E7%80%A8%E6%84%9B%E9%BA%97%E7%B5%B2/",
+                "https://db.avjoho.com/nanase-alice/",
+            ],
+            candidate_names=list(names),
+            matched_url="https://db.avjoho.com/nanase-alice/",
         )
 
-    monkeypatch.setattr(actress_service, "_fetch_avjoho_profile", fake_fetch_avjoho_profile)
+    monkeypatch.setattr(AvjohoActressSpider, "find_first_matching_profile", fake_find_first_matching_profile)
 
     response = client.post(
         "/api/content/actresses/fetch-from-task",
@@ -287,14 +316,15 @@ def test_fetch_actress_from_actor_task_falls_back_to_avjoho_search(
     assert data["matched"] is True
     assert data["profiles"][0]["display_name"] == "七瀬アリス"
     assert data["profiles"][0]["source_task_url_ids"] == [str(task_url.id)]
-    assert attempted_urls[:2] == [
+    assert data["candidates"] == [
         "https://db.avjoho.com/%E4%B8%83%E7%80%A8%E6%84%9B%E9%BA%97%E7%B5%B2/",
-        "https://db.avjoho.com/%E4%B8%83%E7%80%AC%E3%82%A2%E3%83%AA%E3%82%B9/",
+        "https://db.avjoho.com/nanase-alice/",
     ]
-    assert attempted_urls[-1] == "https://db.avjoho.com/nanase-alice/"
+    # JavDB primary names and aliases are plumbed into the spider as candidate names.
+    assert seen_names[0][:2] == ["七瀨愛麗絲", "七瀬アリス"]
 
 
-def test_fetch_actress_from_actor_task_logs_404_without_traceback(
+def test_fetch_actress_from_actor_task_handles_missing_candidates_without_traceback(
     client,
     auth_headers,
     db_session,
@@ -304,14 +334,20 @@ def test_fetch_actress_from_actor_task_logs_404_without_traceback(
 ) -> None:
     task, _task_url = _seed_actor_task(db_session, admin_user, url_name="不存在")
 
-    monkeypatch.setattr(actress_service, "_fetch_javdb_actor_metadata", lambda _url: {
-        "primary_names": ["不存在"],
-        "aliases": [],
-    })
-    monkeypatch.setattr(actress_service, "_find_avjoho_profile_urls_by_search", lambda _name: [])
-    monkeypatch.setattr(actress_service, "_fetch_avjoho_profile", lambda url: (
-        (_ for _ in ()).throw(HTTPError(url, 404, "Not Found", hdrs=None, fp=None))
-    ))
+    class NotFoundFetcher:
+        def get(self, url: str):
+            raise FileNotFoundError(url)
+
+    monkeypatch.setattr(
+        actress_service,
+        "build_site_fetcher",
+        lambda source="javdb", runtime_config=None: NotFoundFetcher(),
+    )
+    monkeypatch.setattr(
+        actress_service,
+        "fetch_actor_metadata",
+        _javdb_metadata(primary_names=["不存在"], aliases=[]),
+    )
 
     response = client.post(
         "/api/content/actresses/fetch-from-task",
@@ -346,22 +382,33 @@ def test_fetch_actress_from_task_only_fetches_selected_actor_url(
     db_session.add(second_url)
     db_session.commit()
     fetched_javdb_urls: list[str] = []
+    _stub_site_fetchers(monkeypatch)
 
-    def fake_fetch_javdb_actor_metadata(url: str) -> dict[str, list[str]]:
+    def fake_fetch_actor_metadata(fetcher, url: str) -> ActorMetadata:
         fetched_javdb_urls.append(url)
-        return {
-            "primary_names": ["演员B"],
-            "aliases": [],
-        }
+        return ActorMetadata(
+            primary_names=["演员B"],
+            aliases=[],
+            source_url=url,
+            source_site="javdb",
+        )
 
-    monkeypatch.setattr(actress_service, "_fetch_javdb_actor_metadata", fake_fetch_javdb_actor_metadata)
-    monkeypatch.setattr(actress_service, "_find_avjoho_profile_urls_by_search", lambda _name: [])
-    monkeypatch.setattr(actress_service, "_fetch_avjoho_profile", lambda url: AvjohoProfilePayload(
-        display_name="演员B",
-        reading="",
-        source_url=url,
-        image_url="https://example.test/b.jpg",
-    ))
+    monkeypatch.setattr(actress_service, "fetch_actor_metadata", fake_fetch_actor_metadata)
+    monkeypatch.setattr(
+        AvjohoActressSpider,
+        "find_first_matching_profile",
+        lambda self, names, manual_url=None: ActressProfileMatch(
+            profile=ActressProfilePayload(
+                display_name="演员B",
+                reading="",
+                source_url="https://db.avjoho.com/actor-b/",
+                image_url="https://example.test/b.jpg",
+            ),
+            attempted_urls=["https://db.avjoho.com/actor-b/"],
+            candidate_names=list(names),
+            matched_url="https://db.avjoho.com/actor-b/",
+        ),
+    )
 
     response = client.post(
         "/api/content/actresses/fetch-from-task",
