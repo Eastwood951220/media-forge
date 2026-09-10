@@ -18,6 +18,8 @@ The existing scraper package already has the better home for site-specific behav
 
 This design moves scraper-only concerns into `scraper` while keeping backend modules responsible for API validation, task ownership, persistence, serialization, and realtime/runtime orchestration.
 
+One important transport constraint: avjoho must have its own site configuration. The current `build_site_fetcher` implementation falls back to `JAVDB_SITE` for any source other than `javbus`, so adding `build_site_fetcher("avjoho")` without first adding `AVJOHO_SITE` would send JavDB headers and cookies to `db.avjoho.com`. The migration must add an explicit avjoho branch before backend services use a scraper fetcher for avjoho.
+
 ## Goals
 
 1. Make `scraper` the single place for site fetch and parse logic.
@@ -120,6 +122,13 @@ The existing `parse_actor_section_metadata(page)` in `javdb_parser.py` can eithe
 
 Move the current avjoho parser into `scraper/spiders/avjoho/avjoho_parser.py`.
 
+Add `AVJOHO_SITE` to `scraper/config/sites.py` and update `scraper/fetchers/site_fetcher.py` so `build_site_fetcher("avjoho")` uses:
+
+- `base_url`: `https://db.avjoho.com`
+- `cookie_file`: `avjoho_cookies.json`
+- headers containing a browser `User-Agent`
+- no JavDB or JavBus cookies
+
 Create `scraper/spiders/avjoho/avjoho_spider.py` with an `AvjohoActressSpider` that owns:
 
 - Direct profile URL validation for `db.avjoho.com`.
@@ -137,7 +146,7 @@ Public methods:
 - `fetch_profile(url: str) -> ActressProfilePayload | None`
 - `find_first_matching_profile(names: list[str], manual_url: str | None = None) -> ActressProfileMatch`
 
-The spider should return structured failed attempts for 404 or parse misses but should not raise FastAPI exceptions.
+The spider should return structured failed attempts for automatic candidate 404s or parse misses but should not raise FastAPI exceptions. For a manually supplied URL, invalid host/scheme and fetch-not-found failures must raise scraper-domain exceptions so backend can return a user-visible error instead of `matched=false`.
 
 ### Backend Actress Service After Migration
 
@@ -189,6 +198,7 @@ After the first two phases, adding a new actress or magnet source should mean cr
 Scraper providers should raise or return scraper-domain errors:
 
 - `ProfileSourceNotFound`
+- `ProfileSourceInvalidUrl`
 - `ProfileSourceAccessBlocked`
 - `ProfileSourceParseError`
 - `MagnetSourceAccessBlocked`

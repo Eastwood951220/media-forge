@@ -21,6 +21,8 @@
 - Backend modules may import scraper provider modules.
 - Keep FastAPI `HTTPException` usage inside backend.
 - The migration must not change the actress table schema.
+- `build_site_fetcher("avjoho")` must use avjoho's own site config and must not load or send JavDB cookies.
+- Automatic avjoho candidate 404s are failed attempts; manual avjoho URL 404s become user-visible backend errors.
 
 ---
 
@@ -28,6 +30,9 @@
 
 - Create `scraper/profiles/__init__.py`: package marker and exports.
 - Create `scraper/profiles/actress.py`: `ActorMetadata`, `ActressProfilePayload`, `ActressProfileMatch`, and helper `dedupe_text`.
+- Modify `scraper/config/sites.py`: add `AVJOHO_SITE`.
+- Modify `scraper/fetchers/site_fetcher.py`: select avjoho site config explicitly.
+- Modify `scraper/tests/test_site_fetcher.py`: prove avjoho uses its own cookie file and never falls through to JavDB.
 - Create `scraper/spiders/javdb/actor_profile.py`: JavDB actor metadata parsing/fetching.
 - Modify `scraper/spiders/javdb/javdb_parser.py`: keep `parse_actor_section_metadata` as a compatibility wrapper delegating to the new actor parser.
 - Create `scraper/spiders/avjoho/__init__.py`: package marker and exports.
@@ -356,7 +361,105 @@ git commit -m "Move JavDB actor metadata parsing"
 
 ---
 
-### Task 3: Move Avjoho Parser and Add Avjoho Spider
+### Task 3: Add Avjoho Site Fetcher Config
+
+**Files:**
+- Modify: `scraper/config/sites.py`
+- Modify: `scraper/fetchers/site_fetcher.py`
+- Modify: `scraper/tests/test_site_fetcher.py`
+
+**Interfaces:**
+- Produces: `AVJOHO_SITE`.
+- Produces: `build_site_fetcher("avjoho", runtime_config=None) -> ScraplingFetcher` using avjoho headers and `avjoho_cookies.json`.
+
+- [ ] **Step 1: Write the failing avjoho fetcher test**
+
+Append to `scraper/tests/test_site_fetcher.py`:
+
+```python
+def test_build_site_fetcher_uses_avjoho_site_without_javdb_cookies(monkeypatch) -> None:
+    loaded_cookie_files = []
+
+    def fake_load(self):
+        loaded_cookie_files.append(self.filepath.name)
+        return {"avjoho_session": "profile"}
+
+    monkeypatch.setattr("scraper.fetchers.site_fetcher.CookieManager.load", fake_load)
+
+    fetcher = build_site_fetcher("avjoho", CrawlerRuntimeConfig(REQUEST_TIMEOUT=12))
+
+    assert fetcher.timeout == 12
+    assert fetcher.cookies == {"avjoho_session": "profile"}
+    assert loaded_cookie_files == ["avjoho_cookies.json"]
+    assert "User-Agent" in fetcher.headers
+```
+
+- [ ] **Step 2: Run the test and verify it fails**
+
+Run: `python -m pytest scraper/tests/test_site_fetcher.py::test_build_site_fetcher_uses_avjoho_site_without_javdb_cookies -q`
+
+Expected: FAIL because `build_site_fetcher("avjoho")` currently falls through to `JAVDB_SITE` and loads `javdb_cookies.json`.
+
+- [ ] **Step 3: Add `AVJOHO_SITE`**
+
+In `scraper/config/sites.py`, add:
+
+```python
+AVJOHO_SITE = {
+    "name": "avjoho",
+    "base_url": os.getenv("AVJOHO_BASE_URL", "https://db.avjoho.com"),
+    "cookie_file": "avjoho_cookies.json",
+    "headers": {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "ja-JP,ja;q=0.9,zh-CN;q=0.8,en;q=0.7",
+    },
+}
+```
+
+- [ ] **Step 4: Branch explicitly in `build_site_fetcher`**
+
+In `scraper/fetchers/site_fetcher.py`, replace the two-site conditional with an explicit map:
+
+```python
+from scraper.config.sites import AVJOHO_SITE, JAVBUS_SITE, JAVDB_SITE
+```
+
+```python
+SITE_CONFIGS = {
+    "javdb": JAVDB_SITE,
+    "javbus": JAVBUS_SITE,
+    "avjoho": AVJOHO_SITE,
+}
+```
+
+```python
+site_config = SITE_CONFIGS.get(source)
+if site_config is None:
+    raise ValueError(f"不支持的站点来源: {source}")
+```
+
+Keep the existing `CookieManager(site_config["cookie_file"])` and `ScraplingFetcher(...)` construction.
+
+- [ ] **Step 5: Run fetcher tests**
+
+Run: `python -m pytest scraper/tests/test_site_fetcher.py -q`
+
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add scraper/config/sites.py scraper/fetchers/site_fetcher.py scraper/tests/test_site_fetcher.py
+git commit -m "Add avjoho site fetcher config"
+```
+
+---
+
+### Task 4: Move Avjoho Parser and Add Avjoho Spider
 
 **Files:**
 - Create: `scraper/spiders/avjoho/__init__.py`
@@ -381,7 +484,13 @@ from scraper.spiders.avjoho.avjoho_parser import parse_avjoho_profile
 Append to `scraper/tests/test_avjoho_spider.py`:
 
 ```python
-from scraper.spiders.avjoho.avjoho_spider import AvjohoActressSpider
+import pytest
+
+from scraper.spiders.avjoho.avjoho_spider import (
+    AvjohoActressSpider,
+    ProfileSourceInvalidUrl,
+    ProfileSourceNotFound,
+)
 
 
 class FakeResponse:
@@ -405,6 +514,10 @@ class FakeFetcher:
         return FakeResponse(self.pages[url])
 
 
+class MissingPageError(Exception):
+    pass
+
+
 def test_avjoho_spider_builds_direct_profile_urls() -> None:
     spider = AvjohoActressSpider(fetcher=FakeFetcher({}))
 
@@ -422,6 +535,61 @@ def test_avjoho_spider_matches_manual_profile_url() -> None:
     assert result.profile is not None
     assert result.profile.display_name == "七瀬アリス"
     assert result.matched_url == "https://db.avjoho.com/nanase/"
+
+
+def test_avjoho_spider_extracts_search_result_profile_urls() -> None:
+    html = """
+      <div id="list">
+        <h2 class="entry-title"><a href="https://db.avjoho.com/nanase-alice/">七瀬アリス</a></h2>
+        <h2 class="entry-title"><a href="https://db.avjoho.com/category/news/">カテゴリ</a></h2>
+      </div>
+    """
+
+    assert AvjohoActressSpider.parse_search_result_urls(html) == [
+        "https://db.avjoho.com/nanase-alice/"
+    ]
+
+
+def test_avjoho_spider_tries_direct_candidates_before_search_results() -> None:
+    profile_html = "<h1 class='entry-title'>七瀬アリス（ななせありす）</h1><div class='database'><table></table></div>"
+    search_html = """
+      <div id="list">
+        <h2 class="entry-title"><a href="https://db.avjoho.com/nanase-alice/">七瀬アリス</a></h2>
+      </div>
+    """
+    fetcher = FakeFetcher({
+        "https://db.avjoho.com/?s=%E4%B8%83%E7%80%AC%E3%82%A2%E3%83%AA%E3%82%B9": search_html,
+        "https://db.avjoho.com/nanase-alice/": profile_html,
+    })
+    spider = AvjohoActressSpider(fetcher=fetcher)
+
+    result = spider.find_first_matching_profile(["七瀬アリス"])
+
+    assert result.profile is not None
+    assert result.matched_url == "https://db.avjoho.com/nanase-alice/"
+    assert result.attempted_urls == [
+        "https://db.avjoho.com/%E4%B8%83%E7%80%AC%E3%82%A2%E3%83%AA%E3%82%B9/",
+        "https://db.avjoho.com/nanase-alice/",
+    ]
+
+
+def test_avjoho_spider_raises_for_missing_manual_url() -> None:
+    class MissingFetcher(FakeFetcher):
+        def get(self, url: str):
+            self.requested.append(url)
+            raise MissingPageError(url)
+
+    spider = AvjohoActressSpider(fetcher=MissingFetcher({}))
+
+    with pytest.raises(ProfileSourceNotFound):
+        spider.find_first_matching_profile(["七瀬アリス"], manual_url="https://db.avjoho.com/missing/")
+
+
+def test_avjoho_spider_rejects_manual_url_outside_avjoho() -> None:
+    spider = AvjohoActressSpider(fetcher=FakeFetcher({}))
+
+    with pytest.raises(ProfileSourceInvalidUrl):
+        spider.find_first_matching_profile(["七瀬アリス"], manual_url="https://javdb.com/actors/X301")
 ```
 
 - [ ] **Step 2: Run tests and verify they fail**
@@ -466,6 +634,14 @@ from scraper.profiles.actress import ActressProfileMatch, ActressProfilePayload,
 from scraper.spiders.avjoho.avjoho_parser import parse_avjoho_profile
 
 
+class ProfileSourceInvalidUrl(ValueError):
+    pass
+
+
+class ProfileSourceNotFound(RuntimeError):
+    pass
+
+
 class AvjohoActressSpider:
     source = "avjoho"
 
@@ -476,7 +652,7 @@ class AvjohoActressSpider:
     def validate_profile_url(url: str) -> str:
         parsed = urlparse(url)
         if parsed.scheme not in {"http", "https"} or parsed.netloc != "db.avjoho.com":
-            raise ValueError("avjoho_url must be an HTTP(S) URL on db.avjoho.com")
+            raise ProfileSourceInvalidUrl("avjoho_url must be an HTTP(S) URL on db.avjoho.com")
         return url
 
     @staticmethod
@@ -554,7 +730,9 @@ class AvjohoActressSpider:
             attempted_urls.append(url)
             try:
                 payload = self.fetch_profile(url)
-            except Exception:
+            except Exception as exc:
+                if manual_url:
+                    raise ProfileSourceNotFound(str(exc)) from exc
                 continue
             if payload is None:
                 continue
@@ -589,7 +767,7 @@ git commit -m "Move avjoho profile scraping into scraper"
 
 ---
 
-### Task 4: Slim Backend Actress Service to Provider Orchestration
+### Task 5: Slim Backend Actress Service to Provider Orchestration
 
 **Files:**
 - Modify: `backend/app/modules/content/actresses/service.py`
@@ -643,6 +821,45 @@ def fake_find_first_matching_profile(self, names, manual_url=None):
 monkeypatch.setattr(AvjohoActressSpider, "find_first_matching_profile", fake_find_first_matching_profile)
 ```
 
+Add or update a backend API test for manual URL 404 behavior:
+
+```python
+from scraper.spiders.avjoho.avjoho_spider import ProfileSourceNotFound
+
+
+def test_fetch_actress_from_task_manual_avjoho_404_is_user_visible(
+    client,
+    db_session,
+    admin_user,
+    auth_headers,
+    monkeypatch,
+) -> None:
+    task, actor_url = _seed_actor_task(db_session, admin_user, url_name="七瀬アリス")
+    monkeypatch.setattr(
+        actress_service,
+        "fetch_actor_metadata",
+        lambda fetcher, url: ActorMetadata(primary_names=["七瀬アリス"], aliases=[]),
+    )
+
+    def fake_find_first_matching_profile(self, names, manual_url=None):
+        raise ProfileSourceNotFound("manual avjoho profile not found")
+
+    monkeypatch.setattr(AvjohoActressSpider, "find_first_matching_profile", fake_find_first_matching_profile)
+
+    response = client.post(
+        "/api/content/actresses/fetch-from-task",
+        json={
+            "task_id": str(task.id),
+            "task_url_id": str(actor_url.id),
+            "avjoho_url": "https://db.avjoho.com/missing/",
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 404
+    assert "manual avjoho profile not found" in response.text
+```
+
 - [ ] **Step 2: Run backend tests and verify they fail**
 
 Run: `python -m pytest backend/tests/test_content_actresses_api.py -q`
@@ -667,7 +884,7 @@ Add imports:
 
 ```python
 from scraper.profiles.actress import ActressProfilePayload, dedupe_text
-from scraper.spiders.avjoho.avjoho_spider import AvjohoActressSpider
+from scraper.spiders.avjoho.avjoho_spider import AvjohoActressSpider, ProfileSourceInvalidUrl, ProfileSourceNotFound
 from scraper.spiders.javdb.actor_profile import fetch_actor_metadata
 ```
 
@@ -716,8 +933,10 @@ for task_url in [actor_url]:
     ])
     try:
         match = avjoho_spider.find_first_matching_profile(names, manual_url=avjoho_url)
-    except ValueError as exc:
+    except ProfileSourceInvalidUrl as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ProfileSourceNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     attempted_urls.extend(match.attempted_urls)
     if match.profile is None:
@@ -755,7 +974,7 @@ git commit -m "Use scraper providers for actress fetch"
 
 ---
 
-### Task 5: Remove the Old Backend Avjoho Parser Module
+### Task 6: Remove the Old Backend Avjoho Parser Module
 
 **Files:**
 - Delete: `backend/app/modules/content/actresses/avjoho_parser.py`
