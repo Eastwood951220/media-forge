@@ -135,7 +135,7 @@ def iter_entity_rows(db: Session, entity: Any, owner_id: uuid.UUID) -> Any:
     """Iterate over all rows of ``entity`` in pages without one giant fetch.
 
     ``entity`` may be an ORM model class or a plain SQLAlchemy ``Table`` such
-    as the task-tag link table.
+    as the actress-tag link table.
     """
     table = entity.__table__ if isinstance(entity, type) else entity
     order_columns = list(table.primary_key.columns)
