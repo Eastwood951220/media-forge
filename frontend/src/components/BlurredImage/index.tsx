@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ImgHTMLAttributes, type ReactNode, type SyntheticEvent } from 'react'
+import { type CSSProperties, type ImgHTMLAttributes, type ReactNode, type SyntheticEvent } from 'react'
 import { Image } from 'antd'
 import { clsx } from 'clsx'
 import { useImageBlurStore } from '@/stores/useImageBlurStore'
@@ -32,14 +32,9 @@ export function BlurredImage({
   referrerPolicy,
 }: BlurredImageProps) {
   const blurEnabled = useImageBlurStore((state) => state.enabled)
-  const [previewOpen, setPreviewOpen] = useState(false)
 
   if (!src) {
     return <div className={clsx(styles.root, className)}>{fallback}</div>
-  }
-
-  const openPreview = () => {
-    if (preview) setPreviewOpen(true)
   }
 
   const stopEventPropagation = (event: SyntheticEvent) => {
@@ -48,30 +43,19 @@ export function BlurredImage({
 
   return (
     <div
-      aria-label={`预览 ${alt}`}
       className={clsx(styles.root, className)}
-      role={preview ? 'button' : undefined}
-      tabIndex={preview ? 0 : undefined}
       style={mediaBackdropStyle(src)}
-      onClick={(event) => {
-        stopEventPropagation(event)
-        openPreview()
-      }}
-      onKeyDown={(event) => {
-        if (!preview) return
-        if (event.key !== 'Enter' && event.key !== ' ') return
-        event.preventDefault()
-        stopEventPropagation(event)
-        openPreview()
-      }}
     >
       <Image
         src={src}
         alt={alt}
+        aria-label={preview ? `预览 ${alt}` : alt}
         className={clsx(blurEnabled && styles.blurred, imageClassName)}
         loading={loading}
-        preview={preview ? { open: previewOpen, onOpenChange: setPreviewOpen } : false}
+        preview={preview}
         referrerPolicy={referrerPolicy}
+        onClick={stopEventPropagation}
+        onKeyDown={stopEventPropagation}
       />
     </div>
   )
