@@ -110,14 +110,25 @@
 
 .urlEntryCompactGrid {
   display: grid;
-  grid-template-columns: minmax(220px, 1.35fr) minmax(136px, 0.72fr) minmax(136px, 0.72fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.72fr) minmax(0, 0.72fr);
   gap: 12px;
   align-items: end;
+  min-width: 0;
 }
 
 .urlEntryCompactGrid :global(.ant-form-item) {
   min-width: 0;
   margin-bottom: 0;
+}
+
+.urlEntryCompactGrid :global(.ant-form-item-control),
+.urlEntryCompactGrid :global(.ant-form-item-control-input),
+.urlEntryCompactGrid :global(.ant-form-item-control-input-content),
+.urlEntryCompactGrid :global(.ant-input),
+.urlEntryCompactGrid :global(.ant-select),
+.urlEntryCompactGrid :global(.ant-select-selector) {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .urlEntryCompactGrid :global(.ant-form-item-label) {

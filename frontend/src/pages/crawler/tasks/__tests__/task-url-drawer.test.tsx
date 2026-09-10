@@ -2,6 +2,8 @@ import { App } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { PropsWithChildren } from 'react'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskFormPage from '../TaskFormPage'
@@ -299,5 +301,11 @@ describe('TaskFormPage URL table drawer', () => {
     expect(container.querySelector('[class*="taskConfigStatus"]')).toBeTruthy()
     expect(container.querySelector('[class*="urlEntryCompactGrid"]')).toBeTruthy()
     expect(container.querySelector('[class*="urlEntrySwitchGroup"]')).toBeTruthy()
+  })
+
+  it('lets URL card grid columns shrink inside short two-column layouts', () => {
+    const css = readFileSync(resolve(__dirname, '../TaskPages.module.less'), 'utf8')
+
+    expect(css).toContain('grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.72fr) minmax(0, 0.72fr);')
   })
 })
