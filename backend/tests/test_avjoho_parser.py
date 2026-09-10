@@ -1,4 +1,4 @@
-from backend.app.modules.content.actresses.avjoho_parser import parse_avjoho_profile
+from scraper.spiders.avjoho.avjoho_parser import parse_avjoho_profile
 
 
 SAMPLE = """
