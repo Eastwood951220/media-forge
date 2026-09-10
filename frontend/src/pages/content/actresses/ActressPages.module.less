@@ -73,8 +73,8 @@
 
 .actressGrid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .actressCard {
@@ -82,11 +82,15 @@
   border-radius: 8px;
 }
 
+.actressCard :global(.ant-card-body) {
+  padding: 12px;
+}
+
 .actressCover {
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 3 / 4;
+  height: clamp(148px, 12vw, 196px);
   background: var(--ant-color-fill-tertiary);
 }
 
@@ -109,7 +113,7 @@
   flex-wrap: wrap;
   gap: 6px;
   min-height: 24px;
-  margin: 10px 0;
+  margin: 8px 0;
 }
 
 .paginationBar {
@@ -348,19 +352,31 @@
   gap: 16px;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1500px) {
   .actressGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1250px) {
   .actressGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .actressGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .movieGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .actressGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -401,6 +417,9 @@
     justify-content: stretch;
   }
 
+}
+
+@media (max-width: 520px) {
   .actressGrid {
     grid-template-columns: 1fr;
   }
