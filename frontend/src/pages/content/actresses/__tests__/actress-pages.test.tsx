@@ -96,25 +96,19 @@ describe('Actress pages', () => {
     expect(screen.getByText('单体')).toBeInTheDocument()
     expect(screen.getByText('清楚')).toBeInTheDocument()
     expect(screen.getByLabelText('标签')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '预览 宮上唯依花' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '预览 宮上唯依花' })).not.toBeInTheDocument()
     expect(screen.getByAltText('宮上唯依花').className).toMatch(/blurred/)
   })
 
-  it('does not open actress detail when closing a list card image preview', async () => {
+  it('opens actress detail directly when clicking a list card image without preview', async () => {
     const user = userEvent.setup()
     vi.mocked(fetchActresses).mockResolvedValue({ items: [profile], total: 1, page: 1, limit: 24, total_pages: 1 })
 
     renderWithClient(<ActressListPage />)
 
-    await user.click(await screen.findByRole('button', { name: '预览 宮上唯依花' }))
-    expect(await screen.findByRole('dialog', { name: '宮上唯依花' })).toHaveClass('ant-image-preview')
+    await user.click(await screen.findByAltText('宮上唯依花'))
 
-    await user.click(await screen.findByRole('button', { name: /close/i }))
-
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: '宮上唯依花' })).not.toBeInTheDocument()
-    })
-    expect(navigateMock).not.toHaveBeenCalled()
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/content/actresses/$id', params: { id: 'actress-1' } })
   })
 
   it('keeps advanced filters collapsed and sends dropdown range filters when expanded', async () => {
@@ -209,6 +203,7 @@ describe('Actress pages', () => {
     renderWithClient(<ActressDetailPage />)
 
     expect(await screen.findByRole('heading', { name: '宮上唯依花' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '预览 宮上唯依花' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '查看 avjoho 资料' })).toHaveAttribute('href', profile.source_url)
     expect(screen.getByText('别名')).toBeInTheDocument()
     expect(screen.getByText('Miyaue Yuika')).toBeInTheDocument()

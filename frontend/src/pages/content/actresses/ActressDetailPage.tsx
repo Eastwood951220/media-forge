@@ -198,6 +198,7 @@ function ActressDetailPage() {
                 alt={actress.display_name}
                 className={styles.detailPortrait}
                 fallback={<Avatar size={96} icon={<UserOutlined />} />}
+                preview={false}
               />
               <div className={styles.detailTitleBlock}>
                 <div className={styles.detailNameRow}>
