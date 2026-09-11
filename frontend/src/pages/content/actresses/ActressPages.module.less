@@ -10,14 +10,19 @@
 }
 
 .toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  column-gap: 16px;
+  row-gap: 14px;
   padding: 16px;
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 8px;
+}
+
+.toolbarTitle {
+  min-width: 132px;
 }
 
 .pageTitle,
@@ -25,8 +30,17 @@
   margin: 0 !important;
 }
 
+.queryRail {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 1px;
+  scrollbar-width: thin;
+}
+
 .searchInput {
-  width: min(360px, 100%);
+  flex: 0 0 320px;
+  width: 320px;
 }
 
 .filterSelect {
@@ -39,27 +53,33 @@
 }
 
 .tagFilterSelect {
-  width: 200px;
-  min-width: 180px;
+  flex: 0 0 240px;
+  width: 240px;
 }
 
 .filterControls {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  min-width: min(520px, 100%);
+  width: max-content;
+  min-width: max-content;
+  margin-left: auto;
+}
+
+.filterControls :global(.ant-btn) {
+  flex: 0 0 auto;
 }
 
 .advancedFilters {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
-  background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ant-color-border-secondary);
 }
 
 .rangeGroup {
@@ -376,11 +396,10 @@
 
 @media (max-width: 640px) {
   .toolbar {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     align-items: stretch;
   }
 
-  .filterControls,
   .advancedFilters,
   .rangeGroup {
     align-items: stretch;
@@ -396,9 +415,7 @@
     align-items: stretch;
   }
 
-  .searchInput,
   .filterSelect,
-  .tagFilterSelect,
   .detailPortrait {
     width: 100%;
   }

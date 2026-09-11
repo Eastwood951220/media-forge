@@ -200,121 +200,123 @@ function ActressListPage() {
   return (
     <div className={styles.page}>
       <section className={styles.toolbar} aria-label="女优列表筛选">
-        <div>
+        <div className={styles.toolbarTitle}>
           <Typography.Title level={4} className={styles.pageTitle}>女优列表</Typography.Title>
           <Typography.Text type="secondary">共 {total} 位女优</Typography.Text>
         </div>
-        <div className={styles.filterControls}>
-          <Input
-            allowClear
-            aria-label="搜索女优姓名或别名"
-            prefix={<SearchOutlined />}
-            placeholder="搜索姓名 / 别名"
-            value={keyword}
-            onChange={(event) => {
-              setKeyword(event.target.value)
-              setPage(1)
-            }}
-            className={styles.searchInput}
-          />
-          <Select
-            mode="tags"
-            allowClear
-            aria-label="标签"
-            placeholder="标签筛选"
-            value={tagFilters}
-            loading={tagOptionsQuery.isLoading}
-            options={(tagOptionsQuery.data ?? []).map((tag) => ({ value: tag.name, label: tag.name }))}
-            onChange={(values) => {
-              setTagFilters(values)
-              setPage(1)
-            }}
-            className={styles.tagFilterSelect}
-          />
-          <Button
-            icon={<FilterOutlined />}
-            aria-label="更多筛选"
-            aria-expanded={advancedOpen}
-            onClick={() => setAdvancedOpen((value) => !value)}
-          >
-            更多筛选
-          </Button>
+        <div className={styles.queryRail}>
+          <div className={styles.filterControls}>
+            <Input
+              allowClear
+              aria-label="搜索女优姓名或别名"
+              prefix={<SearchOutlined />}
+              placeholder="搜索姓名 / 别名"
+              value={keyword}
+              onChange={(event) => {
+                setKeyword(event.target.value)
+                setPage(1)
+              }}
+              className={styles.searchInput}
+            />
+            <Select
+              mode="tags"
+              allowClear
+              maxTagCount="responsive"
+              aria-label="标签"
+              placeholder="标签筛选"
+              value={tagFilters}
+              loading={tagOptionsQuery.isLoading}
+              options={(tagOptionsQuery.data ?? []).map((tag) => ({ value: tag.name, label: tag.name }))}
+              onChange={(values) => {
+                setTagFilters(values)
+                setPage(1)
+              }}
+              className={styles.tagFilterSelect}
+            />
+            <Button
+              icon={<FilterOutlined />}
+              aria-label="更多筛选"
+              aria-expanded={advancedOpen}
+              onClick={() => setAdvancedOpen((value) => !value)}
+            >
+              更多筛选
+            </Button>
+          </div>
         </div>
+        {advancedOpen && (
+          <section className={styles.advancedFilters} aria-label="女优高级筛选">
+            <Select
+              allowClear
+              aria-label="罩杯"
+              options={CUP_OPTIONS}
+              placeholder="罩杯"
+              value={cup}
+              onChange={setRangeFilter(setCup)}
+              className={styles.filterSelect}
+            />
+            <div className={styles.rangeGroup}>
+              <Typography.Text className={styles.rangeLabel}>身高</Typography.Text>
+              <Select
+                allowClear
+                aria-label="身高"
+                options={HEIGHT_OPTIONS}
+                placeholder="身高范围"
+                value={heightRange}
+                onChange={setRangeFilter(setHeightRange)}
+                className={styles.filterSelect}
+              />
+            </div>
+            <div className={styles.rangeGroup}>
+              <Typography.Text className={styles.rangeLabel}>年龄</Typography.Text>
+              <Select
+                allowClear
+                aria-label="年龄"
+                options={AGE_OPTIONS}
+                placeholder="年龄范围"
+                value={ageRange}
+                onChange={setRangeFilter(setAgeRange)}
+                className={styles.filterSelect}
+              />
+            </div>
+            <div className={styles.rangeGroup}>
+              <Typography.Text className={styles.rangeLabel}>胸围</Typography.Text>
+              <Select
+                allowClear
+                aria-label="胸围"
+                options={BUST_OPTIONS}
+                placeholder="胸围范围"
+                value={bustRange}
+                onChange={setRangeFilter(setBustRange)}
+                className={styles.filterSelect}
+              />
+            </div>
+            <div className={styles.rangeGroup}>
+              <Typography.Text className={styles.rangeLabel}>腰围</Typography.Text>
+              <Select
+                allowClear
+                aria-label="腰围"
+                options={WAIST_OPTIONS}
+                placeholder="腰围范围"
+                value={waistRange}
+                onChange={setRangeFilter(setWaistRange)}
+                className={styles.filterSelect}
+              />
+            </div>
+            <div className={styles.rangeGroup}>
+              <Typography.Text className={styles.rangeLabel}>臀围</Typography.Text>
+              <Select
+                allowClear
+                aria-label="臀围"
+                options={HIP_OPTIONS}
+                placeholder="臀围范围"
+                value={hipRange}
+                onChange={setRangeFilter(setHipRange)}
+                className={styles.filterSelect}
+              />
+            </div>
+          </section>
+        )}
       </section>
-
-      {advancedOpen && (
-        <section className={styles.advancedFilters} aria-label="女优高级筛选">
-          <Select
-            allowClear
-            aria-label="罩杯"
-            options={CUP_OPTIONS}
-            placeholder="罩杯"
-            value={cup}
-            onChange={setRangeFilter(setCup)}
-            className={styles.filterSelect}
-          />
-          <div className={styles.rangeGroup}>
-            <Typography.Text className={styles.rangeLabel}>身高</Typography.Text>
-            <Select
-              allowClear
-              aria-label="身高"
-              options={HEIGHT_OPTIONS}
-              placeholder="身高范围"
-              value={heightRange}
-              onChange={setRangeFilter(setHeightRange)}
-              className={styles.filterSelect}
-            />
-          </div>
-          <div className={styles.rangeGroup}>
-            <Typography.Text className={styles.rangeLabel}>年龄</Typography.Text>
-            <Select
-              allowClear
-              aria-label="年龄"
-              options={AGE_OPTIONS}
-              placeholder="年龄范围"
-              value={ageRange}
-              onChange={setRangeFilter(setAgeRange)}
-              className={styles.filterSelect}
-            />
-          </div>
-          <div className={styles.rangeGroup}>
-            <Typography.Text className={styles.rangeLabel}>胸围</Typography.Text>
-            <Select
-              allowClear
-              aria-label="胸围"
-              options={BUST_OPTIONS}
-              placeholder="胸围范围"
-              value={bustRange}
-              onChange={setRangeFilter(setBustRange)}
-              className={styles.filterSelect}
-            />
-          </div>
-          <div className={styles.rangeGroup}>
-            <Typography.Text className={styles.rangeLabel}>腰围</Typography.Text>
-            <Select
-              allowClear
-              aria-label="腰围"
-              options={WAIST_OPTIONS}
-              placeholder="腰围范围"
-              value={waistRange}
-              onChange={setRangeFilter(setWaistRange)}
-              className={styles.filterSelect}
-            />
-          </div>
-          <div className={styles.rangeGroup}>
-            <Typography.Text className={styles.rangeLabel}>臀围</Typography.Text>
-            <Select
-              allowClear
-              aria-label="臀围"
-              options={HIP_OPTIONS}
-              placeholder="臀围范围"
-              value={hipRange}
-              onChange={setRangeFilter(setHipRange)}
-              className={styles.filterSelect}
-            />
-          </div>
-        </section>
-      )}
 
       <Spin spinning={query.isLoading}>
         {actresses.length > 0 ? (

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from 'antd'
@@ -120,6 +120,9 @@ describe('Actress pages', () => {
     expect(screen.queryByLabelText('罩杯')).not.toBeInTheDocument()
 
     await user.click(await screen.findByRole('button', { name: '更多筛选' }))
+    const filterPanel = screen.getByLabelText('女优列表筛选')
+    expect(within(filterPanel).getByLabelText('女优高级筛选')).toBeInTheDocument()
+
     await user.click(screen.getByLabelText('罩杯'))
     await user.click(await screen.findByText('E杯'))
     await user.click(screen.getByLabelText('身高'))
