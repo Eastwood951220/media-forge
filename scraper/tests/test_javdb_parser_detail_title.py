@@ -120,3 +120,29 @@ def test_parse_detail_page_keeps_only_actors_followed_by_female_symbols() -> Non
     )
 
     assert parsed["actors"] == ["女優A", "女優B"]
+
+
+def test_parse_detail_page_keeps_only_actor_female_links() -> None:
+    parsed = parse_detail_page(
+        page(
+            """
+            <html>
+              <body>
+                <nav class="movie-panel-info">
+                  <div class="panel-block">
+                    <strong>演員:</strong>
+                    &nbsp;<span class="value">
+                      <a class="actor-male" href="/actors/male">男優</a>,
+                      <a class="actor-female" href="/actors/EZJ2">優梨まいな</a>,
+                      <a class="actor-female" href="/actors/aKbg">宇野ゆかり</a>,
+                      <a class="actor-female" href="/actors/YngAK">花城れん</a>
+                    </span>
+                  </div>
+                </nav>
+              </body>
+            </html>
+            """
+        )
+    )
+
+    assert parsed["actors"] == ["優梨まいな", "宇野ゆかり", "花城れん"]

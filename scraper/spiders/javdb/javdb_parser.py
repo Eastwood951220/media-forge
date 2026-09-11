@@ -54,6 +54,10 @@ def _parse_field_value(field_name: str, row) -> Any:
         return float(match.group(1)) if match else 0.0
 
     if field_name in ("演員", "演员"):
+        actor_female_links = _all_text(row, "span.value a.actor-female::text") or _all_text(row, "a.actor-female::text")
+        if actor_female_links:
+            return actor_female_links
+
         # Only include female actors (those followed by <strong class="symbol female">)
         female_actors = []
         value_node = row.css("span.value")
