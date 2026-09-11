@@ -200,10 +200,6 @@ function ActressListPage() {
   return (
     <div className={styles.page}>
       <section className={styles.toolbar} aria-label="女优列表筛选">
-        <div className={styles.toolbarTitle}>
-          <Typography.Title level={4} className={styles.pageTitle}>女优列表</Typography.Title>
-          <Typography.Text type="secondary">共 {total} 位女优</Typography.Text>
-        </div>
         <div className={styles.queryRail}>
           <div className={styles.filterControls}>
             <Input

@@ -10,27 +10,22 @@
 }
 
 .toolbar {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  column-gap: 16px;
-  row-gap: 14px;
+  gap: 14px;
   padding: 16px;
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 8px;
 }
 
-.toolbarTitle {
-  min-width: 132px;
-}
-
-.pageTitle,
 .detailTitle {
   margin: 0 !important;
 }
 
 .queryRail {
+  width: 100%;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -73,7 +68,7 @@
 }
 
 .advancedFilters {
-  grid-column: 1 / -1;
+  width: 100%;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -396,7 +391,6 @@
 
 @media (max-width: 640px) {
   .toolbar {
-    grid-template-columns: 1fr;
     align-items: stretch;
   }
 
