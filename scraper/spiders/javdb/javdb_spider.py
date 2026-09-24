@@ -193,9 +193,8 @@ class JavdbSpider(BaseSpider):
                         fresh_tasks = [*kept_skipped_tasks, *crawlable_tasks]
 
                         if (
-                            crawl_mode == "incremental"
-                            and incremental_threshold > 0
-                            and existing_count >= incremental_threshold
+                                crawl_mode == "incremental"
+                                and 0 < incremental_threshold <= existing_count
                         ):
                             msg = (
                                 f"{prefix} 列表页 {page_no} 已存在 {existing_count} 条 "
