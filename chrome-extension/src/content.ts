@@ -1,3 +1,7 @@
+import { mountPageActions } from './pageActions/controller'
+import { extractPageContext } from './pageActions/pageContext'
+import type { PageActionMessage, PageActionResponse } from './pageActions/types'
+
 export type PageSnapshot = {
   page_kind: 'list' | 'detail'
   url: string
@@ -53,3 +57,44 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   sendResponse({ snapshot: snapshot() })
   return true
 })
+
+const pageActionDeps = {
+  sendMessage: (message: PageActionMessage) =>
+    chrome.runtime.sendMessage(message) as Promise<PageActionResponse<unknown>>,
+}
+
+let pageActionTimer: ReturnType<typeof setTimeout> | null = null
+
+export function bootstrapPageActions(): void {
+  const context = extractPageContext(new URL(location.href), document)
+  mountPageActions(context, pageActionDeps)
+}
+
+function schedulePageActionBootstrap(): void {
+  if (pageActionTimer !== null) clearTimeout(pageActionTimer)
+  pageActionTimer = setTimeout(() => {
+    pageActionTimer = null
+    bootstrapPageActions()
+  }, 120)
+}
+
+function mutationNeedsRefresh(mutation: MutationRecord): boolean {
+  const host = document.getElementById('media-forge-page-actions')
+  if (host && (mutation.target === host || host.contains(mutation.target))) return false
+  const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes]
+  return changedNodes.some((node) => node !== host && !(node instanceof Element && host?.contains(node)))
+}
+
+const pageActionObserver = new MutationObserver((mutations) => {
+  if (mutations.some(mutationNeedsRefresh)) schedulePageActionBootstrap()
+})
+
+pageActionObserver.observe(document.documentElement, { childList: true, subtree: true })
+window.addEventListener('popstate', schedulePageActionBootstrap)
+window.addEventListener('hashchange', schedulePageActionBootstrap)
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootstrapPageActions, { once: true })
+} else {
+  bootstrapPageActions()
+}
