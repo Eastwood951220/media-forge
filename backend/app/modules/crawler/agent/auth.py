@@ -4,6 +4,10 @@ import hashlib
 import secrets
 from datetime import UTC, datetime
 
+from sqlalchemy.orm import Session
+
+from backend.app.models.crawler_agent import CrawlerAgent
+
 
 def hash_agent_token(token: str) -> str:
     salt = secrets.token_hex(16)
@@ -20,6 +24,19 @@ def verify_agent_token(token: str, token_hash: str) -> bool:
         return False
     digest = hashlib.sha256(f"{salt}:{token}".encode("utf-8")).hexdigest()
     return secrets.compare_digest(digest, expected)
+
+
+def find_agent_by_token(db: Session, token: str) -> CrawlerAgent | None:
+    if not token:
+        return None
+    return next(
+        (
+            agent
+            for agent in db.query(CrawlerAgent).all()
+            if verify_agent_token(token, agent.token_hash)
+        ),
+        None,
+    )
 
 
 def create_agent_token() -> str:

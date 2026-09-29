@@ -13,9 +13,9 @@ from backend.app.models.crawler_agent import CrawlerAgent, CrawlerAgentSession, 
 from backend.app.modules.crawler.agent.auth import (
     create_agent_session_id,
     create_agent_token,
+    find_agent_by_token,
     hash_agent_token,
     session_is_expired,
-    verify_agent_token,
 )
 from backend.app.modules.crawler.agent.constants import (
     AGENT_HEARTBEAT_FRESH_SECONDS,
@@ -209,8 +209,7 @@ async def request_agent_cookie_sync(current_user: CurrentUser, db: Session = Dep
 
 @router.post("/sessions")
 def create_agent_session(body: AgentSessionCreateRequest, db: Session = Depends(get_db)) -> dict:
-    agents = db.query(CrawlerAgent).all()
-    agent = next((item for item in agents if verify_agent_token(body.token, item.token_hash)), None)
+    agent = find_agent_by_token(db, body.token)
     if agent is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid agent token")
     session_id = create_agent_session_id()
