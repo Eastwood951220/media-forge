@@ -8,9 +8,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {},
   "devDependencies": {
     "@types/chrome": "^0.0.287",
+    "happy-dom": "^20.14.5",
     "typescript": "^6.0.0",
     "vite": "^8.0.0",
     "vitest": "^3.2.4"
