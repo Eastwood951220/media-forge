@@ -72,6 +72,18 @@ class CrawlTaskRepository(BaseRepository):
             .first()
         )
 
+    def get_owned_for_update(
+        self,
+        task_id: uuid.UUID,
+        owner_id: uuid.UUID,
+    ) -> CrawlTask | None:
+        return (
+            self._owner_query(owner_id)
+            .filter(CrawlTask.id == task_id)
+            .with_for_update()
+            .first()
+        )
+
     def get_by_name(self, owner_id: uuid.UUID, name: str) -> CrawlTask | None:
         return (
             self.session.query(CrawlTask)
@@ -118,12 +130,43 @@ class CrawlTaskRepository(BaseRepository):
         is_skip: bool,
         urls: list[TaskUrlEntryCreate],
     ) -> CrawlTask:
-        task = CrawlTask(name=name, storage_location=storage_location, is_skip=is_skip, owner_id=owner_id)
-        task.urls = self.build_url_rows(urls)
-        self.session.add(task)
+        task = self.add_with_urls(
+            owner_id=owner_id,
+            name=name,
+            storage_location=storage_location,
+            is_skip=is_skip,
+            urls=urls,
+        )
         self.session.commit()
         self.session.refresh(task)
         return self.get_owned(task.id, owner_id) or task
+
+    def add_with_urls(
+        self,
+        *,
+        owner_id: uuid.UUID,
+        name: str,
+        storage_location: str,
+        is_skip: bool,
+        urls: list[TaskUrlEntryCreate],
+    ) -> CrawlTask:
+        task = CrawlTask(
+            owner_id=owner_id,
+            name=name,
+            storage_location=storage_location,
+            is_skip=is_skip,
+        )
+        task.urls = self.build_url_rows(urls)
+        self.session.add(task)
+        self.session.flush()
+        return task
+
+    def append_url(self, task: CrawlTask, entry: TaskUrlEntryCreate) -> CrawlTaskUrl:
+        next_position = max((row.position for row in task.urls), default=-1) + 1
+        row = CrawlTaskUrl(**self.build_url_values(entry, next_position))
+        task.urls.append(row)
+        self.session.flush()
+        return row
 
     def replace_urls(self, task: CrawlTask, urls: list[TaskUrlEntryCreate]) -> None:
         existing_by_url = {row.url: row for row in task.urls}
@@ -197,6 +240,15 @@ class CrawlTaskRepository(BaseRepository):
         rows = (
             self.session.query(CrawlTask.id, CrawlTask.name)
             .filter(CrawlTask.owner_id == owner_id)
+            .order_by(CrawlTask.name.asc())
+            .all()
+        )
+        return [{"id": str(row.id), "name": row.name} for row in rows]
+
+    def get_enabled_dict_by_owner(self, owner_id: uuid.UUID) -> list[dict[str, str]]:
+        rows = (
+            self.session.query(CrawlTask.id, CrawlTask.name)
+            .filter(CrawlTask.owner_id == owner_id, CrawlTask.is_skip.is_(False))
             .order_by(CrawlTask.name.asc())
             .all()
         )

@@ -82,6 +82,29 @@ class CrawlerRunService:
         schedule_id: uuid.UUID | None = None,
         schedule_run_id: uuid.UUID | None = None,
     ) -> CrawlRun:
+        run = self.prepare_run(
+            task,
+            crawl_mode,
+            selected_task_url_ids=selected_task_url_ids,
+            trigger_source=trigger_source,
+            schedule_id=schedule_id,
+            schedule_run_id=schedule_run_id,
+        )
+        self.db.commit()
+        self.db.refresh(run)
+        self.activate_run(run)
+        return run
+
+    def prepare_run(
+        self,
+        task: CrawlTask,
+        crawl_mode: str,
+        *,
+        selected_task_url_ids: list[uuid.UUID] | None = None,
+        trigger_source: str | None = None,
+        schedule_id: uuid.UUID | None = None,
+        schedule_run_id: uuid.UUID | None = None,
+    ) -> CrawlRun:
         if crawl_mode not in {"incremental", "full"}:
             raise ValueError("crawl_mode must be incremental or full")
         result = full_task_result()
@@ -99,11 +122,12 @@ class CrawlerRunService:
             schedule_run_id=schedule_run_id,
         )
         self.db.add(run)
-        self.db.commit()
-        self.db.refresh(run)
+        self.db.flush()
+        return run
+
+    def activate_run(self, run: CrawlRun) -> None:
         self.runtime.enqueue_run(str(run.id))
         self._ensure_worker_started()
-        return run
 
     def create_temporary_detail_run(self, task: CrawlTask, detail_urls: list[str]) -> CrawlRun:
         run = CrawlRun(
