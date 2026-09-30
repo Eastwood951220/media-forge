@@ -161,6 +161,39 @@ def test_temporary_run_rejects_invalid_detail_url(
     assert runtime.enqueued == []
 
 
+def test_temporary_run_returns_persisted_run_when_activation_fails(
+    client,
+    agent_headers,
+    db_session,
+    test_user,
+    monkeypatch,
+    caplog,
+) -> None:
+    task = make_task(db_session, test_user.id, "临时部分成功任务")
+    monkeypatch.setattr(
+        CrawlerRunService,
+        "activate_run",
+        lambda _self, _run: (_ for _ in ()).throw(RuntimeError("agt_secret must not leak")),
+    )
+
+    response = client.post(
+        f"{PAGE_ACTIONS}/temporary-runs",
+        headers=agent_headers,
+        json={"task_id": str(task.id), "detail_url": "https://javdb.com/v/partial"},
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["accepted"] is False
+    assert data["crawl_mode"] == "temporary"
+    assert data["run_id"]
+    assert data["runtime_error"]
+    assert "agt_secret" not in response.text
+    assert "agt_secret" not in caplog.text
+    db_session.expire_all()
+    assert db_session.get(CrawlRun, uuid.UUID(data["run_id"])) is not None
+
+
 def test_quick_create_persists_normalized_url_and_full_run(
     client,
     agent_headers,

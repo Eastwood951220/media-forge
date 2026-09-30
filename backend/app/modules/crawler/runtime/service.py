@@ -130,6 +130,13 @@ class CrawlerRunService:
         self._ensure_worker_started()
 
     def create_temporary_detail_run(self, task: CrawlTask, detail_urls: list[str]) -> CrawlRun:
+        run = self.prepare_temporary_detail_run(task, detail_urls)
+        self.db.commit()
+        self.db.refresh(run)
+        self.activate_run(run)
+        return run
+
+    def prepare_temporary_detail_run(self, task: CrawlTask, detail_urls: list[str]) -> CrawlRun:
         run = CrawlRun(
             task_id=task.id,
             task_name=task.name,
@@ -156,10 +163,6 @@ class CrawlerRunService:
                     "_task_url_type": "temporary_detail",
                 },
             )
-        self.db.commit()
-        self.db.refresh(run)
-        self.runtime.enqueue_run(str(run.id))
-        self._ensure_worker_started()
         return run
 
     def stop_run(self, run_id: uuid.UUID) -> CrawlRun:

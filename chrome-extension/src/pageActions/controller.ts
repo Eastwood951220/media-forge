@@ -31,11 +31,15 @@ async function loadTaskChoices(
   modal: PageActionModal,
   deps: PageActionDeps,
 ): Promise<void> {
-  const response = await deps.sendMessage({ type: 'page_action.list_tasks' })
-  if (response.ok) {
-    ui.setTaskChoices(modal, response.data as PageActionTaskChoice[])
-  } else {
-    ui.showError(modal, errorMessage(response))
+  try {
+    const response = await deps.sendMessage({ type: 'page_action.list_tasks' })
+    if (response.ok) {
+      ui.setTaskChoices(modal, response.data as PageActionTaskChoice[])
+    } else {
+      ui.showError(modal, errorMessage(response))
+    }
+  } catch {
+    ui.showError(modal, '无法加载任务列表，请确认扩展后台正在运行')
   }
 }
 

@@ -118,6 +118,20 @@ describe('JavDB page-action UI', () => {
     })
   })
 
+  it('shows a recoverable error when loading task choices rejects', async () => {
+    const sendMessage = vi.fn(async () => {
+      throw new Error('background unavailable')
+    })
+    const mount = mountPageActions(detailContext, { sendMessage })!
+
+    click(mount.root, '[data-action="temporary"]')
+    await tick()
+
+    expect(mount.root.querySelector('[role="alert"]')?.textContent).toContain(
+      '无法加载任务列表',
+    )
+  })
+
   it('keeps an edited quick-create name and attaches a conflict to that field', async () => {
     const sendMessage = vi.fn(async () => ({
       ok: false as const,

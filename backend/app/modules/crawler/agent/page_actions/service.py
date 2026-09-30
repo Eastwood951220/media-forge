@@ -81,26 +81,23 @@ class PageActionService:
                 "invalid_detail_url",
             ) from exc
 
+        run_service = CrawlerRunService(self.db, get_runtime_state())
         try:
-            run = CrawlerRunService(self.db, get_runtime_state()).create_temporary_detail_run(
-                task,
-                [detail_url],
-            )
+            run = run_service.prepare_temporary_detail_run(task, [detail_url])
+            self.db.commit()
+            self.db.refresh(run)
         except Exception as exc:
             self.db.rollback()
-            logger.exception("Create temporary Agent page-action run failed")
+            logger.error(
+                "Create temporary Agent page-action run failed: error_type=%s",
+                type(exc).__name__,
+            )
             raise _page_action_error(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
                 "临时运行创建失败",
                 "runtime_unavailable",
             ) from exc
-        return PageActionRunResult(
-            task_id=task.id,
-            task_name=task.name,
-            run_id=run.id,
-            crawl_mode="temporary",
-            accepted=True,
-        )
+        return self._activate_result(run_service, task, run, crawl_mode="temporary")
 
     def _activate_result(
         self,

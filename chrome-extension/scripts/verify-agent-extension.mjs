@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
 const manifest = JSON.parse(readFileSync(resolve(root, 'manifest.json'), 'utf8'))
+const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
 const background = readFileSync(resolve(root, 'src/background.ts'), 'utf8')
 const content = readFileSync(resolve(root, 'src/content.ts'), 'utf8')
 const pageActionTypes = readFileSync(resolve(root, 'src/pageActions/types.ts'), 'utf8')
@@ -21,6 +22,10 @@ for (const file of requiredDistFiles) {
   if (!existsSync(resolve(root, file))) {
     throw new Error(`missing build output: ${file}`)
   }
+}
+
+if (manifest.version !== packageJson.version) {
+  throw new Error('manifest version must match package version')
 }
 
 const hostPermissions = manifest.host_permissions ?? []
