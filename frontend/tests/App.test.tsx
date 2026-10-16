@@ -10,6 +10,10 @@ import App from '../src/App'
 import { useAuthStore } from '../src/stores/useAuthStore'
 import { useThemeStore } from '../src/stores/useThemeStore'
 import { setToken, removeToken } from '../src/utils/auth'
+// Route pages are code-split. Importing the heaviest one here warms its module
+// during collection, so the lazy route resolves without a slow chunk load
+// while the test is waiting on it.
+import '@/pages/dashboard/DashboardPage'
 
 vi.mock('@/api/init', () => ({
   getInitConfig: vi.fn().mockResolvedValue({ initialized: true, databaseConfigured: true, redisConfigured: true }),
@@ -182,10 +186,14 @@ describe('App auth routing', () => {
 
     renderApp('/')
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: '运行态总览' })).toBeInTheDocument()
-      expect(screen.getAllByText(/Media Forge/i).length).toBeGreaterThanOrEqual(1)
-    })
+    await waitFor(
+      () => {
+        expect(screen.getByRole('heading', { name: '运行态总览' })).toBeInTheDocument()
+        expect(screen.getAllByText(/Media Forge/i).length).toBeGreaterThanOrEqual(1)
+      },
+      // The dashboard page is code-split, so its chunk must load first.
+      { timeout: 10000 },
+    )
   })
 
   it('shows crawler task page with a task list tag for authenticated user', async () => {

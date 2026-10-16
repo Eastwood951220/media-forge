@@ -107,6 +107,13 @@ Current route modules:
 `src/routes/-guards.ts` owns initialization and authentication guards. Layout
 routes require both initialization and authentication.
 
+Route pages are registered with `lazyRouteComponent(() => import(...))` so each
+page builds into its own chunk and is fetched only when its route is opened
+(preloading on hover/focus via `defaultPreload: 'intent'`). `src/layout` stays
+eagerly imported because every authenticated route renders it. Keep new route
+pages lazy, and give route components any extra time they need in tests, since
+their chunk loads asynchronously.
+
 ## API Modules
 
 API modules live under `src/api/` and should export typed functions rather than

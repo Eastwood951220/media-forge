@@ -1,25 +1,37 @@
-import { createRootRoute, createRoute, createRouter, Outlet, redirect } from '@tanstack/react-router'
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  lazyRouteComponent,
+  Outlet,
+  redirect,
+} from '@tanstack/react-router'
 import { ConfigProvider, App as AntApp, theme } from 'antd'
 import { useThemeStore } from '@/stores/useThemeStore'
 import { redirectIfAuthenticated, requireAuth, requireInit } from './-guards'
-import LoginPage from '@/pages/login/LoginPage'
-import DashboardPage from '@/pages/dashboard/DashboardPage'
-import InitPage from '@/pages/init/InitPage'
-import ConfigPage from '@/pages/crawler/config/ConfigPage'
-import TaskListPage from '@/pages/crawler/tasks/TaskListPage'
-import TaskFormPage from '@/pages/crawler/tasks/TaskFormPage'
-import RunListPage from '@/pages/crawler/runs/RunListPage'
-import RunDetailPage from '@/pages/crawler/runs/RunDetailPage'
-import ScheduleListPage from '@/pages/crawler/schedules/ScheduleListPage'
-import ActressDetailPage from '@/pages/content/actresses/ActressDetailPage'
-import ActressListPage from '@/pages/content/actresses/ActressListPage'
-import MovieListPage from '@/pages/content/movies/MovieListPage'
-import BackupPage from '@/pages/backup/BackupPage'
-import StorageConfigPage from '@/pages/storage/config/StorageConfigPage'
-import StorageTaskListPage from '@/pages/storage/tasks/StorageTaskListPage'
-import StorageTaskDetailPage from '@/pages/storage/tasks/StorageTaskDetailPage'
-import StorageSubTaskDetailPage from '@/pages/storage/tasks/StorageSubTaskDetailPage'
+import { RoutePending } from './-routePending'
 import AppLayout from '@/layout'
+
+// Route pages load on demand, so opening one page no longer downloads and
+// parses the crawler, storage, movie, chart, and editor code of every other
+// page. The authenticated shell stays eager because every route needs it.
+const LoginPage = lazyRouteComponent(() => import('@/pages/login/LoginPage'))
+const InitPage = lazyRouteComponent(() => import('@/pages/init/InitPage'))
+const DashboardPage = lazyRouteComponent(() => import('@/pages/dashboard/DashboardPage'))
+const ConfigPage = lazyRouteComponent(() => import('@/pages/crawler/config/ConfigPage'))
+const TaskListPage = lazyRouteComponent(() => import('@/pages/crawler/tasks/TaskListPage'))
+const TaskFormPage = lazyRouteComponent(() => import('@/pages/crawler/tasks/TaskFormPage'))
+const RunListPage = lazyRouteComponent(() => import('@/pages/crawler/runs/RunListPage'))
+const RunDetailPage = lazyRouteComponent(() => import('@/pages/crawler/runs/RunDetailPage'))
+const ScheduleListPage = lazyRouteComponent(() => import('@/pages/crawler/schedules/ScheduleListPage'))
+const ActressListPage = lazyRouteComponent(() => import('@/pages/content/actresses/ActressListPage'))
+const ActressDetailPage = lazyRouteComponent(() => import('@/pages/content/actresses/ActressDetailPage'))
+const MovieListPage = lazyRouteComponent(() => import('@/pages/content/movies/MovieListPage'))
+const BackupPage = lazyRouteComponent(() => import('@/pages/backup/BackupPage'))
+const StorageConfigPage = lazyRouteComponent(() => import('@/pages/storage/config/StorageConfigPage'))
+const StorageTaskListPage = lazyRouteComponent(() => import('@/pages/storage/tasks/StorageTaskListPage'))
+const StorageTaskDetailPage = lazyRouteComponent(() => import('@/pages/storage/tasks/StorageTaskDetailPage'))
+const StorageSubTaskDetailPage = lazyRouteComponent(() => import('@/pages/storage/tasks/StorageSubTaskDetailPage'))
 
 const rootRoute = createRootRoute({
   component: function RootLayout() {
@@ -207,4 +219,5 @@ const routeTree = rootRoute.addChildren([
 export const router = createRouter({
   routeTree,
   defaultPreload: 'intent',
+  defaultPendingComponent: RoutePending,
 })
