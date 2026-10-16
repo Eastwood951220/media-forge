@@ -254,4 +254,82 @@ describe('useMovieList', () => {
     }))
     expect(result.current.loading).toBe(false)
   })
+
+  it('applies batched storage updates in arrival order and ignores unknown rows', async () => {
+    vi.mocked(fetchMovies).mockResolvedValue({
+      items: [
+        { _id: 'movie-1', storage_status: 'not_stored', storage_summary: { storage_status: 'not_stored' } },
+        { _id: 'movie-2', storage_status: 'not_stored', storage_summary: { storage_status: 'not_stored' } },
+      ],
+      total: 2,
+      page: 1,
+      limit: 20,
+      total_pages: 1,
+    } as never)
+
+    const { result } = renderHook(() => useMovieList({ search: 'abc' } as never), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => {
+      result.current.applyStorageUpdates([
+        { movie_id: 'movie-1', storage_summary: { storage_status: 'storing', synced_at: 'first' } },
+        { movie_id: 'movie-1', storage_summary: { storage_status: 'stored', synced_at: 'second' } },
+        { movie_id: 'movie-missing', storage_summary: { storage_status: 'stored' } },
+      ])
+    })
+
+    // Folded in arrival order: the later event wins, earlier keys survive.
+    expect(result.current.data.items[0]).toEqual(expect.objectContaining({
+      storage_status: 'stored',
+      storage_summary: expect.objectContaining({ storage_status: 'stored', synced_at: 'second' }),
+    }))
+    expect(result.current.data.items[1].storage_status).toBe('not_stored')
+  })
+
+  it('persists only pagination metadata instead of whole list rows', async () => {
+    vi.mocked(fetchMovies).mockResolvedValue({
+      items: [{ _id: 'movie-1', storage_status: 'stored', storage_summary: { storage_status: 'stored' } }],
+      total: 1,
+      page: 1,
+      limit: 20,
+      total_pages: 1,
+    } as never)
+
+    const { result } = renderHook(() => useMovieList({ search: 'abc' } as never), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const raw = await waitFor(() => {
+      const value = window.sessionStorage.getItem('media-forge:movie-list-state')
+      expect(value).toBeTruthy()
+      return value as string
+    })
+    const parsed = JSON.parse(raw)
+    expect(parsed).not.toHaveProperty('data')
+    expect(parsed).toMatchObject({ page: 1, pageSize: 20 })
+    expect(raw).not.toContain('movie-1')
+  })
+
+  it('reads the persisted list state once per mount instead of on every render', async () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem')
+    const reads = () => getItem.mock.calls.filter(([key]) => key === 'media-forge:movie-list-state').length
+
+    try {
+      vi.mocked(fetchMovies).mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, total_pages: 1 } as never)
+
+      const { result, rerender } = renderHook(
+        ({ filters }) => useMovieList(filters as never),
+        { wrapper, initialProps: { filters: { search: 'abc' } } },
+      )
+      await waitFor(() => expect(result.current.loading).toBe(false))
+      const readsAfterMount = reads()
+
+      act(() => result.current.setSelectedRowKeys(['movie-1']))
+      rerender({ filters: { search: 'abc' } })
+      await act(async () => {})
+
+      expect(reads()).toBe(readsAfterMount)
+    } finally {
+      getItem.mockRestore()
+    }
+  })
 })

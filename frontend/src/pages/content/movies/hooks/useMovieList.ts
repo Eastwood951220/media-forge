@@ -20,12 +20,17 @@ function mergeMovieStorageFields(current: Movie, refreshed: Movie): Movie {
 }
 
 type MovieListStateCache = {
-    data: MovieListResponse;
     filterKey: string;
     page: number;
     pageSize: number;
     sortBy: string;
     sortOrder: number;
+}
+
+/** A single `movie.storage.updated` realtime update, batched by the list hook. */
+export type MovieStorageUpdate = {
+    movie_id: string;
+    storage_summary: Record<string, unknown>;
 }
 
 const MOVIE_LIST_STATE_CACHE_KEY = "media-forge:movie-list-state";
@@ -65,9 +70,14 @@ export function useMovieList(
     initialSort?: { sortBy: string; sortOrder: number },
 ) {
     const {message} = App.useApp();
-    const cachedState = readMovieListStateCache();
-    const initialCachedState = cachedState && cacheMatchesCurrentTaskSearch(cachedState) ? cachedState : null;
-    const [data, setData] = useState<MovieListResponse>(initialCachedState?.data ?? INITIAL_MOVIE_LIST_RESPONSE);
+    // Read the persisted list state once per mount. It used to be re-read and
+    // re-parsed on every render, which dominated renders whenever a cached page
+    // carried many rows.
+    const [initialCachedState] = useState(() => {
+        const cached = readMovieListStateCache();
+        return cached && cacheMatchesCurrentTaskSearch(cached) ? cached : null;
+    });
+    const [data, setData] = useState<MovieListResponse>(INITIAL_MOVIE_LIST_RESPONSE);
     const [page, setPage] = useState(initialCachedState?.page ?? DEFAULT_MOVIE_PAGE);
     const [pageSize, setPageSize] = useState(initialCachedState?.pageSize ?? DEFAULT_MOVIE_PAGE_SIZE);
     const [sortBy, setSortBy] = useState(initialCachedState?.sortBy ?? initialSort?.sortBy ?? DEFAULT_MOVIE_SORT_FIELD);
@@ -82,15 +92,16 @@ export function useMovieList(
 
     useEffect(() => {
         if (!filterParams) return;
+        // Only pagination/sort metadata is persisted: serializing whole pages
+        // (rows, covers, nested data) on every change is what made the page janky.
         writeMovieListStateCache({
-            data,
             filterKey,
             page,
             pageSize,
             sortBy,
             sortOrder,
         });
-    }, [data, filterKey, filterParams, page, pageSize, sortBy, sortOrder]);
+    }, [filterKey, filterParams, page, pageSize, sortBy, sortOrder]);
 
     const loadMovies = useCallback(async () => {
         if (!filterParams) return;
@@ -202,10 +213,33 @@ export function useMovieList(
         setSortOrder(override?.sortOrder ?? DEFAULT_MOVIE_SORT_ORDER);
     }, []);
 
-    const updateMovie = useCallback((id: string, updater: (movie: Movie) => Movie) => {
+    const applyStorageUpdates = useCallback((updates: MovieStorageUpdate[]) => {
+        if (updates.length === 0) return;
+        const summariesByMovie = new Map<string, Record<string, unknown>[]>();
+        for (const update of updates) {
+            const summaries = summariesByMovie.get(update.movie_id);
+            if (summaries) {
+                summaries.push(update.storage_summary);
+            } else {
+                summariesByMovie.set(update.movie_id, [update.storage_summary]);
+            }
+        }
         setData((prev) => ({
             ...prev,
-            items: prev.items.map((item) => item._id === id ? updater(item) : item),
+            items: prev.items.map((item) => {
+                const summaries = summariesByMovie.get(item._id);
+                if (!summaries) return item;
+                // Fold in arrival order so a batched burst matches the
+                // per-event updates it replaces.
+                return summaries.reduce<Movie>((movie, summary) => ({
+                    ...movie,
+                    storage_status: String(summary.storage_status || 'not_stored') as Movie['storage_status'],
+                    storage_summary: {
+                        ...movie.storage_summary,
+                        ...summary,
+                    },
+                }), item);
+            }),
         }));
     }, []);
 
@@ -231,7 +265,7 @@ export function useMovieList(
     return {
         data, page, pageSize, sortBy, sortOrder, loading, syncingStorage, selectedRowKeys,
         setPage, setPageSize, setSelectedRowKeys,
-        search, reload, refreshStorageFields, syncStorageStatus, handlePageChange, handleShowSizeChange, handleSortChange, resetSort, updateMovie,
+        search, reload, refreshStorageFields, syncStorageStatus, handlePageChange, handleShowSizeChange, handleSortChange, resetSort, applyStorageUpdates,
     };
 }
 

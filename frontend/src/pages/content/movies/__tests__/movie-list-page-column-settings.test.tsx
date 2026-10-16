@@ -50,7 +50,7 @@ vi.mock('../hooks/useMovieList', () => ({
     resetSort: vi.fn(),
     syncingStorage: false,
     syncStorageStatus: vi.fn(),
-    updateMovie: vi.fn(),
+    applyStorageUpdates: vi.fn(),
   }),
 }))
 
