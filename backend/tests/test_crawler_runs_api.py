@@ -153,6 +153,62 @@ def test_run_list_includes_task_summary(client: TestClient, admin_user) -> None:
     }
 
 
+def test_run_list_summarizes_many_runs_with_bounded_detail_task_queries(client: TestClient, admin_user) -> None:
+    """Listing runs must not issue two detail-task queries per row."""
+    from sqlalchemy import event
+
+    from backend.tests.conftest import engine
+
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    task = CrawlTask(name="batched-summary-task", storage_location="A", owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    run_count = 6
+    for index in range(run_count):
+        run = CrawlRun(
+            task_id=task.id,
+            task_name=task.name,
+            status="completed",
+            crawl_mode="incremental" if index % 2 == 0 else "full",
+        )
+        session.add(run)
+        session.flush()
+        session.add_all([
+            CrawlRunDetailTask(
+                run_id=run.id,
+                task_name=task.name,
+                code=f"{index}-{position}",
+                source_url=f"https://example.com/{index}/{position}",
+                source_name="S",
+                status="saved",
+                created_at=datetime.now(),
+            )
+            for position in range(3)
+        ])
+    session.commit()
+    session.close()
+
+    detail_statements: list[str] = []
+
+    def record_detail_statement(conn, cursor, statement, parameters, context, executemany) -> None:
+        if "crawl_run_detail_tasks" in statement:
+            detail_statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", record_detail_statement)
+    try:
+        response = client.get("/api/crawler/runs", headers=headers)
+    finally:
+        event.remove(engine, "before_cursor_execute", record_detail_statement)
+
+    assert response.status_code == HTTPStatus.OK
+    rows = response.json()["rows"]
+    assert len(rows) == run_count
+    assert [row["summary"]["total"] for row in rows] == [3] * run_count
+    # One grouped query for regular runs and one for incremental runs.
+    assert len(detail_statements) <= 2, detail_statements
+
+
 def test_run_list_and_detail_include_scope_display_fields(client: TestClient, admin_user, monkeypatch) -> None:
     headers = auth_headers(client, admin_user)
     payload = task_payload()

@@ -32,14 +32,19 @@ from shared.schemas.common import paginated, success
 router = APIRouter(prefix="/api/crawler/runs", tags=["crawler-runs"])
 
 
-def _hidden_incremental_existing_skip_filter(run: CrawlRun):
-    if run.crawl_mode != "incremental":
-        return None
+def _hidden_incremental_existing_skip_clause():
+    """Visibility clause hiding an incremental run's already-existing skips."""
     return or_(
         CrawlRunDetailTask.status != "skipped",
         CrawlRunDetailTask.error != "already_exists",
         CrawlRunDetailTask.error.is_(None),
     )
+
+
+def _hidden_incremental_existing_skip_filter(run: CrawlRun):
+    if run.crawl_mode != "incremental":
+        return None
+    return _hidden_incremental_existing_skip_clause()
 
 
 def _visible_run_detail_task_query(db: Session, run: CrawlRun):
@@ -56,16 +61,10 @@ def _json_item_text(column, key: str, dialect_name: str):
     return func.json_extract(column, f"$.{key}")
 
 
-def _run_task_summary(db: Session, run: CrawlRun) -> dict:
-    query = _visible_run_detail_task_query(db, run)
-    total = query.count()
-    counts = (
-        query.with_entities(CrawlRunDetailTask.status, func.count(CrawlRunDetailTask.id))
-        .group_by(CrawlRunDetailTask.status)
-        .all()
-    )
-    summary = RunTaskSummary(total=total)
-    for status, count in counts:
+def _summary_from_status_counts(counts: dict[str, int]) -> dict:
+    """Build a RunTaskSummary payload from one run's per-status counts."""
+    summary = RunTaskSummary(total=sum(counts.values()))
+    for status, count in counts.items():
         if hasattr(summary, status):
             setattr(summary, status, count)
     summary.completed = summary.saved + summary.skipped
@@ -74,9 +73,50 @@ def _run_task_summary(db: Session, run: CrawlRun) -> dict:
     return summary.model_dump(mode="json")
 
 
-def _serialize_run_list_item(db: Session, run: CrawlRun) -> dict:
+def _run_task_summaries(db: Session, runs: list[CrawlRun]) -> dict[uuid.UUID, dict]:
+    """Summarize detail tasks for many runs using two grouped queries.
+
+    Replaces the previous two-queries-per-row shape, where listing 20 runs cost
+    40 queries against the fastest-growing crawler table. Detail-task status is
+    non-null, so the per-status counts also yield the run total without a
+    separate COUNT. Incremental runs hide skips that already existed, so they
+    are grouped separately from every other crawl mode.
+    """
+    if not runs:
+        return {}
+    incremental_ids = [run.id for run in runs if run.crawl_mode == "incremental"]
+    regular_ids = [run.id for run in runs if run.crawl_mode != "incremental"]
+    counts_by_run: dict[uuid.UUID, dict[str, int]] = {}
+    for run_ids, hide_existing_skips in ((regular_ids, False), (incremental_ids, True)):
+        if not run_ids:
+            continue
+        query = (
+            db.query(
+                CrawlRunDetailTask.run_id,
+                CrawlRunDetailTask.status,
+                func.count(CrawlRunDetailTask.id),
+            )
+            .filter(CrawlRunDetailTask.run_id.in_(run_ids))
+        )
+        if hide_existing_skips:
+            query = query.filter(_hidden_incremental_existing_skip_clause())
+        for run_id, status, count in query.group_by(
+            CrawlRunDetailTask.run_id, CrawlRunDetailTask.status
+        ).all():
+            counts_by_run.setdefault(run_id, {})[status] = count
+    return {
+        run.id: _summary_from_status_counts(counts_by_run.get(run.id, {}))
+        for run in runs
+    }
+
+
+def _run_task_summary(db: Session, run: CrawlRun) -> dict:
+    return _run_task_summaries(db, [run])[run.id]
+
+
+def _serialize_run_list_item(db: Session, run: CrawlRun, summary: dict | None = None) -> dict:
     payload = serialize_run(run, CrawlRunListItem)
-    payload["summary"] = _run_task_summary(db, run)
+    payload["summary"] = summary if summary is not None else _run_task_summary(db, run)
     return payload
 
 
@@ -142,8 +182,9 @@ def list_runs(
         .limit(size)
         .all()
     )
+    summaries = _run_task_summaries(db, rows)
     return paginated(
-        rows=[_serialize_run_list_item(db, r) for r in rows],
+        rows=[_serialize_run_list_item(db, r, summaries[r.id]) for r in rows],
         total=total,
     )
 

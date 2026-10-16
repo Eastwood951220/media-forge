@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.app.models.crawl_run import CrawlRun
@@ -47,6 +48,11 @@ def derive_runtime_status(latest_run_status: str | None) -> TaskRuntimeStatus:
 def _latest_runs_by_task(db: Session, task_ids: list[uuid.UUID]) -> dict[uuid.UUID, CrawlRun]:
     """Fetch the latest CrawlRun for each task ID.
 
+    A row_number() window ranks every task's runs newest-first inside the
+    database, so the query returns one row per task instead of loading the full
+    run history of every task. Snapshots run on each EventSource connect, so
+    this must stay bounded as runs accumulate.
+
     Args:
         db: Database session.
         task_ids: List of task UUIDs.
@@ -56,17 +62,26 @@ def _latest_runs_by_task(db: Session, task_ids: list[uuid.UUID]) -> dict[uuid.UU
     """
     if not task_ids:
         return {}
+    ranked = (
+        db.query(
+            CrawlRun.id.label("run_id"),
+            func.row_number()
+            .over(
+                partition_by=CrawlRun.task_id,
+                order_by=(CrawlRun.created_at.desc(), CrawlRun.id.desc()),
+            )
+            .label("rank"),
+        )
+        .filter(CrawlRun.task_id.in_(task_ids))
+        .subquery()
+    )
     rows = (
         db.query(CrawlRun)
-        .filter(CrawlRun.task_id.in_(task_ids))
-        .order_by(CrawlRun.task_id.asc(), CrawlRun.created_at.desc())
+        .join(ranked, CrawlRun.id == ranked.c.run_id)
+        .filter(ranked.c.rank == 1)
         .all()
     )
-    latest: dict[uuid.UUID, CrawlRun] = {}
-    for row in rows:
-        if row.task_id is not None and row.task_id not in latest:
-            latest[row.task_id] = row
-    return latest
+    return {row.task_id: row for row in rows if row.task_id is not None}
 
 
 def build_task_runtime_snapshot(task: CrawlTask, latest_run: CrawlRun | None) -> CrawlTaskRuntimeSnapshot:

@@ -120,3 +120,41 @@ def other_user(db_session):
     db_session.commit()
     db_session.refresh(user)
     return user
+
+
+class InMemoryRedis:
+    """Minimal Redis stand-in for cache-backed code paths.
+
+    The real cache client talks to a shared Redis database, so without this
+    every test would read and write the same keys as its neighbours.
+    """
+
+    def __init__(self) -> None:
+        self.store: dict[str, str] = {}
+
+    def get(self, key):
+        return self.store.get(key)
+
+    def set(self, key, value, ex=None):  # noqa: A003 - mirrors the redis-py API
+        self.store[key] = value
+        return True
+
+    def delete(self, *keys):
+        removed = 0
+        for key in keys:
+            if self.store.pop(key, None) is not None:
+                removed += 1
+        return removed
+
+    def scan_iter(self, match=None, count=None):
+        prefix = (match or "").rstrip("*")
+        for key in list(self.store):
+            if key.startswith(prefix):
+                yield key
+
+
+@pytest.fixture(autouse=True)
+def isolated_cache(monkeypatch) -> None:
+    """Give each test a private cache instead of the shared Redis database."""
+    client = InMemoryRedis()
+    monkeypatch.setattr("backend.app.core.cache.get_redis", lambda: client)

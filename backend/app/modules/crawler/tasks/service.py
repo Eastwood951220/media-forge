@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.core.cache import cache_key, delete_keys, read_through_json
 from backend.app.models.crawl_run import CrawlRun
 from backend.app.modules.crawler.runs.schemas import accepted_run_action, RunCreateRequest
 from backend.app.modules.crawler.runtime.service import CrawlerRunService, get_runtime_state
@@ -47,6 +48,19 @@ from scraper.tasks.task_utils import determine_source
 
 logger = logging.getLogger(__name__)
 
+# The task dictionary is a pure ID-to-name mapping that only task create,
+# update, and delete can change, which makes it safe to cache across list reads.
+TASK_DICT_TTL_SECONDS = 300
+
+
+def _task_dict_cache_key(owner_id: uuid.UUID) -> str:
+    return cache_key("crawler", "task_dict", owner_id)
+
+
+def invalidate_task_dict_cache(owner_id: uuid.UUID) -> None:
+    """Drop one owner's cached task dictionary after a task mutation."""
+    delete_keys(_task_dict_cache_key(owner_id))
+
 
 class CrawlerTaskService:
     """Application service for crawler task operations."""
@@ -81,7 +95,11 @@ class CrawlerTaskService:
         return data
 
     def task_dict(self, owner_id: uuid.UUID) -> dict:
-        return self.repo.get_dict_by_owner(owner_id)
+        return read_through_json(
+            _task_dict_cache_key(owner_id),
+            ttl_seconds=TASK_DICT_TTL_SECONDS,
+            producer=lambda: self.repo.get_dict_by_owner(owner_id),
+        )
 
     def get_task(self, task_id: uuid.UUID, owner_id: uuid.UUID) -> dict:
         task = self.repo.get_owned(task_id, owner_id)
@@ -182,6 +200,7 @@ class CrawlerTaskService:
         except IntegrityError as exc:
             self.db.rollback()
             raise_task_integrity_error(exc, name=data.name)
+        invalidate_task_dict_cache(owner_id)
         return serialize_task(created).model_dump(mode="json")
 
     def _unique_task_name(self, owner_id: uuid.UUID, base_name: str, reserved: set[str]) -> str:
@@ -247,6 +266,8 @@ class CrawlerTaskService:
                 self.db.rollback()
                 failed.append(CrawlTaskBatchFailedItem(url=url, reason=str(exc)))
 
+        if created:
+            invalidate_task_dict_cache(owner_id)
         return CrawlTaskBatchCreateResult(
             created=created,
             failed=failed,
@@ -286,6 +307,7 @@ class CrawlerTaskService:
         except IntegrityError as exc:
             self.db.rollback()
             raise_task_integrity_error(exc, name=update_data.get("name") or task.name)
+        invalidate_task_dict_cache(owner_id)
         return serialize_task(updated).model_dump(mode="json")
 
     def _unique_task_ids(self, task_ids: list[uuid.UUID]) -> list[uuid.UUID]:
@@ -361,4 +383,5 @@ class CrawlerTaskService:
         except UnsupportedDeleteMode as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
+        invalidate_task_dict_cache(owner_id)
         return result.to_dict()

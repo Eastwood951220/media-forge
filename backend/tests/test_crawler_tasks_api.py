@@ -65,6 +65,75 @@ def test_get_latest_runs_by_task_ids_returns_one_newest_run_per_task(admin_user)
     assert set(latest) == {task_a.id, task_b.id}
 
 
+def test_latest_runs_by_task_resolves_newest_run_per_task(admin_user) -> None:
+    """The snapshot helper must return exactly the newest run of each task."""
+    from datetime import datetime, timedelta, timezone
+
+    from backend.app.models.crawl_run import CrawlRun
+    from backend.app.models.crawl_task import CrawlTask
+    from backend.app.modules.crawler.tasks.runtime_status import _latest_runs_by_task
+    from backend.tests.conftest import TestingSessionLocal
+
+    session = TestingSessionLocal()
+    task = CrawlTask(name="runtime-latest", storage_location="JP", is_skip=False, owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    now = datetime.now(timezone.utc)
+    session.add_all([
+        CrawlRun(task_id=task.id, task_name=task.name, status="failed", crawl_mode="full", created_at=now - timedelta(hours=3)),
+        CrawlRun(task_id=task.id, task_name=task.name, status="failed", crawl_mode="full", created_at=now - timedelta(hours=2)),
+        CrawlRun(task_id=task.id, task_name=task.name, status="running", crawl_mode="full", created_at=now),
+    ])
+    session.commit()
+
+    latest = _latest_runs_by_task(session, [task.id])
+
+    assert set(latest) == {task.id}
+    assert latest[task.id].status == "running"
+
+
+def test_task_dict_is_cached_and_refreshed_after_task_create(client, auth_headers) -> None:
+    """The task dictionary is served from cache and invalidated on task create."""
+    from sqlalchemy import event
+
+    from backend.tests.conftest import engine
+
+    first = client.get("/api/crawler/tasks/dict", headers=auth_headers)
+    assert first.status_code == 200
+    assert first.json()["data"] == []
+
+    task_queries: list[str] = []
+
+    def record_task_query(conn, cursor, statement, parameters, context, executemany) -> None:
+        if "crawl_tasks" in statement:
+            task_queries.append(statement)
+
+    event.listen(engine, "before_cursor_execute", record_task_query)
+    try:
+        cached = client.get("/api/crawler/tasks/dict", headers=auth_headers)
+    finally:
+        event.remove(engine, "before_cursor_execute", record_task_query)
+
+    assert cached.status_code == 200
+    assert cached.json()["data"] == []
+    assert task_queries == [], task_queries
+
+    created = client.post(
+        "/api/crawler/tasks",
+        json={
+            "name": "缓存任务",
+            "storage_location": "A",
+            "is_skip": False,
+            "urls": [{"url": "https://javdb.com/actors/cache", "url_type": "actors"}],
+        },
+        headers=auth_headers,
+    )
+    assert created.status_code == 201
+
+    refreshed = client.get("/api/crawler/tasks/dict", headers=auth_headers)
+    assert [item["name"] for item in refreshed.json()["data"]] == ["缓存任务"]
+
+
 def test_crawler_task_list_returns_total_and_static_list_fields(client, auth_headers):
     for index in range(3):
         response = client.post(
