@@ -56,6 +56,31 @@ def test_list_movies_search_and_source_task(client: TestClient, admin_user) -> N
     assert str(TASK_ID_A) in body["rows"][0]["source_task_ids"]
 
 
+def test_list_movies_omits_detail_only_fields(client: TestClient, admin_user) -> None:
+    """List responses stay slim: magnets/raw_detail/source_task_url_ids are detail-only."""
+    headers = auth_headers(client, admin_user)
+    movie_id = seed_movie()
+
+    response = client.get("/api/content/movies", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    row = response.json()["rows"][0]
+    assert "magnets" not in row
+    assert "raw_detail" not in row
+    assert "source_task_url_ids" not in row
+    # The fields the list UI relies on must remain.
+    assert row["code"] == "AAA-001"
+    assert row["id"] == row["_id"]
+    assert "storage_status" in row
+    assert "storage_summary" in row
+
+    # The detail endpoint still returns the full payload.
+    detail = client.get(f"/api/content/movies/{movie_id}", headers=headers)
+    assert detail.status_code == HTTPStatus.OK
+    assert detail.json()["data"]["magnets"][0]["magnet_url"].startswith("magnet:")
+    assert "raw_detail" in detail.json()["data"]
+
+
 def test_list_movies_accepts_page_size_up_to_cap(client: TestClient, admin_user) -> None:
     headers = auth_headers(client, admin_user)
 

@@ -67,7 +67,8 @@ export interface Movie {
     synced_at?: string
     [key: string]: unknown
   }
-  raw_detail: Record<string, unknown>
+  // Detail-only: the list endpoint omits raw_detail to keep list responses small.
+  raw_detail?: Record<string, unknown>
   magnets?: MovieMagnet[]
   selected_magnet_dedupe_key?: string | null
   has_chinese_sub?: boolean

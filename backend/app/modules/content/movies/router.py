@@ -114,7 +114,15 @@ def list_movies(
     storage_location_map = build_movie_storage_location_map(db, rows)
     return paginated(
         rows=[
-            serialize_movie(movie, include_magnets=True, db=db, storage_location_map=storage_location_map)
+            # List responses stay slim: magnets/raw_detail/source_task_url_ids are
+            # detail-only and would multiply the payload for every row.
+            serialize_movie(
+                movie,
+                db=db,
+                storage_location_map=storage_location_map,
+                include_raw_detail=False,
+                include_source_task_url_ids=False,
+            )
             for movie in rows
         ],
         total=total,

@@ -73,9 +73,17 @@ def serialize_movie(
     include_magnets: bool = False,
     db: Session | None = None,
     storage_location_map: dict[str, list[str]] | None = None,
+    include_raw_detail: bool = True,
+    include_source_task_url_ids: bool = True,
 ) -> dict:
+    """Serialize a movie.
+
+    The list endpoint sends many rows per request, so it opts out of the
+    detail-only fields (`magnets`, `raw_detail`, `source_task_url_ids`) with
+    `include_magnets=False`, `include_raw_detail=False` and
+    `include_source_task_url_ids=False`; the detail endpoint keeps the defaults.
+    """
     source_task_ids = [str(tid) for tid in (movie.source_task_ids or [])]
-    source_task_url_ids = [str(tid) for tid in (movie.source_task_url_ids or [])]
     payload = {
         "_id": str(movie.id),
         "id": str(movie.id),
@@ -92,15 +100,17 @@ def serialize_movie(
         "actors": list(movie.actors or []),
         "tags": list(movie.tags or []),
         "source_task_ids": source_task_ids,
-        "source_task_url_ids": source_task_url_ids,
         "storage_locations": movie_storage_locations(movie, db, storage_location_map),
         "marked": bool(movie.marked),
         "storage_status": normalized_movie_storage_status(movie),
         "storage_summary": movie.storage_summary or {},
-        "raw_detail": movie.raw_detail or {},
         "created_at": movie.created_at.isoformat() if movie.created_at else None,
         "updated_at": movie.updated_at.isoformat() if movie.updated_at else None,
     }
+    if include_source_task_url_ids:
+        payload["source_task_url_ids"] = [str(tid) for tid in (movie.source_task_url_ids or [])]
+    if include_raw_detail:
+        payload["raw_detail"] = movie.raw_detail or {}
     if include_magnets:
         magnets = list(movie.magnets or [])
         payload["magnets"] = [
