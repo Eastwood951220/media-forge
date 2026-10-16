@@ -6,9 +6,10 @@ from uuid import UUID
 
 from sqlalchemy import Select, Text, and_, cast, false, func, not_, or_, select
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, lazyload
 
 from backend.app.modules.content.movies.filters import MovieListFilters, split_csv
+from backend.app.modules.content.movies.storage_status import normalized_storage_status_expression
 from shared.database.models.content import Movie
 
 ALLOWED_SORT_FIELDS = {
@@ -57,19 +58,20 @@ def _postgres_array_contains(column: Any, value: Any, item_type: Any):
 
 
 def requires_python_fallback(db: Session, filters: MovieListFilters) -> bool:
-    if filters.storage_status:
-        return True
-    if db.bind.dialect.name == "sqlite":
-        return bool(
-            filters.source_task_id
-            or filters.actors
-            or filters.actors_not
-            or filters.actors_count_min is not None
-            or filters.actors_count_max is not None
-            or filters.tags
-            or filters.tags_not
-        )
-    return False
+    # PostgreSQL pushes every filter into SQL. SQLite only needs the fallback
+    # for JSON/ARRAY filters, which have no portable SQL form.
+    if db.bind.dialect.name != "sqlite":
+        return False
+    return bool(
+        filters.storage_status
+        or filters.source_task_id
+        or filters.actors
+        or filters.actors_not
+        or filters.actors_count_min is not None
+        or filters.actors_count_max is not None
+        or filters.tags
+        or filters.tags_not
+    )
 
 
 def build_movie_list_statement(
@@ -79,7 +81,11 @@ def build_movie_list_statement(
     sort_order: int | str,
     dialect_name: str | None = None,
 ) -> Select:
-    stmt = select(Movie).options(selectinload(Movie.magnets))
+    # Movie.magnets defaults to the "selectin" strategy, which would fire an
+    # extra query for every list page. List rows never serialize magnets, so
+    # demote it to a lazy load: no query now, and any later access (or a
+    # same-session db.get) still loads real data instead of a stale empty list.
+    stmt = select(Movie).options(lazyload(Movie.magnets))
     conditions = []
 
     if filters.search:
@@ -121,6 +127,12 @@ def build_movie_list_statement(
         conditions.append(Movie.series == value)
     for value in split_csv(filters.series_not):
         conditions.append(Movie.series != value)
+
+    if filters.storage_status and dialect_name == "postgresql":
+        # storage_summary is JSONB, so the normalized status is filterable in SQL.
+        conditions.append(
+            normalized_storage_status_expression(Movie.storage_summary) == filters.storage_status,
+        )
 
     # PostgreSQL array conditions
     if dialect_name == "postgresql":

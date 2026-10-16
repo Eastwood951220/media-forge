@@ -1,10 +1,17 @@
 import uuid
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
+from sqlalchemy import event
 from sqlalchemy.dialects import postgresql
 
-from backend.app.modules.content.movies.queries import MovieListFilters, build_movie_list_statement, list_movies_page
+from backend.app.modules.content.movies.queries import (
+    MovieListFilters,
+    build_movie_list_statement,
+    list_movies_page,
+    requires_python_fallback,
+)
 from shared.database.models.content import Movie
 
 
@@ -116,6 +123,82 @@ def test_list_movies_page_preserves_sqlite_array_filter_fallback(db_session) -> 
 
     assert total == 1
     assert [movie.code for movie in rows] == ["AAA-100"]
+
+
+def test_list_movies_page_does_not_query_magnets(db_session) -> None:
+    """List rows never serialize magnets, so the relationship must not be loaded."""
+    seed_query_movies(db_session)
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        db_session.expire_all()
+        statements.clear()
+        rows, _ = list_movies_page(
+            db_session,
+            MovieListFilters(),
+            sort_by="code",
+            sort_order=1,
+            page=1,
+            limit=20,
+            skip=None,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    assert [row.code for row in rows] == ["AAA-100", "BBB-200"]
+    assert [statement for statement in statements if "movie_magnets" in statement] == []
+
+
+def _dialect_session(name: str):
+    return SimpleNamespace(bind=SimpleNamespace(dialect=SimpleNamespace(name=name)))
+
+
+def test_requires_python_fallback_only_applies_to_sqlite() -> None:
+    postgres = _dialect_session("postgresql")
+    sqlite = _dialect_session("sqlite")
+
+    assert requires_python_fallback(postgres, MovieListFilters(storage_status="stored")) is False
+    assert requires_python_fallback(postgres, MovieListFilters(actors="Actor A")) is False
+
+    assert requires_python_fallback(sqlite, MovieListFilters(storage_status="stored")) is True
+    assert requires_python_fallback(sqlite, MovieListFilters(actors="Actor A")) is True
+    assert requires_python_fallback(sqlite, MovieListFilters(search="movie")) is False
+
+
+def test_postgresql_storage_status_filter_is_pushed_into_sql() -> None:
+    statement = build_movie_list_statement(
+        MovieListFilters(storage_status="stored"),
+        sort_by="code",
+        sort_order=1,
+        dialect_name="postgresql",
+    )
+    sql = str(statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+
+    assert "movies.storage_summary ->> 'storage_status'" in sql
+    assert "movies.storage_summary ->> 'last_status'" in sql
+    assert "CASE WHEN" in sql
+    assert "'not_stored'" in sql
+    assert "'completed'" in sql
+
+
+def test_sqlite_storage_status_filter_stays_in_python() -> None:
+    from sqlalchemy.dialects import sqlite as sqlite_dialect
+
+    statement = build_movie_list_statement(
+        MovieListFilters(storage_status="stored"),
+        sort_by="code",
+        sort_order=1,
+        dialect_name="sqlite",
+    )
+    sql = str(statement.compile(dialect=sqlite_dialect.dialect()))
+
+    assert "storage_summary ->>" not in sql
+    assert "CASE WHEN" not in sql
 
 
 def compile_postgresql_movie_list_sql(filters: MovieListFilters) -> str:

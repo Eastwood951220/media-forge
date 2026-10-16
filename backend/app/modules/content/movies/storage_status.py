@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from sqlalchemy import case, func, literal
 from sqlalchemy.orm import Session
 
 from backend.app.modules.content.movies.storage_locations import build_movie_storage_target_folders, target_folder_specs_from_subtask
@@ -17,6 +18,9 @@ STORAGE_STATUSES = {
     STORAGE_STATUS_STORING,
     STORAGE_STATUS_STORED,
 }
+# Raw upstream statuses that map onto the normalized statuses above.
+STORAGE_STATUS_COMPLETED_ALIAS = "completed"
+STORAGE_STATUS_STORING_ALIASES = frozenset({"queued", "running", "pending", "waiting_download", "moving"})
 
 
 @dataclass
@@ -28,16 +32,41 @@ class MovieStorageSyncResult:
     locations: list[dict]
 
 
-def normalized_movie_storage_status(movie: Movie) -> str:
-    summary = dict(movie.storage_summary or {})
-    status = str(summary.get("storage_status") or summary.get("last_status") or "")
-    if status == "completed":
+def normalize_storage_status(value: object) -> str:
+    """Normalize a raw storage status value into one of STORAGE_STATUSES."""
+    status = str(value or "")
+    if status == STORAGE_STATUS_COMPLETED_ALIAS:
         return STORAGE_STATUS_STORED
-    if status in {"queued", "running", "pending", "waiting_download", "moving"}:
+    if status in STORAGE_STATUS_STORING_ALIASES:
         return STORAGE_STATUS_STORING
     if status in STORAGE_STATUSES:
         return status
     return STORAGE_STATUS_NOT_STORED
+
+
+def normalized_movie_storage_status(movie: Movie) -> str:
+    summary = dict(movie.storage_summary or {})
+    return normalize_storage_status(summary.get("storage_status") or summary.get("last_status"))
+
+
+def normalized_storage_status_expression(summary_column):
+    """SQL twin of normalize_storage_status for a JSONB storage_summary column.
+
+    Keeps the mapping in one place so the SQL filter and the Python fallback
+    cannot drift apart. Only PostgreSQL supports the `->>` accessor, so callers
+    must gate on the dialect; SQLite keeps using the Python fallback.
+    """
+    status_text = func.coalesce(
+        func.nullif(summary_column.op("->>")(literal("storage_status")), ""),
+        func.nullif(summary_column.op("->>")(literal("last_status")), ""),
+        "",
+    )
+    return case(
+        (status_text == STORAGE_STATUS_COMPLETED_ALIAS, STORAGE_STATUS_STORED),
+        (status_text.in_(sorted(STORAGE_STATUS_STORING_ALIASES)), STORAGE_STATUS_STORING),
+        (status_text.in_(sorted(STORAGE_STATUSES)), status_text),
+        else_=STORAGE_STATUS_NOT_STORED,
+    )
 
 
 def set_movie_storage_status(
