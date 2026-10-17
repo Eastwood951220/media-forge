@@ -239,6 +239,43 @@ describe('TaskListCards action alignment', () => {
     expect(searchInput.value).toBe('prestige')
   })
 
+  it('keeps long URL names on one truncated line inside the task card', () => {
+    const longUrlName = '近ごろ豊満な熟女体型を気にしはじめた嫁の長いURL名称'
+    renderCards({
+      tasks: [
+        {
+          ...baseTask,
+          urls: [{ ...baseTask.urls[0], url_name: longUrlName }],
+        },
+      ] as never,
+    })
+
+    const urlNameTag = screen.getByText(longUrlName)
+    const styles = window.getComputedStyle(urlNameTag)
+
+    expect(styles.maxWidth).toBe('100%')
+    expect(styles.overflow).toBe('hidden')
+    expect(styles.textOverflow).toBe('ellipsis')
+    expect(styles.whiteSpace).toBe('nowrap')
+    expect(styles.marginInlineEnd).toBe('0')
+  })
+
+  it('reveals a long URL name in a tooltip on hover', async () => {
+    const longUrlName = '近ごろ豊満な熟女体型を気にしはじめた嫁の長いURL名称'
+    renderCards({
+      tasks: [
+        {
+          ...baseTask,
+          urls: [{ ...baseTask.urls[0], url_name: longUrlName }],
+        },
+      ] as never,
+    })
+
+    fireEvent.mouseEnter(screen.getByText(longUrlName))
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(longUrlName)
+  })
+
   it('shows a dash for the latest run row when the task has no latest run', () => {
     renderCards()
 

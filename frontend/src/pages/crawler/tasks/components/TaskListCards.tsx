@@ -71,6 +71,18 @@ function getUrlNames(task: CrawlTask) {
 
 const MAX_VISIBLE_URL_NAMES = 3
 
+function UrlNameTag({ name, className }: { name: string; className?: string }) {
+  const tagClassName = className
+    ? `${styles.urlNameTag} ${className}`
+    : styles.urlNameTag
+
+  return (
+    <Tooltip title={name} trigger={['hover', 'focus']}>
+      <Tag className={tagClassName} tabIndex={0}>{name}</Tag>
+    </Tooltip>
+  )
+}
+
 function UrlNameTags({ urlNames }: { urlNames: string[] }) {
   if (urlNames.length === 0) {
     return <Typography.Text type="secondary">-</Typography.Text>
@@ -80,7 +92,7 @@ function UrlNameTags({ urlNames }: { urlNames: string[] }) {
     return (
       <div className={styles.urlNameList}>
         {urlNames.map((name, index) => (
-          <Tag key={`${name}-${index}`}>{name}</Tag>
+          <UrlNameTag key={`${name}-${index}`} name={name} />
         ))}
       </div>
     )
@@ -92,13 +104,17 @@ function UrlNameTags({ urlNames }: { urlNames: string[] }) {
   return (
     <div className={styles.urlNameList}>
       {visibleNames.map((name, index) => (
-        <Tag key={`${name}-${index}`}>{name}</Tag>
+        <UrlNameTag key={`${name}-${index}`} name={name} />
       ))}
       <Popover
         content={
           <div className={styles.urlNamePopover}>
             {urlNames.map((name, index) => (
-              <Tag key={`${name}-${index}`} className={styles.urlNamePopoverTag}>{name}</Tag>
+              <UrlNameTag
+                key={`${name}-${index}`}
+                name={name}
+                className={styles.urlNamePopoverTag}
+              />
             ))}
           </div>
         }
