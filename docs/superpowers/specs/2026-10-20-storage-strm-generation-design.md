@@ -83,7 +83,7 @@ Sidebar: a new `刮削` group (`ScissorOutlined`) placed after `存储`, contain
 
 | Field | Default | Validation |
 | --- | --- | --- |
-| `base_url` | `""` | When non-empty, must start with `http://` or `https://`; surrounding whitespace and trailing `/` are removed on save |
+| `base_url` | `http://192.168.0.36:12333` | When non-empty, must start with `http://` or `https://`; surrounding whitespace and trailing `/` are removed on save |
 | `api_key` | `""` | Masked on read; empty or masked submissions keep the stored value |
 | `directory_id` | `null` | Integer, `>= 1`; `null` clears it |
 | `trigger_delay_seconds` | `30` | Integer, `10 <= value <= 3600` |
@@ -330,8 +330,8 @@ success/error toast instead of relying on the global HTTP error toast.
 `ScrapingConfigPage.tsx` renders two cards:
 
 1. **服务配置**
-   - `服务地址`: text input, placeholder
-     `https://2756e03c9b1c-1.eastwood951220.5ddd.com`.
+   - `服务地址`: text input, default/placeholder
+     `http://192.168.0.36:12333`.
    - `API Key`: password input. When a key is configured, show a `已配置` tag
      with the masked value. Leaving the input empty keeps the stored key.
    - `目录 ID`: number input, minimum 1, placeholder `4`.

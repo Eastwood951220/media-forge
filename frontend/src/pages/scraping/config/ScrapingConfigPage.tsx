@@ -32,6 +32,8 @@ type FormValues = {
   trigger_delay_seconds: number
 }
 
+const DEFAULT_BASE_URL = 'http://192.168.0.36:12333'
+
 export default function ScrapingConfigPage() {
   const { message } = App.useApp()
   const [form] = Form.useForm<FormValues>()
@@ -125,7 +127,11 @@ export default function ScrapingConfigPage() {
   return (
     <div className={styles.page}>
       <Spin spinning={loading}>
-        <Form form={form} layout="vertical">
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={{ base_url: DEFAULT_BASE_URL }}
+        >
           <div className={styles.layout}>
             <div className={styles.mainPanel}>
               <Card
@@ -143,7 +149,7 @@ export default function ScrapingConfigPage() {
                     label="服务地址"
                     rules={[{ required: true, message: '请输入外部服务地址' }]}
                   >
-                    <Input placeholder="https://2756e03c9b1c-1.eastwood951220.5ddd.com" />
+                    <Input placeholder={DEFAULT_BASE_URL} />
                   </Form.Item>
 
                   <Form.Item className={styles.fieldSpan2} label="API Key">

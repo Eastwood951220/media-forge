@@ -30,7 +30,7 @@ def test_get_and_put_scraping_config(client, admin_user, tmp_path, monkeypatch) 
 
     assert get_response.status_code == HTTPStatus.OK
     assert get_response.json()["data"] == {
-        "base_url": "",
+        "base_url": "http://192.168.0.36:12333",
         "api_key": "",
         "api_key_configured": False,
         "directory_id": None,
@@ -95,8 +95,27 @@ def test_put_rejects_out_of_range_values(client, admin_user, tmp_path, monkeypat
     assert bad_directory.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_manual_run_rejects_unconfigured_service(client, admin_user, tmp_path, monkeypatch) -> None:
+def test_manual_run_rejects_missing_api_key(client, admin_user, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    headers = _auth_headers(client, admin_user)
+
+    response = client.post("/api/scraping/strm/run", headers=headers)
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    payload = response.json()
+    assert payload["code"] == HTTPStatus.BAD_REQUEST
+    assert "未配置 API Key" in payload["msg"]
+
+
+def test_manual_run_rejects_empty_base_url(client, admin_user, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "scraping.conf").write_text(
+        "base_url=\n"
+        "api_key=secret-key\n"
+        "directory_id=4\n"
+        "trigger_delay_seconds=30\n",
+        encoding="utf-8",
+    )
     headers = _auth_headers(client, admin_user)
 
     response = client.post("/api/scraping/strm/run", headers=headers)

@@ -12,7 +12,7 @@ def _service(tmp_path: Path) -> ScrapingConfigService:
 
 def test_defaults_without_config_file(tmp_path: Path) -> None:
     assert _service(tmp_path).get_public_config() == {
-        "base_url": "",
+        "base_url": "http://192.168.0.36:12333",
         "api_key": "",
         "api_key_configured": False,
         "directory_id": None,
