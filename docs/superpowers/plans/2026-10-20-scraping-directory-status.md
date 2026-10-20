@@ -4782,6 +4782,198 @@ git commit -m "feat(frontend): make task list pages uncached with refresh header
 
 ---
 
+## Task 18a: Artwork from preview images with site referer
+
+**Files:**
+- Modify: `scraper/spiders/javdb/javdb_parser.py`, `scraper/spiders/javbus/javbus_parser.py`
+- Modify: `backend/app/modules/scraping/sources.py`, `backend/app/modules/scraping/tasks/item_runner.py`
+- Test: `scraper/tests/test_javdb_parser_previews.py` (new), `scraper/tests/test_javbus_parser.py` (extend), `backend/tests/test_scraping_sources.py` (extend), `backend/tests/test_scraping_task_worker.py` (extend)
+
+**Interfaces:**
+- Both detail parsers gain `preview_images: list[str]` (absolute URLs) in their returned dicts.
+- `SourceMetadata.backdrop_url` = first preview image; `SourceMetadata.landscape_url` = second preview image when present.
+- `source_referer(site_key: str) -> str | None` returns the site base URL for `JavDB`/`JavBus`.
+- `run_item` passes `referer=source_referer(site_key)` to `write_artwork`.
+
+**Reference:** `metatube-sdk-go/provider/javbus/javbus.go` collects
+`PreviewImages` from `//*[@id="sample-waterfall"]/a` hrefs and sets
+`CoverURL` from `//a[@class="bigImage"]/img`; its engine downloads images with
+the provider's own request context (site cookies/referer).
+
+- [ ] **Step 1: Write the failing parser tests**
+
+```python
+# scraper/tests/test_javdb_parser_previews.py
+from scraper.spiders.javdb.javdb_parser import parse_detail_page
+from scraper.tests.test_javdb_parser_detail_title import _page  # reuse the helper if exported
+
+
+def test_parse_detail_page_extracts_preview_images() -> None:
+    html = """
+    <html><body>
+      <h2 class="title is-4"><strong>ADN-784</strong><strong class="current-title">Title</strong></h2>
+      <div class="video-cover"><img src="https://c0.jdbstatic.com/cover.jpg"></div>
+      <div class="preview-images">
+        <a class="tile-item" href="https://c0.jdbstatic.com/preview-1.jpg"><img src="https://c0.jdbstatic.com/thumb-1.jpg"></a>
+        <a class="tile-item" href="https://c0.jdbstatic.com/preview-2.jpg"><img src="https://c0.jdbstatic.com/thumb-2.jpg"></a>
+      </div>
+    </body></html>
+    """
+
+    detail = parse_detail_page(_page(html))
+
+    assert detail["preview_images"] == [
+        "https://c0.jdbstatic.com/preview-1.jpg",
+        "https://c0.jdbstatic.com/preview-2.jpg",
+    ]
+```
+
+Extend `scraper/tests/test_javbus_parser.py`:
+
+```python
+def test_parse_detail_page_extracts_preview_images() -> None:
+    html = """
+    <html><body>
+      <a class="bigImage" href="x"><img src="/pics/cover/adn784_b.jpg" title="title"></a>
+      <div id="sample-waterfall">
+        <a href="/pics/sample/adn784-1.jpg"><img src="/pics/sample/adn784-1.jpg"></a>
+        <a href="/pics/sample/adn784-2.jpg"><img src="/pics/sample/adn784-2.jpg"></a>
+      </div>
+    </body></html>
+    """
+
+    result = parse_detail_page(_page(html), "https://www.javbus.com/ADN-784")
+
+    assert result["preview_images"] == [
+        "https://www.javbus.com/pics/sample/adn784-1.jpg",
+        "https://www.javbus.com/pics/sample/adn784-2.jpg",
+    ]
+```
+
+- [ ] **Step 2: Run the parser tests to verify they fail**
+
+Run: `python -m pytest scraper/tests/test_javdb_parser_previews.py scraper/tests/test_javbus_parser.py -v`
+Expected: FAIL with `KeyError: 'preview_images'`.
+
+- [ ] **Step 3: Extract preview images in both parsers**
+
+javdb `parse_detail_page` (after `cover`):
+
+```python
+    preview_images = [
+        href
+        for href in _all_attr(page, ".preview-images a::attr(href)")
+        if href
+    ]
+```
+
+and add `"preview_images": preview_images,` to the returned dict. Reuse the
+module's existing element helpers; if no `_all_attr` helper exists, collect with
+`page.css(".preview-images a")` and `node.attrib.get("href", "")`.
+
+javbus `parse_detail_page` (after `cover_url`):
+
+```python
+    preview_images = [
+        urljoin(source_url, node.attrib.get("href", ""))
+        for node in page.css("#sample-waterfall a")
+        if node.attrib.get("href")
+    ]
+```
+
+and add `"preview_images": preview_images,` to the returned dict (and to the
+early-returned empty dict, so the key is always present).
+
+- [ ] **Step 4: Update the source adapters and the referer helper**
+
+In `sources.py`, add:
+
+```python
+def source_referer(site_key: str) -> str | None:
+    if site_key == "JavDB":
+        return JAVDB_SITE["base_url"].rstrip("/") + "/"
+    if site_key == "JavBus":
+        return JAVBUS_SITE["base_url"].rstrip("/") + "/"
+    return None
+
+
+def _preview_artwork(previews: list[str]) -> tuple[str | None, str | None]:
+    cleaned = [url for url in (_clean(item) for item in previews) if url]
+    backdrop = cleaned[0] if cleaned else None
+    landscape = cleaned[1] if len(cleaned) > 1 else None
+    return backdrop, landscape
+```
+
+In both adapters, before the return:
+
+```python
+            backdrop, landscape = _preview_artwork(list(detail.get("preview_images") or []))
+```
+
+and set `backdrop_url=backdrop, landscape_url=landscape` in the returned
+`SourceMetadata` (javbus no longer hard-codes `backdrop_url=None`).
+
+- [ ] **Step 5: Pass the referer when downloading artwork**
+
+In `item_runner.run_item`:
+
+```python
+    site_key = metadata.site_key if metadata is not None else None
+    written = write_artwork(
+        folder,
+        cover_url=movie.cover,
+        backdrop_url=metadata.backdrop_url if metadata is not None else None,
+        landscape_url=metadata.landscape_url if metadata is not None else None,
+        referer=source_referer(site_key) if site_key else None,
+        transport=transport,
+    )
+```
+
+with `source_referer` imported from `...scraping.sources`.
+
+- [ ] **Step 6: Extend the adapter and worker tests**
+
+In `backend/tests/test_scraping_sources.py`, make the javdb detail fake return
+`"preview_images": ["https://javdb.com/preview-1.jpg", "https://javdb.com/preview-2.jpg"]`
+and assert:
+
+```python
+    assert metadata.backdrop_url == "https://javdb.com/preview-1.jpg"
+    assert metadata.landscape_url == "https://javdb.com/preview-2.jpg"
+```
+
+Do the same in the javbus adapter test. Also add:
+
+```python
+def test_source_referer_maps_registry_sites() -> None:
+    assert sources.source_referer("JavDB") == "https://javdb.com/"
+    assert sources.source_referer("JavBus") == "https://www.javbus.com/"
+    assert sources.source_referer("unknown") is None
+```
+
+In `backend/tests/test_scraping_task_worker.py`, add a test that monkeypatches
+`item_runner.write_artwork` and asserts it was called with
+`referer="https://javdb.com/"` for a javdb source (patch `item_runner.fetch_by_priority`
+to return a `SourceMetadata(site_key="JavDB", cover_url=...)`).
+
+- [ ] **Step 7: Run the tests**
+
+```bash
+python -m pytest scraper/tests/test_javdb_parser_previews.py scraper/tests/test_javbus_parser.py -v
+python -m pytest backend/tests/test_scraping_sources.py backend/tests/test_scraping_task_worker.py -v
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add scraper/spiders/javdb/javdb_parser.py scraper/spiders/javbus/javbus_parser.py scraper/tests/test_javdb_parser_previews.py scraper/tests/test_javbus_parser.py backend/app/modules/scraping/sources.py backend/app/modules/scraping/tasks/item_runner.py backend/tests/test_scraping_sources.py backend/tests/test_scraping_task_worker.py
+git commit -m "feat(scraping): fetch preview artwork with site referer"
+```
+
+---
+
 ## Task 18: Documentation and full verification
 
 **Files:**
