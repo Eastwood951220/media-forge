@@ -13,6 +13,9 @@ class FakeRedis:
         values = self.lists.get(key, [])
         return values.pop(0) if values else None
 
+    def llen(self, key):
+        return len(self.lists.get(key, []))
+
     def set(self, key, value):
         self.values[key] = value
 
@@ -48,3 +51,16 @@ def test_storage_runtime_decodes_byte_task_ids() -> None:
     runtime.enqueue_main_task("main-1")
 
     assert runtime.claim_next_main_task() == "main-1"
+
+
+def test_pending_main_task_count() -> None:
+    runtime = StorageRuntimeState(FakeRedis())
+
+    assert runtime.pending_main_task_count() == 0
+
+    runtime.enqueue_main_task("main-1")
+    runtime.enqueue_main_task("main-2")
+    assert runtime.pending_main_task_count() == 2
+
+    runtime.claim_next_main_task()
+    assert runtime.pending_main_task_count() == 1
