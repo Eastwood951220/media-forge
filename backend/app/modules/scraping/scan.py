@@ -74,7 +74,12 @@ def judge_folder(folder: Path) -> tuple[bool, bool, int]:
     return has_strm, has_nfo, image_count
 
 
-def iter_movie_folders(scrape_root: Path) -> Iterator[Path]:
+def _judged_folder(path: Path) -> tuple[Path, bool, bool, int]:
+    has_strm, has_nfo, image_count = judge_folder(path)
+    return path, has_strm, has_nfo, image_count
+
+
+def iter_movie_folders(scrape_root: Path) -> Iterator[tuple[Path, bool, bool, int]]:
     root = Path(scrape_root)
     root_depth = len(root.parts)
     for current, dirnames, _filenames in os.walk(root, followlinks=False):
@@ -82,9 +87,9 @@ def iter_movie_folders(scrape_root: Path) -> Iterator[Path]:
         dirnames[:] = [name for name in dirnames if not name.startswith(".")]
         if depth >= MAX_DEPTH:
             dirnames[:] = []
-        has_strm, _has_nfo, _images = judge_folder(Path(current))
+        path, has_strm, has_nfo, image_count = _judged_folder(Path(current))
         if has_strm:
-            yield Path(current)
+            yield path, has_strm, has_nfo, image_count
 
 
 def _stored_movies(db: Session) -> list[Movie]:
@@ -104,13 +109,27 @@ def movie_target_folders(movie: Movie) -> list[str]:
     return result
 
 
+def _target_in_media_root(media_root: str, target: str) -> bool:
+    """Whether a stored target folder is one the scanner owns.
+
+    ``cloud_to_local`` already needs a configured scrape root, so it cannot
+    decide this on its own: with no scrape root it returns ``None`` even for
+    targets under the media root. Mapping is therefore a media-root question,
+    while turning a target into a local path stays ``cloud_to_local``'s job.
+    """
+    root = str(media_root or "").strip().rstrip("/")
+    if not root.startswith("/") or root == "":
+        return False
+    return target.startswith(root + "/")
+
+
 def _apply_judgement(
     movie: Movie,
     *,
     has_strm: bool,
     has_nfo: bool,
     image_count: int,
-    cloud_folder: str,
+    cloud_folder: str | None,
     checked_at: datetime,
 ) -> str:
     scraped = has_strm and has_nfo and image_count > 0
@@ -118,6 +137,12 @@ def _apply_judgement(
     movie.scraping_folder = cloud_folder
     movie.scraping_checked_at = checked_at
     return movie.scraping_status
+
+
+def _select_folder(candidates: list[str]) -> str | None:
+    if not candidates:
+        return None
+    return sorted(candidates)[0]
 
 
 def scan_directory(db: Session, config: dict[str, Any]) -> ScanSummary:
@@ -129,56 +154,73 @@ def scan_directory(db: Session, config: dict[str, Any]) -> ScanSummary:
     if not scrape_root or not Path(scrape_root).is_dir():
         return summary
 
-    candidate_folders = list(iter_movie_folders(Path(scrape_root)))
-    summary.folders_with_strm = len(candidate_folders)
-
-    # Count every visited folder; os.walk is repeated cheaply here because the
-    # candidate generator does not expose the walk total.
-    for _current, _dirnames, _filenames in os.walk(scrape_root):
-        summary.folders_scanned += 1
+    candidates = list(iter_movie_folders(Path(scrape_root)))
+    candidates.sort(key=lambda item: str(item[0]))
+    summary.folders_scanned = len(candidates)
+    summary.folders_with_strm = len(candidates)
 
     judgements: dict[str, tuple[bool, bool, int]] = {}
-    for folder in candidate_folders:
-        judgements[str(folder.resolve())] = judge_folder(folder)
-        has_strm, has_nfo, image_count = judgements[str(folder.resolve())]
+    for path, has_strm, has_nfo, image_count in candidates:
+        key = str(path.resolve())
+        judgements[key] = (has_strm, has_nfo, image_count)
         if has_strm and has_nfo and image_count > 0:
             summary.scraped_folders += 1
         else:
             summary.not_scraped_folders += 1
 
-    stored = _stored_movies(db)
-    stored_by_code = {normalize_code(movie.code or ""): movie for movie in stored}
-    assigned: dict[str, str] = {}
-
-    # Exact pass: storage target folders that map under the media root.
+    stored = sorted(_stored_movies(db), key=lambda movie: str(movie.id))
+    stored_by_code: dict[str, Movie] = {}
     for movie in stored:
+        code = normalize_code(movie.code or "")
+        if code:
+            stored_by_code.setdefault(code, movie)
+
+    assigned: dict[str, str] = {}
+    assigned_movies: dict[str, str] = {}
+
+    # Exact pass: each stored movie claims at most one existing candidate folder
+    # derived from its storage locations. Deterministic: lexicographically first.
+    for movie in stored:
+        candidates_for_movie: list[str] = []
         for target in movie_target_folders(movie):
             local = cloud_to_local(scrape_root, media_root, target)
             if local is None:
                 continue
             key = str(local.resolve())
-            if key in judgements and key not in assigned:
-                assigned[key] = str(movie.id)
+            if key in judgements and key not in candidates_for_movie:
+                candidates_for_movie.append(key)
+        key = _select_folder(candidates_for_movie)
+        if key is None or key in assigned:
+            continue
+        assigned[key] = str(movie.id)
+        assigned_movies[str(movie.id)] = key
 
-    # Fallback pass: folder-name codes.
-    for folder in candidate_folders:
-        key = str(folder.resolve())
+    # Fallback pass: folder-name codes, again deterministic by sorted walk.
+    for path, _has_strm, _has_nfo, _image_count in candidates:
+        key = str(path.resolve())
         if key in assigned:
             continue
-        code = code_from_folder_name(folder.name)
-        movie = stored_by_code.get(normalize_code(code or ""))
-        if movie is not None and str(movie.id) not in assigned.values():
-            assigned[key] = str(movie.id)
+        code = code_from_folder_name(path.name)
+        if not code:
+            continue
+        movie = stored_by_code.get(normalize_code(code))
+        if movie is None:
+            continue
+        movie_id = str(movie.id)
+        if movie_id in assigned_movies:
+            continue
+        assigned[key] = movie_id
+        assigned_movies[movie_id] = key
 
+    movie_by_id = {str(movie.id): movie for movie in stored}
     checked_at = datetime.now(timezone.utc)
     updated = 0
-    assigned_movie_ids: set[str] = set()
-    for key, movie_id in assigned.items():
-        movie = next((candidate for candidate in stored if str(candidate.id) == movie_id), None)
+    for movie_id, key in assigned_movies.items():
+        movie = movie_by_id.get(movie_id)
         if movie is None:
             continue
         has_strm, has_nfo, image_count = judgements[key]
-        cloud = local_to_cloud(scrape_root, media_root, key) or ""
+        cloud = local_to_cloud(scrape_root, media_root, key)
         _apply_judgement(
             movie,
             has_strm=has_strm,
@@ -187,13 +229,15 @@ def scan_directory(db: Session, config: dict[str, Any]) -> ScanSummary:
             cloud_folder=cloud,
             checked_at=checked_at,
         )
-        assigned_movie_ids.add(movie_id)
         updated += 1
 
     for movie in stored:
-        if str(movie.id) in assigned_movie_ids:
+        if str(movie.id) in assigned_movies:
             continue
-        mapped = any(cloud_to_local(scrape_root, media_root, target) is not None for target in movie_target_folders(movie))
+        mapped = any(
+            cloud_to_local(scrape_root, media_root, target) is not None
+            for target in movie_target_folders(movie)
+        )
         if mapped:
             movie.scraping_status = NOT_SCRAPED
             movie.scraping_folder = None
@@ -201,7 +245,7 @@ def scan_directory(db: Session, config: dict[str, Any]) -> ScanSummary:
             updated += 1
 
     for movie in db.query(Movie).all():
-        if normalized_movie_storage_status(movie) == "stored":
+        if normalized_movie_storage_status(movie) != "not_stored":
             continue
         if movie.scraping_status is not None or movie.scraping_folder is not None or movie.scraping_checked_at is not None:
             movie.scraping_status = None
@@ -209,15 +253,14 @@ def scan_directory(db: Session, config: dict[str, Any]) -> ScanSummary:
             movie.scraping_checked_at = None
             updated += 1
 
-    matched_keys = set(assigned)
-    for folder in candidate_folders:
-        if str(folder.resolve()) in matched_keys:
+    for path, _has_strm, _has_nfo, _image_count in candidates:
+        if str(path.resolve()) in assigned:
             continue
         if len(summary.unmatched_folders) < UNMATCHED_LIMIT:
-            summary.unmatched_folders.append(str(folder))
+            summary.unmatched_folders.append(str(path))
 
     db.commit()
-    summary.matched_movies = len(assigned)
+    summary.matched_movies = len(assigned_movies)
     summary.updated_movies = updated
     summary.duration_ms = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
     return summary
@@ -230,7 +273,10 @@ def refresh_movie_status(
     local_folder: Path | None = None,
     cloud_folder: str | None = None,
 ) -> str:
-    if normalized_movie_storage_status(movie) != "stored":
+    status = normalized_movie_storage_status(movie)
+    if status == "storing":
+        return status
+    if status != "stored":
         movie.scraping_status = None
         movie.scraping_folder = None
         movie.scraping_checked_at = None
@@ -243,14 +289,25 @@ def refresh_movie_status(
 
     folder = local_folder
     cloud = cloud_folder or ""
+    mapped_targets = [
+        target
+        for target in movie_target_folders(movie)
+        if _target_in_media_root(media_root, target)
+    ]
     if folder is None:
-        for target in movie_target_folders(movie):
+        for target in mapped_targets:
             candidate = cloud_to_local(scrape_root, media_root, target)
             if candidate is not None and candidate.is_dir():
                 folder = candidate
                 cloud = target
                 break
+
     if folder is None:
+        if mapped_targets:
+            movie.scraping_status = NOT_SCRAPED
+            movie.scraping_folder = None
+            movie.scraping_checked_at = datetime.now(timezone.utc)
+            db.commit()
         return "not_scraped"
 
     has_strm, has_nfo, image_count = judge_folder(folder)
@@ -260,7 +317,7 @@ def refresh_movie_status(
         has_strm=has_strm,
         has_nfo=has_nfo,
         image_count=image_count,
-        cloud_folder=cloud,
+        cloud_folder=cloud or None,
         checked_at=datetime.now(timezone.utc),
     )
     db.commit()

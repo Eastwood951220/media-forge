@@ -79,6 +79,73 @@ def test_scan_directory_matches_by_folder_name_when_location_does_not_map(tmp_pa
     assert movie.scraping_folder == "/media/ADN-784"
 
 
+def test_multi_location_movie_claims_only_one_deterministic_folder(tmp_path: Path, db_session) -> None:
+    movie = Movie(
+        code="ADN-784",
+        source_name="ADN-784 title",
+        storage_summary={
+            "storage_status": "stored",
+            "locations": [
+                {"target_folder": "/media/z/ADN-784"},
+                {"target_folder": "/media/a/ADN-784"},
+            ],
+        },
+    )
+    db_session.add(movie)
+    db_session.commit()
+    db_session.refresh(movie)
+    _make_folder(tmp_path, "z/ADN-784", nfo=False)
+    _make_folder(tmp_path, "a/ADN-784")
+
+    summary = scan_directory(db_session, _config(tmp_path))
+
+    db_session.refresh(movie)
+    assert movie.scraping_status == "scraped"
+    assert movie.scraping_folder == "/media/a/ADN-784"
+    assert summary.matched_movies == 1
+
+
+def test_fallback_tie_break_is_lexicographic(tmp_path: Path, db_session) -> None:
+    movie = _make_movie(db_session, "ADN-784", stored=True, target_folder="/other/ADN-784")
+    _make_folder(tmp_path, "b/ADN-784", nfo=False)
+    _make_folder(tmp_path, "a/ADN-784")
+
+    scan_directory(db_session, _config(tmp_path))
+
+    db_session.refresh(movie)
+    assert movie.scraping_status == "scraped"
+    assert movie.scraping_folder == "/media/a/ADN-784"
+
+
+def test_refresh_movie_status_marks_missing_mapped_folder_not_scraped(tmp_path: Path, db_session) -> None:
+    movie = _make_movie(db_session, "ADN-784", stored=True, target_folder="/media/ADN-784")
+    movie.scraping_status = "scraped"
+    movie.scraping_folder = "/media/ADN-784"
+    db_session.commit()
+
+    status = refresh_movie_status(db_session, movie)
+
+    db_session.refresh(movie)
+    assert status == "not_scraped"
+    assert movie.scraping_status == "not_scraped"
+    assert movie.scraping_folder is None
+    assert movie.scraping_checked_at is not None
+
+
+def test_scan_preserves_status_for_unmapped_locations(tmp_path: Path, db_session) -> None:
+    movie = _make_movie(db_session, "ADN-784", stored=True, target_folder="/other/ADN-784")
+    movie.scraping_status = "scraped"
+    movie.scraping_folder = "/other/ADN-784"
+    db_session.commit()
+    _make_folder(tmp_path, "ADN-999")
+
+    scan_directory(db_session, _config(tmp_path))
+
+    db_session.refresh(movie)
+    assert movie.scraping_status == "scraped"
+    assert movie.scraping_folder == "/other/ADN-784"
+
+
 def test_refresh_movie_status_clears_when_not_stored(tmp_path: Path, db_session) -> None:
     movie = _make_movie(db_session, "ADN-784", stored=False, target_folder="/media/ADN-784")
     movie.scraping_status = "scraped"
