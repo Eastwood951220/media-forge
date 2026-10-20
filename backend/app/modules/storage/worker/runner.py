@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from backend.app.models.storage_task import StorageMainTask
+from backend.app.modules.scraping.trigger import schedule_strm_after_storage_drain
 
 logger = logging.getLogger(__name__)
 _worker_lock = threading.Lock()
@@ -48,8 +49,14 @@ def ensure_storage_worker_started(runtime, provider_factory, config_service) -> 
         thread.start()
 
 
+def is_storage_worker_idle() -> bool:
+    with _worker_lock:
+        return not _worker_running
+
+
 def _worker_loop(runtime, provider_factory, config_service) -> None:
     global _worker_running
+    processed_any = False
     try:
         while True:
             task_id = runtime.claim_next_main_task()
@@ -58,7 +65,8 @@ def _worker_loop(runtime, provider_factory, config_service) -> None:
                     task_id = runtime.claim_next_main_task()
                     if task_id is None:
                         _worker_running = False
-                        return
+                        break
+            processed_any = True
             try:
                 process_main_task(runtime, provider_factory, config_service, task_id)
             except Exception:
@@ -68,6 +76,15 @@ def _worker_loop(runtime, provider_factory, config_service) -> None:
         with _worker_lock:
             _worker_running = False
         raise
+
+    if processed_any:
+        try:
+            schedule_strm_after_storage_drain(
+                runtime,
+                is_worker_idle=is_storage_worker_idle,
+            )
+        except Exception:
+            logger.exception("Failed to schedule STRM generation after storage drain")
 
 
 def process_main_task(runtime, provider_factory, config_service, task_id: str) -> bool:

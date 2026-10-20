@@ -119,17 +119,48 @@ def test_worker_loop_rechecks_queue_before_stopping(monkeypatch):
             return None
 
     processed: list[str] = []
+    scheduled: list[tuple[object, object]] = []
 
     def fake_process_main_task(runtime, provider_factory, config_service, task_id: str) -> bool:
         processed.append(task_id)
         return True
 
+    def fake_schedule(runtime, *, is_worker_idle):
+        scheduled.append((runtime, is_worker_idle))
+
     monkeypatch.setattr(runner, "process_main_task", fake_process_main_task)
+    monkeypatch.setattr(runner, "schedule_strm_after_storage_drain", fake_schedule)
     monkeypatch.setattr(runner, "_worker_running", True)
 
-    runner._worker_loop(RaceRuntime(), object(), object())
+    runtime = RaceRuntime()
+    runner._worker_loop(runtime, object(), object())
 
     assert processed == ["task-added-during-stop"]
+    assert runner._worker_running is False
+    assert len(scheduled) == 1
+    assert scheduled[0][0] is runtime
+    assert scheduled[0][1] is runner.is_storage_worker_idle
+    assert runner.is_storage_worker_idle() is True
+
+
+def test_worker_loop_does_not_schedule_without_processing_a_task(monkeypatch):
+    from backend.app.modules.storage.worker import runner
+
+    class EmptyRuntime:
+        def claim_next_main_task(self):
+            return None
+
+    scheduled: list[object] = []
+
+    def fake_schedule(runtime, *, is_worker_idle):
+        scheduled.append(runtime)
+
+    monkeypatch.setattr(runner, "schedule_strm_after_storage_drain", fake_schedule)
+    monkeypatch.setattr(runner, "_worker_running", True)
+
+    runner._worker_loop(EmptyRuntime(), object(), object())
+
+    assert scheduled == []
     assert runner._worker_running is False
 
 
