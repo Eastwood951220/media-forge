@@ -2176,6 +2176,76 @@ def scan_scraping_directory(
 Run: `python -m pytest backend/tests/test_scraping_scan_api.py -v`
 Expected: PASS.
 
+- [ ] **Step 4b: Schedule a scan after a successful manual STRM run**
+
+The spec requires a refresh after the external STRM request succeeds on the
+automatic **and manual** paths. The manual path lives in the same router, so
+change `run_scraping_strm` to keep the result and schedule a scan on success:
+
+```python
+@router.post("/strm/run")
+def run_scraping_strm(_current_user: CurrentUser) -> dict:
+    config = ScrapingConfigService().get_raw_config()
+    reason = validate_run_config(config)
+    if reason is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=reason)
+    result = run_strm_generation(config)
+    if result.success:
+        schedule_scan_after_strm(config)
+    return success(data=asdict(result))
+```
+
+Add the import to the Step 3 import block:
+
+```python
+from backend.app.modules.scraping.scan import scan_directory, schedule_scan_after_strm
+```
+
+Then add this API test to `backend/tests/test_scraping_api.py`:
+
+```python
+def test_manual_strm_run_schedules_a_scan_on_success(client, admin_user, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    _write_config(tmp_path)
+    headers = _auth_headers(client, admin_user)
+    scheduled: list[dict] = []
+
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.router.run_strm_generation",
+        lambda config: StrmRunResult(success=True, status_code=200, message="HTTP 200"),
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.router.schedule_scan_after_strm",
+        lambda config: scheduled.append(config),
+    )
+
+    response = client.post("/api/scraping/strm/run", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert scheduled
+
+
+def test_manual_strm_run_does_not_schedule_a_scan_on_failure(client, admin_user, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    _write_config(tmp_path)
+    headers = _auth_headers(client, admin_user)
+    scheduled: list[dict] = []
+
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.router.run_strm_generation",
+        lambda config: StrmRunResult(success=False, status_code=500, message="HTTP 500"),
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.router.schedule_scan_after_strm",
+        lambda config: scheduled.append(config),
+    )
+
+    response = client.post("/api/scraping/strm/run", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert scheduled == []
+```
+
 - [ ] **Step 5: Add the trigger hook test**
 
 In `backend/tests/test_scraping_strm_trigger.py`, add:
