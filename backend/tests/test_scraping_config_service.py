@@ -17,6 +17,9 @@ def test_defaults_without_config_file(tmp_path: Path) -> None:
         "api_key_configured": False,
         "directory_id": None,
         "trigger_delay_seconds": 30,
+        "scrape_root": "",
+        "media_root": "/media",
+        "metadata_sources": ["javdb", "javbus"],
     }
 
 
@@ -99,3 +102,42 @@ def test_invalid_persisted_values_fall_back_to_defaults(tmp_path: Path) -> None:
     assert raw["api_key"] == "abc"
     assert raw["directory_id"] is None
     assert raw["trigger_delay_seconds"] == 30
+
+
+def test_metadata_sources_round_trip_and_fallback(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    public = service.update_config(
+        ScrapingConfigUpdate(
+            scrape_root=str(tmp_path),
+            media_root="/media/",
+            metadata_sources=["javbus", "javdb"],
+        )
+    )
+
+    assert public["scrape_root"] == str(tmp_path)
+    assert public["media_root"] == "/media"
+    assert public["metadata_sources"] == ["javbus", "javdb"]
+    text = (tmp_path / "scraping.conf").read_text(encoding="utf-8")
+    assert 'metadata_sources=["javbus", "javdb"]' in text
+
+
+def test_invalid_metadata_sources_are_rejected(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    with pytest.raises(ValueError, match="元数据源"):
+        service.update_config(ScrapingConfigUpdate(metadata_sources=["unknown"]))
+
+
+def test_invalid_persisted_metadata_sources_fall_back(tmp_path: Path) -> None:
+    (tmp_path / "scraping.conf").write_text(
+        'metadata_sources=["unknown"]\nmedia_root=media\n',
+        encoding="utf-8",
+    )
+    config = _service(tmp_path).get_public_config()
+    assert config["metadata_sources"] == ["javdb", "javbus"]
+    assert config["media_root"] == "/media"
+
+
+def test_scrape_root_must_be_an_existing_directory(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    with pytest.raises(ValueError, match="刮削目录"):
+        service.update_config(ScrapingConfigUpdate(scrape_root=str(tmp_path / "missing")))

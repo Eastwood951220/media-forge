@@ -9,10 +9,13 @@ from dotenv import dotenv_values
 from pydantic import ValidationError
 
 from backend.app.modules.scraping.schemas import (
+    DEFAULT_MEDIA_ROOT,
+    DEFAULT_METADATA_SOURCES,
     ScrapingConfig,
     ScrapingConfigResponse,
     ScrapingConfigUpdate,
 )
+from backend.app.modules.scraping.sources import SOURCE_REGISTRY
 from shared.runtime_config import RuntimeConfigPaths
 
 
@@ -69,6 +72,43 @@ def _coerce_delay(value: str | None) -> int:
     return parsed if 10 <= parsed <= 3600 else 30
 
 
+def _normalize_media_root(value: str | None) -> str:
+    text = str(value or "").strip().rstrip("/")
+    if not text.startswith("/") or text == "" or text == "/":
+        raise ValueError("媒体库根路径必须是 / 开头的绝对路径")
+    return text
+
+
+def _normalize_scrape_root(value: str | None) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    path = Path(text)
+    if not path.is_absolute():
+        raise ValueError("刮削目录必须是绝对路径")
+    if not path.is_dir():
+        raise ValueError("刮削目录不存在或不是文件夹")
+    return str(path)
+
+
+def _parse_metadata_sources(raw: object) -> list[str]:
+    try:
+        parsed = json.loads(str(raw or ""))
+    except (TypeError, ValueError):
+        return list(DEFAULT_METADATA_SOURCES)
+    if not isinstance(parsed, list):
+        return list(DEFAULT_METADATA_SOURCES)
+    sources = [str(item) for item in parsed if str(item) in SOURCE_REGISTRY]
+    return sources or list(DEFAULT_METADATA_SOURCES)
+
+
+def _safe_media_root(raw: object) -> str:
+    text = str(raw or "").strip().rstrip("/")
+    if not text.startswith("/") or text == "/":
+        return DEFAULT_MEDIA_ROOT
+    return text
+
+
 class ScrapingConfigService:
     """Read and write scraping settings in a dotenv style file."""
 
@@ -91,10 +131,15 @@ class ScrapingConfigService:
         values["api_key"] = str(parsed.get("api_key") or "")
         values["directory_id"] = _coerce_directory_id(parsed.get("directory_id"))
         values["trigger_delay_seconds"] = _coerce_delay(parsed.get("trigger_delay_seconds"))
+        values["scrape_root"] = str(parsed.get("scrape_root") or "").strip()
+        values["media_root"] = _safe_media_root(parsed.get("media_root"))
+        values["metadata_sources"] = _parse_metadata_sources(parsed.get("metadata_sources"))
         try:
             return ScrapingConfig(**values).model_dump()
         except ValidationError:
-            return defaults
+            values["media_root"] = DEFAULT_MEDIA_ROOT
+            values["metadata_sources"] = list(DEFAULT_METADATA_SOURCES)
+            return ScrapingConfig(**values).model_dump()
 
     def update_config(
         self,
@@ -110,6 +155,18 @@ class ScrapingConfigService:
             incoming.pop("trigger_delay_seconds", None)
         if "base_url" in incoming:
             incoming["base_url"] = _normalize_base_url(str(incoming.get("base_url") or ""))
+        if "scrape_root" in incoming:
+            incoming["scrape_root"] = _normalize_scrape_root(incoming.get("scrape_root"))
+        if "media_root" in incoming:
+            incoming["media_root"] = _normalize_media_root(incoming.get("media_root"))
+        if "metadata_sources" in incoming:
+            sources = [str(item) for item in (incoming.get("metadata_sources") or [])]
+            unknown = [item for item in sources if item not in SOURCE_REGISTRY]
+            if unknown:
+                raise ValueError(f"不支持的元数据源: {', '.join(unknown)}")
+            if not sources:
+                raise ValueError("元数据源不能为空")
+            incoming["metadata_sources"] = sources
         if "api_key" in incoming:
             key = str(incoming.get("api_key") or "")
             incoming["api_key"] = current.get("api_key", "") if not key or is_masked_token(key) else key
@@ -129,7 +186,10 @@ class ScrapingConfigService:
 
     def _write_config(self, data: dict[str, Any]) -> None:
         self.config_file.parent.mkdir(parents=True, exist_ok=True)
-        body = "".join(f"{key}={_serialize_value(value)}\n" for key, value in data.items())
+        body = "".join(
+            f"{key}={_serialize_value(value) if not isinstance(value, list) else json.dumps(value, ensure_ascii=False)}\n"
+            for key, value in data.items()
+        )
         temp_path = self.config_file.with_suffix(self.config_file.suffix + ".tmp")
         temp_path.write_text(body, encoding="utf-8")
         temp_path.replace(self.config_file)
@@ -146,4 +206,14 @@ def validate_run_config(config: Mapping[str, Any]) -> str | None:
         return "未配置 API Key"
     if config.get("directory_id") in (None, ""):
         return "未配置目录 ID"
+    return None
+
+
+def validate_scrape_root(config: Mapping[str, Any]) -> str | None:
+    """Return a human-readable reason when directory scanning is not runnable."""
+    scrape_root = str(config.get("scrape_root") or "").strip()
+    if not scrape_root:
+        return "未配置刮削目录"
+    if not Path(scrape_root).is_dir():
+        return "刮削目录不存在或不是文件夹"
     return None

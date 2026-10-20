@@ -17,7 +17,10 @@ def _write_config(tmp_path) -> None:
         "base_url=https://example.com\n"
         "api_key=secret-key\n"
         "directory_id=4\n"
-        "trigger_delay_seconds=30\n",
+        "trigger_delay_seconds=30\n"
+        "scrape_root=\n"
+        "media_root=/media\n"
+        'metadata_sources=["javdb", "javbus"]\n',
         encoding="utf-8",
     )
 
@@ -35,6 +38,9 @@ def test_get_and_put_scraping_config(client, admin_user, tmp_path, monkeypatch) 
         "api_key_configured": False,
         "directory_id": None,
         "trigger_delay_seconds": 30,
+        "scrape_root": "",
+        "media_root": "/media",
+        "metadata_sources": ["javdb", "javbus"],
     }
 
     put_response = client.put(
@@ -61,6 +67,26 @@ def test_get_and_put_scraping_config(client, admin_user, tmp_path, monkeypatch) 
         json={"api_key": "************1234", "base_url": "https://new.example.com"},
     )
     assert preserved.json()["data"]["api_key"] == "************1234"
+
+    reordered = client.put(
+        "/api/scraping/config",
+        headers=headers,
+        json={"scrape_root": str(tmp_path), "metadata_sources": ["javbus", "javdb"]},
+    )
+    assert reordered.status_code == HTTPStatus.OK
+    assert reordered.json()["data"]["metadata_sources"] == ["javbus", "javdb"]
+    assert reordered.json()["data"]["scrape_root"] == str(tmp_path)
+
+
+def test_put_rejects_unknown_metadata_source(client, admin_user, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    headers = _auth_headers(client, admin_user)
+    response = client.put(
+        "/api/scraping/config",
+        headers=headers,
+        json={"metadata_sources": ["unknown"]},
+    )
+    assert response.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_put_rejects_invalid_base_url(client, admin_user, tmp_path, monkeypatch) -> None:
