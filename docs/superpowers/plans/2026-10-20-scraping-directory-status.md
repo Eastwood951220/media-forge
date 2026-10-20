@@ -4305,13 +4305,21 @@ export function useScrapingTaskDetail(id: string) {
   })
 
   useEffect(() => {
+    const refresh = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.scrapingTasks.detail(id) })
+    }
     const unsubscribeTask = subscribeRealtime<ScrapingTaskUpdatedPayload>(
       'scraping.task.updated',
-      (_event: RealtimeEvent<ScrapingTaskUpdatedPayload>) => {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.scrapingTasks.detail(id) })
-      },
+      (_event: RealtimeEvent<ScrapingTaskUpdatedPayload>) => refresh(),
     )
-    return unsubscribeTask
+    const unsubscribeItem = subscribeRealtime(
+      'scraping.item.updated',
+      (_event: RealtimeEvent) => refresh(),
+    )
+    return () => {
+      unsubscribeTask()
+      unsubscribeItem()
+    }
   }, [id, queryClient])
 
   const cancel = useCallback(async () => {
@@ -4320,9 +4328,10 @@ export function useScrapingTaskDetail(id: string) {
   }, [id, queryClient])
 
   const retry = useCallback(async () => {
-    await retryScrapingTask(id)
+    const created = await retryScrapingTask(id)
     void queryClient.invalidateQueries({ queryKey: queryKeys.scrapingTasks.detail(id) })
     void queryClient.invalidateQueries({ queryKey: queryKeys.scrapingTasks.all() })
+    return created
   }, [id, queryClient])
 
   return { task: query.data, loading: query.isLoading, cancel, retry }
@@ -4426,15 +4435,21 @@ export default function TaskListPage() {
 // frontend/src/pages/scraping/tasks/TaskDetailPage.tsx
 import { Button, Card, Descriptions, Space, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useParams } from '@tanstack/react-router'
+import { useNavigate, useParams } from '@tanstack/react-router'
 import type { ScrapingTaskItem } from '@/api/scraping/scrapingTasks'
 import { useScrapingTaskDetail } from './hooks/useScrapingTasks'
 import { ITEM_STATUS_COLOR, ITEM_STATUS_TEXT, TASK_STATUS_COLOR, TASK_STATUS_TEXT } from './utils/status'
 
 export default function TaskDetailPage() {
+  const navigate = useNavigate()
   const { id } = useParams({ strict: false }) as { id: string }
   const detail = useScrapingTaskDetail(id)
   const task = detail.task
+
+  const handleRetry = async () => {
+    const created = await detail.retry()
+    void navigate({ to: '/scraping/tasks/$id', params: { id: created.id } })
+  }
 
   const columns: ColumnsType<ScrapingTaskItem> = [
     { title: '番号', dataIndex: 'movie_code', key: 'movie_code', width: 140 },
@@ -4467,7 +4482,7 @@ export default function TaskDetailPage() {
               <Button danger onClick={() => void detail.cancel()}>取消任务</Button>
             )}
             {['failed', 'partial_failed', 'cancelled'].includes(task.status) && (
-              <Button onClick={() => void detail.retry()}>重试失败项</Button>
+              <Button onClick={() => void handleRetry()}>重试失败项</Button>
             )}
           </Space>
         )}
