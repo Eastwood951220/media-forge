@@ -60,6 +60,7 @@ def test_skips_when_the_database_has_pending_tasks(
     tmp_path: Path,
     db_session,
     test_user,
+    caplog,
 ) -> None:
     _prepare_trigger(monkeypatch, tmp_path)
     db_session.add(
@@ -76,9 +77,11 @@ def test_skips_when_the_database_has_pending_tasks(
     called = Mock()
     monkeypatch.setattr(trigger, "run_strm_generation", called)
 
-    trigger._run_after_delay(trigger._generation, 10, FakeRuntime(), lambda: True)
+    with caplog.at_level("WARNING"):
+        trigger._run_after_delay(trigger._generation, 10, FakeRuntime(), lambda: True)
 
     called.assert_not_called()
+    assert "Cannot confirm storage tasks are idle" not in caplog.text
 
 
 def test_skips_when_the_queue_cannot_be_verified(monkeypatch, tmp_path: Path) -> None:
