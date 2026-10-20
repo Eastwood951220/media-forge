@@ -679,8 +679,14 @@ def test_code_from_folder_name_supports_suffixes_and_titles() -> None:
     assert code_from_folder_name("ADN-784") == "ADN-784"
     assert code_from_folder_name("ADN-784 あなた、許して…。") == "ADN-784"
     assert code_from_folder_name("adn784") == "ADN-784"
+    assert code_from_folder_name("ADN_784") == "ADN-784"
     assert code_from_folder_name("ADN-784-C") == "ADN-784-C"
+    assert code_from_folder_name("ADN-784-CD1") == "ADN-784-CD1"
     assert code_from_folder_name("随机文件夹") is None
+    assert code_from_folder_name("Movie 2023") is None
+    assert code_from_folder_name("Part 01") is None
+    assert code_from_folder_name("FHD 1080") is None
+    assert code_from_folder_name("ABCDEFG-123") is None
 
 
 def test_cloud_to_local_and_back(tmp_path: Path) -> None:
@@ -697,6 +703,19 @@ def test_cloud_to_local_rejects_paths_outside_media_root(tmp_path: Path) -> None
 
 def test_cloud_to_local_rejects_escaping_paths(tmp_path: Path) -> None:
     assert cloud_to_local(str(tmp_path), "/media", "/media/../etc") is None
+
+
+def test_path_mapping_rejects_invalid_roots(tmp_path: Path) -> None:
+    assert cloud_to_local("", "/media", "/media/ADN-784") is None
+    assert cloud_to_local(str(tmp_path), "media", "/media/ADN-784") is None
+    assert cloud_to_local(str(tmp_path), "/", "/ADN-784") is None
+    assert local_to_cloud(str(tmp_path), "/media", "/elsewhere/ADN-784") is None
+    assert local_to_cloud("", "/media", str(tmp_path / "ADN-784")) is None
+
+
+def test_path_mapping_normalizes_trailing_slashes(tmp_path: Path) -> None:
+    assert cloud_to_local(str(tmp_path) + "/", "/media/", "/media/ADN-784/") == tmp_path / "ADN-784"
+    assert local_to_cloud(str(tmp_path), "/media/", tmp_path / "ADN-784") == "/media/ADN-784"
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -713,7 +732,7 @@ from __future__ import annotations
 import re
 from pathlib import Path, PurePosixPath
 
-CODE_PATTERN = re.compile(r"([A-Za-z]{2,6})[-_ ]?(\d{2,6})(?:[-_ ]([A-Za-z]{1,4}))?")
+CODE_PATTERN = re.compile(r"^([A-Za-z]{2,6})[-_]?(\d{2,6})(?:[-_]([A-Za-z0-9]{1,4}))?")
 
 
 def normalize_code(value: str) -> str:
@@ -741,6 +760,8 @@ def _normalized_root(value: str) -> PurePosixPath | None:
 
 
 def cloud_to_local(scrape_root: str, media_root: str, cloud_folder: str) -> Path | None:
+    if not str(scrape_root or "").strip():
+        return None
     root = _normalized_root(media_root)
     folder = _normalized_root(cloud_folder)
     if root is None or folder is None:
@@ -755,19 +776,21 @@ def cloud_to_local(scrape_root: str, media_root: str, cloud_folder: str) -> Path
     local = base / relative
     try:
         local.resolve().relative_to(base.resolve())
-    except ValueError:
+    except (OSError, RuntimeError, ValueError):
         return None
     return local
 
 
 def local_to_cloud(scrape_root: str, media_root: str, local_folder: str | Path) -> str | None:
+    if not str(scrape_root or "").strip():
+        return None
     root = _normalized_root(media_root)
     if root is None:
         return None
     base = Path(scrape_root)
     try:
         relative = Path(local_folder).resolve().relative_to(base.resolve())
-    except ValueError:
+    except (OSError, RuntimeError, ValueError):
         return None
     return str(PurePosixPath(str(root)) / relative.as_posix())
 ```
