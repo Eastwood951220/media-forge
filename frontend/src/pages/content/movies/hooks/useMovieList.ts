@@ -243,6 +243,26 @@ export function useMovieList(
         }));
     }, []);
 
+    const applyScrapingUpdates = useCallback(
+        (updates: Array<{ movie_id: string; scraping_status: Movie['scraping_status']; scraping_checked_at?: string | null }>) => {
+            if (updates.length === 0) return;
+            const byId = new Map(updates.map((update) => [update.movie_id, update]));
+            setData((current) => ({
+                ...current,
+                items: current.items.map((item) => {
+                    const update = byId.get(item._id);
+                    if (!update) return item;
+                    return {
+                        ...item,
+                        scraping_status: update.scraping_status,
+                        scraping_checked_at: update.scraping_checked_at ?? item.scraping_checked_at,
+                    };
+                }),
+            }));
+        },
+        [],
+    );
+
     const syncStorageStatus = useCallback(async () => {
         if (!filterParams) return;
         setSyncingStorage(true);
@@ -265,7 +285,7 @@ export function useMovieList(
     return {
         data, page, pageSize, sortBy, sortOrder, loading, syncingStorage, selectedRowKeys,
         setPage, setPageSize, setSelectedRowKeys,
-        search, reload, refreshStorageFields, syncStorageStatus, handlePageChange, handleShowSizeChange, handleSortChange, resetSort, applyStorageUpdates,
+        search, reload, refreshStorageFields, syncStorageStatus, handlePageChange, handleShowSizeChange, handleSortChange, resetSort, applyStorageUpdates, applyScrapingUpdates,
     };
 }
 

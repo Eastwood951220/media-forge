@@ -25,6 +25,11 @@ def _all_text(node, selector: str) -> list[str]:
     return [str(clean_text(value)) for value in values if clean_text(value)]
 
 
+def _all_attr(node, selector: str, attribute: str) -> list[str]:
+    values = node.css(f"{selector}::attr({attribute})").getall()
+    return [str(clean_text(value)) for value in values if clean_text(value)]
+
+
 def _first_magnet_url(node, selectors: list[str]) -> str:
     for selector in selectors:
         values = node.css(selector).getall()
@@ -223,10 +228,12 @@ def parse_detail_page(page) -> dict:
             "img.video-cover::attr(src)",
         ],
     )
+    preview_images = _all_attr(page, ".preview-images a", "href")
 
     detail: dict[str, Any] = {
         "source_name": title,
         "cover": cover,
+        "preview_images": preview_images,
         "release_date": "",
         "duration": 0,
         "director": "",

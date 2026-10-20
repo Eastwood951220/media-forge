@@ -18,6 +18,9 @@ const EVENT_NAMES: RealtimeEventName[] = [
   'storage.sub.log.appended',
   'storage.queue.updated',
   'movie.storage.updated',
+  'scraping.task.updated',
+  'scraping.item.updated',
+  'movie.scraping.updated',
 ]
 
 type AnyHandler = RealtimeHandler<Record<string, unknown>>

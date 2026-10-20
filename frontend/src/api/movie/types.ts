@@ -60,6 +60,9 @@ export interface Movie {
   storage_locations?: string[]
   marked: boolean
   storage_status: MovieStorageStatus
+  scraping_status?: 'scraped' | 'not_scraped' | null
+  scraping_folder?: string
+  scraping_checked_at?: string | null
   storage_summary: {
     last_status?: MovieStorageStatus
     storage_status?: MovieStorageStatus

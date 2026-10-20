@@ -35,6 +35,12 @@ from backend.app.modules.realtime.router import router as realtime_router
 from backend.app.modules.dashboard.router import router as dashboard_router
 from backend.app.modules.health.router import router as health_router
 from backend.app.modules.init.router import router as init_router
+from backend.app.modules.scraping.router import router as scraping_router
+from backend.app.models.scraping_task import ScrapingTask
+from backend.app.modules.scraping.tasks.worker import (
+    cleanup_interrupted_scraping_tasks,
+    ensure_scraping_worker_started,
+)
 from backend.app.modules.storage.config.router import router as storage_config_router
 from backend.app.modules.storage.index.router import router as storage_index_router
 from backend.app.modules.storage.tasks.router import router as storage_tasks_router
@@ -104,6 +110,24 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             if storage_stopped:
                 logger.info("Stopped %d interrupted storage tasks.", storage_stopped)
 
+            # Cleanup interrupted scraping tasks on startup
+            scraping_stopped = cleanup_interrupted_scraping_tasks(session)
+            if scraping_stopped:
+                logger.info("Failed %d interrupted scraping tasks.", scraping_stopped)
+
+            # Resume the scraping worker when the queue survived the restart.
+            try:
+                queued_scraping = (
+                    session.query(ScrapingTask.id)
+                    .filter(ScrapingTask.status == "queued")
+                    .first()
+                )
+                if queued_scraping is not None:
+                    ensure_scraping_worker_started()
+                    logger.info("Started scraping worker for queued tasks.")
+            except Exception:
+                logger.warning("Failed to start the scraping worker on startup", exc_info=True)
+
             # Finalize schedule runs stranded in "running" by the restart
             # cleanup above (their linked crawler runs are all terminal now).
             finalized_schedule_runs = finalize_stalled_schedule_runs(session)
@@ -167,6 +191,7 @@ app.include_router(backup_router)
 app.include_router(storage_config_router)
 app.include_router(storage_index_router)
 app.include_router(storage_tasks_router)
+app.include_router(scraping_router)
 
 
 def configure_frontend(

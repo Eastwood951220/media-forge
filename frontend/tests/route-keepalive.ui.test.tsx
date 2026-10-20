@@ -79,14 +79,26 @@ describe('RouteKeepAliveOutlet', () => {
       'data-active-cache-key',
       '/crawler/tasks?page=2&status=running',
     )
-    expect(keepAlive).toHaveAttribute('data-exclude', '/login|/init')
+    expect(keepAlive).toHaveAttribute(
+      'data-exclude',
+      '/login|/init|/crawler/runs|/storage/tasks|/scraping/tasks',
+    )
     expect(await screen.findByText('tasks page')).toBeInTheDocument()
   })
 
-  it('keeps login and init in the explicit exclude list', () => {
-    expect(ROUTE_CACHE_EXCLUDE_PATHS).toEqual(['/login', '/init'])
+  it('keeps login, init, and task list pages in the explicit exclude list', () => {
+    expect(ROUTE_CACHE_EXCLUDE_PATHS).toEqual([
+      '/login',
+      '/init',
+      '/crawler/runs',
+      '/storage/tasks',
+      '/scraping/tasks',
+    ])
     expect(isRouteCacheExcluded('/login')).toBe(true)
     expect(isRouteCacheExcluded('/init')).toBe(true)
+    expect(isRouteCacheExcluded('/crawler/runs')).toBe(true)
+    expect(isRouteCacheExcluded('/storage/tasks')).toBe(true)
+    expect(isRouteCacheExcluded('/scraping/tasks')).toBe(true)
     expect(isRouteCacheExcluded('/crawler/tasks')).toBe(false)
   })
 
@@ -137,5 +149,29 @@ describe('RouteKeepAliveOutlet', () => {
     await user.click(screen.getByText('tasks'))
 
     expect(await screen.findByLabelText('cached input')).toHaveValue('stored')
+  })
+
+  it('keeps the keep-alive host mounted on an excluded list page', async () => {
+    const rootRoute = createRootRoute({
+      component: () => (
+        <RouteKeepAliveProvider>
+          <RouteKeepAliveOutlet />
+        </RouteKeepAliveProvider>
+      ),
+    })
+    const storageRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/storage/tasks',
+      component: () => <div>storage tasks page</div>,
+    })
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([storageRoute]),
+      history: createMemoryHistory({ initialEntries: ['/storage/tasks'] }),
+    })
+
+    render(<RouterProvider router={router} />)
+
+    expect(await screen.findByText('storage tasks page')).toBeInTheDocument()
+    expect(screen.getByTestId('keep-alive')).toBeInTheDocument()
   })
 })

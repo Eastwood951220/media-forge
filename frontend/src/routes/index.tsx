@@ -32,6 +32,9 @@ const StorageConfigPage = lazyRouteComponent(() => import('@/pages/storage/confi
 const StorageTaskListPage = lazyRouteComponent(() => import('@/pages/storage/tasks/StorageTaskListPage'))
 const StorageTaskDetailPage = lazyRouteComponent(() => import('@/pages/storage/tasks/StorageTaskDetailPage'))
 const StorageSubTaskDetailPage = lazyRouteComponent(() => import('@/pages/storage/tasks/StorageSubTaskDetailPage'))
+const ScrapingConfigPage = lazyRouteComponent(() => import('@/pages/scraping/config/ScrapingConfigPage'))
+const ScrapingTaskListPage = lazyRouteComponent(() => import('@/pages/scraping/tasks/TaskListPage'))
+const ScrapingTaskDetailPage = lazyRouteComponent(() => import('@/pages/scraping/tasks/TaskDetailPage'))
 
 const rootRoute = createRootRoute({
   component: function RootLayout() {
@@ -162,6 +165,24 @@ const storageSubTaskDetailRoute = createRoute({
   component: StorageSubTaskDetailPage,
 })
 
+const scrapingTasksRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/scraping/tasks',
+  component: ScrapingTaskListPage,
+})
+
+const scrapingTaskDetailRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/scraping/tasks/$id',
+  component: ScrapingTaskDetailPage,
+})
+
+const scrapingConfigRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/scraping/config',
+  component: ScrapingConfigPage,
+})
+
 const contentMoviesRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/content/movies',
@@ -209,6 +230,9 @@ const routeTree = rootRoute.addChildren([
     storageTasksRoute,
     storageTaskDetailRoute,
     storageSubTaskDetailRoute,
+    scrapingTasksRoute,
+    scrapingTaskDetailRoute,
+    scrapingConfigRoute,
     contentMoviesRoute,
     contentActressesRoute,
     contentActressDetailRoute,

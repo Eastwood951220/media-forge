@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from backend.app.models.crawl_task import CrawlTask
@@ -73,4 +73,40 @@ def test_serialize_movie_uses_batched_storage_location_map(admin_user) -> None:
     payload = serialize_movie(movie, include_magnets=False, db=session, storage_location_map=location_map)
 
     assert payload["storage_locations"] == ["JP"]
+    session.close()
+
+
+def test_serialize_movie_includes_scraping_fields(admin_user) -> None:
+    session = TestingSessionLocal()
+    movie = Movie(
+        code="BBB-002",
+        source_url="https://javdb.com/v/bbb",
+        source_name="刮削测试",
+        storage_summary={"storage_status": "stored"},
+        scraping_status="scraped",
+        scraping_folder="/media/演员/BBB-002",
+        scraping_checked_at=datetime(2026, 10, 20, 12, 0, 0),
+    )
+    session.add(movie)
+    session.flush()
+
+    payload = serialize_movie(movie, db=session)
+
+    assert payload["scraping_status"] == "scraped"
+    assert payload["scraping_folder"] == "/media/演员/BBB-002"
+    assert payload["scraping_checked_at"] == "2026-10-20T12:00:00"
+    session.close()
+
+
+def test_serialize_movie_scraping_fields_default_to_none(admin_user) -> None:
+    session = TestingSessionLocal()
+    movie = Movie(code="CCC-003", source_url="https://javdb.com/v/ccc", source_name="默认")
+    session.add(movie)
+    session.flush()
+
+    payload = serialize_movie(movie, db=session)
+
+    assert payload["scraping_status"] is None
+    assert payload["scraping_folder"] == ""
+    assert payload["scraping_checked_at"] is None
     session.close()

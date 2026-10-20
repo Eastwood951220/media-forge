@@ -89,6 +89,7 @@ def client() -> TestClient:
          patch("backend.app.main.crawler_schedule_scheduler.shutdown"), \
          patch("backend.app.main.backup_scheduler.start"), \
          patch("backend.app.main.backup_scheduler.shutdown"), \
+         patch("backend.app.main.ensure_scraping_worker_started"), \
          patch("backend.app.modules.storage.tasks.service.ensure_storage_worker_started"):
         with TestClient(app) as tc:
             yield tc

@@ -104,6 +104,9 @@ def serialize_movie(
         "marked": bool(movie.marked),
         "storage_status": normalized_movie_storage_status(movie),
         "storage_summary": movie.storage_summary or {},
+        "scraping_status": movie.scraping_status,
+        "scraping_folder": movie.scraping_folder or "",
+        "scraping_checked_at": movie.scraping_checked_at.isoformat() if movie.scraping_checked_at else None,
         "created_at": movie.created_at.isoformat() if movie.created_at else None,
         "updated_at": movie.updated_at.isoformat() if movie.updated_at else None,
     }

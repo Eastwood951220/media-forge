@@ -24,6 +24,9 @@ class StorageRuntimeState:
         self.redis.set(self.CURRENT_KEY, task_id)
         return task_id
 
+    def pending_main_task_count(self) -> int:
+        return int(self.redis.llen(self.QUEUE_KEY) or 0)
+
     def set_current_main_task(self, task_id: str | None) -> None:
         if task_id is None:
             self.redis.delete(self.CURRENT_KEY)

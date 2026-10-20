@@ -143,6 +143,25 @@ def test_parse_detail_page_extracts_fields() -> None:
     assert result["source_url"] == "https://www.javbus.com/ABCD-123"
 
 
+def test_parse_detail_page_extracts_preview_images() -> None:
+    html = """
+    <html><body>
+      <a class="bigImage" href="x"><img src="/pics/cover/adn784_b.jpg" title="title"></a>
+      <div id="sample-waterfall">
+        <a href="/pics/sample/adn784-1.jpg"><img src="/pics/sample/adn784-1.jpg"></a>
+        <a href="/pics/sample/adn784-2.jpg"><img src="/pics/sample/adn784-2.jpg"></a>
+      </div>
+    </body></html>
+    """
+
+    result = parse_detail_page(_page(html), "https://www.javbus.com/ADN-784")
+
+    assert result["preview_images"] == [
+        "https://www.javbus.com/pics/sample/adn784-1.jpg",
+        "https://www.javbus.com/pics/sample/adn784-2.jpg",
+    ]
+
+
 def test_extract_ajax_params_from_detail_page() -> None:
     params = extract_ajax_params(_page(DETAIL_PAGE_HTML))
 

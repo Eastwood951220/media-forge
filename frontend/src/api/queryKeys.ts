@@ -44,6 +44,12 @@ export const queryKeys = {
     files: () => ['backup', 'files'] as const,
     job: (jobId: string) => ['backup', 'jobs', jobId] as const,
   },
+  scrapingTasks: {
+    all: () => ['scrapingTasks'] as const,
+    list: (params: { page: number; size: number; status?: string }) =>
+      ['scrapingTasks', 'list', params] as const,
+    detail: (id: string) => ['scrapingTasks', 'detail', id] as const,
+  },
   storageTasks: {
     list: (params: { page: number; size: number; status?: string; keyword?: string }) =>
       ['storageTasks', params] as const,

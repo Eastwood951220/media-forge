@@ -125,6 +125,11 @@ def parse_detail_page(page: Adaptor, source_url: str) -> dict[str, Any]:
             ".screencap a.bigImage::attr(href)",
         ],
     )
+    preview_images = [
+        urljoin(source_url, node.attrib.get("href", ""))
+        for node in page.css("#sample-waterfall a")
+        if node.attrib.get("href")
+    ]
 
     result: dict[str, Any] = {
         "source": "javbus",
@@ -140,6 +145,7 @@ def parse_detail_page(page: Adaptor, source_url: str) -> dict[str, Any]:
         "tags": [],
         "actors": [],
         "cover_url": cover_url,
+        "preview_images": preview_images,
         "magnets": [],
     }
 

@@ -14,6 +14,7 @@ from backend.app.models.crawler_schedule import (
     CrawlerScheduleRunCrawlRun,
     CrawlerScheduleTask,
 )
+from backend.app.models.scraping_task import ScrapingTask, ScrapingTaskItem
 from backend.app.models.storage_task import StorageMainTask, StorageSubTask
 from backend.app.models.user import User
 
@@ -33,4 +34,6 @@ __all__ = [
     "CrawlerScheduleRunCrawlRun",
     "StorageMainTask",
     "StorageSubTask",
+    "ScrapingTask",
+    "ScrapingTaskItem",
 ]
