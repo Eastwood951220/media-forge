@@ -11,6 +11,7 @@ export interface MovieColumnsOptions {
   onDelete?: (movie: Movie) => void
   onCd2Sync?: (movie: Movie) => void
   onRefreshMagnets?: (movie: Movie) => void
+  onScrape?: (movie: Movie) => void
   cd2SyncingId?: string | null
   magnetRefreshingId?: string | null
 }
@@ -47,7 +48,7 @@ function MovieCoverCell({ movie }: { movie: Movie }) {
   )
 }
 
-export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, onRefreshMagnets, cd2SyncingId, magnetRefreshingId }: MovieColumnsOptions): ColumnsType<Movie> {
+export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, onRefreshMagnets, onScrape, cd2SyncingId, magnetRefreshingId }: MovieColumnsOptions): ColumnsType<Movie> {
   return [
     {
       title: '封面',
@@ -123,6 +124,19 @@ export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, 
       },
     },
     {
+      title: '刮削状态',
+      key: 'scraping_status',
+      width: 100,
+      render: (_: unknown, record) => {
+        if ((record.storage_status || record.storage_summary?.storage_status) !== 'stored') {
+          return <span>-</span>
+        }
+        if (record.scraping_status === 'scraped') return <Tag color="success">已刮削</Tag>
+        if (record.scraping_status === 'not_scraped') return <Tag>未刮削</Tag>
+        return <span>-</span>
+      },
+    },
+    {
       title: '抓取时间',
       dataIndex: 'created_at',
       key: 'created_at',
@@ -156,6 +170,7 @@ export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, 
                 onClick: () => onRefreshMagnets(record),
               }]
             : []),
+          ...(onScrape ? [{ key: 'scrape', label: '刮削', onClick: () => onScrape(record) }] : []),
           ...(onDelete ? [{ key: 'delete', label: '删除', danger: true, onClick: () => onDelete(record) }] : []),
         ]
 

@@ -18,6 +18,7 @@ import { useMovieList } from './hooks/useMovieList'
 import { useMovieListActions } from './hooks/useMovieListActions'
 import { useMovieListRealtime } from './hooks/useMovieListRealtime'
 import { useMoviePageSortDefault } from './hooks/useMoviePageSortDefault'
+import { useMovieScraping } from './hooks/useMovieScraping'
 import { useMovieStorageIndexActions } from './hooks/useMovieStorageIndexActions'
 import { useMovieUrlDetail } from './hooks/useMovieUrlDetail'
 import { useMovieTaskUrlSync } from './hooks/useMovieTaskUrlSync'
@@ -47,6 +48,7 @@ function MovieListPage() {
   const detail = useMovieDetail()
   const push = useStoragePush(list.reload)
   const storageIndex = useMovieStorageIndexActions({ reload: list.reload })
+  const { scrapeMovies } = useMovieScraping()
 
   const actions = useMovieListActions({
     config: configHook.config,
@@ -65,7 +67,7 @@ function MovieListPage() {
 
   useMovieUrlDetail(detail.showDetail)
   useMovieTaskUrlSync({ active: isActive, selectedTask: filters.form.selectedTask })
-  useMovieListRealtime(list.applyStorageUpdates)
+  useMovieListRealtime(list.applyStorageUpdates, list.applyScrapingUpdates)
 
   useEffect(() => {
     if (isActive && !wasActiveRef.current && listReady) {
@@ -81,9 +83,10 @@ function MovieListPage() {
       onDelete: (movie) => confirmDeleteMovies([movie]),
       onCd2Sync: storageIndex.handleCd2Sync,
       onRefreshMagnets: (movie) => refreshMagnetsForMovies([movie]),
+      onScrape: (movie) => void scrapeMovies([movie]),
       cd2SyncingId: storageIndex.cd2SyncingId,
     }),
-    [detail.showDetail, push.openSinglePush, confirmDeleteMovies, storageIndex.handleCd2Sync, storageIndex.cd2SyncingId, refreshMagnetsForMovies],
+    [detail.showDetail, push.openSinglePush, confirmDeleteMovies, storageIndex.handleCd2Sync, storageIndex.cd2SyncingId, refreshMagnetsForMovies, scrapeMovies],
   )
 
   const queryNode = configHook.loaded ? (
@@ -120,6 +123,17 @@ function MovieListPage() {
         queryNode={queryNode}
         toolbarLeft={(
           <Space>
+            {list.selectedRowKeys.length > 0 && (
+              <Button
+                type="primary"
+                size="small"
+                onClick={() => void scrapeMovies(
+                  list.data.items.filter((movie) => list.selectedRowKeys.includes(movie._id)),
+                )}
+              >
+                批量刮削
+              </Button>
+            )}
             {list.selectedRowKeys.length > 0 && (
               <Button type="primary" size="small" onClick={actions.handleBulkPush}>
                 批量推送

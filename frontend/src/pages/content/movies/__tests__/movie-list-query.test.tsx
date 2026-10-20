@@ -286,6 +286,51 @@ describe('useMovieList', () => {
     expect(result.current.data.items[1].storage_status).toBe('not_stored')
   })
 
+  it('applies scraping updates and keeps the previous checked time when omitted', async () => {
+    vi.mocked(fetchMovies).mockResolvedValue({
+      items: [
+        {
+          _id: 'movie-1',
+          storage_status: 'stored',
+          storage_summary: { storage_status: 'stored' },
+          scraping_status: 'not_scraped',
+          scraping_checked_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          _id: 'movie-2',
+          storage_status: 'stored',
+          storage_summary: { storage_status: 'stored' },
+          scraping_status: 'not_scraped',
+          scraping_checked_at: null,
+        },
+      ],
+      total: 2,
+      page: 1,
+      limit: 20,
+      total_pages: 1,
+    } as never)
+
+    const { result } = renderHook(() => useMovieList({ search: 'abc' } as never), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => {
+      result.current.applyScrapingUpdates([
+        { movie_id: 'movie-1', scraping_status: 'scraped' },
+        { movie_id: 'movie-2', scraping_status: 'scraped', scraping_checked_at: '2026-02-02T00:00:00.000Z' },
+        { movie_id: 'movie-missing', scraping_status: 'scraped' },
+      ])
+    })
+
+    expect(result.current.data.items[0]).toEqual(expect.objectContaining({
+      scraping_status: 'scraped',
+      scraping_checked_at: '2026-01-01T00:00:00.000Z',
+    }))
+    expect(result.current.data.items[1]).toEqual(expect.objectContaining({
+      scraping_status: 'scraped',
+      scraping_checked_at: '2026-02-02T00:00:00.000Z',
+    }))
+  })
+
   it('persists only pagination metadata instead of whole list rows', async () => {
     vi.mocked(fetchMovies).mockResolvedValue({
       items: [{ _id: 'movie-1', storage_status: 'stored', storage_summary: { storage_status: 'stored' } }],

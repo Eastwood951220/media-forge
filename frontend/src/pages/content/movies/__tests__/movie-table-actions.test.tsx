@@ -54,6 +54,43 @@ describe('MovieTable actions', () => {
     })
   })
 
+  it('renders scraping status and a scrape action', () => {
+    const onScrape = vi.fn()
+    render(
+      <Table
+        rowKey="_id"
+        dataSource={[{ ...movie, storage_status: 'stored', scraping_status: 'scraped' }]}
+        columns={createMovieColumns({
+          onViewDetail: vi.fn(),
+          onPush: vi.fn(),
+          onCd2Sync: vi.fn(),
+          onRefreshMagnets: vi.fn(),
+          onDelete: vi.fn(),
+          onScrape,
+        })}
+        pagination={false}
+      />,
+    )
+
+    expect(screen.getByText('已刮削')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '刮削' }))
+    expect(onScrape).toHaveBeenCalled()
+  })
+
+  it('shows a dash for scraping status when the movie is not stored', () => {
+    render(
+      <Table
+        rowKey="_id"
+        dataSource={[{ ...movie, storage_status: 'not_stored', scraping_status: null }]}
+        columns={createMovieColumns({ onViewDetail: vi.fn(), onScrape: vi.fn() })}
+        pagination={false}
+      />,
+    )
+
+    expect(screen.queryByText('已刮削')).not.toBeInTheDocument()
+    expect(screen.queryByText('未刮削')).not.toBeInTheDocument()
+  })
+
   it('shows the movie crawl time column', () => {
     render(
       <Table
