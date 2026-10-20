@@ -7,10 +7,12 @@ from datetime import datetime, timezone
 
 from backend.app.models.scraping_task import ScrapingTask
 from backend.app.modules.scraping.tasks.events import (
+    publish_movie_scraping_updated,
     publish_scraping_item_updated,
     publish_scraping_task_updated,
 )
 from backend.app.modules.scraping.tasks.item_runner import run_item
+from shared.database.models.content import Movie
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +110,15 @@ def run_task(task_id: uuid.UUID) -> None:
             db.commit()
             _recompute(task, db)
             publish_scraping_item_updated(str(task.created_by), item)
+            if item.status == "success" and item.movie_id is not None:
+                movie = db.get(Movie, item.movie_id)
+                if movie is not None:
+                    publish_movie_scraping_updated(
+                        str(task.created_by),
+                        str(movie.id),
+                        movie.scraping_status,
+                        movie.scraping_checked_at.isoformat() if movie.scraping_checked_at else None,
+                    )
 
         _recompute(task, db)
         if cancelled:

@@ -32,6 +32,8 @@ def test_run_task_success_transitions(db_session, admin_user, monkeypatch) -> No
     monkeypatch.setattr(worker, "get_scraping_config", lambda: {"metadata_sources": ["javdb", "javbus"]})
     monkeypatch.setattr(worker, "publish_scraping_task_updated", lambda task: None)
     monkeypatch.setattr(worker, "publish_scraping_item_updated", lambda owner_id, item: None)
+    published: list[tuple] = []
+    monkeypatch.setattr(worker, "publish_movie_scraping_updated", lambda *args: published.append(args))
 
     worker.run_task(task_id)
 
@@ -40,6 +42,7 @@ def test_run_task_success_transitions(db_session, admin_user, monkeypatch) -> No
     assert stored.status == "success"
     assert stored.success_count == 1
     assert stored.finished_at is not None
+    assert published and published[0][0] == str(admin_user.id)
 
 
 def test_run_task_partial_failure_and_skips(db_session, admin_user, monkeypatch) -> None:
