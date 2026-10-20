@@ -117,7 +117,11 @@ def test_fallback_tie_break_is_lexicographic(tmp_path: Path, db_session) -> None
     assert movie.scraping_folder == "/media/a/ADN-784"
 
 
-def test_refresh_movie_status_marks_missing_mapped_folder_not_scraped(tmp_path: Path, db_session) -> None:
+def test_refresh_movie_status_marks_missing_mapped_folder_not_scraped(tmp_path: Path, db_session, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.scan._current_scan_config",
+        lambda: {"scrape_root": str(tmp_path), "media_root": "/media"},
+    )
     movie = _make_movie(db_session, "ADN-784", stored=True, target_folder="/media/ADN-784")
     movie.scraping_status = "scraped"
     movie.scraping_folder = "/media/ADN-784"

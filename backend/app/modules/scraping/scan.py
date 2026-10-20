@@ -109,20 +109,6 @@ def movie_target_folders(movie: Movie) -> list[str]:
     return result
 
 
-def _target_in_media_root(media_root: str, target: str) -> bool:
-    """Whether a stored target folder is one the scanner owns.
-
-    ``cloud_to_local`` already needs a configured scrape root, so it cannot
-    decide this on its own: with no scrape root it returns ``None`` even for
-    targets under the media root. Mapping is therefore a media-root question,
-    while turning a target into a local path stays ``cloud_to_local``'s job.
-    """
-    root = str(media_root or "").strip().rstrip("/")
-    if not root.startswith("/") or root == "":
-        return False
-    return target.startswith(root + "/")
-
-
 def _apply_judgement(
     movie: Movie,
     *,
@@ -292,7 +278,7 @@ def refresh_movie_status(
     mapped_targets = [
         target
         for target in movie_target_folders(movie)
-        if _target_in_media_root(media_root, target)
+        if cloud_to_local(scrape_root, media_root, target) is not None
     ]
     if folder is None:
         for target in mapped_targets:
