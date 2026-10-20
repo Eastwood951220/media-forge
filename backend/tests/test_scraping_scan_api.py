@@ -25,20 +25,33 @@ def test_scan_returns_summary(client, admin_user, tmp_path, monkeypatch) -> None
     client.put(
         "/api/scraping/config",
         headers=headers,
-        json={"scrape_root": str(tmp_path), "media_root": "/media"},
+        json={
+            "scrape_root": str(tmp_path),
+            "media_root": "/media",
+            "api_key": "secret-key-1234",
+        },
     )
 
-    monkeypatch.setattr(
-        "backend.app.modules.scraping.router.scan_directory",
-        lambda db, config: ScanSummary(
+    captured: dict = {}
+
+    def fake_scan_directory(db, config):
+        captured.update(config)
+        return ScanSummary(
             folders_scanned=3,
             folders_with_strm=1,
             scraped_folders=1,
             updated_movies=1,
-        ),
+        )
+
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.router.scan_directory",
+        fake_scan_directory,
     )
 
     response = client.post("/api/scraping/scan", headers=headers)
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["data"]["scraped_folders"] == 1
+    assert captured["scrape_root"] == str(tmp_path)
+    # Only the raw config exposes the unmasked key; the public config masks it.
+    assert captured["api_key"] == "secret-key-1234"

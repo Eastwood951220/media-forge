@@ -175,6 +175,48 @@ def test_manual_run_returns_the_external_result(client, admin_user, tmp_path, mo
     }
 
 
+def test_manual_strm_run_schedules_a_scan_on_success(client, admin_user, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    _write_config(tmp_path)
+    headers = _auth_headers(client, admin_user)
+    scheduled: list[dict] = []
+
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.router.run_strm_generation",
+        lambda config: StrmRunResult(success=True, status_code=200, message="HTTP 200"),
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.router.schedule_scan_after_strm",
+        lambda config: scheduled.append(config),
+    )
+
+    response = client.post("/api/scraping/strm/run", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert scheduled
+
+
+def test_manual_strm_run_does_not_schedule_a_scan_on_failure(client, admin_user, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    _write_config(tmp_path)
+    headers = _auth_headers(client, admin_user)
+    scheduled: list[dict] = []
+
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.router.run_strm_generation",
+        lambda config: StrmRunResult(success=False, status_code=500, message="HTTP 500"),
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.router.schedule_scan_after_strm",
+        lambda config: scheduled.append(config),
+    )
+
+    response = client.post("/api/scraping/strm/run", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert scheduled == []
+
+
 def test_manual_run_reports_external_failure_with_200(client, admin_user, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
     _write_config(tmp_path)
