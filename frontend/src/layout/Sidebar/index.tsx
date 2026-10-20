@@ -77,6 +77,11 @@ const menuItems: MenuProps['items'] = [
     label: '刮削',
     children: [
       {
+        key: '/scraping/tasks',
+        icon: <HistoryOutlined />,
+        label: '刮削任务',
+      },
+      {
         key: '/scraping/config',
         icon: <SettingOutlined />,
         label: '刮削配置',
@@ -127,9 +132,11 @@ export function SideMenu({ collapsed }: SideMenuProps) {
           ? '/storage/tasks'
           : pathname.startsWith('/storage/config')
             ? '/storage/config'
-            : pathname.startsWith('/scraping/config')
-              ? '/scraping/config'
-              : pathname.startsWith('/content/movies')
+            : pathname.startsWith('/scraping/tasks')
+              ? '/scraping/tasks'
+              : pathname.startsWith('/scraping/config')
+                ? '/scraping/config'
+                : pathname.startsWith('/content/movies')
                 ? '/content/movies'
                 : pathname.startsWith('/content/actresses')
                   ? '/content/actresses'

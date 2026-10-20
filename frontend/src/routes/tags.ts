@@ -60,6 +60,14 @@ const ROUTE_TAGS: Array<{ pattern: RegExp; meta: RouteTagMeta }> = [
       singletonKey: '/storage/tasks/subtasks/:id',
     },
   },
+  {
+    pattern: /^\/scraping\/tasks$/,
+    meta: { title: '刮削任务' },
+  },
+  {
+    pattern: /^\/scraping\/tasks\/[^/]+$/,
+    meta: { title: '刮削任务详情', activeMenu: '/scraping/tasks' },
+  },
   { pattern: /^\/scraping\/config$/, meta: { title: '刮削配置' } },
 ]
 
