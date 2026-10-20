@@ -12,16 +12,21 @@ import {
 import {
   ApiOutlined,
   ClockCircleOutlined,
+  FolderOpenOutlined,
+  ScanOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import {
   getScrapingConfig,
+  runScrapingScan,
   runScrapingStrm,
   updateScrapingConfig,
   type ScrapingConfig,
   type ScrapingConfigUpdate,
+  type ScrapingScanSummary,
 } from '@/api/scraping/scrapingConfig'
 import { FullWidthNumberInput } from '@/components/common'
+import SourcePriorityList from './components/SourcePriorityList'
 import { getErrorMessage, isFormValidationError } from './utils/error'
 import styles from './ScrapingConfigPage.module.less'
 
@@ -30,6 +35,8 @@ type FormValues = {
   api_key?: string
   directory_id: number
   trigger_delay_seconds: number
+  scrape_root: string
+  media_root: string
 }
 
 const DEFAULT_BASE_URL = 'http://192.168.0.36:12333'
@@ -42,6 +49,9 @@ export default function ScrapingConfigPage() {
   const [running, setRunning] = useState(false)
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false)
   const [maskedApiKey, setMaskedApiKey] = useState('')
+  const [sources, setSources] = useState<string[]>(['javdb', 'javbus'])
+  const [scanning, setScanning] = useState(false)
+  const [scanSummary, setScanSummary] = useState<ScrapingScanSummary | null>(null)
 
   const applyConfig = useCallback(
     (config: ScrapingConfig) => {
@@ -50,9 +60,12 @@ export default function ScrapingConfigPage() {
         api_key: '',
         directory_id: config.directory_id ?? undefined,
         trigger_delay_seconds: config.trigger_delay_seconds,
+        scrape_root: config.scrape_root,
+        media_root: config.media_root,
       })
       setApiKeyConfigured(config.api_key_configured)
       setMaskedApiKey(config.api_key)
+      setSources(config.metadata_sources ?? [])
     },
     [form],
   )
@@ -78,6 +91,9 @@ export default function ScrapingConfigPage() {
       base_url: values.base_url,
       directory_id: values.directory_id,
       trigger_delay_seconds: values.trigger_delay_seconds,
+      scrape_root: values.scrape_root,
+      media_root: values.media_root,
+      metadata_sources: sources,
     }
     if (values.api_key?.trim()) {
       payload.api_key = values.api_key.trim()
@@ -119,6 +135,19 @@ export default function ScrapingConfigPage() {
       message.error(getErrorMessage(error))
     } finally {
       setRunning(false)
+    }
+  }
+
+  const handleScan = async () => {
+    setScanning(true)
+    try {
+      const summary = await runScrapingScan()
+      setScanSummary(summary)
+      message.success('扫描完成')
+    } catch (error: unknown) {
+      message.error(getErrorMessage(error))
+    } finally {
+      setScanning(false)
     }
   }
 
@@ -208,6 +237,42 @@ export default function ScrapingConfigPage() {
                   title={`存储队列空闲 ${delaySeconds} 秒后自动调用；等待期间有新任务会重新计时。`}
                 />
               </Card>
+
+              <Card
+                title={
+                  <span className={styles.sectionTitle}>
+                    <FolderOpenOutlined />
+                    刮削目录
+                  </span>
+                }
+                className={styles.formCard}
+              >
+                <div className={styles.fieldGrid}>
+                  <Form.Item
+                    name="scrape_root"
+                    label="刮削目录（本地路径）"
+                    rules={[{ required: true, message: '请输入刮削目录' }]}
+                  >
+                    <Input placeholder="/mnt/cd2/media" />
+                  </Form.Item>
+                  <Form.Item
+                    name="media_root"
+                    label="媒体库根路径（云端）"
+                    rules={[{ required: true, message: '请输入媒体库根路径' }]}
+                  >
+                    <Input placeholder="/media" />
+                  </Form.Item>
+                </div>
+                <div className={styles.fieldGrid}>
+                  <Form.Item label="元数据源优先级" className={styles.fieldSpan2}>
+                    <SourcePriorityList
+                      sources={sources}
+                      labels={{ javdb: 'JavDB', javbus: 'JavBus' }}
+                      onChange={setSources}
+                    />
+                  </Form.Item>
+                </div>
+              </Card>
             </div>
 
             <div className={styles.sidePanel}>
@@ -229,10 +294,31 @@ export default function ScrapingConfigPage() {
                     aria-label="立即生成"
                     onClick={() => void handleRun()}
                     loading={running}
-                    disabled={saving}
+                    disabled={saving || scanning}
                   >
                     立即生成
                   </Button>
+                  <Button
+                    icon={<ScanOutlined />}
+                    aria-label="扫描目录"
+                    onClick={() => void handleScan()}
+                    loading={scanning}
+                    disabled={saving || running}
+                  >
+                    扫描目录
+                  </Button>
+                  {scanSummary && (
+                    <Alert
+                      type="success"
+                      showIcon
+                      title={(
+                        <span>
+                          扫描 {scanSummary.folders_scanned} 个文件夹，已刮削 {scanSummary.scraped_folders}，
+                          未刮削 {scanSummary.not_scraped_folders}，匹配 {scanSummary.matched_movies} 部电影
+                        </span>
+                      )}
+                    />
+                  )}
                 </div>
               </Card>
             </div>

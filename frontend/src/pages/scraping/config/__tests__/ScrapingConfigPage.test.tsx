@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ScrapingConfigPage from '../ScrapingConfigPage'
 import {
   getScrapingConfig,
+  runScrapingScan,
   runScrapingStrm,
   updateScrapingConfig,
 } from '@/api/scraping/scrapingConfig'
@@ -12,6 +13,7 @@ vi.mock('@/api/scraping/scrapingConfig', () => ({
   getScrapingConfig: vi.fn(),
   updateScrapingConfig: vi.fn(),
   runScrapingStrm: vi.fn(),
+  runScrapingScan: vi.fn(),
 }))
 
 const savedConfig = {
@@ -42,6 +44,16 @@ describe('ScrapingConfigPage', () => {
       success: true,
       status_code: 200,
       message: 'HTTP 200',
+    })
+    vi.mocked(runScrapingScan).mockResolvedValue({
+      folders_scanned: 0,
+      folders_with_strm: 0,
+      scraped_folders: 0,
+      not_scraped_folders: 0,
+      matched_movies: 0,
+      updated_movies: 0,
+      unmatched_folders: [],
+      duration_ms: 0,
     })
   })
 
@@ -75,5 +87,38 @@ describe('ScrapingConfigPage', () => {
     expect(vi.mocked(updateScrapingConfig).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(runScrapingStrm).mock.invocationCallOrder[0],
     )
+  })
+
+  it('loads scraping directory fields', async () => {
+    renderPage()
+    expect(await screen.findByDisplayValue('/mnt/media')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('/media')).toBeInTheDocument()
+  })
+
+  it('saves reordered metadata sources', async () => {
+    renderPage()
+    await screen.findByDisplayValue('/mnt/media')
+    fireEvent.click(screen.getByRole('button', { name: '下移 JavDB' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存配置' }))
+    await waitFor(() => expect(updateScrapingConfig).toHaveBeenCalled())
+    const payload = vi.mocked(updateScrapingConfig).mock.calls[0][0]
+    expect(payload.metadata_sources).toEqual(['javbus', 'javdb'])
+  })
+
+  it('runs a scan and shows the summary', async () => {
+    vi.mocked(runScrapingScan).mockResolvedValue({
+      folders_scanned: 10,
+      folders_with_strm: 4,
+      scraped_folders: 3,
+      not_scraped_folders: 1,
+      matched_movies: 3,
+      updated_movies: 3,
+      unmatched_folders: [],
+      duration_ms: 12,
+    })
+    renderPage()
+    await screen.findByDisplayValue('/mnt/media')
+    fireEvent.click(screen.getByRole('button', { name: '扫描目录' }))
+    expect(await screen.findByText(/已刮削 3/)).toBeInTheDocument()
   })
 })
