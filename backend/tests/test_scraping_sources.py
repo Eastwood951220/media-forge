@@ -73,6 +73,10 @@ def test_javdb_adapter_parses_search_and_detail(monkeypatch) -> None:
             "series": "シリーズ",
             "tags": ["タグ"],
             "actors": ["女優"],
+            "preview_images": [
+                "https://javdb.com/preview-1.jpg",
+                "https://javdb.com/preview-2.jpg",
+            ],
         },
     )
 
@@ -82,6 +86,8 @@ def test_javdb_adapter_parses_search_and_detail(monkeypatch) -> None:
     assert metadata is not None
     assert metadata.site_key == "JavDB"
     assert metadata.cover_url == "https://javdb.com/cover.jpg"
+    assert metadata.backdrop_url == "https://javdb.com/preview-1.jpg"
+    assert metadata.landscape_url == "https://javdb.com/preview-2.jpg"
     assert metadata.premiered == "2026-07-03"
     assert metadata.studio == "メーカー"
     assert fetcher.requested[0].endswith("/search?q=ADN-784&f=all")
@@ -112,6 +118,10 @@ def test_javbus_adapter_parses_search_and_detail(monkeypatch) -> None:
             "series": "シリーズ",
             "tags": ["タグ"],
             "actors": ["女優"],
+            "preview_images": [
+                "https://www.javbus.com/preview-1.jpg",
+                "https://www.javbus.com/preview-2.jpg",
+            ],
         },
     )
 
@@ -121,6 +131,8 @@ def test_javbus_adapter_parses_search_and_detail(monkeypatch) -> None:
     assert metadata is not None
     assert metadata.site_key == "JavBus"
     assert metadata.cover_url == "https://www.javbus.com/cover.jpg"
+    assert metadata.backdrop_url == "https://www.javbus.com/preview-1.jpg"
+    assert metadata.landscape_url == "https://www.javbus.com/preview-2.jpg"
     assert metadata.premiered == "2026-07-03"
     assert metadata.studio == "メーカー"
     assert fetcher.requested[1] == "https://www.javbus.com/ADN-784"
@@ -133,3 +145,9 @@ def test_adapters_return_none_when_fetch_raises() -> None:
     adapter = sources.JavbusAdapter(fetcher_factory=failing_factory, throttle=lambda: None)
 
     assert adapter.fetch_by_code("ADN-784") is None
+
+
+def test_source_referer_maps_registry_sites() -> None:
+    assert sources.source_referer("JavDB") == "https://javdb.com/"
+    assert sources.source_referer("JavBus") == "https://www.javbus.com/"
+    assert sources.source_referer("unknown") is None

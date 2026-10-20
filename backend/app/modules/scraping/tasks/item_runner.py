@@ -11,7 +11,7 @@ from backend.app.modules.scraping.images import write_artwork
 from backend.app.modules.scraping.nfo import write_movie_nfo
 from backend.app.modules.scraping.paths import cloud_to_local
 from backend.app.modules.scraping.scan import movie_target_folders, refresh_movie_status
-from backend.app.modules.scraping.sources import fetch_by_priority
+from backend.app.modules.scraping.sources import fetch_by_priority, source_referer
 from shared.database.models.content import Movie
 
 
@@ -69,11 +69,13 @@ def run_item(
         cloud_folder=cloud_folder,
         source_site=metadata.site_key if metadata is not None else None,
     )
+    site_key = metadata.site_key if metadata is not None else None
     written = write_artwork(
         folder,
         cover_url=movie.cover,
         backdrop_url=metadata.backdrop_url if metadata is not None else None,
         landscape_url=metadata.landscape_url if metadata is not None else None,
+        referer=source_referer(site_key) if site_key else None,
         transport=transport,
     )
     if written == 0:

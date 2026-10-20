@@ -47,6 +47,21 @@ def _clean(value: object) -> str:
     return str(value or "").strip()
 
 
+def source_referer(site_key: str) -> str | None:
+    if site_key == "JavDB":
+        return JAVDB_SITE["base_url"].rstrip("/") + "/"
+    if site_key == "JavBus":
+        return JAVBUS_SITE["base_url"].rstrip("/") + "/"
+    return None
+
+
+def _preview_artwork(previews: list[str]) -> tuple[str | None, str | None]:
+    cleaned = [url for url in (_clean(item) for item in previews) if url]
+    backdrop = cleaned[0] if cleaned else None
+    landscape = cleaned[1] if len(cleaned) > 1 else None
+    return backdrop, landscape
+
+
 def _throttle() -> None:
     try:
         config = read_crawler_runtime_config()
@@ -84,6 +99,7 @@ class JavdbAdapter:
                 return None
             self.throttle()
             detail = parse_javdb_detail(fetcher.get(target["url"]))
+            backdrop, landscape = _preview_artwork(list(detail.get("preview_images") or []))
             return SourceMetadata(
                 site_key=self.site_key,
                 title=_clean(detail.get("source_name")) or None,
@@ -95,6 +111,8 @@ class JavdbAdapter:
                 series=_clean(detail.get("series")) or None,
                 actors=list(detail.get("actors") or []),
                 cover_url=_clean(detail.get("cover")) or None,
+                backdrop_url=backdrop,
+                landscape_url=landscape,
             )
         except Exception:
             logger.warning("javdb metadata fetch failed for %s", code, exc_info=True)
@@ -127,6 +145,7 @@ class JavbusAdapter:
                 return None
             self.throttle()
             detail = parse_javbus_detail(fetcher.get(target["url"]), target["url"])
+            backdrop, landscape = _preview_artwork(list(detail.get("preview_images") or []))
             return SourceMetadata(
                 site_key=self.site_key,
                 title=_clean(detail.get("source_name")) or None,
@@ -138,7 +157,8 @@ class JavbusAdapter:
                 series=_clean(detail.get("series")) or None,
                 actors=list(detail.get("actors") or []),
                 cover_url=_clean(detail.get("cover_url")) or None,
-                backdrop_url=None,
+                backdrop_url=backdrop,
+                landscape_url=landscape,
             )
         except Exception:
             logger.warning("javbus metadata fetch failed for %s", code, exc_info=True)

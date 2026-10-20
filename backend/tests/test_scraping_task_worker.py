@@ -110,3 +110,72 @@ def test_cleanup_marks_running_tasks_failed(db_session, admin_user) -> None:
     assert stopped == 1
     assert stored.status == "failed"
     assert stored.error_message == "任务中断，需重试"
+
+
+def test_run_item_passes_site_referer_to_artwork(db_session, admin_user, monkeypatch, tmp_path) -> None:
+    from backend.app.modules.scraping.sources import SourceMetadata
+    from backend.app.modules.scraping.tasks import item_runner
+
+    movie = Movie(
+        code="ADN-784",
+        source_name="ADN-784",
+        storage_summary={"storage_status": "stored", "locations": [{"target_folder": "/media/ADN-784"}]},
+    )
+    db_session.add(movie)
+    db_session.flush()
+    task = ScrapingTask(
+        status="running",
+        total_count=1,
+        created_by=admin_user.id,
+        queued_at=datetime.now(timezone.utc),
+    )
+    db_session.add(task)
+    db_session.flush()
+    item = ScrapingTaskItem(
+        task_id=task.id,
+        movie_id=movie.id,
+        movie_code="ADN-784",
+        movie_title="ADN-784",
+        status="pending",
+    )
+    db_session.add(item)
+    db_session.commit()
+
+    folder = tmp_path / "ADN-784"
+    folder.mkdir()
+
+    monkeypatch.setattr(
+        item_runner,
+        "fetch_by_priority",
+        lambda code, sources: SourceMetadata(
+            site_key="JavDB",
+            title="ADN-784",
+            cover_url="https://javdb.com/cover.jpg",
+        ),
+    )
+    captured: dict[str, object] = {}
+
+    def fake_write_artwork(folder_arg, *, cover_url, backdrop_url, landscape_url, referer=None, transport=None):
+        captured.update(
+            folder=str(folder_arg),
+            cover_url=cover_url,
+            backdrop_url=backdrop_url,
+            landscape_url=landscape_url,
+            referer=referer,
+        )
+        return 1
+
+    monkeypatch.setattr(item_runner, "write_artwork", fake_write_artwork)
+
+    item_runner.run_item(
+        db_session,
+        item,
+        config={
+            "scrape_root": str(tmp_path),
+            "media_root": "/media",
+            "metadata_sources": ["javdb"],
+        },
+    )
+
+    assert captured["referer"] == "https://javdb.com/"
+    assert captured["cover_url"] == "https://javdb.com/cover.jpg"
