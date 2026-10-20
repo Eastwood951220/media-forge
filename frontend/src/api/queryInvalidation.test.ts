@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import { queryKeys } from './queryKeys'
-import { invalidateCrawlerRunLists, invalidateCrawlerTaskLists } from './queryInvalidation'
+import { invalidateCrawlerRunLists, invalidateCrawlerTaskLists, invalidateScrapingTaskLists } from './queryInvalidation'
 
 describe('crawler query invalidation helpers', () => {
   it('invalidates crawler run list and count queries through the crawlerRuns root key', async () => {
@@ -20,5 +20,16 @@ describe('crawler query invalidation helpers', () => {
     await invalidateCrawlerTaskLists(client)
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.crawlerTasks.all() })
+  })
+})
+
+describe('scraping query invalidation helpers', () => {
+  it('invalidates scraping task list and detail queries through the scrapingTasks root key', async () => {
+    const client = new QueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries').mockResolvedValue()
+
+    await invalidateScrapingTaskLists(client)
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.scrapingTasks.all() })
   })
 })

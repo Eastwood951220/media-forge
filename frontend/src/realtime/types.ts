@@ -105,6 +105,21 @@ export type MovieStorageUpdatedPayload = {
   storage_summary: Record<string, unknown>
 }
 
+export type ScrapingTaskUpdatedPayload = {
+  id: string
+  status: string
+  total_count: number
+  success_count: number
+  failed_count: number
+  skipped_count: number
+}
+
+export type MovieScrapingUpdatedPayload = {
+  movie_id: string
+  scraping_status: 'scraped' | 'not_scraped' | null
+  scraping_checked_at: string | null
+}
+
 /** Real-time Agent diagnostic event payload matches the REST AgentEvent contract. */
 export type CrawlerAgentEventCreatedPayload = AgentEvent
 
@@ -123,6 +138,9 @@ export type RealtimeEventName =
   | 'storage.sub.log.appended'
   | 'storage.queue.updated'
   | 'movie.storage.updated'
+  | 'scraping.task.updated'
+  | 'scraping.item.updated'
+  | 'movie.scraping.updated'
 
 export type RealtimeHandler<TPayload = Record<string, unknown>> = (
   event: RealtimeEvent<TPayload>,

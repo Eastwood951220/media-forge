@@ -14,6 +14,10 @@ export function invalidateCrawlerSchedules(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: queryKeys.crawlerSchedules.all() })
 }
 
+export function invalidateScrapingTaskLists(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: queryKeys.scrapingTasks.all() })
+}
+
 export function invalidateBackupFiles(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: queryKeys.backup.files() })
 }

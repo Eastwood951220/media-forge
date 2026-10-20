@@ -20,6 +20,9 @@ const savedConfig = {
   api_key_configured: true,
   directory_id: 4,
   trigger_delay_seconds: 30,
+  scrape_root: '/mnt/media',
+  media_root: '/media',
+  metadata_sources: ['javdb', 'javbus'],
 }
 
 function renderPage() {
