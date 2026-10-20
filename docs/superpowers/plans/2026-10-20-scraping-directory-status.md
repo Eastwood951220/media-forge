@@ -4170,18 +4170,20 @@ describe('scraping task pages', () => {
 
   it('renders the task list with a status tag, title, and refresh button', async () => {
     renderPage(<TaskListPage />)
-    expect(await screen.findByText('ADN-784')).toBeInTheDocument()
+    // The list has no movie-code column; assert the rendered progress cell instead.
+    expect(await screen.findByText(/2\/2 成功/)).toBeInTheDocument()
     expect(screen.getByText('成功')).toBeInTheDocument()
     expect(screen.getByText('刮削任务')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    fireEvent.click(screen.getByRole('button', { name: /刷新/ }))
 
     await waitFor(() => expect(api.listScrapingTasks).toHaveBeenCalledTimes(2))
   })
 
   it('renders the task detail items', async () => {
     renderPage(<TaskDetailPage />)
-    expect(await screen.findByText('ADN-784')).toBeInTheDocument()
+    // The detail row renders the code in both the code and title cells.
+    expect(await screen.findAllByText('ADN-784')).not.toHaveLength(0)
     expect(screen.getByText('boom')).toBeInTheDocument()
   })
 })
