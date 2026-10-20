@@ -100,6 +100,7 @@ Current route modules:
 | `/content/movies` | `pages/content/movies/MovieListPage.tsx` | Movie list, filters, storage sync, push actions |
 | `/backup` | `pages/backup/BackupPage.tsx` | Manual/automatic backup and restore |
 | `/storage/config` | `pages/storage/config/StorageConfigPage.tsx` | CloudDrive2/storage target configuration |
+| `/scraping/config` | `pages/scraping/config/ScrapingConfigPage.tsx` | Scraping service config and STRM generation trigger |
 | `/storage/tasks` | `pages/storage/tasks/StorageTaskListPage.tsx` | Storage main task list |
 | `/storage/tasks/$id` | `pages/storage/tasks/StorageTaskDetailPage.tsx` | Storage task detail and subtasks |
 | `/storage/tasks/subtasks/$id` | `pages/storage/tasks/StorageSubTaskDetailPage.tsx` | Storage subtask detail, files, logs, timeline |
@@ -133,6 +134,7 @@ Current API groups:
 - `storage/storageConfig/`: storage config and connection test.
 - `storage/storageIndex/`: storage index status and refresh.
 - `storage/storageTasks/`: storage push creation and task/subtask detail APIs.
+- `scraping/scrapingConfig/`: scraping service config and manual STRM generation.
 
 The shared request layer is `src/request/`. It adds token injection, GET
 parameter normalization, repeat-submit checks, cancellation, optional GET cache,

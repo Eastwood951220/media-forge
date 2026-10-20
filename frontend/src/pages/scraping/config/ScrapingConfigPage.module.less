@@ -1,0 +1,102 @@
+.page {
+  width: 100%;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 20px;
+  align-items: start;
+}
+
+.mainPanel,
+.sidePanel {
+  min-width: 0;
+}
+
+.mainPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.formCard {
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 0 18px;
+
+  :global(.ant-form-item) {
+    margin-bottom: 18px;
+  }
+}
+
+.fieldSpan2 {
+  grid-column: span 2;
+}
+
+.tokenStack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionTitle {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  font-weight: 600;
+
+  svg {
+    color: var(--app-primary-color, #1890ff);
+  }
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  :global(.ant-btn) {
+    width: 100%;
+  }
+}
+
+.actionCard {
+  :global(.ant-card-body) {
+    padding-top: 16px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+
+    :global(.ant-btn) {
+      width: auto;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fieldSpan2 {
+    grid-column: auto;
+  }
+}

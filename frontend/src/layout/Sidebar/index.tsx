@@ -7,6 +7,7 @@ import {
   HistoryOutlined,
   PlayCircleOutlined,
   SaveOutlined,
+  ScissorOutlined,
   SearchOutlined,
   SettingOutlined,
   UnorderedListOutlined,
@@ -71,6 +72,18 @@ const menuItems: MenuProps['items'] = [
     ],
   },
   {
+    key: 'scraping',
+    icon: <ScissorOutlined />,
+    label: '刮削',
+    children: [
+      {
+        key: '/scraping/config',
+        icon: <SettingOutlined />,
+        label: '刮削配置',
+      },
+    ],
+  },
+  {
     key: 'content',
     icon: <PlayCircleOutlined />,
     label: '内容管理',
@@ -114,16 +127,19 @@ export function SideMenu({ collapsed }: SideMenuProps) {
           ? '/storage/tasks'
           : pathname.startsWith('/storage/config')
             ? '/storage/config'
-            : pathname.startsWith('/content/movies')
-              ? '/content/movies'
-              : pathname.startsWith('/content/actresses')
-                ? '/content/actresses'
-                : pathname
+            : pathname.startsWith('/scraping/config')
+              ? '/scraping/config'
+              : pathname.startsWith('/content/movies')
+                ? '/content/movies'
+                : pathname.startsWith('/content/actresses')
+                  ? '/content/actresses'
+                  : pathname
   const selectedKeys = useMemo(() => [selectedKey === '/' ? '/' : selectedKey], [selectedKey])
   const openKeys = useMemo(() => {
     const keys: string[] = []
     if (pathname.startsWith('/crawler')) keys.push('crawler')
     if (pathname.startsWith('/storage')) keys.push('storage')
+    if (pathname.startsWith('/scraping')) keys.push('scraping')
     if (pathname.startsWith('/content')) keys.push('content')
     return keys
   }, [pathname])
