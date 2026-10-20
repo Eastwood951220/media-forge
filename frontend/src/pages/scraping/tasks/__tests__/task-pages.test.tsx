@@ -5,6 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaskListPage from '../TaskListPage'
 import TaskDetailPage from '../TaskDetailPage'
 import * as api from '@/api/scraping/scrapingTasks'
+import * as realtime from '@/realtime/eventSourceClient'
+
+const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }))
 
 vi.mock('@/api/scraping/scrapingTasks', () => ({
   listScrapingTasks: vi.fn(),
@@ -19,7 +22,7 @@ vi.mock('@/realtime/eventSourceClient', () => ({
 }))
 
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigateMock,
   useParams: () => ({ id: 'task-1' }),
 }))
 
@@ -72,6 +75,16 @@ describe('scraping task pages', () => {
         error_message: 'boom',
       }],
     })
+    vi.mocked(api.retryScrapingTask).mockResolvedValue({
+      id: 'task-2',
+      status: 'queued',
+      total_count: 1,
+      success_count: 0,
+      failed_count: 0,
+      skipped_count: 0,
+      cancel_requested: false,
+      created_by: 'user-1',
+    })
   })
 
   it('renders the task list with a status tag, title, and refresh button', async () => {
@@ -89,5 +102,30 @@ describe('scraping task pages', () => {
     renderPage(<TaskDetailPage />)
     expect(await screen.findAllByText('ADN-784')).not.toHaveLength(0)
     expect(screen.getByText('boom')).toBeInTheDocument()
+  })
+
+  it('subscribes to task and item updates on the detail page', async () => {
+    renderPage(<TaskDetailPage />)
+    await screen.findAllByText('ADN-784')
+    expect(realtime.subscribeRealtime).toHaveBeenCalledWith(
+      'scraping.task.updated',
+      expect.any(Function),
+    )
+    expect(realtime.subscribeRealtime).toHaveBeenCalledWith(
+      'scraping.item.updated',
+      expect.any(Function),
+    )
+  })
+
+  it('follows the retried task after clicking 重试失败项', async () => {
+    renderPage(<TaskDetailPage />)
+    fireEvent.click(await screen.findByRole('button', { name: '重试失败项' }))
+
+    await waitFor(() => expect(api.retryScrapingTask).toHaveBeenCalledWith('task-1'))
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({
+      to: '/scraping/tasks/$id',
+      params: { id: 'task-2' },
+    }))
+    await waitFor(() => expect(vi.mocked(api.getScrapingTask).mock.calls.length).toBeGreaterThan(1))
   })
 })

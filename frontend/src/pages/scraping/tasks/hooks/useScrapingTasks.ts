@@ -68,13 +68,21 @@ export function useScrapingTaskDetail(id: string) {
   })
 
   useEffect(() => {
+    const refresh = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.scrapingTasks.detail(id) })
+    }
     const unsubscribeTask = subscribeRealtime<ScrapingTaskUpdatedPayload>(
       'scraping.task.updated',
-      (_event: RealtimeEvent<ScrapingTaskUpdatedPayload>) => {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.scrapingTasks.detail(id) })
-      },
+      (_event: RealtimeEvent<ScrapingTaskUpdatedPayload>) => refresh(),
     )
-    return unsubscribeTask
+    const unsubscribeItem = subscribeRealtime(
+      'scraping.item.updated',
+      (_event: RealtimeEvent) => refresh(),
+    )
+    return () => {
+      unsubscribeTask()
+      unsubscribeItem()
+    }
   }, [id, queryClient])
 
   const cancel = useCallback(async () => {
@@ -83,9 +91,10 @@ export function useScrapingTaskDetail(id: string) {
   }, [id, queryClient])
 
   const retry = useCallback(async () => {
-    await retryScrapingTask(id)
+    const created = await retryScrapingTask(id)
     void queryClient.invalidateQueries({ queryKey: queryKeys.scrapingTasks.detail(id) })
     void queryClient.invalidateQueries({ queryKey: queryKeys.scrapingTasks.all() })
+    return created
   }, [id, queryClient])
 
   return { task: query.data, loading: query.isLoading, cancel, retry }
