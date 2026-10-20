@@ -11,14 +11,14 @@ CREATE TABLE scraping_tasks (
     failed_count INTEGER NOT NULL,
     skipped_count INTEGER NOT NULL,
     cancel_requested BOOLEAN NOT NULL,
-    config_snapshot JSONB NOT NULL,
+    config_snapshot JSON NOT NULL,
     created_by UUID NOT NULL,
     queued_at TIMESTAMP WITHOUT TIME ZONE,
     started_at TIMESTAMP WITHOUT TIME ZONE,
     finished_at TIMESTAMP WITHOUT TIME ZONE,
     error_message TEXT,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP WITHOUT TIME ZONE,
     PRIMARY KEY (id),
     FOREIGN KEY (created_by) REFERENCES users (id)
 );
@@ -39,8 +39,8 @@ CREATE TABLE scraping_task_items (
     folder TEXT NOT NULL,
     duration_ms INTEGER NOT NULL,
     error_message TEXT,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP WITHOUT TIME ZONE,
     PRIMARY KEY (id),
     FOREIGN KEY (task_id) REFERENCES scraping_tasks (id) ON DELETE CASCADE,
     FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE

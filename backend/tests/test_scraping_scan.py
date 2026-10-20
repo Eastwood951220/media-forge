@@ -161,3 +161,71 @@ def test_refresh_movie_status_clears_when_not_stored(tmp_path: Path, db_session)
     db_session.refresh(movie)
     assert status == "not_stored"
     assert movie.scraping_status is None
+
+
+def test_refresh_movie_status_keeps_row_when_scrape_root_is_gone(tmp_path: Path, db_session, monkeypatch) -> None:
+    missing_root = tmp_path / "gone"
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.scan._current_scan_config",
+        lambda: {"scrape_root": str(missing_root), "media_root": "/media"},
+    )
+    movie = _make_movie(db_session, "ADN-784", stored=True, target_folder="/media/ADN-784")
+    movie.scraping_status = "scraped"
+    movie.scraping_folder = "/media/ADN-784"
+    movie.scraping_checked_at = datetime(2026, 10, 1, 12, 0, 0)
+    db_session.commit()
+    movie_id = movie.id
+
+    status = refresh_movie_status(db_session, movie)
+
+    db_session.expire_all()
+    stored = db_session.get(Movie, movie_id)
+    assert status == "not_scraped"
+    assert stored.scraping_status == "scraped"
+    assert stored.scraping_folder == "/media/ADN-784"
+    assert stored.scraping_checked_at == datetime(2026, 10, 1, 12, 0, 0)
+
+
+def test_explicit_local_folder_bypasses_the_missing_root_guard(tmp_path: Path, db_session, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.scan._current_scan_config",
+        lambda: {"scrape_root": str(tmp_path / "gone"), "media_root": "/media"},
+    )
+    movie = _make_movie(db_session, "ADN-784", stored=True, target_folder="/media/ADN-784")
+    movie.scraping_status = "scraped"
+    movie.scraping_folder = "/media/ADN-784"
+    db_session.commit()
+    _make_folder(tmp_path, "ADN-784")
+
+    status = refresh_movie_status(
+        db_session,
+        movie,
+        local_folder=tmp_path / "ADN-784",
+        cloud_folder="/media/ADN-784",
+    )
+
+    db_session.refresh(movie)
+    assert status == "scraped"
+    assert movie.scraping_status == "scraped"
+
+
+def test_scan_directory_is_a_noop_while_another_scan_runs(tmp_path: Path, db_session) -> None:
+    from backend.app.modules.scraping import scan as scan_module
+
+    movie = _make_movie(db_session, "ADN-784", stored=True, target_folder="/media/ADN-784")
+    _make_folder(tmp_path, "ADN-784")
+
+    with scan_module._scan_lock:
+        blocked = scan_directory(db_session, _config(tmp_path))
+
+    assert blocked.updated_movies == 0
+    assert blocked.folders_scanned == 0
+    db_session.refresh(movie)
+    assert movie.scraping_status is None
+
+    summary = scan_directory(db_session, _config(tmp_path))
+
+    db_session.refresh(movie)
+    assert summary.updated_movies >= 1
+    assert movie.scraping_status == "scraped"
+    assert movie.scraping_folder == "/media/ADN-784"

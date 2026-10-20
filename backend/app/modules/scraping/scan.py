@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
 from backend.app.modules.scraping.paths import (
@@ -26,6 +26,10 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 SCRAPED = "scraped"
 NOT_SCRAPED = "not_scraped"
 UNMATCHED_LIMIT = 50
+
+# Single-flight guard: a manual scan and the post-STRM background scan must not
+# walk the same tree or write movie status rows at the same time.
+_scan_lock = threading.Lock()
 
 
 @dataclass
@@ -92,11 +96,6 @@ def iter_movie_folders(scrape_root: Path) -> Iterator[tuple[Path, bool, bool, in
             yield path, has_strm, has_nfo, image_count
 
 
-def _stored_movies(db: Session) -> list[Movie]:
-    movies = db.query(Movie).all()
-    return [movie for movie in movies if normalized_movie_storage_status(movie) == "stored"]
-
-
 def movie_target_folders(movie: Movie) -> list[str]:
     summary = dict(movie.storage_summary or {})
     result: list[str] = []
@@ -132,6 +131,16 @@ def _select_folder(candidates: list[str]) -> str | None:
 
 
 def scan_directory(db: Session, config: dict[str, Any]) -> ScanSummary:
+    if not _scan_lock.acquire(blocking=False):
+        logger.info("Skipping scraping scan: another scan is already running")
+        return ScanSummary()
+    try:
+        return _scan_directory(db, config)
+    finally:
+        _scan_lock.release()
+
+
+def _scan_directory(db: Session, config: dict[str, Any]) -> ScanSummary:
     started = datetime.now(timezone.utc)
     scrape_root = str(config.get("scrape_root") or "").strip()
     media_root = str(config.get("media_root") or "/media")
@@ -154,7 +163,13 @@ def scan_directory(db: Session, config: dict[str, Any]) -> ScanSummary:
         else:
             summary.not_scraped_folders += 1
 
-    stored = sorted(_stored_movies(db), key=lambda movie: str(movie.id))
+    # Load the movie rows once (magnets are irrelevant to status) and reuse the
+    # list for both the stored matching pass and the not-stored cleanup sweep.
+    movies = db.query(Movie).options(noload(Movie.magnets)).all()
+    stored = sorted(
+        [movie for movie in movies if normalized_movie_storage_status(movie) == "stored"],
+        key=lambda movie: str(movie.id),
+    )
     stored_by_code: dict[str, Movie] = {}
     for movie in stored:
         code = normalize_code(movie.code or "")
@@ -230,7 +245,7 @@ def scan_directory(db: Session, config: dict[str, Any]) -> ScanSummary:
             movie.scraping_checked_at = checked_at
             updated += 1
 
-    for movie in db.query(Movie).all():
+    for movie in movies:
         if normalized_movie_storage_status(movie) != "not_stored":
             continue
         if movie.scraping_status is not None or movie.scraping_folder is not None or movie.scraping_checked_at is not None:
@@ -272,6 +287,12 @@ def refresh_movie_status(
     config = _current_scan_config()
     scrape_root = str(config.get("scrape_root") or "")
     media_root = str(config.get("media_root") or "/media")
+
+    # A derived path is only meaningful while the configured root still exists.
+    # Explicit callers (the item runner) already resolved an existing folder, so
+    # they bypass this guard.
+    if local_folder is None and not Path(scrape_root).is_dir():
+        return "not_scraped"
 
     folder = local_folder
     cloud = cloud_folder or ""

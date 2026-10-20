@@ -76,6 +76,10 @@ def render_movie_nfo(
     for tag in _dedupe([maker, str(movie.series or ""), *list(movie.tags or [])]):
         ET.SubElement(root, "tag").text = tag
 
+    for actor in _dedupe(list(movie.actors or [])):
+        actor_node = ET.SubElement(root, "actor")
+        ET.SubElement(actor_node, "name").text = actor
+
     if source_site:
         ET.SubElement(root, "metatubeid").text = f"{source_site}:{movie.code}"
 

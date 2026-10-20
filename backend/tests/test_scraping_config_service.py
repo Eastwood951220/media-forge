@@ -141,3 +141,20 @@ def test_scrape_root_must_be_an_existing_directory(tmp_path: Path) -> None:
     service = _service(tmp_path)
     with pytest.raises(ValueError, match="刮削目录"):
         service.update_config(ScrapingConfigUpdate(scrape_root=str(tmp_path / "missing")))
+
+
+def test_scrape_root_rejects_filesystem_root_and_relative_paths(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+
+    with pytest.raises(ValueError, match="刮削目录"):
+        service.update_config(ScrapingConfigUpdate(scrape_root="/"))
+
+    with pytest.raises(ValueError, match="刮削目录"):
+        service.update_config(ScrapingConfigUpdate(scrape_root="relative/dir"))
+
+
+def test_validate_scrape_root_rejects_filesystem_root_and_relative_paths() -> None:
+    from backend.app.modules.scraping.config import validate_scrape_root
+
+    assert validate_scrape_root({"scrape_root": "/"}) is not None
+    assert validate_scrape_root({"scrape_root": "relative/dir"}) is not None

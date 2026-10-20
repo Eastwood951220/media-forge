@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from typing import Callable, Protocol
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
 from scraper.config.sites import JAVBUS_SITE, JAVDB_SITE
@@ -53,6 +53,25 @@ def source_referer(site_key: str) -> str | None:
     if site_key == "JavBus":
         return JAVBUS_SITE["base_url"].rstrip("/") + "/"
     return None
+
+
+_REFERER_BY_HOST = {
+    "javdb.com": JAVDB_SITE["base_url"].rstrip("/") + "/",
+    "www.javdb.com": JAVDB_SITE["base_url"].rstrip("/") + "/",
+    "javbus.com": JAVBUS_SITE["base_url"].rstrip("/") + "/",
+    "www.javbus.com": JAVBUS_SITE["base_url"].rstrip("/") + "/",
+}
+
+
+def referer_for_url(url: str | None) -> str | None:
+    """Return the referer required to fetch artwork for a known source URL."""
+    try:
+        host = urlsplit(str(url or "").strip()).hostname
+    except ValueError:
+        return None
+    if not host:
+        return None
+    return _REFERER_BY_HOST.get(host.lower())
 
 
 def _preview_artwork(previews: list[str]) -> tuple[str | None, str | None]:

@@ -86,6 +86,8 @@ def _normalize_scrape_root(value: str | None) -> str:
     path = Path(text)
     if not path.is_absolute():
         raise ValueError("刮削目录必须是绝对路径")
+    if path.parent == path:
+        raise ValueError("刮削目录不能是文件系统根目录")
     if not path.is_dir():
         raise ValueError("刮削目录不存在或不是文件夹")
     return str(path)
@@ -214,6 +216,11 @@ def validate_scrape_root(config: Mapping[str, Any]) -> str | None:
     scrape_root = str(config.get("scrape_root") or "").strip()
     if not scrape_root:
         return "未配置刮削目录"
-    if not Path(scrape_root).is_dir():
+    path = Path(scrape_root)
+    if not path.is_absolute():
+        return "刮削目录必须是绝对路径"
+    if path.parent == path:
+        return "刮削目录不能是文件系统根目录"
+    if not path.is_dir():
         return "刮削目录不存在或不是文件夹"
     return None

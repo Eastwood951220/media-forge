@@ -151,3 +151,15 @@ def test_source_referer_maps_registry_sites() -> None:
     assert sources.source_referer("JavDB") == "https://javdb.com/"
     assert sources.source_referer("JavBus") == "https://www.javbus.com/"
     assert sources.source_referer("unknown") is None
+
+
+def test_referer_for_url_maps_known_source_hosts() -> None:
+    assert sources.referer_for_url("https://javdb.com/v/abc123") == "https://javdb.com/"
+    assert sources.referer_for_url("https://www.javdb.com/v/abc123") == "https://javdb.com/"
+    assert sources.referer_for_url("https://javbus.com/ADN-784") == "https://www.javbus.com/"
+    assert sources.referer_for_url("https://www.javbus.com/ADN-784") == "https://www.javbus.com/"
+    assert sources.referer_for_url("https://javdb.com:443/v/abc123") == "https://javdb.com/"
+    assert sources.referer_for_url(None) is None
+    assert sources.referer_for_url("") is None
+    assert sources.referer_for_url("https://example.com/v/abc123") is None
+    assert sources.referer_for_url("not a url") is None

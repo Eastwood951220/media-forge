@@ -71,3 +71,19 @@ def test_cancel_and_retry_endpoints(client, admin_user, db_session, tmp_path, mo
 
     assert retried.status_code == HTTPStatus.OK
     assert retried.json()["data"]["id"] != task["id"]
+
+
+def test_sql_script_matches_alembic_migration_types() -> None:
+    from pathlib import Path
+
+    sql_path = Path(__file__).resolve().parents[2] / "sql" / "20261020_add_scraping_status_and_tasks.sql"
+    sql = sql_path.read_text(encoding="utf-8")
+
+    assert "config_snapshot JSON NOT NULL" in sql
+    assert "JSONB" not in sql
+    assert "TIMESTAMP WITH TIME ZONE" not in sql
+    for table in ("scraping_tasks", "scraping_task_items"):
+        block = sql.split(f"CREATE TABLE {table} (")[1].split(");")[0]
+        assert "created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now()" in block
+        assert "updated_at TIMESTAMP WITHOUT TIME ZONE" in block
+        assert "updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL" not in block
