@@ -1504,7 +1504,10 @@ def download_image(
         temp.replace(target)
     except OSError:
         logger.warning("Artwork write failed: path=%s", target, exc_info=True)
-        temp.unlink(missing_ok=True)
+        try:
+            temp.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Artwork temp cleanup failed: path=%s", temp, exc_info=True)
         return False
     return True
 
