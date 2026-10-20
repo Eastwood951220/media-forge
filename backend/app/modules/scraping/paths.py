@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path, PurePosixPath
 
-CODE_PATTERN = re.compile(r"([A-Za-z]{2,6})[-_ ]?(\d{2,6})(?:[-_ ]([A-Za-z]{1,4}))?")
+CODE_PATTERN = re.compile(r"^([A-Za-z]{2,6})[-_]?(\d{2,6})(?:[-_]([A-Za-z0-9]{1,4}))?")
 
 
 def normalize_code(value: str) -> str:
@@ -31,6 +31,8 @@ def _normalized_root(value: str) -> PurePosixPath | None:
 
 
 def cloud_to_local(scrape_root: str, media_root: str, cloud_folder: str) -> Path | None:
+    if not str(scrape_root or "").strip():
+        return None
     root = _normalized_root(media_root)
     folder = _normalized_root(cloud_folder)
     if root is None or folder is None:
@@ -45,18 +47,20 @@ def cloud_to_local(scrape_root: str, media_root: str, cloud_folder: str) -> Path
     local = base / relative
     try:
         local.resolve().relative_to(base.resolve())
-    except ValueError:
+    except (OSError, RuntimeError, ValueError):
         return None
     return local
 
 
 def local_to_cloud(scrape_root: str, media_root: str, local_folder: str | Path) -> str | None:
+    if not str(scrape_root or "").strip():
+        return None
     root = _normalized_root(media_root)
     if root is None:
         return None
     base = Path(scrape_root)
     try:
         relative = Path(local_folder).resolve().relative_to(base.resolve())
-    except ValueError:
+    except (OSError, RuntimeError, ValueError):
         return None
     return str(PurePosixPath(str(root)) / relative.as_posix())
