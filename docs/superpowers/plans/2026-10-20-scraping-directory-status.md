@@ -2755,7 +2755,7 @@ def run_item(
     written = write_artwork(
         folder,
         cover_url=movie.cover,
-        backdrop_url=metadata.backdrop_url if metadata is not None else movie.cover,
+        backdrop_url=metadata.backdrop_url if metadata is not None else None,
         landscape_url=metadata.landscape_url if metadata is not None else None,
         transport=transport,
     )
@@ -4547,5 +4547,5 @@ git commit -m "docs(scraping): document scraping task routes"
 ## Self-Review Notes
 
 - Spec coverage: data model (Task 1), movie payload (Task 2), configuration and metadata sources (Tasks 3, 6), path mapping (Task 4), nfo/artwork (Tasks 5, 7), scanning and status judgment (Task 8), scan API and STRM refresh (Task 9), tasks with cancel/retry and progress (Tasks 10–12), frontend API/events (Task 13), config page (Task 14), movie list status/actions (Task 15), task pages/routing/sidebar (Task 16), uncached list pages and headers for crawler runs, storage tasks, and scraping tasks (Task 17), verification/docs (Task 18).
-- Known deliberate simplifications: the scan API is synchronous (spec); `SourceMetadata.backdrop_url`/`landscape_url` are only populated by the javbus adapter; when no crawl is needed the nfo omits `metatubeid`; button hiding remains out of scope.
+- Known deliberate simplifications: the scan API is synchronous (spec); `SourceMetadata.backdrop_url`/`landscape_url` are currently not populated by either adapter, so DB-complete movies write only `folder.jpg`; when no crawl is needed the nfo omits `metatubeid`; button hiding remains out of scope.
 - Type consistency: `task_to_dict`/`item_to_dict` field names match the frontend `ScrapingTask`/`ScrapingTaskItem` types; `scan_directory` returns `ScanSummary` with `to_dict()` used by the API and matched by `ScrapingScanSummary`.
