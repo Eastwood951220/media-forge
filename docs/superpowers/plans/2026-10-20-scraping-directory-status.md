@@ -4639,6 +4639,77 @@ export const ROUTE_CACHE_EXCLUDE_PATHS = [
 ]
 ```
 
+- [ ] **Step 3b: Keep the keep-alive container mounted on excluded paths**
+
+`RouteKeepAliveOutlet` currently early-returns `<Outlet />` when
+`isRouteCacheExcluded(pathname)` is true, which unmounts `KeepAlive` entirely and
+discards every other page's cached state whenever a user detours through a list
+page. The library's `exclude` prop already prevents caching and destroys the
+entry when it deactivates, so remove the early return:
+
+```tsx
+  if (!aliveRef) {
+    return <Outlet />
+  }
+```
+
+and drop the now-unused `isRouteCacheExcluded` import from the
+`./routeCacheControl` import list.
+
+Add this regression test to `frontend/tests/route-keepalive.ui.test.tsx`:
+
+```tsx
+  it('keeps other cached pages when visiting an excluded list page', async () => {
+    const user = userEvent.setup()
+
+    function CachedInputPage() {
+      const [value, setValue] = useState('')
+      return (
+        <input
+          aria-label="cached input"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+        />
+      )
+    }
+
+    const rootRoute = createRootRoute({
+      component: () => (
+        <RouteKeepAliveProvider>
+          <nav>
+            <RouterLink to="/crawler/tasks">tasks</RouterLink>
+            <RouterLink to="/storage/tasks">storage tasks</RouterLink>
+          </nav>
+          <RouteKeepAliveOutlet />
+        </RouteKeepAliveProvider>
+      ),
+    })
+    const tasksRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/crawler/tasks',
+      component: CachedInputPage,
+    })
+    const storageRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/storage/tasks',
+      component: () => <div>storage tasks page</div>,
+    })
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([tasksRoute, storageRoute]),
+      history: createMemoryHistory({ initialEntries: ['/crawler/tasks'] }),
+    })
+
+    render(<RouterProvider router={router} />)
+
+    await user.type(await screen.findByLabelText('cached input'), 'stored')
+    await user.click(screen.getByText('storage tasks'))
+    expect(await screen.findByText('storage tasks page')).toBeInTheDocument()
+    await user.click(screen.getByText('tasks'))
+
+    expect(await screen.findByLabelText('cached input')).toHaveValue('stored')
+  })
+```
+
 - [ ] **Step 4: Run the route test to verify it passes**
 
 Run: `cd frontend && pnpm test -- src/layout/__tests__/routeCacheControl.test.ts`
