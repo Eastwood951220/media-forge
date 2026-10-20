@@ -521,13 +521,20 @@ def _parse_metadata_sources(raw: object) -> list[str]:
         return list(DEFAULT_METADATA_SOURCES)
     sources = [str(item) for item in parsed if str(item) in SOURCE_REGISTRY]
     return sources or list(DEFAULT_METADATA_SOURCES)
+
+
+def _safe_media_root(raw: object) -> str:
+    text = str(raw or "").strip().rstrip("/")
+    if not text.startswith("/") or text == "/":
+        return DEFAULT_MEDIA_ROOT
+    return text
 ```
 
 In `get_raw_config()`, add after the `trigger_delay_seconds` line:
 
 ```python
         values["scrape_root"] = str(parsed.get("scrape_root") or "").strip()
-        values["media_root"] = str(parsed.get("media_root") or DEFAULT_MEDIA_ROOT).strip() or DEFAULT_MEDIA_ROOT
+        values["media_root"] = _safe_media_root(parsed.get("media_root"))
         values["metadata_sources"] = _parse_metadata_sources(parsed.get("metadata_sources"))
 ```
 
@@ -1066,14 +1073,14 @@ def test_javdb_adapter_parses_search_and_detail(monkeypatch) -> None:
 
     monkeypatch.setattr(
         sources,
-        "parse_search_page",
+        "parse_javdb_search",
         lambda page, page_no: [
             {"url": "https://javdb.com/v/detail", "code": "ADN-784", "status": "pending", "name": "ADN-784"}
         ],
     )
     monkeypatch.setattr(
         sources,
-        "parse_detail_page",
+        "parse_javdb_detail",
         lambda page: {
             "code": "ADN-784",
             "source_name": "ADN-784 タイトル",
@@ -1489,8 +1496,8 @@ def test_judge_folder_requires_strm_nfo_and_image(tmp_path: Path) -> None:
     no_image = _make_folder(tmp_path, "CCC-002", images=0)
 
     assert judge_folder(good) == (True, True, 1)
-    assert judge_folder(no_nfo)[0] is False
-    assert judge_folder(no_image)[0] is False
+    assert judge_folder(no_nfo) == (True, False, 1)
+    assert judge_folder(no_image) == (True, True, 0)
 
 
 def test_scan_directory_updates_stored_movies(tmp_path: Path, db_session, monkeypatch) -> None:
@@ -1533,7 +1540,7 @@ def test_refresh_movie_status_clears_when_not_stored(tmp_path: Path, db_session)
     status = refresh_movie_status(db_session, movie)
 
     db_session.refresh(movie)
-    assert status == STORAGE_STATUS_NOT_STORED or status == "not_stored"
+    assert status == "not_stored"
     assert movie.scraping_status is None
 ```
 
@@ -1640,7 +1647,7 @@ def _stored_movies(db: Session) -> list[Movie]:
     return [movie for movie in movies if normalized_movie_storage_status(movie) == "stored"]
 
 
-def _locations(movie: Movie) -> list[str]:
+def movie_target_folders(movie: Movie) -> list[str]:
     summary = dict(movie.storage_summary or {})
     result: list[str] = []
     for location in summary.get("locations") or []:
@@ -1700,7 +1707,7 @@ def scan_directory(db: Session, config: dict[str, Any]) -> ScanSummary:
 
     # Exact pass: storage target folders that map under the media root.
     for movie in stored:
-        for target in _locations(movie):
+        for target in movie_target_folders(movie):
             local = cloud_to_local(scrape_root, media_root, target)
             if local is None:
                 continue
@@ -1741,7 +1748,7 @@ def scan_directory(db: Session, config: dict[str, Any]) -> ScanSummary:
     for movie in stored:
         if str(movie.id) in assigned_movie_ids:
             continue
-        mapped = any(cloud_to_local(scrape_root, media_root, target) is not None for target in _locations(movie))
+        mapped = any(cloud_to_local(scrape_root, media_root, target) is not None for target in movie_target_folders(movie))
         if mapped:
             movie.scraping_status = NOT_SCRAPED
             movie.scraping_folder = None
@@ -1792,7 +1799,7 @@ def refresh_movie_status(
     folder = local_folder
     cloud = cloud_folder or ""
     if folder is None:
-        for target in _locations(movie):
+        for target in movie_target_folders(movie):
             candidate = cloud_to_local(scrape_root, media_root, target)
             if candidate is not None and candidate.is_dir():
                 folder = candidate
@@ -1958,6 +1965,14 @@ def test_successful_strm_generation_schedules_scan(monkeypatch) -> None:
     monkeypatch.setattr(
         "backend.app.modules.scraping.trigger.schedule_scan_after_strm",
         lambda config: scheduled.append(config),
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.trigger.ScrapingConfigService",
+        lambda: type("S", (), {"get_raw_config": staticmethod(lambda: {"metadata_sources": ["javdb"]})})(),
+    )
+    monkeypatch.setattr(
+        "backend.app.modules.scraping.trigger.validate_run_config",
+        lambda config: None,
     )
 
     trigger._run_after_delay(
@@ -2402,7 +2417,6 @@ git commit -m "feat(scraping): add scraping task service and repository"
 from datetime import datetime, timezone
 
 from backend.app.models.scraping_task import ScrapingTask, ScrapingTaskItem
-from backend.app.modules.scraping.tasks import worker
 from shared.database.models.content import Movie
 
 
@@ -2574,32 +2588,25 @@ def publish_movie_scraping_updated(owner_id: str, movie_id: str, status: str | N
 # backend/app/modules/scraping/tasks/item_runner.py
 from __future__ import annotations
 
-import logging
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from backend.app.models.scraping_task import ScrapingTaskItem
-from backend.app.modules.scraping.config import ScrapingConfigService
+from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
 from backend.app.modules.scraping.images import write_artwork
 from backend.app.modules.scraping.nfo import write_movie_nfo
-from backend.app.modules.scraping.paths import cloud_to_local, local_to_cloud
-from backend.app.modules.scraping.scan import refresh_movie_status
-from backend.app.modules.scraping.sources import SOURCE_REGISTRY, fetch_by_priority
+from backend.app.modules.scraping.paths import cloud_to_local
+from backend.app.modules.scraping.scan import movie_target_folders, refresh_movie_status
+from backend.app.modules.scraping.sources import fetch_by_priority
 from shared.database.models.content import Movie
-from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
-
-logger = logging.getLogger(__name__)
 
 
-def _resolve_folder(db: Session, movie: Movie, config: dict) -> tuple[Path | None, str]:
-    from backend.app.modules.scraping.scan import _locations  # local helper
-
+def _resolve_folder(movie: Movie, config: dict) -> tuple[Path | None, str]:
     scrape_root = str(config.get("scrape_root") or "")
     media_root = str(config.get("media_root") or "/media")
-    for target in _locations(movie):
+    for target in movie_target_folders(movie):
         local = cloud_to_local(scrape_root, media_root, target)
         if local is not None and local.is_dir():
             return local, target
@@ -2624,18 +2631,17 @@ def run_item(
         item.error_message = "未存储"
         return
 
-    folder, cloud_folder = _resolve_folder(db, movie, config)
+    folder, cloud_folder = _resolve_folder(movie, config)
     if folder is None:
         item.status = "skipped"
         item.error_message = "目标文件夹不存在"
         return
 
-    source_site = None
+    metadata = None
     missing = not (movie.cover and movie.actors and movie.release_date and movie.maker and movie.series)
     if missing:
         metadata = fetch_by_priority(movie.code or "", list(config.get("metadata_sources") or []))
         if metadata is not None:
-            source_site = metadata.site_key
             item.source = metadata.site_key.lower()
             if not movie.cover and metadata.cover_url:
                 movie.cover = metadata.cover_url
@@ -2645,13 +2651,17 @@ def run_item(
         item.error_message = "缺少封面，无法生成图片"
         return
 
-    write_movie_nfo(folder, movie, cloud_folder=cloud_folder, source_site=source_site)
+    write_movie_nfo(
+        folder,
+        movie,
+        cloud_folder=cloud_folder,
+        source_site=metadata.site_key if metadata is not None else None,
+    )
     written = write_artwork(
         folder,
         cover_url=movie.cover,
-        backdrop_url=movie.cover if not source_site else None,
-        landscape_url=None,
-        referer=None,
+        backdrop_url=metadata.backdrop_url if metadata is not None else movie.cover,
+        landscape_url=metadata.landscape_url if metadata is not None else None,
         transport=transport,
     )
     if written == 0:
@@ -2727,7 +2737,7 @@ def _worker_loop() -> None:
             if task is None:
                 break
             try:
-                run_task(task)
+                run_task(task.id)
             except Exception:
                 logger.exception("Scraping task failed: %s", task)
     finally:
@@ -2861,7 +2871,6 @@ git commit -m "feat(scraping): run scraping tasks in a background worker"
 # backend/tests/test_scraping_tasks_api.py
 from http import HTTPStatus
 
-from backend.app.modules.scraping.tasks import worker
 from shared.database.models.content import Movie
 
 
@@ -2881,7 +2890,7 @@ def _movie(db, code="ADN-784") -> Movie:
 
 def test_create_and_list_scraping_tasks(client, admin_user, db_session, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr(worker, "ensure_scraping_worker_started", lambda: None)
+    monkeypatch.setattr("backend.app.modules.scraping.router.ensure_scraping_worker_started", lambda: None)
     headers = _auth_headers(client)
     movie = _movie(db_session)
 
@@ -2905,7 +2914,7 @@ def test_create_and_list_scraping_tasks(client, admin_user, db_session, tmp_path
 
 def test_create_rejects_empty_and_unknown_movies(client, admin_user, db_session, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr(worker, "ensure_scraping_worker_started", lambda: None)
+    monkeypatch.setattr("backend.app.modules.scraping.router.ensure_scraping_worker_started", lambda: None)
     headers = _auth_headers(client)
 
     empty = client.post("/api/scraping/tasks", headers=headers, json={"movie_ids": []})
@@ -2919,7 +2928,7 @@ def test_create_rejects_empty_and_unknown_movies(client, admin_user, db_session,
 
 def test_cancel_and_retry_endpoints(client, admin_user, db_session, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr(worker, "ensure_scraping_worker_started", lambda: None)
+    monkeypatch.setattr("backend.app.modules.scraping.router.ensure_scraping_worker_started", lambda: None)
     headers = _auth_headers(client)
     movie = _movie(db_session)
     task = client.post("/api/scraping/tasks", headers=headers, json={"movie_ids": [str(movie.id)]}).json()["data"]
@@ -3354,15 +3363,12 @@ export interface SourcePriorityListProps {
 const ALL_SOURCES = ['javdb', 'javbus']
 
 export default function SourcePriorityList({ sources, labels, onChange }: SourcePriorityListProps) {
-  const ordered = [...sources, ...ALL_SOURCES.filter((source) => !sources.includes(source))]
-
-  const move = (source: string, offset: number) => {
-    const index = ordered.indexOf(source)
+  const move = (index: number, offset: number) => {
     const next = index + offset
-    if (index < 0 || next < 0 || next >= ordered.length) return
-    const updated = [...ordered]
+    if (next < 0 || next >= sources.length) return
+    const updated = [...sources]
     ;[updated[index], updated[next]] = [updated[next], updated[index]]
-    onChange(updated.filter((item) => item === source || sources.includes(item)))
+    onChange(updated)
   }
 
   const toggle = (source: string, enabled: boolean) => {
@@ -3376,38 +3382,42 @@ export default function SourcePriorityList({ sources, labels, onChange }: Source
 
   return (
     <Space direction="vertical" style={{ width: '100%' }}>
-      {ordered.map((source, index) => {
-        const enabled = sources.includes(source)
-        return (
-          <div key={source} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Tag color={enabled ? 'blue' : 'default'}>{index + 1}</Tag>
-            <Typography.Text style={{ flex: 1 }}>{labels[source] ?? source}</Typography.Text>
-            {enabled && (
-              <Button
-                size="small"
-                icon={<ArrowUpOutlined />}
-                aria-label={`上移 ${labels[source] ?? source}`}
-                disabled={index === 0}
-                onClick={() => move(source, -1)}
-              />
-            )}
-            {enabled && (
-              <Button
-                size="small"
-                icon={<ArrowDownOutlined />}
-                aria-label={`下移 ${labels[source] ?? source}`}
-                disabled={index === sources.length - 1}
-                onClick={() => move(source, 1)}
-              />
-            )}
-            <Switch
-              checked={enabled}
-              aria-label={`启用 ${labels[source] ?? source}`}
-              onChange={(value) => toggle(source, value)}
-            />
-          </div>
-        )
-      })}
+      {sources.map((source, index) => (
+        <div key={source} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Tag color="blue">{index + 1}</Tag>
+          <Typography.Text style={{ flex: 1 }}>{labels[source] ?? source}</Typography.Text>
+          <Button
+            size="small"
+            icon={<ArrowUpOutlined />}
+            aria-label={`上移 ${labels[source] ?? source}`}
+            disabled={index === 0}
+            onClick={() => move(index, -1)}
+          />
+          <Button
+            size="small"
+            icon={<ArrowDownOutlined />}
+            aria-label={`下移 ${labels[source] ?? source}`}
+            disabled={index === sources.length - 1}
+            onClick={() => move(index, 1)}
+          />
+          <Switch
+            checked
+            aria-label={`启用 ${labels[source] ?? source}`}
+            onChange={(value) => toggle(source, value)}
+          />
+        </div>
+      ))}
+      {ALL_SOURCES.filter((source) => !sources.includes(source)).map((source) => (
+        <div key={source} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Tag color="default">-</Tag>
+          <Typography.Text type="secondary" style={{ flex: 1 }}>{labels[source] ?? source}</Typography.Text>
+          <Switch
+            checked={false}
+            aria-label={`启用 ${labels[source] ?? source}`}
+            onChange={(value) => toggle(source, value)}
+          />
+        </div>
+      ))}
     </Space>
   )
 }
@@ -3785,6 +3795,10 @@ vi.mock('@/api/scraping/scrapingTasks', () => ({
   createScrapingTask: vi.fn(),
   cancelScrapingTask: vi.fn(),
   retryScrapingTask: vi.fn(),
+}))
+
+vi.mock('@/realtime/eventSourceClient', () => ({
+  subscribeRealtime: vi.fn(() => vi.fn()),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -4353,7 +4367,7 @@ with:
     >
 ```
 
-and add `Button` to the existing `antd` import:
+and add `Button` to the existing `antd` import if it is not already there:
 
 ```tsx
 import {Button, Card, message, Progress, Table, Tag} from 'antd'
