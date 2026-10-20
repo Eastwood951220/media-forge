@@ -6,7 +6,6 @@ import {
   ROUTE_CACHE_EXCLUDE_PATHS,
   RouteCacheControlContext,
   RouteCacheRefContext,
-  isRouteCacheExcluded,
   type RouteCacheControl,
 } from './routeCacheControl'
 
@@ -51,7 +50,7 @@ export function RouteKeepAliveOutlet() {
   const searchStr = useRouterState({ select: (state) => state.location.searchStr ?? '' })
   const activeCacheKey = getRouteViewKey(pathname, searchStr)
 
-  if (isRouteCacheExcluded(pathname) || !aliveRef) {
+  if (!aliveRef) {
     return <Outlet />
   }
 
