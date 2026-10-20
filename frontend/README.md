@@ -72,11 +72,14 @@ status before rendering unauthenticated routes.
 
 Authenticated pages render inside `src/layout/`:
 
-- `Sidebar/` defines the main navigation groups: 仪表盘, 爬虫, 存储, 内容管理.
+- `Sidebar/` defines the main navigation groups: 仪表盘, 爬虫, 存储, 刮削, 内容管理.
 - `Header/` shows the current route title, theme toggle, user identity, and logout.
 - `TagsView/` tracks visited route tabs and tab actions.
-- `routeCache.tsx` wraps routed pages with `keepalive-for-react`; `/login` and
-  `/init` are excluded from route caching.
+- `routeCache.tsx` wraps routed pages with `keepalive-for-react`. `/login`,
+  `/init`, and the task list pages `/crawler/runs`, `/storage/tasks`, and
+  `/scraping/tasks` are excluded (`ROUTE_CACHE_EXCLUDE_PATHS` in
+  `routeCacheControl.ts`) so those lists refresh on entry; detail routes stay
+  cached.
 
 ## Routes And Pages
 
@@ -136,7 +139,8 @@ Current API groups:
 - `storage/storageConfig/`: storage config and connection test.
 - `storage/storageIndex/`: storage index status and refresh.
 - `storage/storageTasks/`: storage push creation and task/subtask detail APIs.
-- `scraping/scrapingConfig/`: scraping service config and manual STRM generation.
+- `scraping/scrapingConfig/`: scraping service config, directory scan, and metadata source priority.
+- `scraping/scrapingTasks/`: scraping task list/detail, create, cancel, and retry actions.
 
 The shared request layer is `src/request/`. It adds token injection, GET
 parameter normalization, repeat-submit checks, cancellation, optional GET cache,
