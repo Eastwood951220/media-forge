@@ -36,6 +36,7 @@ from backend.app.modules.dashboard.router import router as dashboard_router
 from backend.app.modules.health.router import router as health_router
 from backend.app.modules.init.router import router as init_router
 from backend.app.modules.scraping.router import router as scraping_router
+from backend.app.modules.scraping.tasks.worker import cleanup_interrupted_scraping_tasks
 from backend.app.modules.storage.config.router import router as storage_config_router
 from backend.app.modules.storage.index.router import router as storage_index_router
 from backend.app.modules.storage.tasks.router import router as storage_tasks_router
@@ -104,6 +105,11 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             storage_stopped = cleanup_interrupted_storage_tasks(session, StorageRuntimeState(get_redis()))
             if storage_stopped:
                 logger.info("Stopped %d interrupted storage tasks.", storage_stopped)
+
+            # Cleanup interrupted scraping tasks on startup
+            scraping_stopped = cleanup_interrupted_scraping_tasks(session)
+            if scraping_stopped:
+                logger.info("Failed %d interrupted scraping tasks.", scraping_stopped)
 
             # Finalize schedule runs stranded in "running" by the restart
             # cleanup above (their linked crawler runs are all terminal now).
