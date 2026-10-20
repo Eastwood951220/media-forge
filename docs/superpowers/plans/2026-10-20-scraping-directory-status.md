@@ -1418,6 +1418,16 @@ def test_download_image_handles_http_errors(tmp_path: Path) -> None:
     assert not dest.exists()
 
 
+def test_download_image_rejects_oversized_content(tmp_path: Path, monkeypatch) -> None:
+    from backend.app.modules.scraping import images
+
+    monkeypatch.setattr(images, "MAX_IMAGE_BYTES", 4)
+    dest = tmp_path / "folder.jpg"
+    ok = download_image("https://example.com/a.jpg", dest, transport=_transport(b"12345", "image/jpeg"))
+    assert ok is False
+    assert not dest.exists()
+
+
 def test_write_artwork_writes_available_images(tmp_path: Path) -> None:
     transport = _transport(b"img", "image/jpeg")
     count = write_artwork(
@@ -1489,8 +1499,13 @@ def download_image(
         return False
 
     temp = target.with_suffix(target.suffix + ".tmp")
-    temp.write_bytes(b"".join(chunks))
-    temp.replace(target)
+    try:
+        temp.write_bytes(b"".join(chunks))
+        temp.replace(target)
+    except OSError:
+        logger.warning("Artwork write failed: path=%s", target, exc_info=True)
+        temp.unlink(missing_ok=True)
+        return False
     return True
 
 
