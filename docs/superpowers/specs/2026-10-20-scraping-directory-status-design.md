@@ -47,6 +47,10 @@ single/batch scraping with persistent tasks and progress.
   cancellation, and retry of failed/skipped items.
 - Add a scraping status column and scrape / batch-scrape actions to the movie
   list.
+- Make the crawler run records page, the storage task list, and the new
+  scraping task list uncached lists: they must reload whenever the user enters
+  them, and each renders a card header with a title and a refresh button
+  (matching the storage task list).
 
 ## Non-Goals
 
@@ -143,6 +147,8 @@ frontend/src/pages/scraping/config/ScrapingConfigPage.tsx   # extended form + sc
 frontend/src/pages/content/movies/components/MovieTable.tsx # status column + scrape action
 frontend/src/pages/content/movies/MovieListPage.tsx         # batch scrape button
 frontend/src/pages/content/movies/hooks/useMovieScraping.ts # task creation + realtime
+frontend/src/layout/routeCacheControl.ts                    # uncached list pages
+frontend/src/pages/crawler/runs/RunListPage.tsx              # title + refresh header
 ```
 
 ## Data Model
@@ -563,6 +569,32 @@ New events published through the existing realtime bus:
 - Status/color mapping helpers live in `pages/scraping/tasks/utils/status.ts`,
   mirroring the storage task utilities.
 
+### List page caching and headers
+
+The crawler run records page (`/crawler/runs`), the storage task list
+(`/storage/tasks`), and the scraping task list (`/scraping/tasks`) are uncached
+lists:
+
+- Add all three paths to `ROUTE_CACHE_EXCLUDE_PATHS` in
+  `frontend/src/layout/routeCacheControl.ts`. Excluded routes render outside
+  `KeepAlive`, so entering the route remounts the page and TanStack Query
+  refetches the list (`staleTime` defaults to 0). Detail routes
+  (`/crawler/runs/$id`, `/storage/tasks/$id`, `/scraping/tasks/$id`) are not
+  excluded and keep the existing cache behavior.
+- Each of the three list pages renders its table inside a card whose header has
+  a title and a `刷新` button in the card `extra` slot, following
+  `StorageMainTaskTable`:
+  - `/crawler/runs`: title `运行记录`, refresh calls the page's `refreshRuns`.
+  - `/storage/tasks`: title `任务列表` (already implemented).
+  - `/scraping/tasks`: title `刮削任务`, refresh calls the list hook's
+    `refresh`.
+- The existing tags view still registers tabs for these routes; cache-control
+  `refresh` for an excluded route is a no-op because the page has no kept-alive
+  instance.
+- `useRouteActivationRefresh` may remain in pages that already use it; with
+  cache exclusion the page remounts anyway, so it becomes redundant but
+  harmless.
+
 ### Movie list
 
 - New `刮削状态` column after `存储状态`:
@@ -648,7 +680,9 @@ cd frontend && pnpm test -- src/pages/scraping/tasks src/pages/scraping/config s
 
 Tests cover: status column rendering, scrape/batch buttons creating tasks,
 config page source ordering and scan summary, task list/detail rendering and
-actions, realtime refresh.
+actions, realtime refresh, and the uncached list behavior (route exclusion and
+card header refresh buttons for crawler runs, storage tasks, and scraping
+tasks).
 
 ## Risks and Assumptions
 
