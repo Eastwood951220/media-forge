@@ -58,6 +58,9 @@ class Movie(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     marked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     storage_summary: Mapped[dict] = mapped_column(CompatibleJSON, nullable=False, default=dict)
     raw_detail: Mapped[dict] = mapped_column(CompatibleJSON, nullable=False, default=dict)
+    scraping_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    scraping_folder: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scraping_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     magnets: Mapped[list["MovieMagnet"]] = relationship(
         back_populates="movie",
