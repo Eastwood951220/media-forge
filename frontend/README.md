@@ -100,7 +100,9 @@ Current route modules:
 | `/content/movies` | `pages/content/movies/MovieListPage.tsx` | Movie list, filters, storage sync, push actions |
 | `/backup` | `pages/backup/BackupPage.tsx` | Manual/automatic backup and restore |
 | `/storage/config` | `pages/storage/config/StorageConfigPage.tsx` | CloudDrive2/storage target configuration |
-| `/scraping/config` | `pages/scraping/config/ScrapingConfigPage.tsx` | Scraping service config and STRM generation trigger |
+| `/scraping/tasks` | `pages/scraping/tasks/TaskListPage.tsx` | Scraping task list, progress, cancel/retry |
+| `/scraping/tasks/$id` | `pages/scraping/tasks/TaskDetailPage.tsx` | Scraping task detail, item results, cancel/retry |
+| `/scraping/config` | `pages/scraping/config/ScrapingConfigPage.tsx` | Scraping service config, directory scan, and STRM generation trigger |
 | `/storage/tasks` | `pages/storage/tasks/StorageTaskListPage.tsx` | Storage main task list |
 | `/storage/tasks/$id` | `pages/storage/tasks/StorageTaskDetailPage.tsx` | Storage task detail and subtasks |
 | `/storage/tasks/subtasks/$id` | `pages/storage/tasks/StorageSubTaskDetailPage.tsx` | Storage subtask detail, files, logs, timeline |
