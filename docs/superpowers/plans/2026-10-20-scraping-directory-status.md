@@ -4642,10 +4642,10 @@ export const ROUTE_CACHE_EXCLUDE_PATHS = [
 - [ ] **Step 3b: Keep the keep-alive container mounted on excluded paths**
 
 `RouteKeepAliveOutlet` currently early-returns `<Outlet />` when
-`isRouteCacheExcluded(pathname)` is true, which unmounts `KeepAlive` entirely and
-discards every other page's cached state whenever a user detours through a list
-page. The library's `exclude` prop already prevents caching and destroys the
-entry when it deactivates, so remove the early return:
+`isRouteCacheExcluded(pathname)` is true, which unmounts `KeepAlive` entirely. The
+library's `exclude` prop already prevents caching and destroys the entry when it
+deactivates, so the early return is redundant and drops the keep-alive host for
+every page. Remove it:
 
 ```tsx
   if (!aliveRef) {
@@ -4656,38 +4656,24 @@ entry when it deactivates, so remove the early return:
 and drop the now-unused `isRouteCacheExcluded` import from the
 `./routeCacheControl` import list.
 
-Add this regression test to `frontend/tests/route-keepalive.ui.test.tsx`:
+Do **not** rewrite the `keepalive-for-react` mock in
+`frontend/tests/route-keepalive.ui.test.tsx`: the existing mock renders its
+children, which is faithful enough for these tests. (A mock that fabricates
+cached-subtree survival would make the pre-existing "keeps keyed outlet content
+mounted" failure pass falsely — that failure reflects a real, out-of-scope
+library/router limitation and must stay visible.)
+
+Add this regression test instead; it asserts the property this change actually
+guarantees — the keep-alive host stays mounted on an excluded route:
 
 ```tsx
-  it('keeps other cached pages when visiting an excluded list page', async () => {
-    const user = userEvent.setup()
-
-    function CachedInputPage() {
-      const [value, setValue] = useState('')
-      return (
-        <input
-          aria-label="cached input"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-        />
-      )
-    }
-
+  it('keeps the keep-alive host mounted on an excluded list page', async () => {
     const rootRoute = createRootRoute({
       component: () => (
         <RouteKeepAliveProvider>
-          <nav>
-            <RouterLink to="/crawler/tasks">tasks</RouterLink>
-            <RouterLink to="/storage/tasks">storage tasks</RouterLink>
-          </nav>
           <RouteKeepAliveOutlet />
         </RouteKeepAliveProvider>
       ),
-    })
-    const tasksRoute = createRoute({
-      getParentRoute: () => rootRoute,
-      path: '/crawler/tasks',
-      component: CachedInputPage,
     })
     const storageRoute = createRoute({
       getParentRoute: () => rootRoute,
@@ -4695,18 +4681,14 @@ Add this regression test to `frontend/tests/route-keepalive.ui.test.tsx`:
       component: () => <div>storage tasks page</div>,
     })
     const router = createRouter({
-      routeTree: rootRoute.addChildren([tasksRoute, storageRoute]),
-      history: createMemoryHistory({ initialEntries: ['/crawler/tasks'] }),
+      routeTree: rootRoute.addChildren([storageRoute]),
+      history: createMemoryHistory({ initialEntries: ['/storage/tasks'] }),
     })
 
     render(<RouterProvider router={router} />)
 
-    await user.type(await screen.findByLabelText('cached input'), 'stored')
-    await user.click(screen.getByText('storage tasks'))
     expect(await screen.findByText('storage tasks page')).toBeInTheDocument()
-    await user.click(screen.getByText('tasks'))
-
-    expect(await screen.findByLabelText('cached input')).toHaveValue('stored')
+    expect(screen.getByTestId('keep-alive')).toBeInTheDocument()
   })
 ```
 
