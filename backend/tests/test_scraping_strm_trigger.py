@@ -146,6 +146,45 @@ def test_schedule_waits_then_runs(monkeypatch, tmp_path: Path) -> None:
     assert finished.wait(1.0) is True
 
 
+def test_successful_strm_generation_schedules_scan(monkeypatch, tmp_path: Path) -> None:
+    _prepare_trigger(monkeypatch, tmp_path)
+    scheduled: list[dict] = []
+    monkeypatch.setattr(
+        trigger,
+        "run_strm_generation",
+        lambda config: StrmRunResult(success=True, status_code=200, message="HTTP 200"),
+    )
+    monkeypatch.setattr(
+        trigger,
+        "schedule_scan_after_strm",
+        lambda config: scheduled.append(dict(config)),
+    )
+
+    trigger._run_after_delay(trigger._generation, 10, FakeRuntime(), lambda: True)
+
+    assert len(scheduled) == 1
+    assert scheduled[0]["directory_id"] == 4
+
+
+def test_failed_strm_generation_does_not_schedule_scan(monkeypatch, tmp_path: Path) -> None:
+    _prepare_trigger(monkeypatch, tmp_path)
+    scheduled: list[dict] = []
+    monkeypatch.setattr(
+        trigger,
+        "run_strm_generation",
+        lambda config: StrmRunResult(success=False, status_code=500, message="HTTP 500: down"),
+    )
+    monkeypatch.setattr(
+        trigger,
+        "schedule_scan_after_strm",
+        lambda config: scheduled.append(dict(config)),
+    )
+
+    trigger._run_after_delay(trigger._generation, 10, FakeRuntime(), lambda: True)
+
+    assert scheduled == []
+
+
 def test_failure_is_only_logged(monkeypatch, tmp_path: Path, caplog) -> None:
     _prepare_trigger(monkeypatch, tmp_path)
     monkeypatch.setattr(

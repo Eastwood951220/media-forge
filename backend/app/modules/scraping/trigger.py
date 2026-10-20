@@ -8,6 +8,7 @@ from typing import Any
 
 from backend.app.models.storage_task import StorageMainTask
 from backend.app.modules.scraping.config import ScrapingConfigService, validate_run_config
+from backend.app.modules.scraping.scan import schedule_scan_after_strm
 from backend.app.modules.scraping.strm import run_strm_generation
 from shared.database.session import get_session_factory
 
@@ -92,6 +93,7 @@ def _run_after_delay(
         result = run_strm_generation(config)
         if result.success:
             logger.info("STRM generation triggered: %s", result.message)
+            schedule_scan_after_strm(config)
         else:
             logger.warning("STRM generation failed: %s", result.message)
     except Exception:
