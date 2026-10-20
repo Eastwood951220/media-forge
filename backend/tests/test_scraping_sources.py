@@ -76,7 +76,7 @@ def test_javdb_adapter_parses_search_and_detail(monkeypatch) -> None:
         },
     )
 
-    adapter = sources.JavdbAdapter(fetcher_factory=lambda source: fetcher)
+    adapter = sources.JavdbAdapter(fetcher_factory=lambda source: fetcher, throttle=lambda: None)
     metadata = adapter.fetch_by_code("ADN-784")
 
     assert metadata is not None
@@ -85,3 +85,51 @@ def test_javdb_adapter_parses_search_and_detail(monkeypatch) -> None:
     assert metadata.premiered == "2026-07-03"
     assert metadata.studio == "メーカー"
     assert fetcher.requested[0].endswith("/search?q=ADN-784&f=all")
+
+
+def test_javbus_adapter_parses_search_and_detail(monkeypatch) -> None:
+    search_page = _FakePage("search")
+    detail_page = _FakePage("detail")
+    fetcher = _FakeFetcher({
+        "https://www.javbus.com/search/ADN-784": search_page,
+        "https://www.javbus.com/ADN-784": detail_page,
+    })
+
+    monkeypatch.setattr(
+        sources,
+        "parse_javbus_list",
+        lambda page, source_url: ([{"url": "https://www.javbus.com/ADN-784", "code": "ADN-784"}], None),
+    )
+    monkeypatch.setattr(
+        sources,
+        "parse_javbus_detail",
+        lambda page, source_url: {
+            "code": "ADN-784",
+            "source_name": "ADN-784 タイトル",
+            "cover_url": "https://www.javbus.com/cover.jpg",
+            "release_date": "2026-07-03",
+            "maker": "メーカー",
+            "series": "シリーズ",
+            "tags": ["タグ"],
+            "actors": ["女優"],
+        },
+    )
+
+    adapter = sources.JavbusAdapter(fetcher_factory=lambda source: fetcher, throttle=lambda: None)
+    metadata = adapter.fetch_by_code("ADN-784")
+
+    assert metadata is not None
+    assert metadata.site_key == "JavBus"
+    assert metadata.cover_url == "https://www.javbus.com/cover.jpg"
+    assert metadata.premiered == "2026-07-03"
+    assert metadata.studio == "メーカー"
+    assert fetcher.requested[1] == "https://www.javbus.com/ADN-784"
+
+
+def test_adapters_return_none_when_fetch_raises() -> None:
+    def failing_factory(source: str):
+        raise RuntimeError("network down")
+
+    adapter = sources.JavbusAdapter(fetcher_factory=failing_factory, throttle=lambda: None)
+
+    assert adapter.fetch_by_code("ADN-784") is None

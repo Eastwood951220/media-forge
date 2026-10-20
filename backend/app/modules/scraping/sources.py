@@ -5,7 +5,9 @@ from dataclasses import dataclass, field
 from typing import Callable, Protocol
 from urllib.parse import quote
 
+from backend.app.modules.crawler.config.conf_reader import read_crawler_runtime_config
 from scraper.config.sites import JAVBUS_SITE, JAVDB_SITE
+from scraper.core.throttle import random_sleep
 from scraper.fetchers.site_fetcher import build_site_fetcher
 from scraper.spiders.javbus.javbus_parser import parse_detail_page as parse_javbus_detail
 from scraper.spiders.javbus.javbus_parser import parse_list_page as parse_javbus_list
@@ -45,27 +47,42 @@ def _clean(value: object) -> str:
     return str(value or "").strip()
 
 
+def _throttle() -> None:
+    try:
+        config = read_crawler_runtime_config()
+        random_sleep(config.DETAIL_PAGE_DELAY_MIN, config.DETAIL_PAGE_DELAY_MAX)
+    except Exception:
+        logger.warning("Metadata request throttle failed; continuing", exc_info=True)
+
+
 class JavdbAdapter:
     key = "javdb"
     site_key = "JavDB"
 
-    def __init__(self, fetcher_factory: Callable[[str], object] = build_site_fetcher) -> None:
+    def __init__(
+        self,
+        fetcher_factory: Callable[[str], object] = build_site_fetcher,
+        throttle: Callable[[], None] | None = None,
+    ) -> None:
         self.fetcher_factory = fetcher_factory
+        self.throttle = throttle or _throttle
 
     def fetch_by_code(self, code: str) -> SourceMetadata | None:
         try:
             fetcher = self.fetcher_factory("javdb")
             base = JAVDB_SITE["base_url"].rstrip("/")
             search_url = f"{base}/search?q={quote(code)}&f=all"
+            self.throttle()
             search_page = fetcher.get(search_url)
             tasks = parse_javdb_search(search_page, 1)
             wanted = normalize_code(code)
             target = next(
                 (task for task in tasks if normalize_code(task.get("code") or "") == wanted and task.get("status") != "skipped"),
-                tasks[0] if tasks else None,
+                None,
             )
             if target is None or not target.get("url"):
                 return None
+            self.throttle()
             detail = parse_javdb_detail(fetcher.get(target["url"]))
             return SourceMetadata(
                 site_key=self.site_key,
@@ -88,21 +105,28 @@ class JavbusAdapter:
     key = "javbus"
     site_key = "JavBus"
 
-    def __init__(self, fetcher_factory: Callable[[str], object] = build_site_fetcher) -> None:
+    def __init__(
+        self,
+        fetcher_factory: Callable[[str], object] = build_site_fetcher,
+        throttle: Callable[[], None] | None = None,
+    ) -> None:
         self.fetcher_factory = fetcher_factory
+        self.throttle = throttle or _throttle
 
     def fetch_by_code(self, code: str) -> SourceMetadata | None:
         try:
             fetcher = self.fetcher_factory("javbus")
             base = JAVBUS_SITE["base_url"].rstrip("/")
             search_url = f"{base}/search/{quote(code)}"
+            self.throttle()
             search_page = fetcher.get(search_url)
             movies, _page = parse_javbus_list(search_page, search_url)
             wanted = normalize_code(code)
             target = next((movie for movie in movies if normalize_code(movie.get("code") or "") == wanted), None)
-            if target is None or not target.get("source_url"):
+            if target is None or not target.get("url"):
                 return None
-            detail = parse_javbus_detail(fetcher.get(target["source_url"]), target["source_url"])
+            self.throttle()
+            detail = parse_javbus_detail(fetcher.get(target["url"]), target["url"])
             return SourceMetadata(
                 site_key=self.site_key,
                 title=_clean(detail.get("source_name")) or None,
@@ -114,7 +138,7 @@ class JavbusAdapter:
                 series=_clean(detail.get("series")) or None,
                 actors=list(detail.get("actors") or []),
                 cover_url=_clean(detail.get("cover_url")) or None,
-                backdrop_url=_clean(detail.get("cover_url")) or None,
+                backdrop_url=None,
             )
         except Exception:
             logger.warning("javbus metadata fetch failed for %s", code, exc_info=True)
