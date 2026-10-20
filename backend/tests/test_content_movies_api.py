@@ -54,6 +54,9 @@ def test_list_movies_search_and_source_task(client: TestClient, admin_user) -> N
     assert body["total"] == 1
     assert body["rows"][0]["code"] == "AAA-001"
     assert str(TASK_ID_A) in body["rows"][0]["source_task_ids"]
+    assert "scraping_status" in body["rows"][0]
+    assert "scraping_folder" in body["rows"][0]
+    assert "scraping_checked_at" in body["rows"][0]
 
 
 def test_list_movies_omits_detail_only_fields(client: TestClient, admin_user) -> None:
