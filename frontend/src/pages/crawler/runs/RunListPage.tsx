@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, type SetStateAction} from 'react'
 import {DeleteOutlined, EyeOutlined, ReloadOutlined, StopOutlined} from '@ant-design/icons'
 import {useNavigate} from '@tanstack/react-router'
-import {Card, message, Progress, Table, Tag} from 'antd'
+import {Button, Card, message, Progress, Table, Tag} from 'antd'
 import type {ColumnsType} from 'antd/es/table'
 import {useQuery, useQueryClient} from '@tanstack/react-query'
 import {deleteCrawlerRun, getCrawlerRuns, restartCrawlerRun, stopCrawlerRun} from '@/api/crawler/crawlerRun'
@@ -364,7 +364,15 @@ function RunListPage() {
   ]
 
   return (
-    <Card className={styles.runListCard}>
+    <Card
+      className={styles.runListCard}
+      title="运行记录"
+      extra={(
+        <Button icon={<ReloadOutlined />} onClick={() => void refreshRuns()}>
+          刷新
+        </Button>
+      )}
+    >
       <Table
         rowKey="id"
         columns={columns}

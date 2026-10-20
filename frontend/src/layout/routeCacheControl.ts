@@ -1,7 +1,13 @@
 import { createContext, useContext } from 'react'
 import type { useKeepAliveRef } from 'keepalive-for-react'
 
-export const ROUTE_CACHE_EXCLUDE_PATHS = ['/login', '/init']
+export const ROUTE_CACHE_EXCLUDE_PATHS = [
+  '/login',
+  '/init',
+  '/crawler/runs',
+  '/storage/tasks',
+  '/scraping/tasks',
+]
 
 export type RouteCacheControl = {
   destroy: (cacheKey: string) => Promise<void>

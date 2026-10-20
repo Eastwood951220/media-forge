@@ -261,6 +261,24 @@ describe('RunListPage', () => {
     successSpy.mockRestore()
   })
 
+  it('renders the run list card title and refreshes from the header button', async () => {
+    vi.mocked(getCrawlerRuns).mockResolvedValue({
+      rows: [buildRun()],
+      page: 1,
+      size: 20,
+      has_more: false,
+    } as never)
+
+    render(<RunListPage />, { wrapper })
+
+    expect(await screen.findByText('运行记录')).toBeInTheDocument()
+    await waitFor(() => expect(getCrawlerRuns).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(screen.getByRole('button', { name: /刷新/ }))
+
+    await waitFor(() => expect(getCrawlerRuns).toHaveBeenCalledTimes(2))
+  })
+
   it('keeps pagination and refreshes that page when the run list is mounted again', async () => {
     vi.mocked(getCrawlerRuns).mockResolvedValue({
       rows: [buildRun('completed')],
