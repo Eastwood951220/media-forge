@@ -45,8 +45,16 @@ def download_image(
         return False
 
     temp = target.with_suffix(target.suffix + ".tmp")
-    temp.write_bytes(b"".join(chunks))
-    temp.replace(target)
+    try:
+        temp.write_bytes(b"".join(chunks))
+        temp.replace(target)
+    except OSError:
+        logger.warning("Artwork write failed: path=%s", target, exc_info=True)
+        try:
+            temp.unlink(missing_ok=True)
+        except OSError:
+            logger.debug("Could not remove temp artwork file: path=%s", temp)
+        return False
     return True
 
 
