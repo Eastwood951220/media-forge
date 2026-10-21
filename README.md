@@ -322,6 +322,32 @@ make docker-build-amd64 \
   PYTHON_BASE_IMAGE=mirror.gcr.io/library/python:3.12-slim
 ```
 
+### 刮削目录与文件夹选择
+
+刮削配置页的“刮削目录”提供“选择文件夹”按钮，弹窗列出**服务端进程可见**的目录（本地运行即宿主机文件系统，Docker 部署即容器内文件系统），选择后自动回填绝对路径，仍可手动输入。
+
+Docker 部署时，需要先把宿主机媒体目录挂载到容器，页面中才能浏览并选择该目录。例如 `docker-compose.yml`：
+
+```yaml
+services:
+  media-forge:
+    volumes:
+      - ./data:/app/data
+      # 宿主机媒体目录挂载到容器，建议保持两段路径一致
+      - /mnt/cd2/media:/mnt/cd2/media
+```
+
+或使用 `docker run`：
+
+```bash
+docker run -d --name media-forge -p 18642:18642 \
+  -v "$(pwd)/data:/app/data" \
+  -v /mnt/cd2/media:/mnt/cd2/media \
+  media-forge:amd64
+```
+
+挂载后在刮削配置页选择 `/mnt/cd2/media` 即可。可选环境变量 `SCRAPING_BROWSE_ROOT` 用于指定“选择文件夹”弹窗的默认起点，例如 `SCRAPING_BROWSE_ROOT=/mnt/cd2`；未设置时从服务端文件系统根目录开始，并列出 `/mnt`、`/media`、`/data`、`/app/data` 等常用位置。
+
 
 ### JavDB Chrome Agent
 

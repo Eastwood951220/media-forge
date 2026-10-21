@@ -7,9 +7,14 @@ services:
       - "18642:18642"
     volumes:
       - ./data:/app/data
+      # 刮削目录：把宿主机媒体目录挂载进容器，配置页“选择文件夹”才能浏览到；
+      # 建议宿主机与容器路径保持一致。
+      # - /mnt/cd2/media:/mnt/cd2/media
     environment:
       - HTTP_PROXY=http://192.168.0.36:7890
       - HTTPS_PROXY=http://192.168.0.36:7890
       - NO_PROXY=localhost,127.0.0.1,host.docker.internal
+      # 可选：文件夹选择弹窗的默认起点，默认从容器根目录开始
+      # - SCRAPING_BROWSE_ROOT=/mnt/cd2
     extra_hosts:
       - "host.docker.internal:host-gateway"
