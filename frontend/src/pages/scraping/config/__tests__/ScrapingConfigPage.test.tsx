@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ScrapingConfigPage from '../ScrapingConfigPage'
 import {
   getScrapingConfig,
+  listScrapingDirectories,
   runScrapingScan,
   runScrapingStrm,
   updateScrapingConfig,
@@ -14,6 +15,7 @@ vi.mock('@/api/scraping/scrapingConfig', () => ({
   updateScrapingConfig: vi.fn(),
   runScrapingStrm: vi.fn(),
   runScrapingScan: vi.fn(),
+  listScrapingDirectories: vi.fn(),
 }))
 
 const savedConfig = {
@@ -55,6 +57,13 @@ describe('ScrapingConfigPage', () => {
       unmatched_folders: [],
       duration_ms: 0,
     })
+    vi.mocked(listScrapingDirectories).mockResolvedValue({
+      path: '/mnt/media',
+      parent: '/mnt',
+      entries: [{ name: 'Movies', path: '/mnt/media/Movies' }],
+      roots: [{ name: '/mnt', path: '/mnt' }],
+      truncated: false,
+    })
   })
 
   it('loads the saved config', async () => {
@@ -93,6 +102,39 @@ describe('ScrapingConfigPage', () => {
     renderPage()
     expect(await screen.findByDisplayValue('/mnt/media')).toBeInTheDocument()
     expect(screen.getByDisplayValue('/media')).toBeInTheDocument()
+  })
+
+  it('selects the scraping folder through the folder picker', async () => {
+    vi.mocked(listScrapingDirectories).mockImplementation(async (path) => ({
+      path: path ?? '/mnt',
+      parent:
+        path === '/mnt/media'
+          ? '/mnt'
+          : path === '/mnt/media/Movies'
+            ? '/mnt/media'
+            : null,
+      entries: path === '/mnt/media' ? [{ name: 'Movies', path: '/mnt/media/Movies' }] : [],
+      roots: [{ name: '/mnt', path: '/mnt' }],
+      truncated: false,
+    }))
+    renderPage()
+    await screen.findByDisplayValue('/mnt/media')
+
+    fireEvent.click(screen.getByRole('button', { name: '选择文件夹' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Movies' }))
+
+    await waitFor(() =>
+      expect(listScrapingDirectories).toHaveBeenLastCalledWith('/mnt/media/Movies', false),
+    )
+    const confirm = await screen.findByRole('button', { name: /选择当前文件夹/ })
+    await waitFor(() => expect(confirm).toHaveAccessibleName('选择当前文件夹'))
+    fireEvent.click(confirm)
+
+    expect(await screen.findByDisplayValue('/mnt/media/Movies')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '保存配置' }))
+    await waitFor(() => expect(updateScrapingConfig).toHaveBeenCalled())
+    expect(vi.mocked(updateScrapingConfig).mock.calls[0][0].scrape_root).toBe('/mnt/media/Movies')
   })
 
   it('saves reordered metadata sources', async () => {

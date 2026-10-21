@@ -2,6 +2,7 @@ import { request } from '@/request'
 import type {
   ScrapingConfig,
   ScrapingConfigUpdate,
+  ScrapingDirectoryListing,
   ScrapingRunResult,
   ScrapingScanSummary,
 } from './types.ts'
@@ -9,6 +10,8 @@ import type {
 export type {
   ScrapingConfig,
   ScrapingConfigUpdate,
+  ScrapingDirectoryEntry,
+  ScrapingDirectoryListing,
   ScrapingRunResult,
   ScrapingScanSummary,
 } from './types.ts'
@@ -29,4 +32,18 @@ export function runScrapingStrm(): Promise<ScrapingRunResult> {
 
 export function runScrapingScan(): Promise<ScrapingScanSummary> {
   return request.post<ScrapingScanSummary>(`${BASE_URL}/scan`)
+}
+
+export function listScrapingDirectories(
+  path?: string,
+  includeHidden = false,
+): Promise<ScrapingDirectoryListing> {
+  return request.get<ScrapingDirectoryListing>(
+    `${BASE_URL}/directories`,
+    {
+      ...(path ? { path } : {}),
+      include_hidden: includeHidden,
+    },
+    { showError: false },
+  )
 }

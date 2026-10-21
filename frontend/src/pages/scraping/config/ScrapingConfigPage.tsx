@@ -26,6 +26,7 @@ import {
   type ScrapingScanSummary,
 } from '@/api/scraping/scrapingConfig'
 import { FullWidthNumberInput } from '@/components/common'
+import DirectoryPathInput from './components/DirectoryPathInput'
 import SourcePriorityList from './components/SourcePriorityList'
 import { getErrorMessage, isFormValidationError } from './utils/error'
 import styles from './ScrapingConfigPage.module.less'
@@ -252,8 +253,9 @@ export default function ScrapingConfigPage() {
                     name="scrape_root"
                     label="刮削目录（本地路径）"
                     rules={[{ required: true, message: '请输入刮削目录' }]}
+                    extra="文件夹列表来自服务端文件系统；Docker 部署需先把宿主机目录挂载到容器。"
                   >
-                    <Input placeholder="/mnt/cd2/media" />
+                    <DirectoryPathInput placeholder="/mnt/cd2/media" />
                   </Form.Item>
                   <Form.Item
                     name="media_root"

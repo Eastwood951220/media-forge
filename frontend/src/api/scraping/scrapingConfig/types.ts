@@ -25,6 +25,19 @@ export interface ScrapingRunResult {
   message: string
 }
 
+export interface ScrapingDirectoryEntry {
+  name: string
+  path: string
+}
+
+export interface ScrapingDirectoryListing {
+  path: string
+  parent: string | null
+  entries: ScrapingDirectoryEntry[]
+  roots: ScrapingDirectoryEntry[]
+  truncated: boolean
+}
+
 export interface ScrapingScanSummary {
   folders_scanned: number
   folders_with_strm: number

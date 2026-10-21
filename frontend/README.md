@@ -105,7 +105,7 @@ Current route modules:
 | `/storage/config` | `pages/storage/config/StorageConfigPage.tsx` | CloudDrive2/storage target configuration |
 | `/scraping/tasks` | `pages/scraping/tasks/TaskListPage.tsx` | Scraping task list, progress, cancel/retry |
 | `/scraping/tasks/$id` | `pages/scraping/tasks/TaskDetailPage.tsx` | Scraping task detail, item results, cancel/retry |
-| `/scraping/config` | `pages/scraping/config/ScrapingConfigPage.tsx` | Scraping service config, directory scan, and STRM generation trigger |
+| `/scraping/config` | `pages/scraping/config/ScrapingConfigPage.tsx` | Scraping service config, folder picker, directory scan, and STRM generation trigger |
 | `/storage/tasks` | `pages/storage/tasks/StorageTaskListPage.tsx` | Storage main task list |
 | `/storage/tasks/$id` | `pages/storage/tasks/StorageTaskDetailPage.tsx` | Storage task detail and subtasks |
 | `/storage/tasks/subtasks/$id` | `pages/storage/tasks/StorageSubTaskDetailPage.tsx` | Storage subtask detail, files, logs, timeline |
@@ -139,7 +139,7 @@ Current API groups:
 - `storage/storageConfig/`: storage config and connection test.
 - `storage/storageIndex/`: storage index status and refresh.
 - `storage/storageTasks/`: storage push creation and task/subtask detail APIs.
-- `scraping/scrapingConfig/`: scraping service config, directory scan, and metadata source priority.
+- `scraping/scrapingConfig/`: scraping service config, server-side folder browsing, directory scan, and metadata source priority.
 - `scraping/scrapingTasks/`: scraping task list/detail, create, cancel, and retry actions.
 
 The shared request layer is `src/request/`. It adds token injection, GET

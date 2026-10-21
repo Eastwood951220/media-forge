@@ -1,0 +1,61 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hiddenRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 180px;
+  max-height: 320px;
+  padding: 6px;
+  overflow-y: auto;
+  background: var(--app-fill-color, #fafafa);
+  border: 1px solid var(--app-border-color, #f0f0f0);
+  border-radius: 8px;
+}
+
+.entry {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.entryName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hint {
+  font-size: 12px;
+}
