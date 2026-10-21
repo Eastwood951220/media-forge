@@ -1,5 +1,7 @@
 ARG NODE_BASE_IMAGE=node:22-bookworm-slim
 ARG PYTHON_BASE_IMAGE=python:3.12-slim
+ARG APT_MIRROR=
+ARG PLAYWRIGHT_DOWNLOAD_HOST=
 
 FROM ${NODE_BASE_IMAGE} AS frontend-build
 WORKDIR /build/frontend
@@ -9,6 +11,8 @@ COPY frontend/ ./
 RUN pnpm run build
 
 FROM ${PYTHON_BASE_IMAGE} AS runtime
+ARG APT_MIRROR
+ARG PLAYWRIGHT_DOWNLOAD_HOST
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -17,13 +21,21 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update \
+RUN if [ -n "$APT_MIRROR" ]; then \
+        for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do \
+            [ -e "$f" ] && sed -i \
+                -e "s|https\?://deb.debian.org|$APT_MIRROR|g" \
+                -e "s|https\?://security.debian.org|$APT_MIRROR|g" "$f" || true; \
+        done; \
+    fi \
+    && apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
-RUN python -m playwright install --with-deps chromium
+RUN PLAYWRIGHT_DOWNLOAD_HOST="${PLAYWRIGHT_DOWNLOAD_HOST}" \
+    python -m playwright install --with-deps chromium
 
 COPY backend /app/backend
 COPY shared /app/shared
