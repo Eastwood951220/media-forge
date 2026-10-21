@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.dependencies import CurrentUser, get_db
+from backend.app.modules.scraping.browse import DirectoryBrowseError, list_directories
 from backend.app.modules.scraping.config import (
     ScrapingConfigService,
     validate_run_config,
@@ -35,6 +36,18 @@ def update_scraping_config(
     try:
         return success(data=ScrapingConfigService().update_config(body))
     except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/directories")
+def list_scraping_directories(
+    _current_user: CurrentUser,
+    path: str | None = None,
+    include_hidden: bool = False,
+) -> dict:
+    try:
+        return success(data=list_directories(path, include_hidden))
+    except DirectoryBrowseError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
