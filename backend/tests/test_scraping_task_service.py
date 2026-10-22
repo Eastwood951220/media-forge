@@ -4,6 +4,7 @@ import pytest
 
 from backend.app.models.scraping_task import ScrapingTask, ScrapingTaskItem
 from backend.app.modules.scraping.tasks.service import ScrapingTaskService
+from backend.app.modules.scraping.tasks.logs import read_scraping_item_logs
 from shared.database.models.content import Movie
 
 
@@ -50,7 +51,8 @@ def test_create_task_rejects_empty_and_oversized_lists(db_session, admin_user) -
         service.create_task([movie.id] * 501, admin_user.id, config=_config())
 
 
-def test_cancel_queued_task_marks_pending_items_skipped(db_session, admin_user) -> None:
+def test_cancel_queued_task_marks_pending_items_skipped(db_session, admin_user, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
     movie = _movie(db_session, "ADN-784")
     service = ScrapingTaskService(db_session)
     task = service.create_task([movie.id], admin_user.id, config=_config())
@@ -61,6 +63,7 @@ def test_cancel_queued_task_marks_pending_items_skipped(db_session, admin_user) 
     item = db_session.query(ScrapingTaskItem).filter_by(task_id=task.id).one()
     assert item.status == "skipped"
     assert item.error_message == "任务已取消"
+    assert read_scraping_item_logs(str(item.id))[-1]["message"] == "任务已取消"
 
 
 def test_retry_creates_a_task_from_failed_and_skipped_items(db_session, admin_user) -> None:

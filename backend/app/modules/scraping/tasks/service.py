@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.scraping_task import ScrapingTask, ScrapingTaskItem
 from backend.app.modules.scraping.tasks.repository import ScrapingTaskRepository
+from backend.app.modules.scraping.tasks.progress import append_item_log
 from shared.database.models.content import Movie
 
 MAX_TASK_ITEMS = 500
@@ -86,14 +87,18 @@ class ScrapingTaskService:
         if task.status in TERMINAL_STATUSES:
             raise ValueError("当前状态不能取消")
         task.cancel_requested = True
+        skipped_items: list[ScrapingTaskItem] = []
         if task.status == "queued":
             for item in self.repository.pending_items(task.id):
                 item.status = "skipped"
                 item.error_message = "任务已取消"
+                skipped_items.append(item)
             task.status = "cancelled"
             task.finished_at = datetime.now(timezone.utc)
             self.repository.recompute_counts(task)
         self.db.commit()
+        for item in skipped_items:
+            append_item_log(item, "WARNING", item.error_message or "任务已取消")
         self.db.refresh(task)
         return task
 

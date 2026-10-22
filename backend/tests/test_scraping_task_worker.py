@@ -1,9 +1,17 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from backend.app.models.scraping_task import ScrapingTask, ScrapingTaskItem
 from backend.app.modules.scraping.images import ArtworkResult
 from backend.app.modules.scraping.tasks import worker
+from backend.app.modules.scraping.tasks.logs import read_scraping_item_logs
 from shared.database.models.content import Movie
+
+
+@pytest.fixture(autouse=True)
+def isolated_scraping_logs(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
 
 
 def _seed_task(db, admin_user, status="queued"):
@@ -22,6 +30,7 @@ def _seed_task(db, admin_user, status="queued"):
 def test_run_task_success_transitions(db_session, admin_user, monkeypatch) -> None:
     task, item = _seed_task(db_session, admin_user)
     task_id = task.id
+    item_id = str(item.id)
 
     def fake_run_item(db, item, *, config, **kwargs):
         item.status = "success"
@@ -44,11 +53,13 @@ def test_run_task_success_transitions(db_session, admin_user, monkeypatch) -> No
     assert stored.success_count == 1
     assert stored.finished_at is not None
     assert published and published[0][0] == str(admin_user.id)
+    assert [entry["message"] for entry in read_scraping_item_logs(item_id)] == ["开始刮削", "刮削完成"]
 
 
 def test_run_task_partial_failure_and_skips(db_session, admin_user, monkeypatch) -> None:
-    task, _item = _seed_task(db_session, admin_user)
+    task, item = _seed_task(db_session, admin_user)
     task_id = task.id
+    item_id = str(item.id)
 
     def fake_run_item(db, item, *, config, **kwargs):
         item.status = "failed"
@@ -66,6 +77,7 @@ def test_run_task_partial_failure_and_skips(db_session, admin_user, monkeypatch)
     stored = db_session.get(ScrapingTask, task_id)
     assert stored.status == "failed"
     assert stored.failed_count == 1
+    assert read_scraping_item_logs(item_id)[-1]["message"] == "boom"
 
 
 def test_cancel_between_items_marks_pending_skipped(db_session, admin_user, monkeypatch) -> None:
@@ -78,6 +90,7 @@ def test_cancel_between_items_marks_pending_skipped(db_session, admin_user, monk
     task.total_count = 2
     db_session.commit()
     task_id = task.id
+    second_id = str(second.id)
 
     def fake_run_item(db, item, *, config, **kwargs):
         item.status = "success"
@@ -99,6 +112,7 @@ def test_cancel_between_items_marks_pending_skipped(db_session, admin_user, monk
     assert stored.skipped_count == 1
     remaining = db_session.query(ScrapingTaskItem).filter_by(task_id=task_id, status="skipped").count()
     assert remaining == 1
+    assert read_scraping_item_logs(second_id)[-1]["message"] == "任务已取消"
 
 
 def test_cleanup_marks_running_tasks_failed(db_session, admin_user) -> None:
@@ -111,6 +125,7 @@ def test_cleanup_marks_running_tasks_failed(db_session, admin_user) -> None:
     assert stopped == 1
     assert stored.status == "failed"
     assert stored.error_message == "任务中断，需重试"
+    assert read_scraping_item_logs(str(_item.id))[-1]["message"] == "任务中断，需重试"
 
 
 def test_run_item_passes_site_referer_to_artwork(db_session, admin_user, monkeypatch, tmp_path) -> None:
@@ -260,6 +275,41 @@ def test_run_item_fills_missing_metadata_and_renders_set_and_actors(
     assert stored.actors == ["北野未奈"]
     assert stored.release_date is not None
     assert stored.release_date.isoformat() == "2026-07-03"
+    assert [entry["step"] for entry in read_scraping_item_logs(str(item.id))] == [
+        "locate_folder", "fetch_metadata", "write_artwork", "write_nfo", "refresh_status",
+    ]
+
+
+def test_run_task_logs_unexpected_exception(db_session, admin_user, monkeypatch) -> None:
+    task, item = _seed_task(db_session, admin_user)
+    item_id = str(item.id)
+    item_uuid = item.id
+    task_id = task.id
+    monkeypatch.setattr(worker, "_open_session", lambda: db_session)
+    monkeypatch.setattr(worker, "run_item", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("network down")))
+    monkeypatch.setattr(worker, "publish_movie_scraping_updated", lambda *args: None)
+
+    worker.run_task(task_id)
+
+    assert db_session.get(ScrapingTaskItem, item_uuid).status == "failed"
+    assert read_scraping_item_logs(item_id)[-1]["message"] == "RuntimeError: network down"
+
+
+def test_run_task_logs_early_skip_for_unstored_movie(db_session, admin_user, monkeypatch) -> None:
+    task, item = _seed_task(db_session, admin_user)
+    task_id = task.id
+    item_uuid = item.id
+    movie_id = item.movie_id
+    item_id = str(item.id)
+    movie = db_session.get(Movie, movie_id)
+    movie.storage_summary = {"storage_status": "not_stored", "locations": []}
+    db_session.commit()
+    monkeypatch.setattr(worker, "_open_session", lambda: db_session)
+
+    worker.run_task(task_id)
+
+    assert db_session.get(ScrapingTaskItem, item_uuid).status == "skipped"
+    assert read_scraping_item_logs(item_id)[-1]["message"] == "未存储"
 
 
 def test_run_item_falls_back_to_scan_index_folder(db_session, admin_user, monkeypatch, tmp_path) -> None:
