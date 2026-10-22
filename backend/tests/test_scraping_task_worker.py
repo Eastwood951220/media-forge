@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from backend.app.models.scraping_task import ScrapingTask, ScrapingTaskItem
+from backend.app.modules.scraping.images import ArtworkResult
 from backend.app.modules.scraping.tasks import worker
 from shared.database.models.content import Movie
 
@@ -155,15 +156,15 @@ def test_run_item_passes_site_referer_to_artwork(db_session, admin_user, monkeyp
     )
     captured: dict[str, object] = {}
 
-    def fake_write_artwork(folder_arg, *, cover_url, backdrop_url, landscape_url, referer=None, transport=None):
+    def fake_write_artwork(folder_arg, *, cover_url, backdrop_urls, landscape_urls, referer=None, cover_referer=None, transport=None):
         captured.update(
             folder=str(folder_arg),
             cover_url=cover_url,
-            backdrop_url=backdrop_url,
-            landscape_url=landscape_url,
+            backdrop_urls=backdrop_urls,
+            landscape_urls=landscape_urls,
             referer=referer,
         )
-        return 1
+        return ArtworkResult(written=1, available={"folder.jpg"})
 
     monkeypatch.setattr(item_runner, "write_artwork", fake_write_artwork)
 
@@ -233,7 +234,7 @@ def test_run_item_fills_missing_metadata_and_renders_set_and_actors(
             cover_url="https://www.javbus.com/cover.jpg",
         ),
     )
-    monkeypatch.setattr(item_runner, "write_artwork", lambda *args, **kwargs: 1)
+    monkeypatch.setattr(item_runner, "write_artwork", lambda *args, **kwargs: ArtworkResult(written=1, available={"folder.jpg"}))
 
     item_runner.run_item(
         db_session,
@@ -285,9 +286,9 @@ def test_run_item_falls_back_to_scan_index_folder(db_session, admin_user, monkey
     monkeypatch.setattr(
         item_runner,
         "fetch_by_priority",
-        lambda code, sources: (_ for _ in ()).throw(AssertionError("should not crawl a complete DB row")),
+        lambda code, sources: None,
     )
-    monkeypatch.setattr(item_runner, "write_artwork", lambda *args, **kwargs: 1)
+    monkeypatch.setattr(item_runner, "write_artwork", lambda *args, **kwargs: ArtworkResult(written=1, available={"folder.jpg"}))
 
     item_runner.run_item(
         db_session,
@@ -329,13 +330,13 @@ def test_run_item_uses_source_url_referer_for_complete_db_movie(
     monkeypatch.setattr(
         item_runner,
         "fetch_by_priority",
-        lambda code, sources: (_ for _ in ()).throw(AssertionError("should not crawl a complete DB row")),
+        lambda code, sources: None,
     )
     captured: dict[str, object] = {}
 
-    def fake_write_artwork(folder_arg, *, cover_url, backdrop_url, landscape_url, referer=None, transport=None):
+    def fake_write_artwork(folder_arg, *, cover_url, backdrop_urls, landscape_urls, referer=None, cover_referer=None, transport=None):
         captured["referer"] = referer
-        return 1
+        return ArtworkResult(written=1, available={"folder.jpg"})
 
     monkeypatch.setattr(item_runner, "write_artwork", fake_write_artwork)
 
@@ -351,6 +352,50 @@ def test_run_item_uses_source_url_referer_for_complete_db_movie(
 
     assert item.status == "success"
     assert captured["referer"] == "https://javdb.com/"
+
+
+def test_run_item_fetches_fanza_artwork_for_complete_movie_without_overwriting_fields(
+    db_session, admin_user, monkeypatch, tmp_path
+) -> None:
+    from datetime import date
+
+    from backend.app.modules.scraping.sources import SourceMetadata
+    from backend.app.modules.scraping.tasks import item_runner
+
+    movie = Movie(
+        code="MIDA-819", source_name="Existing title", cover="https://old/cover.jpg",
+        release_date=date(2025, 1, 1), maker="Existing maker", series="Existing series",
+        actors=["Existing actor"], tags=["Existing tag"],
+        storage_summary={"storage_status": "stored", "locations": [{"target_folder": "/media/MIDA-819"}]},
+    )
+    item = _seed_item_for_movie(db_session, admin_user, movie)
+    folder = tmp_path / "MIDA-819"
+    folder.mkdir()
+    fetched: list[tuple[str, list[str]]] = []
+    captured: dict[str, object] = {}
+
+    def fake_fetch(code, sources):
+        fetched.append((code, sources))
+        return SourceMetadata(
+            site_key="FANZA", cover_url="https://new/cover.jpg", studio="New maker",
+            preview_urls=["https://new/sample-1.jpg", "https://new/sample-2.jpg"],
+        )
+
+    def fake_write(folder_arg, **kwargs):
+        captured.update(kwargs)
+        return ArtworkResult(written=2, available={"folder.jpg", "backdrop.jpg"})
+
+    monkeypatch.setattr(item_runner, "fetch_by_priority", fake_fetch)
+    monkeypatch.setattr(item_runner, "write_artwork", fake_write)
+    item_runner.run_item(db_session, item, config={"scrape_root": str(tmp_path), "media_root": "/media", "metadata_sources": ["fanza", "javdb"]})
+
+    assert fetched == [("MIDA-819", ["fanza", "javdb"])]
+    assert item.source == "fanza"
+    assert movie.maker == "Existing maker"
+    assert captured["cover_url"] == "https://old/cover.jpg"
+    assert captured["backdrop_urls"] == ["https://new/sample-1.jpg", "https://new/sample-2.jpg"]
+    nfo = (folder / "movie.nfo").read_text(encoding="utf-8")
+    assert "<fanart>/media/MIDA-819/backdrop.jpg</fanart>" in nfo
 
 
 def test_worker_loop_rechecks_queue_before_retiring(db_session, admin_user, monkeypatch) -> None:

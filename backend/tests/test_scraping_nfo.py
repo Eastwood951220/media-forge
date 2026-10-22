@@ -48,6 +48,14 @@ def test_render_movie_nfo_omits_metatubeid_without_source() -> None:
     assert "<metatubeid>" not in text
 
 
+def test_render_movie_nfo_only_references_available_artwork() -> None:
+    text = render_movie_nfo(
+        _movie(), cloud_folder="/media/ADN-784", artwork={"folder.jpg"},
+    )
+    assert "<poster>/media/ADN-784/folder.jpg</poster>" in text
+    assert "<fanart>" not in text
+
+
 def test_render_movie_nfo_escapes_xml() -> None:
     text = render_movie_nfo(
         _movie(code="ADN-784", source_name='ADN-784 A & B <C>'),

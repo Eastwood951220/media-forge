@@ -139,7 +139,7 @@ Current API groups:
 - `storage/storageConfig/`: storage config and connection test.
 - `storage/storageIndex/`: storage index status and refresh.
 - `storage/storageTasks/`: storage push creation and task/subtask detail APIs.
-- `scraping/scrapingConfig/`: scraping service config, server-side folder browsing, directory scan, and metadata source priority.
+- `scraping/scrapingConfig/`: scraping service config, server-side folder browsing, directory scan, and JavDB/JavBus/FANZA metadata source priority (FANZA is optional).
 - `scraping/scrapingTasks/`: scraping task list/detail, create, cancel, and retry actions.
 
 The shared request layer is `src/request/`. It adds token injection, GET

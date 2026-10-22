@@ -269,7 +269,7 @@ export default function ScrapingConfigPage() {
                   <Form.Item label="元数据源优先级" className={styles.fieldSpan2}>
                     <SourcePriorityList
                       sources={sources}
-                      labels={{ javdb: 'JavDB', javbus: 'JavBus' }}
+                      labels={{ javdb: 'JavDB', javbus: 'JavBus', fanza: 'FANZA' }}
                       onChange={setSources}
                     />
                   </Form.Item>

@@ -7,7 +7,7 @@ export interface SourcePriorityListProps {
   onChange: (sources: string[]) => void
 }
 
-const ALL_SOURCES = ['javdb', 'javbus']
+const ALL_SOURCES = ['javdb', 'javbus', 'fanza']
 
 export default function SourcePriorityList({ sources, labels, onChange }: SourcePriorityListProps) {
   const move = (index: number, offset: number) => {

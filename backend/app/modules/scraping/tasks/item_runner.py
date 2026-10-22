@@ -114,7 +114,7 @@ def run_item(
         item.error_message = "目标文件夹不存在"
         return
 
-    metadata = None
+    metadata = fetch_by_priority(movie.code or "", list(config.get("metadata_sources") or []))
     missing = not (
         movie.cover
         and list(movie.actors or [])
@@ -123,10 +123,9 @@ def run_item(
         and str(movie.series or "").strip()
         and list(movie.tags or [])
     )
-    if missing:
-        metadata = fetch_by_priority(movie.code or "", list(config.get("metadata_sources") or []))
-        if metadata is not None:
-            item.source = metadata.site_key.lower()
+    if metadata is not None:
+        item.source = metadata.site_key.lower()
+        if missing:
             _apply_metadata(movie, metadata)
 
     if not movie.cover:
@@ -140,24 +139,30 @@ def run_item(
     else:
         referer = referer_for_url(movie.source_url) or referer_for_url(movie.cover)
 
+    previews = list(metadata.preview_urls) if metadata is not None else []
+    if not previews and metadata is not None:
+        previews = [url for url in (metadata.backdrop_url, metadata.landscape_url) if url]
+    artwork = write_artwork(
+        folder,
+        cover_url=movie.cover,
+        backdrop_urls=previews,
+        landscape_urls=previews,
+        referer=referer,
+        cover_referer=referer_for_url(movie.source_url) or referer_for_url(movie.cover) or referer,
+        transport=transport,
+    )
+    if "folder.jpg" not in artwork.available:
+        item.status = "failed"
+        item.error_message = "图片下载失败"
+        return
+
     write_movie_nfo(
         folder,
         movie,
         cloud_folder=cloud_folder,
         source_site=site_key,
+        artwork=artwork.available,
     )
-    written = write_artwork(
-        folder,
-        cover_url=movie.cover,
-        backdrop_url=metadata.backdrop_url if metadata is not None else None,
-        landscape_url=metadata.landscape_url if metadata is not None else None,
-        referer=referer,
-        transport=transport,
-    )
-    if written == 0:
-        item.status = "failed"
-        item.error_message = "图片下载失败"
-        return
 
     refresh_movie_status(db, movie, local_folder=folder, cloud_folder=cloud_folder)
     item.status = "success"

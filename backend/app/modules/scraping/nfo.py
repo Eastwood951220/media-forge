@@ -48,6 +48,7 @@ def render_movie_nfo(
     cloud_folder: str,
     source_site: str | None = None,
     dateadded: datetime | None = None,
+    artwork: set[str] | None = None,
 ) -> str:
     root = ET.Element("movie")
     ET.SubElement(root, "plot")
@@ -85,8 +86,11 @@ def render_movie_nfo(
 
     art = ET.SubElement(root, "art")
     folder = str(cloud_folder or "").rstrip("/")
-    ET.SubElement(art, "poster").text = f"{folder}/folder.jpg"
-    ET.SubElement(art, "fanart").text = f"{folder}/backdrop.jpg"
+    available = artwork if artwork is not None else {"folder.jpg", "backdrop.jpg"}
+    if "folder.jpg" in available:
+        ET.SubElement(art, "poster").text = f"{folder}/folder.jpg"
+    if "backdrop.jpg" in available:
+        ET.SubElement(art, "fanart").text = f"{folder}/backdrop.jpg"
 
     series = str(movie.series or "").strip()
     if series:
@@ -106,8 +110,11 @@ def write_movie_nfo(
     *,
     cloud_folder: str,
     source_site: str | None = None,
+    artwork: set[str] | None = None,
 ) -> None:
-    text = render_movie_nfo(movie, cloud_folder=cloud_folder, source_site=source_site)
+    if artwork is None:
+        artwork = {name for name in ("folder.jpg", "backdrop.jpg") if (Path(folder) / name).is_file()}
+    text = render_movie_nfo(movie, cloud_folder=cloud_folder, source_site=source_site, artwork=artwork)
     target = Path(folder) / "movie.nfo"
     temp = target.with_suffix(".nfo.tmp")
     temp.write_text(text, encoding="utf-8")

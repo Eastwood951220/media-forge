@@ -147,6 +147,15 @@ describe('ScrapingConfigPage', () => {
     expect(payload.metadata_sources).toEqual(['javbus', 'javdb'])
   })
 
+  it('enables FANZA as a third ordered source', async () => {
+    renderPage()
+    await screen.findByDisplayValue('/mnt/media')
+    fireEvent.click(screen.getByRole('switch', { name: '启用 FANZA' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存配置' }))
+    await waitFor(() => expect(updateScrapingConfig).toHaveBeenCalled())
+    expect(vi.mocked(updateScrapingConfig).mock.calls[0][0].metadata_sources).toEqual(['javdb', 'javbus', 'fanza'])
+  })
+
   it('runs a scan and shows the summary', async () => {
     vi.mocked(runScrapingScan).mockResolvedValue({
       folders_scanned: 10,
