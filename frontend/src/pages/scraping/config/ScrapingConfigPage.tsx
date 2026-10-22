@@ -37,7 +37,6 @@ type FormValues = {
   directory_id: number
   trigger_delay_seconds: number
   scrape_root: string
-  media_root: string
 }
 
 const DEFAULT_BASE_URL = 'http://192.168.0.36:12333'
@@ -62,7 +61,6 @@ export default function ScrapingConfigPage() {
         directory_id: config.directory_id ?? undefined,
         trigger_delay_seconds: config.trigger_delay_seconds,
         scrape_root: config.scrape_root,
-        media_root: config.media_root,
       })
       setApiKeyConfigured(config.api_key_configured)
       setMaskedApiKey(config.api_key)
@@ -93,7 +91,6 @@ export default function ScrapingConfigPage() {
       directory_id: values.directory_id,
       trigger_delay_seconds: values.trigger_delay_seconds,
       scrape_root: values.scrape_root,
-      media_root: values.media_root,
       metadata_sources: sources,
     }
     if (values.api_key?.trim()) {
@@ -250,19 +247,13 @@ export default function ScrapingConfigPage() {
               >
                 <div className={styles.fieldGrid}>
                   <Form.Item
+                    className={styles.fieldSpan2}
                     name="scrape_root"
                     label="刮削目录（本地路径）"
                     rules={[{ required: true, message: '请输入刮削目录' }]}
                     extra="文件夹列表来自服务端文件系统；Docker 部署需先把宿主机目录挂载到容器。"
                   >
                     <DirectoryPathInput placeholder="/mnt/cd2/media" />
-                  </Form.Item>
-                  <Form.Item
-                    name="media_root"
-                    label="媒体库根路径（云端）"
-                    rules={[{ required: true, message: '请输入媒体库根路径' }]}
-                  >
-                    <Input placeholder="/media" />
                   </Form.Item>
                 </div>
                 <div className={styles.fieldGrid}>

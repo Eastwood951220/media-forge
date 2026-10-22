@@ -98,10 +98,14 @@ describe('ScrapingConfigPage', () => {
     )
   })
 
-  it('loads scraping directory fields', async () => {
+  it('shows the local scraping directory without exposing the cloud mapping root', async () => {
     renderPage()
     expect(await screen.findByDisplayValue('/mnt/media')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('/media')).toBeInTheDocument()
+    expect(screen.queryByLabelText('媒体库根路径（云端）')).not.toBeInTheDocument()
+    expect(screen.queryByDisplayValue('/media')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '保存配置' }))
+    await waitFor(() => expect(updateScrapingConfig).toHaveBeenCalled())
+    expect(vi.mocked(updateScrapingConfig).mock.calls[0][0]).not.toHaveProperty('media_root')
   })
 
   it('selects the scraping folder through the folder picker', async () => {
