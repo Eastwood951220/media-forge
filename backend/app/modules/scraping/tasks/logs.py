@@ -34,18 +34,18 @@ def write_scraping_item_log(
 
 
 def read_scraping_item_logs(item_id: str) -> list[dict]:
-    path = _log_path(item_id)
-    if not path.exists():
-        return []
     entries: list[dict] = []
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(entry, dict):
-                entries.append(entry)
+    try:
+        with _log_path(item_id).open(encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(entry, dict):
+                    entries.append(entry)
+    except OSError:
+        return []
     return entries

@@ -147,17 +147,17 @@ def run_task(task_id: uuid.UUID) -> None:
                 break
             item.status = "running"
             db.commit()
-            start_item_step(db, item, "prepare", "开始刮削")
+            start_item_step(db, item, owner_id, "prepare", "开始刮削")
             try:
-                run_item(db, item, config=config)
+                run_item(db, item, config=config, owner_id=owner_id)
             except Exception as exc:
                 item.status = "failed"
                 item.error_message = f"{type(exc).__name__}: {exc}"
             db.commit()
             if item.status == "success":
-                append_item_log(item, "INFO", "刮削完成")
+                append_item_log(item, owner_id, "INFO", "刮削完成")
             elif item.status in {"failed", "skipped"}:
-                append_item_log(item, "ERROR" if item.status == "failed" else "WARNING", item.error_message or "刮削未完成")
+                append_item_log(item, owner_id, "ERROR" if item.status == "failed" else "WARNING", item.error_message or "刮削未完成")
             _recompute(task, db, task_id=task_id)
             publish_scraping_item_updated(owner_id, item)
             if item.status == "success" and item.movie_id is not None:
@@ -181,7 +181,7 @@ def run_task(task_id: uuid.UUID) -> None:
             task.status = "cancelled"
             _recompute(task, db, task_id=task_id)
             for item in skipped_items:
-                append_item_log(item, "WARNING", item.error_message or "任务已取消")
+                append_item_log(item, owner_id, "WARNING", item.error_message or "任务已取消")
                 publish_scraping_item_updated(owner_id, item)
         elif task.success_count > 0 and task.failed_count + task.skipped_count > 0:
             task.status = "partial_failed"
@@ -217,7 +217,7 @@ def _recompute(task: ScrapingTask, db, *, task_id: uuid.UUID | None = None) -> N
 def cleanup_interrupted_scraping_tasks(db) -> int:
     rows = db.query(ScrapingTask).filter(ScrapingTask.status == "running").all()
     now = datetime.now(timezone.utc)
-    interrupted_items: list[ScrapingTaskItem] = []
+    interrupted_items: list[tuple[ScrapingTaskItem, str]] = []
     for task in rows:
         task.status = "failed"
         task.finished_at = now
@@ -226,9 +226,9 @@ def cleanup_interrupted_scraping_tasks(db) -> int:
             if item.status in {"pending", "running"}:
                 item.status = "skipped"
                 item.error_message = "任务中断，需重试"
-                interrupted_items.append(item)
+                interrupted_items.append((item, str(task.created_by)))
     if rows:
         db.commit()
-        for item in interrupted_items:
-            append_item_log(item, "WARNING", item.error_message or "任务中断，需重试")
+        for item, owner_id in interrupted_items:
+            append_item_log(item, owner_id, "WARNING", item.error_message or "任务中断，需重试")
     return len(rows)

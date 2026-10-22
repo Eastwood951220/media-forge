@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy.orm import Session
 
 from backend.app.models.scraping_task import ScrapingTaskItem
@@ -9,14 +11,20 @@ from backend.app.modules.scraping.tasks.events import (
 )
 from backend.app.modules.scraping.tasks.logs import write_scraping_item_log
 
-
-def append_item_log(item: ScrapingTaskItem, level: str, message: str) -> None:
-    entry = write_scraping_item_log(str(item.id), level, message, step=item.step or None)
-    publish_scraping_item_log_appended(str(item.task.created_by), str(item.id), entry)
+logger = logging.getLogger(__name__)
 
 
-def start_item_step(db: Session, item: ScrapingTaskItem, step: str, message: str) -> None:
+def append_item_log(item: ScrapingTaskItem, owner_id: str, level: str, message: str) -> None:
+    try:
+        entry = write_scraping_item_log(str(item.id), level, message, step=item.step or None)
+    except OSError:
+        logger.warning("Could not save scraping item log: item=%s", item.id, exc_info=True)
+        return
+    publish_scraping_item_log_appended(owner_id, str(item.id), entry)
+
+
+def start_item_step(db: Session, item: ScrapingTaskItem, owner_id: str, step: str, message: str) -> None:
     item.step = step
     db.commit()
-    publish_scraping_item_updated(str(item.task.created_by), item)
-    append_item_log(item, "INFO", message)
+    publish_scraping_item_updated(owner_id, item)
+    append_item_log(item, owner_id, "INFO", message)

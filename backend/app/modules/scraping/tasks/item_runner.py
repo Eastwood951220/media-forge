@@ -97,8 +97,10 @@ def run_item(
     *,
     config: dict,
     transport=None,
+    owner_id: str | None = None,
 ) -> None:
     started = time.monotonic()
+    owner_id = owner_id or str(item.task.created_by)
     movie = db.get(Movie, item.movie_id)
     if movie is None:
         item.status = "failed"
@@ -109,14 +111,14 @@ def run_item(
         item.error_message = "未存储"
         return
 
-    start_item_step(db, item, "locate_folder", "定位影片文件夹")
+    start_item_step(db, item, owner_id, "locate_folder", "定位影片文件夹")
     folder, cloud_folder = _resolve_folder(movie, config)
     if folder is None:
         item.status = "skipped"
         item.error_message = "目标文件夹不存在"
         return
 
-    start_item_step(db, item, "fetch_metadata", "获取元数据")
+    start_item_step(db, item, owner_id, "fetch_metadata", "获取元数据")
     metadata = fetch_by_priority(movie.code or "", list(config.get("metadata_sources") or []))
     missing = not (
         movie.cover
@@ -136,7 +138,7 @@ def run_item(
         item.error_message = "缺少封面，无法生成图片"
         return
 
-    start_item_step(db, item, "write_artwork", "下载并筛选图片")
+    start_item_step(db, item, owner_id, "write_artwork", "下载并筛选图片")
     site_key = metadata.site_key if metadata is not None else None
     if metadata is not None:
         referer = source_referer(metadata.site_key)
@@ -161,7 +163,7 @@ def run_item(
         item.error_message = "图片下载失败"
         return
 
-    start_item_step(db, item, "write_nfo", "写入影片 NFO")
+    start_item_step(db, item, owner_id, "write_nfo", "写入影片 NFO")
     write_movie_nfo(
         folder,
         movie,
@@ -170,7 +172,7 @@ def run_item(
         artwork=artwork.available,
     )
 
-    start_item_step(db, item, "refresh_status", "更新影片刮削状态")
+    start_item_step(db, item, owner_id, "refresh_status", "更新影片刮削状态")
     refresh_movie_status(db, movie, local_folder=folder, cloud_folder=cloud_folder)
     item.status = "success"
     item.folder = cloud_folder
