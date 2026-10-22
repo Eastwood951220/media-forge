@@ -315,3 +315,78 @@ def test_dashboard_content_section_builds_top_rankings(admin_user) -> None:
     assert {item.name for item in rankings.recent_created.tags}.isdisjoint({"單體作品", "中出"})
     assert [item.name for item in rankings.recent_storage.actors] == ["演员A", "演员B"]
     assert [item.name for item in rankings.recent_created.actors] == ["演员A", "演员B", "演员C"]
+
+
+class RankingCacheStub:
+    def __init__(self) -> None:
+        self.now = 0
+        self.value: str | None = None
+        self.expires_at = 0
+
+    def get(self, _key: str) -> str | None:
+        return self.value if self.now < self.expires_at else None
+
+    def setex(self, _key: str, ttl: int, value: str) -> None:
+        self.value = value
+        self.expires_at = self.now + ttl
+
+
+def _overview_with_cache(session, owner_id, cache):
+    return build_dashboard_overview(
+        db=session,
+        owner_id=owner_id,
+        queue_status={"queue_size": 0, "is_running": False, "current_run_id": None, "stop_requested": False},
+        index_metadata={"target_folder": "", "status": "completed", "category_count": 0, "code_folder_count": 0, "video_count": 0, "completed_at": None, "errors": []},
+        ranking_cache=cache,
+    )
+
+
+def test_ranking_cache_keeps_dynamic_movie_count_live_and_expires_after_five_minutes(admin_user) -> None:
+    session = TestingSessionLocal()
+    cache = RankingCacheStub()
+    session.add(Movie(code="CACHE-001", source_url="https://example.test/cache-1", maker="片商A"))
+    session.commit()
+
+    first = _overview_with_cache(session, admin_user.id, cache)
+    assert first.content.movie_total == 1
+    assert first.content.rankings.total.makers[0].name == "片商A"
+    assert datetime.fromisoformat(first.content.rankings_updated_at).tzinfo is not None
+
+    session.add(Movie(code="CACHE-002", source_url="https://example.test/cache-2", maker="片商B"))
+    session.commit()
+    cache.now = 299
+    hit = _overview_with_cache(session, admin_user.id, cache)
+    assert hit.content.movie_total == 2
+    assert [item.name for item in hit.content.rankings.total.makers] == ["片商A"]
+    assert hit.content.rankings_updated_at == first.content.rankings_updated_at
+
+    cache.now = 300
+    expired = _overview_with_cache(session, admin_user.id, cache)
+    assert {item.name for item in expired.content.rankings.total.makers} == {"片商A", "片商B"}
+    assert expired.content.rankings_updated_at != first.content.rankings_updated_at
+    assert expired.partial_errors == []
+    session.close()
+
+
+def test_ranking_cache_failure_or_invalid_json_falls_back_to_database(admin_user) -> None:
+    session = TestingSessionLocal()
+    session.add(Movie(code="CACHE-003", source_url="https://example.test/cache-3", maker="片商C"))
+    session.commit()
+    cache = RankingCacheStub()
+    cache.value = "{invalid json"
+    cache.expires_at = 300
+    invalid = _overview_with_cache(session, admin_user.id, cache)
+    assert invalid.content.rankings.total.makers[0].name == "片商C"
+    assert invalid.partial_errors == []
+
+    class FailedCache:
+        def get(self, _key):
+            raise ConnectionError("redis unavailable")
+
+        def setex(self, _key, _ttl, _value):
+            raise ConnectionError("redis unavailable")
+
+    unavailable = _overview_with_cache(session, admin_user.id, FailedCache())
+    assert unavailable.content.rankings.total.makers[0].name == "片商C"
+    assert unavailable.partial_errors == []
+    session.close()

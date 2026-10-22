@@ -5,6 +5,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
+from redis import Redis
 from sqlalchemy import case, func, literal, type_coerce
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, noload
@@ -24,6 +25,7 @@ from backend.app.modules.dashboard.schemas import (
     DashboardOverviewDraft,
     DashboardQueueStatus,
     DashboardContentRankings,
+    DashboardRankingsCacheEntry,
     DashboardRankingGroup,
     DashboardRunsSection,
     DashboardRuntimeStats,
@@ -44,6 +46,8 @@ TREND_DAYS = 7
 RANKING_LIMIT = 5
 RECENT_RANKING_DAYS = 30
 EXCLUDED_RANKING_TAGS = {"單體作品", "中出"}
+RANKINGS_CACHE_KEY = "dashboard:content:rankings:v2"
+RANKINGS_CACHE_TTL_SECONDS = 300
 
 
 def _iso(value) -> str | None:
@@ -282,12 +286,32 @@ def _build_content_rankings(db: Session) -> DashboardContentRankings:
     )
 
 
-def _build_content_section(db: Session) -> DashboardContentSection:
+def _build_cached_content_rankings(db: Session, ranking_cache: Redis | None) -> DashboardRankingsCacheEntry:
+    if ranking_cache is not None:
+        try:
+            cached = ranking_cache.get(RANKINGS_CACHE_KEY)
+            if cached:
+                return DashboardRankingsCacheEntry.model_validate_json(cached)
+        except Exception:
+            pass
+
+    entry = DashboardRankingsCacheEntry(updated_at=datetime.now(timezone.utc), rankings=_build_content_rankings(db))
+    if ranking_cache is not None:
+        try:
+            ranking_cache.setex(RANKINGS_CACHE_KEY, RANKINGS_CACHE_TTL_SECONDS, entry.model_dump_json())
+        except Exception:
+            pass
+    return entry
+
+
+def _build_content_section(db: Session, ranking_cache: Redis | None = None) -> DashboardContentSection:
     total, counts = _count_movie_storage_statuses(db)
+    ranking_entry = _build_cached_content_rankings(db, ranking_cache)
     return DashboardContentSection(
         movie_total=total,
         storage_status=DashboardMovieStorageStatus(**counts),
-        rankings=_build_content_rankings(db),
+        rankings=ranking_entry.rankings,
+        rankings_updated_at=ranking_entry.updated_at.isoformat(),
     )
 
 
@@ -389,6 +413,7 @@ def build_dashboard_overview(
     owner_id: uuid.UUID,
     queue_status: dict,
     index_metadata: dict,
+    ranking_cache: Redis | None = None,
 ) -> DashboardOverview:
     partial_errors: list[PartialError] = []
     crawler = _safe_section(
@@ -398,7 +423,7 @@ def build_dashboard_overview(
         lambda: _build_crawler_section(db, owner_id, queue_status),
     )
     runs = _safe_section("runs", partial_errors, DashboardRunsSection(), lambda: _build_runs_section(db, owner_id))
-    content = _safe_section("content", partial_errors, DashboardContentSection(), lambda: _build_content_section(db))
+    content = _safe_section("content", partial_errors, DashboardContentSection(), lambda: _build_content_section(db, ranking_cache))
     storage = _safe_section(
         "storage",
         partial_errors,

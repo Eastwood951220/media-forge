@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -88,10 +89,16 @@ class DashboardContentRankings(BaseModel):
     recent_created: DashboardRankingGroup = Field(default_factory=DashboardRankingGroup)
 
 
+class DashboardRankingsCacheEntry(BaseModel):
+    updated_at: datetime
+    rankings: DashboardContentRankings
+
+
 class DashboardContentSection(BaseModel):
     movie_total: int = 0
     storage_status: DashboardMovieStorageStatus = Field(default_factory=DashboardMovieStorageStatus)
     rankings: DashboardContentRankings = Field(default_factory=DashboardContentRankings)
+    rankings_updated_at: str | None = None
 
 
 class DashboardStorageIndex(BaseModel):
