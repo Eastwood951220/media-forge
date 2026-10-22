@@ -43,6 +43,7 @@ const INITIAL_FILTER_STATE: MovieFilterState = {
   selectedSeries: [],
   selectedSeriesNot: [],
   storageStatus: undefined,
+  scrapingStatus: undefined,
   releaseDateFrom: null,
   releaseDateTo: null,
   createdAtFrom: null,

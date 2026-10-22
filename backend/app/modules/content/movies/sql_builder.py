@@ -133,6 +133,8 @@ def build_movie_list_statement(
         conditions.append(
             normalized_storage_status_expression(Movie.storage_summary) == filters.storage_status,
         )
+    if filters.scraping_status:
+        conditions.append(Movie.scraping_status == filters.scraping_status)
 
     # PostgreSQL array conditions
     if dialect_name == "postgresql":

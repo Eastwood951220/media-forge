@@ -28,6 +28,7 @@ class MovieListFilters:
     created_at_from: str | None = None
     created_at_to: str | None = None
     storage_status: str | None = None
+    scraping_status: str | None = None
 
 
 def split_csv(value: str | None) -> list[str]:

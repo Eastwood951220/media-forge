@@ -331,6 +331,27 @@ describe('useMovieList', () => {
     }))
   })
 
+  it('refreshes a scraping-status-filtered list after a scraping update', async () => {
+    vi.mocked(fetchMovies)
+      .mockResolvedValueOnce({
+        items: [{ _id: 'movie-1', scraping_status: 'not_scraped' }],
+        total: 1, page: 1, limit: 20, total_pages: 1,
+      } as never)
+      .mockResolvedValueOnce({
+        items: [], total: 0, page: 1, limit: 20, total_pages: 0,
+      } as never)
+
+    const { result } = renderHook(() => useMovieList({ scraping_status: 'not_scraped' }), { wrapper })
+    await waitFor(() => expect(result.current.data.total).toBe(1))
+
+    act(() => {
+      result.current.applyScrapingUpdates([{ movie_id: 'movie-1', scraping_status: 'scraped' }])
+    })
+
+    await waitFor(() => expect(result.current.data.total).toBe(0))
+    expect(fetchMovies).toHaveBeenLastCalledWith(expect.objectContaining({ scraping_status: 'not_scraped' }))
+  })
+
   it('persists only pagination metadata instead of whole list rows', async () => {
     vi.mocked(fetchMovies).mockResolvedValue({
       items: [{ _id: 'movie-1', storage_status: 'stored', storage_summary: { storage_status: 'stored' } }],

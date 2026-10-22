@@ -457,6 +457,48 @@ def test_movie_payload_and_filter_use_three_storage_statuses(client: TestClient,
     assert stored.json()["rows"][0]["storage_status"] == "stored"
 
 
+def test_movie_list_filters_by_scraping_status_before_pagination(client: TestClient, admin_user) -> None:
+    headers = auth_headers(client, admin_user)
+    session = TestingSessionLocal()
+    session.add_all([
+        Movie(code="SCRAPE-100", source_url="https://example.test/scrape1", source_name="已刮削", scraping_status="scraped"),
+        Movie(code="SCRAPE-200", source_url="https://example.test/scrape2", source_name="未刮削", scraping_status="not_scraped"),
+        Movie(code="SCRAPE-300", source_url="https://example.test/scrape3", source_name="未检查", scraping_status=None),
+    ])
+    session.commit()
+    session.close()
+
+    scraped = client.get("/api/content/movies?scraping_status=scraped&limit=1", headers=headers)
+    not_scraped = client.get("/api/content/movies?scraping_status=not_scraped&limit=1", headers=headers)
+    combined = client.get("/api/content/movies?storage_status=not_stored&scraping_status=scraped", headers=headers)
+
+    assert scraped.status_code == 200
+    assert scraped.json()["total"] == 1
+    assert [row["code"] for row in scraped.json()["rows"]] == ["SCRAPE-100"]
+    assert not_scraped.status_code == 200
+    assert not_scraped.json()["total"] == 1
+    assert [row["code"] for row in not_scraped.json()["rows"]] == ["SCRAPE-200"]
+    assert [row["code"] for row in combined.json()["rows"]] == ["SCRAPE-100"]
+
+
+def test_storage_sync_selection_respects_scraping_status_filter(db_session) -> None:
+    from backend.app.modules.content.movies.storage_sync_service import select_movies_for_storage_sync
+
+    db_session.add_all([
+        Movie(code="SYNC-SCRAPE-1", source_url="https://example.test/sync1", source_name="已刮削", scraping_status="scraped"),
+        Movie(code="SYNC-SCRAPE-2", source_url="https://example.test/sync2", source_name="未刮削", scraping_status="not_scraped"),
+    ])
+    db_session.commit()
+
+    rows = select_movies_for_storage_sync(
+        db_session,
+        movie_ids=None,
+        filters={"scraping_status": "not_scraped"},
+    )
+
+    assert [movie.code for movie in rows] == ["SYNC-SCRAPE-2"]
+
+
 def test_sync_movie_storage_status_api_syncs_selected_movies(client: TestClient, admin_user, monkeypatch, tmp_path):
     from backend.app.models.crawl_task import CrawlTask
     from backend.app.modules.storage.index.models import StorageIndexMetadata, StorageIndexRecord

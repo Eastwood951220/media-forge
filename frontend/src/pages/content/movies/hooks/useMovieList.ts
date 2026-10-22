@@ -89,6 +89,14 @@ export function useMovieList(
     const filterKey = filterParams === undefined ? "__not_ready__" : JSON.stringify(filterParams);
     const previousFilterKeyRef = useRef<string | null>(null);
     const requestSeqRef = useRef(0);
+    const scrapingReloadTimerRef = useRef<number | null>(null);
+
+    useEffect(() => () => {
+        if (scrapingReloadTimerRef.current !== null) {
+            window.clearTimeout(scrapingReloadTimerRef.current);
+            scrapingReloadTimerRef.current = null;
+        }
+    }, [filterKey]);
 
     useEffect(() => {
         if (!filterParams) return;
@@ -246,6 +254,17 @@ export function useMovieList(
     const applyScrapingUpdates = useCallback(
         (updates: Array<{ movie_id: string; scraping_status: Movie['scraping_status']; scraping_checked_at?: string | null }>) => {
             if (updates.length === 0) return;
+            if (filterParams?.scraping_status) {
+                // A status change can remove a visible movie or add an off-page one.
+                // Refetch the filtered page and total once for a burst of events.
+                if (scrapingReloadTimerRef.current === null) {
+                    scrapingReloadTimerRef.current = window.setTimeout(() => {
+                        scrapingReloadTimerRef.current = null;
+                        void loadMovies();
+                    }, 100);
+                }
+                return;
+            }
             const byId = new Map(updates.map((update) => [update.movie_id, update]));
             setData((current) => ({
                 ...current,
@@ -260,7 +279,7 @@ export function useMovieList(
                 }),
             }));
         },
-        [],
+        [filterParams?.scraping_status, loadMovies],
     );
 
     const syncStorageStatus = useCallback(async () => {

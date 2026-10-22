@@ -55,4 +55,6 @@ def movie_matches(movie: Movie, filters: MovieListFilters) -> bool:
         return False
     if filters.storage_status and normalized_movie_storage_status(movie) != filters.storage_status:
         return False
+    if filters.scraping_status and movie.scraping_status != filters.scraping_status:
+        return False
     return True

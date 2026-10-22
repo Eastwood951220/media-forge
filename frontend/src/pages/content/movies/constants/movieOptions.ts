@@ -15,3 +15,8 @@ export const MOVIE_STORAGE_STATUS_OPTIONS: SelectOption[] = [
     {value: "storing", label: "入库中"},
     {value: "stored", label: "已存储"},
 ];
+
+export const MOVIE_SCRAPING_STATUS_OPTIONS: SelectOption[] = [
+    {value: "scraped", label: "已刮削"},
+    {value: "not_scraped", label: "未刮削"},
+];

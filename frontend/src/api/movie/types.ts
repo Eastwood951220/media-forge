@@ -97,7 +97,7 @@ export interface SelectOption<T = string> {
 export type MovieFilterField =
   | 'actors' | 'tags' | 'director' | 'maker' | 'series'
   | 'actorsNot' | 'tagsNot' | 'directorNot' | 'makerNot' | 'seriesNot'
-  | 'storageStatus' | 'ratingMin' | 'ratingMax'
+  | 'storageStatus' | 'scrapingStatus' | 'ratingMin' | 'ratingMax'
   | 'actorsCountMin' | 'actorsCountMax'
   | 'releaseDateFrom' | 'releaseDateTo'
   | 'createdAtFrom' | 'createdAtTo' | 'sortBy'

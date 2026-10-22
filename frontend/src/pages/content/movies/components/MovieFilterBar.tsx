@@ -3,6 +3,7 @@ import {Input, Select, InputNumber, DatePicker, Button, Space} from "antd";
 import {SearchOutlined, ReloadOutlined, SettingOutlined} from "@ant-design/icons";
 import type {MovieFilters} from "../hooks/useMovieFilters";
 import type {MovieFilterConfig, MovieFilterField} from "@/api/movie/types";
+import {MOVIE_SCRAPING_STATUS_OPTIONS} from "../constants";
 import styles from "../MovieListPage.module.less";
 
 // Module-level constant — defines all filter items with their default order
@@ -18,15 +19,16 @@ const FILTER_ITEMS: {key: MovieFilterField; label: string; defaultOrder: number}
     {key: "series", label: "系列筛选", defaultOrder: 8},
     {key: "seriesNot", label: "排除系列", defaultOrder: 9},
     {key: "storageStatus", label: "存储状态", defaultOrder: 10},
-    {key: "ratingMin", label: "最低评分", defaultOrder: 11},
-    {key: "ratingMax", label: "最高评分", defaultOrder: 12},
-    {key: "actorsCountMin", label: "最少演员", defaultOrder: 13},
-    {key: "actorsCountMax", label: "最多演员", defaultOrder: 14},
-    {key: "releaseDateFrom", label: "发行开始", defaultOrder: 15},
-    {key: "releaseDateTo", label: "发行结束", defaultOrder: 16},
-    {key: "createdAtFrom", label: "入库开始", defaultOrder: 17},
-    {key: "createdAtTo", label: "入库结束", defaultOrder: 18},
-    {key: "sortBy", label: "排序", defaultOrder: 19},
+    {key: "scrapingStatus", label: "刮削状态", defaultOrder: 11},
+    {key: "ratingMin", label: "最低评分", defaultOrder: 12},
+    {key: "ratingMax", label: "最高评分", defaultOrder: 13},
+    {key: "actorsCountMin", label: "最少演员", defaultOrder: 14},
+    {key: "actorsCountMax", label: "最多演员", defaultOrder: 15},
+    {key: "releaseDateFrom", label: "发行开始", defaultOrder: 16},
+    {key: "releaseDateTo", label: "发行结束", defaultOrder: 17},
+    {key: "createdAtFrom", label: "入库开始", defaultOrder: 18},
+    {key: "createdAtTo", label: "入库结束", defaultOrder: 19},
+    {key: "sortBy", label: "排序", defaultOrder: 20},
 ];
 
 // Date picker keys that are rendered as paired groups
@@ -54,7 +56,7 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
 
     const {search, selectedTask, selectedActors, selectedActorsNot, selectedTags, selectedTagsNot,
         selectedDirectors, selectedDirectorsNot, selectedMakers, selectedMakersNot,
-        selectedSeries, selectedSeriesNot, storageStatus,
+        selectedSeries, selectedSeriesNot, storageStatus, scrapingStatus,
         ratingMin, ratingMax, actorsCountMin, actorsCountMax,
         releaseDateFrom, releaseDateTo, createdAtFrom, createdAtTo,
     } = form;
@@ -80,6 +82,7 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
             {value: "storing", label: "入库中"},
             {value: "stored", label: "已存储"},
         ]} />,
+        scrapingStatus: <Select className={styles.filterSelect} value={scrapingStatus} onChange={(v) => patchForm({scrapingStatus: v})} placeholder="刮削状态筛选" allowClear options={MOVIE_SCRAPING_STATUS_OPTIONS} />,
         ratingMin: <InputNumber className={styles.filterNumber} placeholder="最低评分" min={0} max={5} step={0.1} value={ratingMin} onChange={(v) => patchForm({ratingMin: v ?? undefined})} />,
         ratingMax: <InputNumber className={styles.filterNumber} placeholder="最高评分" min={0} max={5} step={0.1} value={ratingMax} onChange={(v) => patchForm({ratingMax: v ?? undefined})} />,
         actorsCountMin: <InputNumber className={styles.filterNumber} placeholder="最少演员" min={0} value={actorsCountMin} onChange={(v) => patchForm({actorsCountMin: v ?? undefined})} />,

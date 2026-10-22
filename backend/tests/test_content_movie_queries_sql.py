@@ -186,6 +186,18 @@ def test_postgresql_storage_status_filter_is_pushed_into_sql() -> None:
     assert "'completed'" in sql
 
 
+def test_postgresql_scraping_status_filter_is_pushed_into_sql() -> None:
+    statement = build_movie_list_statement(
+        MovieListFilters(scraping_status="not_scraped"),
+        sort_by="code",
+        sort_order=1,
+        dialect_name="postgresql",
+    )
+    sql = str(statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+
+    assert "movies.scraping_status = 'not_scraped'" in sql
+
+
 def test_sqlite_storage_status_filter_stays_in_python() -> None:
     from sqlalchemy.dialects import sqlite as sqlite_dialect
 

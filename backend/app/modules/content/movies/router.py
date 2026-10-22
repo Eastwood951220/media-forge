@@ -78,6 +78,7 @@ def list_movies(
     created_at_from: str | None = Query(default=None),
     created_at_to: str | None = Query(default=None),
     storage_status: str | None = Query(default=None),
+    scraping_status: str | None = Query(default=None),
 ) -> dict:
     search_text = search or keyword
     rows, total = list_movies_page(
@@ -104,6 +105,7 @@ def list_movies(
             created_at_from=created_at_from,
             created_at_to=created_at_to,
             storage_status=storage_status,
+            scraping_status=scraping_status,
         ),
         sort_by=sort_by,
         sort_order=sort_order,
