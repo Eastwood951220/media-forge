@@ -156,7 +156,7 @@ def test_run_item_passes_site_referer_to_artwork(db_session, admin_user, monkeyp
     )
     captured: dict[str, object] = {}
 
-    def fake_write_artwork(folder_arg, *, cover_url, backdrop_urls, landscape_urls, referer=None, cover_referer=None, transport=None):
+    def fake_write_artwork(folder_arg, *, cover_url, source_cover_url=None, backdrop_urls, landscape_urls, referer=None, cover_referer=None, transport=None):
         captured.update(
             folder=str(folder_arg),
             cover_url=cover_url,
@@ -334,7 +334,7 @@ def test_run_item_uses_source_url_referer_for_complete_db_movie(
     )
     captured: dict[str, object] = {}
 
-    def fake_write_artwork(folder_arg, *, cover_url, backdrop_urls, landscape_urls, referer=None, cover_referer=None, transport=None):
+    def fake_write_artwork(folder_arg, *, cover_url, source_cover_url=None, backdrop_urls, landscape_urls, referer=None, cover_referer=None, transport=None):
         captured["referer"] = referer
         return ArtworkResult(written=1, available={"folder.jpg"})
 
@@ -393,6 +393,7 @@ def test_run_item_fetches_fanza_artwork_for_complete_movie_without_overwriting_f
     assert item.source == "fanza"
     assert movie.maker == "Existing maker"
     assert captured["cover_url"] == "https://old/cover.jpg"
+    assert captured["source_cover_url"] == "https://new/cover.jpg"
     assert captured["backdrop_urls"] == ["https://new/sample-1.jpg", "https://new/sample-2.jpg"]
     nfo = (folder / "movie.nfo").read_text(encoding="utf-8")
     assert "<fanart>/media/MIDA-819/backdrop.jpg</fanart>" in nfo

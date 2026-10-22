@@ -106,9 +106,9 @@ def _same_picture(left: bytes, right: bytes) -> bool:
             ratio_b = second.width / second.height
             if abs(ratio_a - ratio_b) > 0.1:
                 return False
-            # Normalize size and small aspect differences before comparing pixels.
-            a = ImageOps.fit(first.convert("RGB"), (32, 32), method=Image.Resampling.LANCZOS)
-            b = ImageOps.fit(second.convert("RGB"), (32, 32), method=Image.Resampling.LANCZOS)
+            # Preserve edges: a center crop can make different scenes compare equal.
+            a = ImageOps.pad(first.convert("RGB"), (32, 32), method=Image.Resampling.LANCZOS)
+            b = ImageOps.pad(second.convert("RGB"), (32, 32), method=Image.Resampling.LANCZOS)
             difference = sum(abs(x - y) for x, y in zip(a.tobytes(), b.tobytes())) / (32 * 32 * 3)
             return difference <= 6.0
     except (OSError, UnidentifiedImageError, ValueError, ZeroDivisionError):
@@ -131,6 +131,7 @@ def write_artwork(
     folder: Path,
     *,
     cover_url: str | None,
+    source_cover_url: str | None = None,
     backdrop_urls: list[str],
     landscape_urls: list[str],
     referer: str | None = None,
@@ -153,6 +154,10 @@ def write_artwork(
     selected: dict[str, bytes] = {}
     if cover_path.is_file():
         selected["folder.jpg"] = cover_path.read_bytes()
+    comparison_only: list[bytes] = []
+    if source_cover_url and source_cover_url != cover_url and (backdrop_urls or landscape_urls):
+        if source_cover := fetch(source_cover_url):
+            comparison_only.append(source_cover)
 
     for filename, candidates in (("backdrop.jpg", backdrop_urls), ("landscape.jpg", landscape_urls)):
         target = folder / filename
@@ -160,7 +165,7 @@ def write_artwork(
         for url in dict.fromkeys(candidates):
             if not url or not (data := fetch(url)):
                 continue
-            if any(_same_picture(data, previous) for previous in selected.values()):
+            if any(_same_picture(data, previous) for previous in [*selected.values(), *comparison_only]):
                 logger.info("Skipping duplicate artwork: slot=%s url=%s", filename, url)
                 continue
             if _save_image(target, data):
@@ -170,7 +175,7 @@ def write_artwork(
                 break
         if not chosen and target.is_file():
             old = target.read_bytes()
-            if any(_same_picture(old, previous) for previous in selected.values()):
+            if any(_same_picture(old, previous) for previous in [*selected.values(), *comparison_only]):
                 target.unlink(missing_ok=True)
                 logger.info("Removed duplicate old artwork: path=%s", target)
             else:

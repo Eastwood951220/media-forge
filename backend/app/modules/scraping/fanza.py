@@ -234,9 +234,9 @@ class FanzaAdapter:
                         metadata = self._digital(client, item, wanted) if urlparse(url).hostname == "video.dmm.co.jp" else self._dvd(client, item, wanted)
                         if metadata and metadata.cover_url:
                             return metadata
-                    except (httpx.HTTPError, ValueError, TypeError, KeyError):
+                    except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
                         logger.warning("FANZA detail unavailable: code=%s url=%s", code, url, exc_info=True)
                 logger.info("FANZA exact metadata not found: code=%s", code)
-        except (httpx.HTTPError, ValueError, TypeError):
+        except (httpx.HTTPError, ValueError, TypeError, AttributeError):
             logger.warning("FANZA search unavailable: code=%s", code, exc_info=True)
         return None

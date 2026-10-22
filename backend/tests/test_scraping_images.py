@@ -154,3 +154,41 @@ def test_write_artwork_does_not_confuse_different_colors_with_equal_luminance(tm
 
     assert result.available == {"folder.jpg", "backdrop.jpg"}
 
+
+def test_write_artwork_preserves_existing_scene_when_only_edges_differ(tmp_path: Path) -> None:
+    def edged(color: str) -> bytes:
+        image = Image.new("RGB", (300, 100), "gray")
+        ImageDraw.Draw(image).rectangle((0, 0, 85, 99), fill=color)
+        buffer = BytesIO()
+        image.save(buffer, format="JPEG", quality=95)
+        return buffer.getvalue()
+
+    (tmp_path / "folder.jpg").write_bytes(edged("red"))
+    (tmp_path / "backdrop.jpg").write_bytes(edged("blue"))
+
+    result = write_artwork(tmp_path, cover_url=None, backdrop_urls=[], landscape_urls=[])
+
+    assert result.available == {"folder.jpg", "backdrop.jpg"}
+
+
+def test_write_artwork_excludes_source_cover_like_sample_when_preserving_db_cover(tmp_path: Path) -> None:
+    urls = {
+        "/db.jpg": _jpeg("scene-a"),
+        "/source-cover.jpg": _jpeg("cover"),
+        "/source-cover-large.jpg": _jpeg("cover", (320, 200)),
+        "/actual-scene.jpg": Image.new("RGB", (160, 100), "green"),
+    }
+    buffer = BytesIO()
+    urls["/actual-scene.jpg"].save(buffer, format="JPEG")
+    urls["/actual-scene.jpg"] = buffer.getvalue()
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=urls[request.url.path], headers={"content-type": "image/jpeg"}))
+
+    result = write_artwork(
+        tmp_path, cover_url="https://db/db.jpg", source_cover_url="https://source/source-cover.jpg",
+        backdrop_urls=["https://source/source-cover-large.jpg", "https://source/actual-scene.jpg"],
+        landscape_urls=[], transport=transport,
+    )
+
+    assert result.available == {"folder.jpg", "backdrop.jpg"}
+    assert (tmp_path / "backdrop.jpg").read_bytes() == urls["/actual-scene.jpg"]
+

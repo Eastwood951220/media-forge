@@ -145,6 +145,7 @@ def run_item(
     artwork = write_artwork(
         folder,
         cover_url=movie.cover,
+        source_cover_url=metadata.cover_url if metadata is not None else None,
         backdrop_urls=previews,
         landscape_urls=previews,
         referer=referer,

@@ -2,7 +2,9 @@ import json
 
 import httpx
 
+from backend.app.modules.scraping import sources
 from backend.app.modules.scraping.fanza import FanzaAdapter
+from backend.app.modules.scraping.source_types import SourceMetadata
 
 
 def _search_page(products: list[dict]) -> str:
@@ -96,3 +98,33 @@ def test_fanza_ignores_external_detail_urls() -> None:
 
     assert FanzaAdapter(transport=httpx.MockTransport(handle)).fetch_by_code("MIDA-819") is None
     assert all("other.example" not in call for call in calls)
+
+
+def test_fanza_malformed_digital_images_fall_through_without_crashing() -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "www.dmm.co.jp":
+            return httpx.Response(200, text=_search_page([
+                {"content_id": "mida00819", "detail_url": "https://video.dmm.co.jp/av/content/?id=mida00819"},
+            ]))
+        return httpx.Response(200, json={"data": {"ppvContent": {
+            "id": "mida00819", "makerContentId": "MIDA-819", "packageImage": {"largeUrl": "https://img/cover.jpg"},
+            "sampleImages": "malformed",
+        }}})
+
+    assert FanzaAdapter(transport=httpx.MockTransport(handle)).fetch_by_code("MIDA-819") is None
+
+
+def test_fanza_malformed_search_contents_falls_back_to_next_source(monkeypatch) -> None:
+    class Backup:
+        def fetch_by_code(self, _code: str) -> SourceMetadata:
+            return SourceMetadata(site_key="JavDB", cover_url="https://backup/cover.jpg")
+
+    monkeypatch.setitem(sources.SOURCE_REGISTRY, "javdb", Backup())
+    for contents in (None, []):
+        payload = json.dumps(["$", {"backendResponse": {"contents": contents}}])
+        push = json.dumps([1, "1c:" + payload])
+        page = f"<script>self.__next_f.push({push})</script>"
+        adapter = FanzaAdapter(transport=httpx.MockTransport(lambda _request: httpx.Response(200, text=page)))
+        monkeypatch.setitem(sources.SOURCE_REGISTRY, "fanza", adapter)
+        result = sources.fetch_by_priority("MIDA-819", ["fanza", "javdb"])
+        assert result is not None and result.site_key == "JavDB"
