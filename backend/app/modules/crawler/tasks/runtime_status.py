@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Literal
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 
 from backend.app.models.crawl_run import CrawlRun
 from backend.app.models.crawl_task import CrawlTask
@@ -79,6 +79,7 @@ def _latest_runs_by_task(db: Session, task_ids: list[uuid.UUID]) -> dict[uuid.UU
         db.query(CrawlRun)
         .join(ranked, CrawlRun.id == ranked.c.run_id)
         .filter(ranked.c.rank == 1)
+        .options(noload(CrawlRun.detail_tasks))
         .all()
     )
     return {row.task_id: row for row in rows if row.task_id is not None}
@@ -117,6 +118,7 @@ def build_task_runtime_status_response_for_task_ids(
     tasks = (
         db.query(CrawlTask)
         .filter(CrawlTask.owner_id == owner_id, CrawlTask.id.in_(task_ids))
+        .options(noload(CrawlTask.urls))
         .all()
     )
     task_by_id = {task.id: task for task in tasks}
@@ -152,6 +154,7 @@ def build_task_runtime_status_response(db: Session, owner_id: uuid.UUID) -> Craw
         db.query(CrawlTask)
         .filter(CrawlTask.owner_id == owner_id)
         .order_by(CrawlTask.created_at.desc())
+        .options(noload(CrawlTask.urls))
         .all()
     )
     latest_runs = _latest_runs_by_task(db, [task.id for task in tasks])

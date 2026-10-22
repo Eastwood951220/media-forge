@@ -7,7 +7,7 @@ from typing import Callable
 
 from sqlalchemy import case, func, literal, type_coerce
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 
 from backend.app.models.crawl_run import CrawlRun
 from backend.app.models.crawl_task import CrawlTask
@@ -87,7 +87,7 @@ def _build_runs_section(db: Session, owner_id: uuid.UUID) -> DashboardRunsSectio
     owner_task_ids = db.query(CrawlTask.id).filter(CrawlTask.owner_id == owner_id).subquery()
     owner_runs = db.query(CrawlRun).filter(CrawlRun.task_id.in_(owner_task_ids))
     status_rows = owner_runs.with_entities(CrawlRun.status, func.count(CrawlRun.id)).group_by(CrawlRun.status).all()
-    recent_rows = owner_runs.order_by(CrawlRun.created_at.desc()).limit(RECENT_LIMIT).all()
+    recent_rows = owner_runs.order_by(CrawlRun.created_at.desc()).limit(RECENT_LIMIT).options(noload(CrawlRun.detail_tasks)).all()
     since = datetime.now(timezone.utc) - timedelta(days=TREND_DAYS - 1)
     trend_rows = (
         owner_runs.filter(CrawlRun.created_at >= since)

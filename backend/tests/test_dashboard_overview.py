@@ -3,6 +3,7 @@ from http import HTTPStatus
 import uuid
 
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 from sqlalchemy.dialects import postgresql
 
 from backend.app.models.crawl_run import CrawlRun
@@ -133,6 +134,36 @@ def test_build_dashboard_overview_counts_real_state(admin_user) -> None:
     assert overview.content.storage_status.not_stored == 1
     assert {item.status: item.count for item in overview.runs.status_distribution}["failed"] == 1
     assert overview.alerts[0].severity == "error"
+
+
+def test_overview_does_not_load_task_urls_or_run_details(admin_user) -> None:
+    session = TestingSessionLocal()
+    task = CrawlTask(name="lightweight", storage_location="JP", owner_id=admin_user.id)
+    session.add(task)
+    session.flush()
+    session.add(CrawlRun(task_id=task.id, task_name=task.name, status="completed"))
+    session.commit()
+
+    statements: list[str] = []
+
+    def record_sql(_connection, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    engine = session.get_bind()
+    event.listen(engine, "before_cursor_execute", record_sql)
+    try:
+        build_dashboard_overview(
+            db=session,
+            owner_id=admin_user.id,
+            queue_status={"queue_size": 0, "is_running": False, "current_run_id": None, "stop_requested": False},
+            index_metadata={"target_folder": "", "status": "completed", "category_count": 0, "code_folder_count": 0, "video_count": 0, "completed_at": None, "errors": []},
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", record_sql)
+        session.close()
+
+    assert not any("from crawl_task_urls" in sql for sql in statements)
+    assert not any("from crawl_run_detail_tasks" in sql for sql in statements)
 
 
 def test_derive_system_status_precedence() -> None:
