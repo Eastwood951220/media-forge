@@ -84,6 +84,7 @@ export interface DashboardContentSection {
   movie_total: number
   storage_status: DashboardMovieStorageStatus
   rankings: DashboardContentRankings
+  rankings_updated_at: string | null
 }
 
 export interface DashboardStorageIndex {

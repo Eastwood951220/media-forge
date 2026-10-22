@@ -54,7 +54,7 @@ function DashboardPage() {
       ) : null}
       <DashboardMetricCards overview={data} />
       <DashboardCharts distribution={data.runs.status_distribution} trend={data.runs.daily_trend} />
-      <DashboardContentRankings rankings={data.content.rankings} />
+      <DashboardContentRankings rankings={data.content.rankings} updatedAt={data.content.rankings_updated_at} />
       <section className={styles.workGrid}>
         <DashboardRecentTabs overview={data} />
         <DashboardAlerts alerts={data.alerts} />

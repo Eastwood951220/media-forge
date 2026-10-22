@@ -21,6 +21,7 @@ const overview: DashboardOverview = {
   content: {
     movie_total: 10,
     storage_status: { stored: 6, storing: 1, not_stored: 3 },
+    rankings_updated_at: '2026-07-13T00:00:00Z',
     rankings: {
       total: {
         actors: [{ name: '演员A', count: 6 }],
@@ -105,6 +106,7 @@ describe('DashboardPage runtime overview', () => {
     expect(screen.getByText('影片库')).toBeInTheDocument()
     expect(screen.getByText('存储索引')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '内容排名' })).toBeInTheDocument()
+    expect(screen.getByText(`最近统计窗口为 30 天 · 榜单更新于 ${new Date('2026-07-13T00:00:00Z').toLocaleString()}`)).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: '总排名' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: '最近存储' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: '最近入库' })).toBeInTheDocument()

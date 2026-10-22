@@ -41,7 +41,7 @@ function RankingList({ items }: { items: RankingItem[] }) {
   )
 }
 
-export function DashboardContentRankings({ rankings }: { rankings: ContentRankings }) {
+export function DashboardContentRankings({ rankings, updatedAt }: { rankings: ContentRankings; updatedAt: string | null }) {
   const [mode, setMode] = useState<RankingMode>('total')
   const activeGroup = rankings[mode]
 
@@ -50,7 +50,10 @@ export function DashboardContentRankings({ rankings }: { rankings: ContentRankin
       <div className={styles.panelHeader}>
         <div>
           <h2>内容排名</h2>
-          <p className={styles.panelHint}>最近统计窗口为 30 天</p>
+          <p className={styles.panelHint}>
+            最近统计窗口为 30 天
+            {updatedAt ? ` · 榜单更新于 ${new Date(updatedAt).toLocaleString()}` : null}
+          </p>
         </div>
         <Segmented<RankingMode>
           value={mode}
