@@ -314,6 +314,16 @@ make docker-build-amd64
 make docker-build-arm64
 ```
 
+Makefile 默认使用清华 apt/PyPI 镜像和 npmmirror Playwright 下载地址，并缓存 pip
+下载文件，以减少重复打包时的依赖下载时间。需要使用官方源时可以覆盖：
+
+```bash
+make docker-build-amd64 \
+  APT_MIRROR= \
+  PIP_INDEX_URL=https://pypi.org/simple \
+  PLAYWRIGHT_DOWNLOAD_HOST=
+```
+
 Docker Hub 访问不稳定时，可以通过基础镜像变量切换镜像源：
 
 ```bash

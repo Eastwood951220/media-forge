@@ -2,6 +2,7 @@ ARG NODE_BASE_IMAGE=node:22-bookworm-slim
 ARG PYTHON_BASE_IMAGE=python:3.12-slim
 ARG APT_MIRROR=
 ARG PLAYWRIGHT_DOWNLOAD_HOST=
+ARG PIP_INDEX_URL=https://pypi.org/simple
 
 FROM ${NODE_BASE_IMAGE} AS frontend-build
 WORKDIR /build/frontend
@@ -13,6 +14,7 @@ RUN pnpm run build
 FROM ${PYTHON_BASE_IMAGE} AS runtime
 ARG APT_MIRROR
 ARG PLAYWRIGHT_DOWNLOAD_HOST
+ARG PIP_INDEX_URL
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -33,7 +35,8 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r /app/backend/requirements.txt
 RUN PLAYWRIGHT_DOWNLOAD_HOST="${PLAYWRIGHT_DOWNLOAD_HOST}" \
     python -m playwright install --with-deps chromium
 

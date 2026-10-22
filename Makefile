@@ -5,8 +5,9 @@ ARM64_TAG ?= arm64
 AMD64_TAG ?= amd64
 NODE_BASE_IMAGE ?= node:22-bookworm-slim
 PYTHON_BASE_IMAGE ?= python:3.12-slim
-APT_MIRROR ?=
-PLAYWRIGHT_DOWNLOAD_HOST ?=
+APT_MIRROR ?= https://mirrors.tuna.tsinghua.edu.cn
+PLAYWRIGHT_DOWNLOAD_HOST ?= https://npmmirror.com/mirrors/playwright
+PIP_INDEX_URL ?= https://pypi.tuna.tsinghua.edu.cn/simple
 CONTAINER_NAME ?= media-forge
 HOST_PORT ?= 18642
 CONTAINER_PORT ?= 18642
@@ -14,7 +15,7 @@ DATA_DIR ?= $(CURDIR)/data
 OUTPUT_DIR ?= $(CURDIR)/output
 ARM64_TAR ?= $(OUTPUT_DIR)/media-forge-linux-arm64.tar
 AMD64_TAR ?= $(OUTPUT_DIR)/media-forge-linux-amd64.tar
-DOCKER_BUILD_ARGS ?= --build-arg NODE_BASE_IMAGE=$(NODE_BASE_IMAGE) --build-arg PYTHON_BASE_IMAGE=$(PYTHON_BASE_IMAGE) --build-arg APT_MIRROR=$(APT_MIRROR) --build-arg PLAYWRIGHT_DOWNLOAD_HOST=$(PLAYWRIGHT_DOWNLOAD_HOST)
+DOCKER_BUILD_ARGS ?= --build-arg NODE_BASE_IMAGE=$(NODE_BASE_IMAGE) --build-arg PYTHON_BASE_IMAGE=$(PYTHON_BASE_IMAGE) --build-arg APT_MIRROR=$(APT_MIRROR) --build-arg PLAYWRIGHT_DOWNLOAD_HOST=$(PLAYWRIGHT_DOWNLOAD_HOST) --build-arg PIP_INDEX_URL=$(PIP_INDEX_URL)
 
 .PHONY: frontend-build docker-build docker-build-arm64 docker-build-amd64 docker-save-arm64 docker-save-amd64 docker-run docker-stop output-dir
 
