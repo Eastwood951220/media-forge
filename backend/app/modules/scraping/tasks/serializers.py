@@ -29,6 +29,7 @@ def item_to_dict(item: ScrapingTaskItem) -> dict:
         "movie_code": item.movie_code,
         "movie_title": item.movie_title,
         "status": item.status,
+        "step": item.step,
         "source": item.source,
         "folder": item.folder,
         "duration_ms": item.duration_ms,

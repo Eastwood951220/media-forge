@@ -52,6 +52,7 @@ class ScrapingTaskItem(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     movie_code: Mapped[str] = mapped_column(String(100), nullable=False, default="")
     movie_title: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending", index=True)
+    step: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     source: Mapped[str] = mapped_column(String(30), nullable=False, default="")
     folder: Mapped[str] = mapped_column(Text, nullable=False, default="")
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

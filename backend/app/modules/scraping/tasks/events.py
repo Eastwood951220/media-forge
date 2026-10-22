@@ -32,9 +32,20 @@ def publish_scraping_item_updated(owner_id: str, item: ScrapingTaskItem) -> None
             "id": str(item.id),
             "task_id": str(item.task_id),
             "status": item.status,
+            "step": item.step,
             "source": item.source,
             "error_message": item.error_message,
         },
+    ))
+
+
+def publish_scraping_item_log_appended(owner_id: str, item_id: str, entry: dict) -> None:
+    event_bus.publish(make_realtime_event(
+        event="scraping.item.log.appended",
+        scope="scraping.task",
+        owner_id=str(owner_id),
+        resource_id=item_id,
+        payload=entry,
     ))
 
 

@@ -63,6 +63,7 @@ class ScrapingTaskService:
                 movie_code=movie.code or "",
                 movie_title=movie.source_name or "",
                 status="pending",
+                step="prepare",
             ))
         self.db.commit()
         self.db.refresh(task)

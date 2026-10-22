@@ -15,6 +15,7 @@ from backend.app.modules.scraping.scan import scan_directory, schedule_scan_afte
 from backend.app.modules.scraping.schemas import ScrapingConfigUpdate
 from backend.app.modules.scraping.strm import run_strm_generation
 from backend.app.modules.scraping.tasks.schemas import ScrapingTaskCreate
+from backend.app.modules.scraping.tasks.logs import read_scraping_item_logs
 from backend.app.modules.scraping.tasks.serializers import item_to_dict, task_to_dict
 from backend.app.modules.scraping.tasks.service import ScrapingTaskService
 from backend.app.modules.scraping.tasks.worker import ensure_scraping_worker_started
@@ -106,6 +107,33 @@ def list_scraping_tasks(
     rows = service.list_tasks(user_id=current_user.id, page=page, size=size, status=status)
     total = service.count_tasks(user_id=current_user.id, status=status)
     return success(data={"rows": [task_to_dict(row) for row in rows], "total": total, "page": page, "size": size})
+
+
+def _owned_scraping_item(item_id: uuid.UUID, user_id: uuid.UUID, service: ScrapingTaskService):
+    item = service.repository.get_item(item_id)
+    if item is None or item.task.created_by != user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="子任务不存在")
+    return item
+
+
+@router.get("/tasks/items/{item_id}")
+def get_scraping_item(
+    item_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    item = _owned_scraping_item(item_id, current_user.id, ScrapingTaskService(db))
+    return success(data=item_to_dict(item))
+
+
+@router.get("/tasks/items/{item_id}/logs")
+def get_scraping_item_logs(
+    item_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> dict:
+    _owned_scraping_item(item_id, current_user.id, ScrapingTaskService(db))
+    return success(data=read_scraping_item_logs(str(item_id)))
 
 
 @router.get("/tasks/{task_id}")
