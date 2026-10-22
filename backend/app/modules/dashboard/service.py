@@ -318,7 +318,7 @@ def _build_content_section(db: Session, ranking_cache: Redis | None = None) -> D
 def _build_storage_section(db: Session, owner_id: uuid.UUID, index_metadata: dict) -> DashboardStorageSection:
     owner_tasks = db.query(StorageMainTask).filter(StorageMainTask.created_by == owner_id)
     status_rows = owner_tasks.with_entities(StorageMainTask.status, func.count(StorageMainTask.id)).group_by(StorageMainTask.status).all()
-    recent_rows = owner_tasks.order_by(StorageMainTask.created_at.desc()).limit(RECENT_LIMIT).all()
+    recent_rows = owner_tasks.order_by(StorageMainTask.created_at.desc()).limit(RECENT_LIMIT).options(noload(StorageMainTask.subtasks)).all()
     return DashboardStorageSection(
         task_status_distribution=_count_items(status_rows),
         recent_tasks=[

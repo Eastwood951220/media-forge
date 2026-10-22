@@ -3,6 +3,7 @@ from http import HTTPStatus
 import uuid
 
 from fastapi.testclient import TestClient
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import event
 from sqlalchemy.dialects import postgresql
 
@@ -142,6 +143,7 @@ def test_overview_does_not_load_task_urls_or_run_details(admin_user) -> None:
     session.add(task)
     session.flush()
     session.add(CrawlRun(task_id=task.id, task_name=task.name, status="completed"))
+    session.add(StorageMainTask(alias="recent", display_name="recent", source="single", storage_mode="single", status="completed", created_by=admin_user.id))
     session.commit()
 
     statements: list[str] = []
@@ -164,6 +166,7 @@ def test_overview_does_not_load_task_urls_or_run_details(admin_user) -> None:
 
     assert not any("from crawl_task_urls" in sql for sql in statements)
     assert not any("from crawl_run_detail_tasks" in sql for sql in statements)
+    assert not any("from storage_sub_tasks" in sql for sql in statements)
 
 
 def test_derive_system_status_precedence() -> None:
@@ -390,3 +393,34 @@ def test_ranking_cache_failure_or_invalid_json_falls_back_to_database(admin_user
     assert unavailable.content.rankings.total.makers[0].name == "片商C"
     assert unavailable.partial_errors == []
     session.close()
+
+
+def test_overview_endpoint_degrades_when_redis_queue_is_unavailable(client: TestClient, admin_user, monkeypatch) -> None:
+    headers = auth_headers(client, admin_user)
+
+    class FailedRuntime:
+        def queue_status(self):
+            raise RedisConnectionError("redis queue unavailable")
+
+    class FailedCache:
+        def get(self, _key):
+            raise ConnectionError("redis cache unavailable")
+
+        def setex(self, _key, _ttl, _value):
+            raise ConnectionError("redis cache unavailable")
+
+    from backend.app.core.dependencies import get_redis
+
+    monkeypatch.setattr("backend.app.modules.dashboard.router.get_runtime_state", lambda: FailedRuntime())
+    client.app.dependency_overrides[get_redis] = lambda: FailedCache()
+    try:
+        response = client.get("/api/dashboard/overview", headers=headers)
+    finally:
+        client.app.dependency_overrides.pop(get_redis, None)
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()["data"]
+    assert data["system_status"] == "warning"
+    assert data["crawler"]["queue"]["queue_size"] == 0
+    assert any(error["section"] == "queue" for error in data["partial_errors"])
+    assert data["content"]["rankings_updated_at"] is not None

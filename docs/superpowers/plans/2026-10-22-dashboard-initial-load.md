@@ -19,11 +19,12 @@
 
 ## Review Focus
 
-- A latest run with many detail rows should not cause dashboard reads to load them.
+- Latest runs and recent storage tasks with many detail/subtask rows should not cause dashboard reads to load them.
 - A cache hit must leave movie totals and storage status live.
 - A cache miss must preserve all three ranking groups and excluded tags.
 - A cache hit must display the original ranking calculation time, not the new overview request time.
 - A malformed or unavailable Redis value must not blank the content section.
+- An unavailable Redis queue must not prevent the overview endpoint from returning its database-backed sections.
 - Manual refresh must still fetch fresh dynamic metrics while rankings may be five minutes old.
 
 ---
@@ -37,7 +38,7 @@
 
 **Interfaces:** `build_task_runtime_status_response(db, owner_id)` and `build_dashboard_overview(...)` retain signatures and response models.
 
-- [ ] Add a regression test recording SQL during an overview build with task URLs and run details, asserting those tables are not queried by the overview.
+- [ ] Add a regression test recording SQL during an overview build with task URLs, run details and storage subtasks, asserting those tables are not queried by the overview.
 - [ ] Run the new test and confirm it fails because eager relationship queries occur.
 - [ ] Add query-local loading options to omit `CrawlTask.urls` and `CrawlRun.detail_tasks` in the runtime status and dashboard recent-run queries.
 - [ ] Run the focused dashboard test and related crawler status tests; confirm they pass.
@@ -53,7 +54,7 @@
 
 **Interfaces:** `build_dashboard_overview(..., ranking_cache: redis.Redis | None = None)`; the router supplies the existing Redis client. Existing direct callers remain valid.
 
-- [ ] Add tests for cache miss/hit with changed movie counts, 300-second expiry, ranking calculation timestamp, and Redis read/write failure or invalid cached JSON.
+- [ ] Add tests for cache miss/hit with changed movie counts, 300-second expiry, ranking calculation timestamp, Redis read/write failure or invalid cached JSON, and endpoint degradation when Redis queue reads fail.
 - [ ] Run those tests and confirm they fail for missing caching behavior.
 - [ ] Cache rankings with their calculation time under a versioned global key; on cache failure, compute rankings from the database and keep dynamic metrics live.
 - [ ] Run the focused tests and broader backend suite; confirm results and compare cache miss/hit timings.
