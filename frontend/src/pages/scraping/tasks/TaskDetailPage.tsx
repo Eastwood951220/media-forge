@@ -1,15 +1,18 @@
+import { useState } from 'react'
 import { Button, Card, Descriptions, Space, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import type { ScrapingTaskItem } from '@/api/scraping/scrapingTasks'
 import { useScrapingTaskDetail } from './hooks/useScrapingTasks'
 import { ITEM_STATUS_COLOR, ITEM_STATUS_TEXT, TASK_STATUS_COLOR, TASK_STATUS_TEXT } from './utils/status'
+import { ScrapingItemDetailDrawer } from './components/ScrapingItemDetailDrawer'
 
 export default function TaskDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams({ strict: false }) as { id: string }
   const detail = useScrapingTaskDetail(id)
   const task = detail.task
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
 
   const handleRetry = async () => {
     const created = await detail.retry()
@@ -31,6 +34,10 @@ export default function TaskDetailPage() {
     { title: '文件夹', dataIndex: 'folder', key: 'folder', ellipsis: true },
     { title: '耗时', key: 'duration', width: 100, render: (_: unknown, record) => `${record.duration_ms} ms` },
     { title: '错误', dataIndex: 'error_message', key: 'error_message', ellipsis: true },
+    {
+      title: '操作', key: 'actions', width: 88,
+      render: (_: unknown, record) => <Button type="link" onClick={() => setSelectedItemId(record.id)}>详情</Button>,
+    },
   ]
 
   if (!task) {
@@ -69,6 +76,9 @@ export default function TaskDetailPage() {
         columns={columns}
         pagination={false}
       />
+      {selectedItemId && (
+        <ScrapingItemDetailDrawer key={selectedItemId} itemId={selectedItemId} onClose={() => setSelectedItemId(null)} />
+      )}
     </Space>
   )
 }

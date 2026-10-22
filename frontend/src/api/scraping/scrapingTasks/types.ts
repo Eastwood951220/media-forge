@@ -31,12 +31,21 @@ export interface ScrapingTaskItem {
   movie_code: string
   movie_title: string
   status: ScrapingItemStatus
+  step?: string
   source: string
   folder: string
   duration_ms: number
   error_message?: string | null
   created_at?: string | null
   updated_at?: string | null
+}
+
+export interface ScrapingTaskLog {
+  timestamp: string
+  level: string
+  message: string
+  step?: string
+  context?: Record<string, unknown>
 }
 
 export interface ScrapingTaskDetail extends ScrapingTask {

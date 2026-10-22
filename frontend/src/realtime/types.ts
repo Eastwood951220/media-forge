@@ -140,6 +140,7 @@ export type RealtimeEventName =
   | 'movie.storage.updated'
   | 'scraping.task.updated'
   | 'scraping.item.updated'
+  | 'scraping.item.log.appended'
   | 'movie.scraping.updated'
 
 export type RealtimeHandler<TPayload = Record<string, unknown>> = (

@@ -20,6 +20,7 @@ const EVENT_NAMES: RealtimeEventName[] = [
   'movie.storage.updated',
   'scraping.task.updated',
   'scraping.item.updated',
+  'scraping.item.log.appended',
   'movie.scraping.updated',
 ]
 
