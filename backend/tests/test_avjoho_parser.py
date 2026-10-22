@@ -57,3 +57,33 @@ def test_parse_avjoho_profile_extracts_profile_fields() -> None:
     assert profile.sns_links == [{"label": "X（旧Twitter）", "url": "https://x.com/MiyaueYuika", "text": "@MiyaueYuika"}]
     assert profile.representative_works[0]["title"] == "宮上唯依花 Debut"
     assert profile.similar_actresses[0]["name"] == "永峰椿（ながみねつばき）"
+
+
+def test_parse_avjoho_profile_extracts_linked_aliases_without_year_notes() -> None:
+    html = """
+    <h1 class="entry-title">永瀬愛菜（ながせあいな）</h1>
+    <div class="database"><div class="name"><table><tr><th>別名</th><td>
+      <div class="fukusuu"><a href="https://example.test/1">愛那あい</a>（2025年）
+      <p><a href="https://example.test/2">愛原ゆず美</a>（2019年）※豊彦</p>
+      <p><a href="https://example.test/3">神谷もにか</a>（2018年）※イメージビデオ</p></div>
+    </td></tr></table></div></div>
+    """
+
+    profile = parse_avjoho_profile(html, "https://db.avjoho.com/永瀬愛菜/")
+
+    assert profile is not None
+    assert profile.aliases == ["愛那あい", "愛原ゆず美", "神谷もにか"]
+
+
+def test_parse_avjoho_profile_preserves_unlinked_alias_beside_linked_alias() -> None:
+    html = """
+    <h1 class="entry-title">永瀬愛菜（ながせあいな）</h1>
+    <div class="database"><div class="name"><table><tr><th>別名</th><td>
+      <a href="https://example.test/alias">愛那あい</a>（2025年）, 愛原ゆず美
+    </td></tr></table></div></div>
+    """
+
+    profile = parse_avjoho_profile(html, "https://db.avjoho.com/永瀬愛菜/")
+
+    assert profile is not None
+    assert profile.aliases == ["愛那あい", "愛原ゆず美"]

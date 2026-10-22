@@ -81,6 +81,18 @@ def _parse_aliases(value: str) -> list[str]:
     return aliases
 
 
+def _parse_profile_aliases(page: Adaptor, fields: dict[str, str]) -> list[str]:
+    alias_cells = page.css(".database .name td")
+    if alias_cells:
+        aliases: list[str] = []
+        for value in alias_cells[0].css("::text").getall():
+            text = re.sub(r"（\d{4}年）", "", str(value))
+            text = re.sub(r"※[^,、，\n]*", "", text)
+            aliases.extend(_parse_aliases(text))
+        return list(dict.fromkeys(aliases))
+    return _parse_aliases(fields.get("別名", ""))
+
+
 def _parse_sns(page: Adaptor) -> list[dict]:
     links: list[dict] = []
     for row in page.css(".sns tr"):
@@ -131,7 +143,7 @@ def parse_avjoho_profile(html: str, source_url: str) -> ActressProfilePayload | 
         reading=reading,
         source_url=source_url,
         image_url=_first_attr(page, ".gazou img::attr(src)"),
-        aliases=_parse_aliases(fields.get("別名", "")),
+        aliases=_parse_profile_aliases(page, fields),
         debut_date=_parse_japanese_date(fields.get("デビュー", "")),
         birth_date=_parse_japanese_date(fields.get("生年月日", "")),
         height_cm=_parse_int_cm(fields.get("身長", "")),

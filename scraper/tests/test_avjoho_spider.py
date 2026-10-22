@@ -207,6 +207,27 @@ def test_avjoho_spider_falls_back_to_search_after_direct_candidates_miss() -> No
     ]
 
 
+def test_avjoho_spider_matches_search_result_linked_alias_with_year_note() -> None:
+    profile_url = "https://db.avjoho.com/%e6%b0%b8%e7%80%ac%e6%84%9b%e8%8f%9c/"
+    spider = AvjohoActressSpider(fetcher=FakeFetcher({
+        f"https://db.avjoho.com/?s={quote('愛那あい')}": f"""
+        <div id="list"><h2 class="entry-title"><a href="{profile_url}">永瀬愛菜</a></h2></div>
+        """,
+        profile_url: """
+        <h1 class="entry-title">永瀬愛菜（ながせあいな）</h1>
+        <div class="database"><div class="name"><table><tr><th>別名</th><td>
+          <div class="fukusuu"><a href="https://example.test/alias">愛那あい</a>（2025年）</div>
+        </td></tr></table></div></div>
+        """,
+    }))
+
+    result = spider.find_first_matching_profile(["愛那あい"])
+
+    assert result.matched_url == profile_url
+    assert result.profile is not None
+    assert result.profile.aliases == ["愛那あい"]
+
+
 def test_avjoho_spider_stops_searching_names_after_first_search_match() -> None:
     profile_html = """
     <h1 class="entry-title">命中名（めいちゅう）</h1>
