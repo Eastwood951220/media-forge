@@ -1,6 +1,8 @@
 from pathlib import Path
+from io import BytesIO
 
 import httpx
+from PIL import Image, ImageDraw
 
 from backend.app.modules.scraping.images import download_image, write_artwork
 
@@ -44,16 +46,76 @@ def test_download_image_rejects_oversized_content(tmp_path: Path, monkeypatch) -
 
 
 def test_write_artwork_writes_available_images(tmp_path: Path) -> None:
-    transport = _transport(b"img", "image/jpeg")
-    count = write_artwork(
+    transport = _transport(_jpeg("cover"), "image/jpeg")
+    result = write_artwork(
         tmp_path,
         cover_url="https://example.com/cover.jpg",
-        backdrop_url="https://example.com/backdrop.jpg",
-        landscape_url=None,
+        backdrop_urls=["https://example.com/backdrop.jpg"],
+        landscape_urls=[],
         transport=transport,
     )
-    assert count == 2
+    assert result.written == 1
     assert (tmp_path / "folder.jpg").exists()
-    assert (tmp_path / "backdrop.jpg").exists()
+    assert not (tmp_path / "backdrop.jpg").exists()
     assert not (tmp_path / "landscape.jpg").exists()
+
+
+def _jpeg(scene: str, size: tuple[int, int] = (160, 100)) -> bytes:
+    image = Image.new("RGB", size, "white")
+    draw = ImageDraw.Draw(image)
+    color = "red" if scene == "cover" else "blue"
+    draw.rectangle((10, 10, size[0] // 2, size[1] // 2), fill=color)
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG", quality=95)
+    return buffer.getvalue()
+
+
+def test_write_artwork_skips_resized_cover_then_uses_distinct_previews(tmp_path: Path) -> None:
+    content = {
+        "/cover.jpg": _jpeg("cover"),
+        "/cover-large.jpg": _jpeg("cover", (320, 200)),
+        "/scene-a.jpg": _jpeg("scene-a"),
+        "/scene-b.jpg": Image.new("RGB", (160, 100), "green"),
+    }
+    green = BytesIO()
+    content["/scene-b.jpg"].save(green, format="JPEG")
+    content["/scene-b.jpg"] = green.getvalue()
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=content[request.url.path], headers={"content-type": "image/jpeg"}))
+
+    result = write_artwork(
+        tmp_path, cover_url="https://example.com/cover.jpg",
+        backdrop_urls=["https://example.com/cover-large.jpg", "https://example.com/scene-a.jpg", "https://example.com/scene-b.jpg"],
+        landscape_urls=["https://example.com/cover-large.jpg", "https://example.com/scene-a.jpg", "https://example.com/scene-b.jpg"],
+        transport=transport,
+    )
+
+    assert result.available == {"folder.jpg", "backdrop.jpg", "landscape.jpg"}
+    assert (tmp_path / "backdrop.jpg").read_bytes() == content["/scene-a.jpg"]
+    assert (tmp_path / "landscape.jpg").read_bytes() == content["/scene-b.jpg"]
+
+
+def test_write_artwork_removes_only_proven_duplicate_old_slot(tmp_path: Path) -> None:
+    (tmp_path / "folder.jpg").write_bytes(_jpeg("cover"))
+    (tmp_path / "backdrop.jpg").write_bytes(_jpeg("cover", (320, 200)))
+    (tmp_path / "landscape.jpg").write_bytes(_jpeg("scene-a"))
+
+    result = write_artwork(tmp_path, cover_url=None, backdrop_urls=[], landscape_urls=[])
+
+    assert result.available == {"folder.jpg", "landscape.jpg"}
+    assert not (tmp_path / "backdrop.jpg").exists()
+    assert (tmp_path / "landscape.jpg").exists()
+
+
+def test_write_artwork_preserves_existing_unique_slot_on_download_failure(tmp_path: Path) -> None:
+    original = _jpeg("scene-a")
+    (tmp_path / "backdrop.jpg").write_bytes(original)
+    transport = _transport(b"", "image/jpeg", status=500)
+
+    result = write_artwork(
+        tmp_path, cover_url="https://example.com/cover.jpg",
+        backdrop_urls=["https://example.com/broken.jpg"], landscape_urls=[], transport=transport,
+    )
+
+    assert result.available == {"backdrop.jpg"}
+    assert (tmp_path / "backdrop.jpg").read_bytes() == original
 
