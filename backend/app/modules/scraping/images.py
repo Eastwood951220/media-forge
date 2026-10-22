@@ -107,9 +107,9 @@ def _same_picture(left: bytes, right: bytes) -> bool:
             if abs(ratio_a - ratio_b) > 0.1:
                 return False
             # Normalize size and small aspect differences before comparing pixels.
-            a = ImageOps.fit(first.convert("L"), (32, 32), method=Image.Resampling.LANCZOS)
-            b = ImageOps.fit(second.convert("L"), (32, 32), method=Image.Resampling.LANCZOS)
-            difference = sum(abs(x - y) for x, y in zip(a.tobytes(), b.tobytes())) / 1024
+            a = ImageOps.fit(first.convert("RGB"), (32, 32), method=Image.Resampling.LANCZOS)
+            b = ImageOps.fit(second.convert("RGB"), (32, 32), method=Image.Resampling.LANCZOS)
+            difference = sum(abs(x - y) for x, y in zip(a.tobytes(), b.tobytes())) / (32 * 32 * 3)
             return difference <= 6.0
     except (OSError, UnidentifiedImageError, ValueError, ZeroDivisionError):
         return False
@@ -134,19 +134,20 @@ def write_artwork(
     backdrop_urls: list[str],
     landscape_urls: list[str],
     referer: str | None = None,
+    cover_referer: str | None = None,
     transport: httpx.BaseTransport | None = None,
 ) -> ArtworkResult:
     folder = Path(folder)
     written = 0
     cache: dict[str, bytes | None] = {}
 
-    def fetch(url: str) -> bytes | None:
+    def fetch(url: str, preferred_referer: str | None = None) -> bytes | None:
         if url not in cache:
-            cache[url] = _fetch_artwork(url, referer=referer, transport=transport)
+            cache[url] = _fetch_artwork(url, referer=preferred_referer or referer, transport=transport)
         return cache[url]
 
     cover_path = folder / "folder.jpg"
-    if cover_url and (data := fetch(cover_url)) and _save_image(cover_path, data):
+    if cover_url and (data := fetch(cover_url, cover_referer)) and _save_image(cover_path, data):
         written += 1
 
     selected: dict[str, bytes] = {}

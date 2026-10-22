@@ -221,13 +221,14 @@ class FanzaAdapter:
         if not wanted:
             return None
         try:
-            with httpx.Client(timeout=TIMEOUT, transport=self.transport, follow_redirects=True, cookies={"age_check_done": "1"}) as client:
+            with httpx.Client(timeout=TIMEOUT, transport=self.transport, follow_redirects=False, cookies={"age_check_done": "1"}) as client:
                 products = self._search(client, code)
                 exact = [item for item in products if normalize_code(_product_code(str(item.get("content_id") or ""))) == wanted]
                 exact.sort(key=lambda item: urlparse(str(item.get("detail_url") or "")).hostname != "video.dmm.co.jp")
                 for item in exact:
                     url = str(item.get("detail_url") or "")
-                    if not url:
+                    parsed = urlparse(url)
+                    if parsed.scheme != "https" or parsed.hostname not in {"www.dmm.co.jp", "video.dmm.co.jp"}:
                         continue
                     try:
                         metadata = self._digital(client, item, wanted) if urlparse(url).hostname == "video.dmm.co.jp" else self._dvd(client, item, wanted)

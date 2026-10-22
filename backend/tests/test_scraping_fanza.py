@@ -83,3 +83,16 @@ def test_fanza_blocked_or_malformed_source_returns_none() -> None:
     for body in ("<html>not-available-in-your-region</html>", "<html>no payload</html>"):
         adapter = FanzaAdapter(transport=httpx.MockTransport(lambda _request: httpx.Response(200, text=body)))
         assert adapter.fetch_by_code("MIDA-819") is None
+
+
+def test_fanza_ignores_external_detail_urls() -> None:
+    calls: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(200, text=_search_page([
+            {"content_id": "mida00819", "detail_url": "https://other.example/mono/dvd/-/detail/=/cid=mida00819/"},
+        ]))
+
+    assert FanzaAdapter(transport=httpx.MockTransport(handle)).fetch_by_code("MIDA-819") is None
+    assert all("other.example" not in call for call in calls)

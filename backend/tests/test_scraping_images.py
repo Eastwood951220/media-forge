@@ -119,3 +119,38 @@ def test_write_artwork_preserves_existing_unique_slot_on_download_failure(tmp_pa
     assert result.available == {"backdrop.jpg"}
     assert (tmp_path / "backdrop.jpg").read_bytes() == original
 
+
+def test_write_artwork_uses_original_source_referer_for_saved_cover(tmp_path: Path) -> None:
+    referers: dict[str, str | None] = {}
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        referers[request.url.path] = request.headers.get("referer")
+        content = _jpeg("cover") if request.url.path == "/cover.jpg" else _jpeg("scene-a")
+        return httpx.Response(200, content=content, headers={"content-type": "image/jpeg"})
+
+    write_artwork(
+        tmp_path, cover_url="https://javdb.example/cover.jpg",
+        backdrop_urls=["https://dmm.example/scene.jpg"], landscape_urls=[],
+        cover_referer="https://javdb.com/", referer="https://video.dmm.co.jp/",
+        transport=httpx.MockTransport(handle),
+    )
+
+    assert referers == {"/cover.jpg": "https://javdb.com/", "/scene.jpg": "https://video.dmm.co.jp/"}
+
+
+def test_write_artwork_does_not_confuse_different_colors_with_equal_luminance(tmp_path: Path) -> None:
+    def jpeg(color: tuple[int, int, int]) -> bytes:
+        buffer = BytesIO()
+        Image.new("RGB", (160, 100), color).save(buffer, format="JPEG", quality=95)
+        return buffer.getvalue()
+
+    data = {"/cover.jpg": jpeg((255, 0, 0)), "/other.jpg": jpeg((0, 130, 0))}
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=data[request.url.path], headers={"content-type": "image/jpeg"}))
+
+    result = write_artwork(
+        tmp_path, cover_url="https://example.com/cover.jpg",
+        backdrop_urls=["https://example.com/other.jpg"], landscape_urls=[], transport=transport,
+    )
+
+    assert result.available == {"folder.jpg", "backdrop.jpg"}
+
