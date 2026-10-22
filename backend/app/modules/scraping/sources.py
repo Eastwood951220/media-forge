@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from typing import Callable, Protocol
 from urllib.parse import quote, urlsplit
 
@@ -15,25 +14,9 @@ from scraper.spiders.javdb.javdb_parser import parse_detail_page as parse_javdb_
 from scraper.spiders.javdb.javdb_parser import parse_search_page as parse_javdb_search
 
 from backend.app.modules.scraping.paths import normalize_code
+from backend.app.modules.scraping.source_types import SourceMetadata
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class SourceMetadata:
-    site_key: str
-    title: str | None = None
-    original_title: str | None = None
-    year: int | None = None
-    premiered: str | None = None
-    genres: list[str] = field(default_factory=list)
-    tags: list[str] = field(default_factory=list)
-    studio: str | None = None
-    series: str | None = None
-    actors: list[str] = field(default_factory=list)
-    cover_url: str | None = None
-    backdrop_url: str | None = None
-    landscape_url: str | None = None
 
 
 class SourceAdapter(Protocol):
@@ -52,6 +35,8 @@ def source_referer(site_key: str) -> str | None:
         return JAVDB_SITE["base_url"].rstrip("/") + "/"
     if site_key == "JavBus":
         return JAVBUS_SITE["base_url"].rstrip("/") + "/"
+    if site_key == "FANZA":
+        return "https://video.dmm.co.jp/"
     return None
 
 
@@ -132,6 +117,7 @@ class JavdbAdapter:
                 cover_url=_clean(detail.get("cover")) or None,
                 backdrop_url=backdrop,
                 landscape_url=landscape,
+                preview_urls=list(detail.get("preview_images") or []),
             )
         except Exception:
             logger.warning("javdb metadata fetch failed for %s", code, exc_info=True)
@@ -178,19 +164,25 @@ class JavbusAdapter:
                 cover_url=_clean(detail.get("cover_url")) or None,
                 backdrop_url=backdrop,
                 landscape_url=landscape,
+                preview_urls=list(detail.get("preview_images") or []),
             )
         except Exception:
             logger.warning("javbus metadata fetch failed for %s", code, exc_info=True)
             return None
 
 
+from backend.app.modules.scraping.fanza import FanzaAdapter
+
+
 SOURCE_REGISTRY: dict[str, SourceAdapter] = {
     "javdb": JavdbAdapter(),
     "javbus": JavbusAdapter(),
+    "fanza": FanzaAdapter(),
 }
 SOURCE_LABELS = {
     "javdb": "JavDB",
     "javbus": "JavBus",
+    "fanza": "FANZA",
 }
 
 

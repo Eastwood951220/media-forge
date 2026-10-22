@@ -17,10 +17,11 @@ class _FakeFetcher:
         return self.pages[url]
 
 
-def test_registry_contains_javdb_and_javbus() -> None:
-    assert set(SOURCE_REGISTRY) == {"javdb", "javbus"}
+def test_registry_contains_selectable_metadata_sources() -> None:
+    assert set(SOURCE_REGISTRY) == {"javdb", "javbus", "fanza"}
     assert SOURCE_LABELS["javdb"]
     assert SOURCE_LABELS["javbus"]
+    assert SOURCE_LABELS["fanza"] == "FANZA"
 
 
 def test_fetch_by_priority_uses_configured_order_and_stops_on_success(monkeypatch) -> None:
