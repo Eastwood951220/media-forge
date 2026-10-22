@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from backend.app.models.scraping_task import ScrapingTask, ScrapingTaskItem
+from backend.app.modules.scraping.tasks.events import publish_scraping_item_updated, publish_scraping_task_updated
 from backend.app.modules.scraping.tasks.repository import ScrapingTaskRepository
 from backend.app.modules.scraping.tasks.progress import append_item_log
 from shared.database.models.content import Movie
@@ -98,8 +99,11 @@ class ScrapingTaskService:
             self.repository.recompute_counts(task)
         self.db.commit()
         for item in skipped_items:
+            publish_scraping_item_updated(str(user_id), item)
             append_item_log(item, str(user_id), "WARNING", item.error_message or "任务已取消")
         self.db.refresh(task)
+        if skipped_items:
+            publish_scraping_task_updated(task)
         return task
 
     def retry_task(self, task_id: uuid.UUID, user_id: uuid.UUID, *, config: dict) -> ScrapingTask:

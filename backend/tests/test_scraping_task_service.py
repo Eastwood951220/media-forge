@@ -3,6 +3,7 @@ import uuid
 import pytest
 
 from backend.app.models.scraping_task import ScrapingTask, ScrapingTaskItem
+from backend.app.modules.realtime.bus import event_bus
 from backend.app.modules.scraping.tasks.service import ScrapingTaskService
 from backend.app.modules.scraping.tasks.logs import read_scraping_item_logs
 from shared.database.models.content import Movie
@@ -57,13 +58,22 @@ def test_cancel_queued_task_marks_pending_items_skipped(db_session, admin_user, 
     service = ScrapingTaskService(db_session)
     task = service.create_task([movie.id], admin_user.id, config=_config())
 
-    cancelled = service.cancel_task(task.id, admin_user.id)
+    queue = event_bus.subscribe(str(admin_user.id))
+    try:
+        cancelled = service.cancel_task(task.id, admin_user.id)
+        events = []
+        while not queue.empty():
+            events.append(queue.get_nowait())
+    finally:
+        event_bus.unsubscribe(str(admin_user.id), queue)
 
     assert cancelled.status == "cancelled"
     item = db_session.query(ScrapingTaskItem).filter_by(task_id=task.id).one()
     assert item.status == "skipped"
     assert item.error_message == "任务已取消"
     assert read_scraping_item_logs(str(item.id))[-1]["message"] == "任务已取消"
+    assert any(event.event == "scraping.item.updated" and event.resource_id == str(item.id) and event.payload["status"] == "skipped" for event in events)
+    assert any(event.event == "scraping.task.updated" and event.resource_id == str(task.id) and event.payload["status"] == "cancelled" for event in events)
 
 
 def test_retry_creates_a_task_from_failed_and_skipped_items(db_session, admin_user) -> None:

@@ -36,7 +36,7 @@ def write_scraping_item_log(
 def read_scraping_item_logs(item_id: str) -> list[dict]:
     entries: list[dict] = []
     try:
-        with _log_path(item_id).open(encoding="utf-8") as handle:
+        with _log_path(item_id).open(encoding="utf-8", errors="replace") as handle:
             for line in handle:
                 if not line.strip():
                     continue

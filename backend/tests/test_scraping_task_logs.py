@@ -17,10 +17,12 @@ def test_scraping_item_logs_survive_invalid_lines(tmp_path, monkeypatch) -> None
     path = tmp_path / "logs/scraping/tasks/item-1.jsonl"
     with path.open("a", encoding="utf-8") as handle:
         handle.write("not-json\n")
+    with path.open("ab") as handle:
+        handle.write(b'{"message":"\xe4')
 
     assert entry["step"] == "fetch_metadata"
     assert read_scraping_item_logs("item-1") == [entry]
-    assert json.loads(path.read_text(encoding="utf-8").splitlines()[0]) == entry
+    assert json.loads(path.read_bytes().splitlines()[0].decode("utf-8")) == entry
 
 
 def test_log_storage_failure_does_not_stop_scraping(tmp_path, monkeypatch) -> None:
