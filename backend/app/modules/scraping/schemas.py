@@ -19,6 +19,13 @@ class ScrapingConfig(BaseModel):
     metadata_sources: list[str] = Field(default_factory=lambda: list(DEFAULT_METADATA_SOURCES))
     metatube_url: str = ""
     metatube_token: str = ""
+    jellyfin_base_url: str = ""
+    jellyfin_api_key: str = ""
+    jellyfin_auto_refresh_enabled: bool = False
+    jellyfin_watch_sync_enabled: bool = False
+    jellyfin_watch_sync_schedule_type: str = "daily"
+    jellyfin_watch_sync_time_of_day: str = "03:00"
+    jellyfin_watch_sync_weekdays: list[int] = Field(default_factory=list)
 
 
 class ScrapingConfigUpdate(BaseModel):
@@ -33,6 +40,13 @@ class ScrapingConfigUpdate(BaseModel):
     metadata_sources: list[str] | None = None
     metatube_url: str | None = None
     metatube_token: str | None = None
+    jellyfin_base_url: str | None = None
+    jellyfin_api_key: str | None = None
+    jellyfin_auto_refresh_enabled: bool | None = None
+    jellyfin_watch_sync_enabled: bool | None = None
+    jellyfin_watch_sync_schedule_type: str | None = None
+    jellyfin_watch_sync_time_of_day: str | None = None
+    jellyfin_watch_sync_weekdays: list[int] | None = None
 
 
 class ScrapingConfigResponse(ScrapingConfig):
@@ -40,3 +54,4 @@ class ScrapingConfigResponse(ScrapingConfig):
     api_key_configured: bool = False
     metatube_token: str = ""
     metatube_token_configured: bool = False
+    jellyfin_api_key_configured: bool = False

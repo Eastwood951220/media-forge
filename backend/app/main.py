@@ -36,6 +36,7 @@ from backend.app.modules.dashboard.router import router as dashboard_router
 from backend.app.modules.health.router import router as health_router
 from backend.app.modules.init.router import router as init_router
 from backend.app.modules.scraping.router import router as scraping_router
+from backend.app.modules.jellyfin.router import router as jellyfin_router
 from backend.app.models.scraping_task import ScrapingTask
 from backend.app.modules.scraping.tasks.worker import (
     cleanup_interrupted_scraping_tasks,
@@ -192,6 +193,7 @@ app.include_router(storage_config_router)
 app.include_router(storage_index_router)
 app.include_router(storage_tasks_router)
 app.include_router(scraping_router)
+app.include_router(jellyfin_router)
 
 
 def configure_frontend(

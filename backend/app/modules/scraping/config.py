@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -120,6 +121,32 @@ def _safe_media_root(raw: object) -> str:
     return text
 
 
+def _parse_bool(raw: object) -> bool:
+    return str(raw or "").lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_weekdays(raw: object) -> list[int]:
+    try:
+        parsed = json.loads(str(raw or "[]"))
+    except (TypeError, ValueError):
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
+def _validate_jellyfin_schedule(config: dict[str, Any]) -> None:
+    kind = config["jellyfin_watch_sync_schedule_type"]
+    time_of_day = config["jellyfin_watch_sync_time_of_day"]
+    weekdays = config["jellyfin_watch_sync_weekdays"]
+    if kind not in {"daily", "weekly"}:
+        raise ValueError("Jellyfin 同步周期只能是每日或每周")
+    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", time_of_day):
+        raise ValueError("Jellyfin 同步时间必须是 HH:mm")
+    if not isinstance(weekdays, list) or any(not isinstance(day, int) or day < 0 or day > 6 for day in weekdays):
+        raise ValueError("Jellyfin 同步星期无效")
+    if config["jellyfin_watch_sync_enabled"] and kind == "weekly" and not weekdays:
+        raise ValueError("每周同步至少选择一天")
+
+
 class ScrapingConfigService:
     """Read and write scraping settings in a dotenv style file."""
 
@@ -147,6 +174,13 @@ class ScrapingConfigService:
         values["metadata_sources"] = _parse_metadata_sources(parsed.get("metadata_sources"))
         values["metatube_url"] = str(parsed.get("metatube_url") or "").strip()
         values["metatube_token"] = str(parsed.get("metatube_token") or "")
+        values["jellyfin_base_url"] = str(parsed.get("jellyfin_base_url") or "").strip()
+        values["jellyfin_api_key"] = str(parsed.get("jellyfin_api_key") or "")
+        values["jellyfin_auto_refresh_enabled"] = _parse_bool(parsed.get("jellyfin_auto_refresh_enabled"))
+        values["jellyfin_watch_sync_enabled"] = _parse_bool(parsed.get("jellyfin_watch_sync_enabled"))
+        values["jellyfin_watch_sync_schedule_type"] = str(parsed.get("jellyfin_watch_sync_schedule_type") or "daily")
+        values["jellyfin_watch_sync_time_of_day"] = str(parsed.get("jellyfin_watch_sync_time_of_day") or "03:00")
+        values["jellyfin_watch_sync_weekdays"] = _parse_weekdays(parsed.get("jellyfin_watch_sync_weekdays"))
         try:
             return ScrapingConfig(**values).model_dump()
         except ValidationError:
@@ -170,6 +204,8 @@ class ScrapingConfigService:
             incoming["base_url"] = _normalize_base_url(str(incoming.get("base_url") or ""))
         if "metatube_url" in incoming:
             incoming["metatube_url"] = _normalize_base_url(str(incoming.get("metatube_url") or ""))
+        if "jellyfin_base_url" in incoming:
+            incoming["jellyfin_base_url"] = _normalize_base_url(str(incoming.get("jellyfin_base_url") or ""))
         if "scrape_root" in incoming:
             incoming["scrape_root"] = _normalize_scrape_root(incoming.get("scrape_root"))
         if "media_root" in incoming:
@@ -190,12 +226,16 @@ class ScrapingConfigService:
         if "metatube_token" in incoming:
             token = str(incoming.get("metatube_token") or "")
             incoming["metatube_token"] = current.get("metatube_token", "") if not token or is_masked_token(token) else token
+        if "jellyfin_api_key" in incoming:
+            token = str(incoming.get("jellyfin_api_key") or "")
+            incoming["jellyfin_api_key"] = current.get("jellyfin_api_key", "") if not token or is_masked_token(token) else token
 
         merged = dict(current)
         merged.update(incoming)
         if "metadata_sources" in incoming and not merged.get("metatube_url"):
             raise ValueError("启用 MetaTube 来源前请配置 MetaTube Server 地址")
         validated = ScrapingConfig(**merged).model_dump()
+        _validate_jellyfin_schedule(validated)
         self._write_config(validated)
         return self._public_config(validated)
 
@@ -207,6 +247,9 @@ class ScrapingConfigService:
         raw_metatube_token = str(config.get("metatube_token") or "")
         public["metatube_token"] = mask_token(raw_metatube_token)
         public["metatube_token_configured"] = bool(raw_metatube_token)
+        raw_jellyfin_key = str(config.get("jellyfin_api_key") or "")
+        public["jellyfin_api_key"] = mask_token(raw_jellyfin_key)
+        public["jellyfin_api_key_configured"] = bool(raw_jellyfin_key)
         return ScrapingConfigResponse(**public).model_dump()
 
     def _write_config(self, data: dict[str, Any]) -> None:
