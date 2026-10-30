@@ -104,6 +104,9 @@ class MovieDeleteResponse(BaseModel):
     cloud_deleted_folders: list[str]
     cloud_missing_folders: list[str]
     cloud_failed_folders: list[dict[str, Any]]
+    nas_deleted_folders: list[str] = Field(default_factory=list)
+    nas_missing_folders: list[str] = Field(default_factory=list)
+    nas_failed_folders: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class MovieMagnetRefreshRequest(BaseModel):

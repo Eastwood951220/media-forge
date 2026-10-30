@@ -39,6 +39,9 @@ class MovieDeleteResult:
     cloud_deleted_folders: list[str] = field(default_factory=list)
     cloud_missing_folders: list[str] = field(default_factory=list)
     cloud_failed_folders: list[dict] = field(default_factory=list)
+    nas_deleted_folders: list[str] = field(default_factory=list)
+    nas_missing_folders: list[str] = field(default_factory=list)
+    nas_failed_folders: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -48,6 +51,9 @@ class MovieDeleteResult:
             "cloud_deleted_folders": self.cloud_deleted_folders,
             "cloud_missing_folders": self.cloud_missing_folders,
             "cloud_failed_folders": self.cloud_failed_folders,
+            "nas_deleted_folders": self.nas_deleted_folders,
+            "nas_missing_folders": self.nas_missing_folders,
+            "nas_failed_folders": self.nas_failed_folders,
         }
 
 
