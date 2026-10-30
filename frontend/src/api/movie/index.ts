@@ -1,4 +1,6 @@
 import { request } from '@/request'
+import { baseURL } from '@/request/instance'
+import { getToken } from '@/utils/auth'
 import type { Movie, MovieDeleteMode, MovieDeleteResult, MovieListResponse, MovieMagnetRefreshPayload, MovieMagnetRefreshResponse, MovieStorageStatus } from './types'
 
 export type { Movie, MovieDeleteMode, MovieDeleteResult, MovieListResponse, MovieMagnetRefreshPayload, MovieMagnetRefreshResponse, MovieStorageStatus, StorageLocation } from './types'
@@ -70,6 +72,18 @@ export function fetchMovies(params: MovieQueryParams): Promise<MovieListResponse
 
 export function fetchMovie(id: string): Promise<Movie> {
   return request.get<Movie>(`${BASE_URL}/${id}`)
+}
+
+export async function fetchScrapedMovieCover(id: string, signal?: AbortSignal, version?: string | null): Promise<Blob> {
+  const token = getToken()
+  if (!token) throw new Error('Not authenticated')
+  const versionQuery = version ? `?v=${encodeURIComponent(version)}` : ''
+  const response = await fetch(`${baseURL.replace(/\/$/, '')}${BASE_URL}/${encodeURIComponent(id)}/scraped-cover${versionQuery}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal,
+  })
+  if (!response.ok) throw new Error('Scraped cover unavailable')
+  return response.blob()
 }
 
 export interface MovieStorageSyncPayload {

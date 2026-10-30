@@ -1,6 +1,6 @@
 import {Descriptions, Drawer, Space, Tag, Typography} from "antd";
-import type {MovieMagnet} from "@/api/movie/types";
-import {BlurredImage} from "@/components/BlurredImage";
+import type {Movie, MovieMagnet} from "@/api/movie/types";
+import {MovieCoverImage} from "./MovieCoverImage";
 import {formatDateTime, getMagnetSizeText, uniqueStrings} from "../utils/movieDetailFormat";
 import styles from "../MovieListPage.module.less";
 
@@ -93,14 +93,7 @@ export default function MovieDetailDrawer({open, detail, onClose, onFilterClick}
                     <Descriptions.Item label="中文字幕">{detailHasChineseSub ? "是" : "否"}</Descriptions.Item>
                     <Descriptions.Item label="大小">{detailSizeText}</Descriptions.Item>
                     <Descriptions.Item label="封面">
-                        {detail.cover as string ? (
-                            <BlurredImage
-                                src={detail.cover as string}
-                                alt={(detail.code as string) || "封面"}
-                                className={styles.movieDetailCover}
-                                referrerPolicy="no-referrer"
-                            />
-                        ) : "-"}
+                        <MovieCoverImage movie={detail as unknown as Movie} className={styles.movieDetailCover} />
                     </Descriptions.Item>
                     <Descriptions.Item label="最佳磁力">
                         {(() => {

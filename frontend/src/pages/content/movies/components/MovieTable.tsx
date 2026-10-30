@@ -1,8 +1,8 @@
 import { Space, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { Movie } from '@/api/movie/types'
-import { BlurredImage } from '@/components/BlurredImage'
 import ResponsiveActions, { type ResponsiveAction } from '@/components/ResponsiveActions'
+import { MovieCoverImage } from './MovieCoverImage'
 import styles from '../MovieListPage.module.less'
 import { JELLYFIN_WATCH_STATUS_OPTIONS } from '../constants'
 
@@ -38,15 +38,7 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 function MovieCoverCell({ movie }: { movie: Movie }) {
-  if (!movie.cover) return <span>-</span>
-  return (
-    <BlurredImage
-      src={movie.cover}
-      alt={movie.code}
-      className={styles.movieCoverCell}
-      referrerPolicy="no-referrer"
-    />
-  )
+  return <MovieCoverImage movie={movie} className={styles.movieCoverCell} />
 }
 
 export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, onRefreshMagnets, onScrape, cd2SyncingId, magnetRefreshingId }: MovieColumnsOptions): ColumnsType<Movie> {

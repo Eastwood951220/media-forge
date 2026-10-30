@@ -1,7 +1,9 @@
 import json
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, not_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -22,6 +24,7 @@ from backend.app.modules.content.movies.storage_status import normalized_movie_s
 from backend.app.models.jellyfin_sync import JellyfinSyncState
 from backend.app.modules.jellyfin.sync import config_fingerprint
 from backend.app.modules.scraping.config import ScrapingConfigService
+from backend.app.modules.scraping.paths import cloud_to_local
 from backend.app.modules.content.movies.storage_sync_api import (
     sync_movies_from_request,
     sync_single_movie_from_cd2,
@@ -200,3 +203,28 @@ def get_movie(movie_id: uuid.UUID, _current_user: CurrentUser, db: Session = Dep
     if movie is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found")
     return success(data=serialize_movie(movie, include_magnets=True, db=db))
+
+
+@router.get("/{movie_id}/scraped-cover")
+def get_scraped_movie_cover(
+    movie_id: uuid.UUID, _current_user: CurrentUser, db: Session = Depends(get_db),
+) -> FileResponse:
+    movie = db.get(Movie, movie_id)
+    if movie is None or movie.scraping_status != "scraped" or not movie.scraping_folder:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped cover not found")
+
+    config = ScrapingConfigService().get_raw_config()
+    scrape_root = str(config.get("scrape_root") or "")
+    local_folder = cloud_to_local(scrape_root, str(config.get("media_root") or "/media"), movie.scraping_folder)
+    if local_folder is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped cover not found")
+
+    cover = local_folder / "folder.jpg"
+    try:
+        cover.resolve(strict=True).relative_to(Path(scrape_root).resolve(strict=True))
+        if not cover.is_file():
+            raise OSError("Cover is not a file")
+    except (OSError, RuntimeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped cover not found") from None
+
+    return FileResponse(cover, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=60"})
