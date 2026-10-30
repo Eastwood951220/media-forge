@@ -10,6 +10,8 @@ from backend.app.models.storage_task import StorageMainTask
 from backend.app.modules.scraping.config import ScrapingConfigService, validate_run_config
 from backend.app.modules.scraping.scan import schedule_scan_after_strm
 from backend.app.modules.scraping.strm import run_strm_generation
+from backend.app.modules.jellyfin.refresh import snapshot_strm_files, schedule_refresh_after_strm
+from pathlib import Path
 from shared.database.session import get_session_factory
 
 logger = logging.getLogger(__name__)
@@ -90,10 +92,12 @@ def _run_after_delay(
             logger.info("Skipping STRM generation: storage became busy during the final check")
             return
 
+        before = snapshot_strm_files(Path(str(config.get("scrape_root") or ""))) if config.get("jellyfin_auto_refresh_enabled") else {}
         result = run_strm_generation(config)
         if result.success:
             logger.info("STRM generation triggered: %s", result.message)
             schedule_scan_after_strm(config)
+            schedule_refresh_after_strm(config, before)
         else:
             logger.warning("STRM generation failed: %s", result.message)
     except Exception:

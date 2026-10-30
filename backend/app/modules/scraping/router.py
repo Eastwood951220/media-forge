@@ -73,9 +73,13 @@ def run_scraping_strm(_current_user: CurrentUser) -> dict:
     reason = validate_run_config(config)
     if reason is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=reason)
+    from pathlib import Path
+    from backend.app.modules.jellyfin.refresh import snapshot_strm_files, schedule_refresh_after_strm
+    before = snapshot_strm_files(Path(str(config.get("scrape_root") or ""))) if config.get("jellyfin_auto_refresh_enabled") else {}
     result = run_strm_generation(config)
     if result.success:
         schedule_scan_after_strm(config)
+        schedule_refresh_after_strm(config, before)
     return success(data=asdict(result))
 
 

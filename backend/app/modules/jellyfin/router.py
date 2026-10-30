@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from pathlib import Path
 
 from backend.app.core.dependencies import CurrentUser, get_db
 from backend.app.modules.jellyfin.client import JellyfinClient, JellyfinError
 from backend.app.modules.jellyfin.sync import config_fingerprint, get_sync_state, sync_jellyfin_watch_state
+from backend.app.modules.jellyfin.refresh import refresh_libraries_for_paths, snapshot_strm_files
 from backend.app.modules.scraping.config import ScrapingConfigService
 from shared.schemas.common import success
 
@@ -30,6 +32,19 @@ def test_connection(_current_user: CurrentUser) -> dict:
 def get_libraries(_current_user: CurrentUser) -> dict:
     try:
         return success(data=configured_client().get_virtual_folders())
+    except JellyfinError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+
+@router.post("/libraries/refresh")
+def refresh_libraries(_current_user: CurrentUser) -> dict:
+    config = ScrapingConfigService().get_raw_config()
+    root = Path(str(config.get("scrape_root") or ""))
+    if not root.is_dir():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="刮削目录不可用")
+    try:
+        results = refresh_libraries_for_paths(config, snapshot_strm_files(root).keys())
+        return success(data={"libraries": [item.to_dict() for item in results]})
     except JellyfinError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
