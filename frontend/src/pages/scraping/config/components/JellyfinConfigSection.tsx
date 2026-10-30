@@ -23,6 +23,7 @@ export default function JellyfinConfigSection({ configured, maskedKey, save }: P
   const { message } = App.useApp()
   const form = Form.useFormInstance()
   const scheduleType = Form.useWatch('jellyfin_watch_sync_schedule_type', form)
+  const syncEnabled = Form.useWatch('jellyfin_watch_sync_enabled', form)
   const [libraries, setLibraries] = useState<JellyfinLibrary[]>([])
   const [status, setStatus] = useState<JellyfinWatchStatus | null>(null)
   const [busy, setBusy] = useState('')
@@ -77,7 +78,7 @@ export default function JellyfinConfigSection({ configured, maskedKey, save }: P
       <Form.Item name="jellyfin_auto_refresh_enabled" label="生成或删除 STRM 后自动刷新影视库" valuePropName="checked"><Switch /></Form.Item>
       <Form.Item name="jellyfin_watch_sync_enabled" label="定时同步观看状态" valuePropName="checked"><Switch /></Form.Item>
       <Form.Item name="jellyfin_watch_sync_schedule_type" label="同步周期"><Segmented options={[{ label: '每天', value: 'daily' }, { label: '每周', value: 'weekly' }]} /></Form.Item>
-      {scheduleType === 'weekly' && <Form.Item name="jellyfin_watch_sync_weekdays" label="星期" rules={[{ validator: (_, value: number[]) => value?.length ? Promise.resolve() : Promise.reject(new Error('请选择星期')) }]}><Checkbox.Group options={weekdays} /></Form.Item>}
+      {scheduleType === 'weekly' && <Form.Item name="jellyfin_watch_sync_weekdays" label="星期" rules={[{ validator: (_, value: number[]) => !syncEnabled || value?.length ? Promise.resolve() : Promise.reject(new Error('请选择星期')) }]}><Checkbox.Group options={weekdays} /></Form.Item>}
       <Form.Item name="jellyfin_watch_sync_time_of_day" label="同步时间" rules={[{ required: true, message: '请选择同步时间' }]}><Input type="time" /></Form.Item>
       <Space wrap>
         <Button loading={busy === 'test'} disabled={!!busy} onClick={() => void action('test')}>测试连接</Button>

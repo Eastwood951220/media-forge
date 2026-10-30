@@ -117,6 +117,22 @@ describe('ScrapingConfigPage', () => {
     expect(screen.getByRole('button', { name: '立即同步观看状态' })).toBeInTheDocument()
   })
 
+  it('saves Jellyfin settings before manually refreshing libraries', async () => {
+    renderPage()
+    await screen.findByLabelText('Jellyfin 服务地址')
+    fireEvent.click(screen.getByRole('button', { name: '手动刷新影视库' }))
+    await waitFor(() => expect(refreshJellyfinLibraries).toHaveBeenCalledOnce())
+    expect(vi.mocked(updateScrapingConfig).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(refreshJellyfinLibraries).mock.invocationCallOrder[0],
+    )
+    expect(vi.mocked(updateScrapingConfig).mock.calls[0][0]).toMatchObject({
+      jellyfin_base_url: 'http://jellyfin:8096',
+      jellyfin_auto_refresh_enabled: false,
+      jellyfin_watch_sync_schedule_type: 'daily',
+    })
+    expect(vi.mocked(updateScrapingConfig).mock.calls[0][0]).not.toHaveProperty('jellyfin_api_key')
+  })
+
   it('does not send an untouched api key when saving', async () => {
     renderPage()
     const baseUrl = await screen.findByLabelText('服务地址')
