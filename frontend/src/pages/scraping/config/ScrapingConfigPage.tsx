@@ -30,6 +30,7 @@ import {
 import { FullWidthNumberInput } from '@/components/common'
 import DirectoryPathInput from './components/DirectoryPathInput'
 import SourcePriorityList from './components/SourcePriorityList'
+import JellyfinConfigSection from './components/JellyfinConfigSection'
 import { getErrorMessage, isFormValidationError } from './utils/error'
 import styles from './ScrapingConfigPage.module.less'
 
@@ -41,6 +42,13 @@ type FormValues = {
   scrape_root: string
   metatube_url: string
   metatube_token?: string
+  jellyfin_base_url: string
+  jellyfin_api_key?: string
+  jellyfin_auto_refresh_enabled: boolean
+  jellyfin_watch_sync_enabled: boolean
+  jellyfin_watch_sync_schedule_type: 'daily' | 'weekly'
+  jellyfin_watch_sync_time_of_day: string
+  jellyfin_watch_sync_weekdays: number[]
 }
 
 const DEFAULT_BASE_URL = 'http://192.168.0.36:12333'
@@ -58,6 +66,8 @@ export default function ScrapingConfigPage() {
   const [metatubeError, setMetatubeError] = useState(false)
   const [metatubeLoading, setMetatubeLoading] = useState(false)
   const [metatubeTokenConfigured, setMetatubeTokenConfigured] = useState(false)
+  const [jellyfinKeyConfigured, setJellyfinKeyConfigured] = useState(false)
+  const [maskedJellyfinKey, setMaskedJellyfinKey] = useState('')
   const [scanning, setScanning] = useState(false)
   const [scanSummary, setScanSummary] = useState<ScrapingScanSummary | null>(null)
 
@@ -71,11 +81,20 @@ export default function ScrapingConfigPage() {
         scrape_root: config.scrape_root,
         metatube_url: config.metatube_url,
         metatube_token: '',
+        jellyfin_base_url: config.jellyfin_base_url,
+        jellyfin_api_key: '',
+        jellyfin_auto_refresh_enabled: config.jellyfin_auto_refresh_enabled,
+        jellyfin_watch_sync_enabled: config.jellyfin_watch_sync_enabled,
+        jellyfin_watch_sync_schedule_type: config.jellyfin_watch_sync_schedule_type,
+        jellyfin_watch_sync_time_of_day: config.jellyfin_watch_sync_time_of_day,
+        jellyfin_watch_sync_weekdays: config.jellyfin_watch_sync_weekdays,
       })
       setApiKeyConfigured(config.api_key_configured)
       setMaskedApiKey(config.api_key)
       setSources(config.metadata_sources ?? [])
       setMetatubeTokenConfigured(config.metatube_token_configured)
+      setJellyfinKeyConfigured(config.jellyfin_api_key_configured)
+      setMaskedJellyfinKey(config.jellyfin_api_key)
     },
     [form],
   )
@@ -117,6 +136,12 @@ export default function ScrapingConfigPage() {
       scrape_root: values.scrape_root,
       metadata_sources: sources,
       metatube_url: values.metatube_url,
+      jellyfin_base_url: values.jellyfin_base_url,
+      jellyfin_auto_refresh_enabled: values.jellyfin_auto_refresh_enabled,
+      jellyfin_watch_sync_enabled: values.jellyfin_watch_sync_enabled,
+      jellyfin_watch_sync_schedule_type: values.jellyfin_watch_sync_schedule_type,
+      jellyfin_watch_sync_time_of_day: values.jellyfin_watch_sync_time_of_day,
+      jellyfin_watch_sync_weekdays: values.jellyfin_watch_sync_schedule_type === 'weekly' ? values.jellyfin_watch_sync_weekdays : [],
     }
     if (values.api_key?.trim()) {
       payload.api_key = values.api_key.trim()
@@ -124,6 +149,7 @@ export default function ScrapingConfigPage() {
     if (values.metatube_token?.trim()) {
       payload.metatube_token = values.metatube_token.trim()
     }
+    if (values.jellyfin_api_key?.trim()) payload.jellyfin_api_key = values.jellyfin_api_key.trim()
     return payload
   }
 
@@ -144,6 +170,16 @@ export default function ScrapingConfigPage() {
       message.error(getErrorMessage(error))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const saveForJellyfin = async (): Promise<boolean> => {
+    try {
+      await persist(await form.validateFields())
+      return true
+    } catch (error) {
+      if (!isFormValidationError(error)) message.error(getErrorMessage(error))
+      return false
     }
   }
 
@@ -326,6 +362,7 @@ export default function ScrapingConfigPage() {
                   </Form.Item>
                 </div>
               </Card>
+              <JellyfinConfigSection configured={jellyfinKeyConfigured} maskedKey={maskedJellyfinKey} save={saveForJellyfin} />
             </div>
 
             <div className={styles.sidePanel}>

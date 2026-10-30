@@ -10,6 +10,14 @@ export interface ScrapingConfig {
   metatube_url: string
   metatube_token: string
   metatube_token_configured: boolean
+  jellyfin_base_url: string
+  jellyfin_api_key: string
+  jellyfin_api_key_configured: boolean
+  jellyfin_auto_refresh_enabled: boolean
+  jellyfin_watch_sync_enabled: boolean
+  jellyfin_watch_sync_schedule_type: 'daily' | 'weekly'
+  jellyfin_watch_sync_time_of_day: string
+  jellyfin_watch_sync_weekdays: number[]
 }
 
 export interface ScrapingConfigUpdate {
@@ -22,6 +30,13 @@ export interface ScrapingConfigUpdate {
   metadata_sources?: string[]
   metatube_url?: string
   metatube_token?: string
+  jellyfin_base_url?: string
+  jellyfin_api_key?: string
+  jellyfin_auto_refresh_enabled?: boolean
+  jellyfin_watch_sync_enabled?: boolean
+  jellyfin_watch_sync_schedule_type?: 'daily' | 'weekly'
+  jellyfin_watch_sync_time_of_day?: string
+  jellyfin_watch_sync_weekdays?: number[]
 }
 
 export interface ScrapingRunResult {

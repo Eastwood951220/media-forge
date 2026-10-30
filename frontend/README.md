@@ -220,6 +220,8 @@ document-level variables:
 
 ## Testing
 
+The scraping configuration page also manages Jellyfin connection, library refresh, and scheduled watch-state synchronization. Its API wrapper is in `src/api/jellyfin/`.
+
 Vitest runs in `jsdom` with setup from `tests/setup.ts`.
 
 Run all tests:

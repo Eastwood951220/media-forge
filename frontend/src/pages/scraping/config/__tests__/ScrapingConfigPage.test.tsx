@@ -10,6 +10,21 @@ import {
   runScrapingStrm,
   updateScrapingConfig,
 } from '@/api/scraping/scrapingConfig'
+import {
+  getJellyfinWatchStatus,
+  listJellyfinLibraries,
+  refreshJellyfinLibraries,
+  syncJellyfinWatch,
+  testJellyfinConnection,
+} from '@/api/jellyfin'
+
+vi.mock('@/api/jellyfin', () => ({
+  getJellyfinWatchStatus: vi.fn(),
+  listJellyfinLibraries: vi.fn(),
+  refreshJellyfinLibraries: vi.fn(),
+  syncJellyfinWatch: vi.fn(),
+  testJellyfinConnection: vi.fn(),
+}))
 
 vi.mock('@/api/scraping/scrapingConfig', () => ({
   getScrapingConfig: vi.fn(),
@@ -32,6 +47,14 @@ const savedConfig = {
   metatube_url: 'http://127.0.0.1:2048',
   metatube_token: '',
   metatube_token_configured: false,
+  jellyfin_base_url: 'http://jellyfin:8096',
+  jellyfin_api_key: '************5678',
+  jellyfin_api_key_configured: true,
+  jellyfin_auto_refresh_enabled: false,
+  jellyfin_watch_sync_enabled: false,
+  jellyfin_watch_sync_schedule_type: 'daily' as const,
+  jellyfin_watch_sync_time_of_day: '03:00',
+  jellyfin_watch_sync_weekdays: [],
 }
 
 function renderPage() {
@@ -70,6 +93,11 @@ describe('ScrapingConfigPage', () => {
       roots: [{ name: '/mnt', path: '/mnt' }],
       truncated: false,
     })
+    vi.mocked(listJellyfinLibraries).mockResolvedValue([{ Name: '日本', ItemId: 'lib-1', Locations: ['/media'] }])
+    vi.mocked(getJellyfinWatchStatus).mockResolvedValue({ status: 'success', last_success_at: '2026-10-30T09:20:00', last_attempt_at: '2026-10-30T09:20:00', last_error: null })
+    vi.mocked(testJellyfinConnection).mockResolvedValue({ library_count: 1, root_user_id: 'root-id' })
+    vi.mocked(refreshJellyfinLibraries).mockResolvedValue({ libraries: [{ library_id: 'lib-1', name: '日本', accepted: true, error: null }] })
+    vi.mocked(syncJellyfinWatch).mockResolvedValue({ total_count: 1, matched_count: 1, ambiguous_count: 0, synced_at: '2026-10-30T09:20:00' })
   })
 
   it('loads the saved config', async () => {
@@ -78,6 +106,15 @@ describe('ScrapingConfigPage', () => {
     expect(await screen.findByDisplayValue('https://example.com')).toBeInTheDocument()
     expect(screen.getByText('已配置: ************1234')).toBeInTheDocument()
     expect(screen.queryByText(/直连/)).not.toBeInTheDocument()
+  })
+
+  it('shows Jellyfin settings and discovered library paths in scraping config', async () => {
+    renderPage()
+    expect(await screen.findByLabelText('Jellyfin 服务地址')).toHaveValue('http://jellyfin:8096')
+    expect(screen.getByText('Jellyfin API Key 已配置: ************5678')).toBeInTheDocument()
+    expect(await screen.findByText('/media')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '手动刷新影视库' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '立即同步观看状态' })).toBeInTheDocument()
   })
 
   it('does not send an untouched api key when saving', async () => {
