@@ -97,7 +97,7 @@ describe('DashboardPage runtime overview', () => {
     }
   })
 
-  it('renders runtime overview metrics from data', () => {
+  it('renders runtime overview metrics from data', async () => {
     render(<DashboardPage />)
 
     expect(screen.getByRole('heading', { name: '运行态总览' })).toBeInTheDocument()
@@ -113,6 +113,7 @@ describe('DashboardPage runtime overview', () => {
     expect(screen.getByText('演员A')).toBeInTheDocument()
     expect(screen.getByText('暂无需要关注的问题')).toBeInTheDocument()
     expect(screen.queryByText('Operations Console')).not.toBeInTheDocument()
+    expect(await screen.findByTestId('dashboard-charts')).toBeInTheDocument()
   })
 
   it('renders request failure and retries', () => {

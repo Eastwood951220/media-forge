@@ -1,12 +1,16 @@
+import { lazy, Suspense } from 'react'
 import { Alert, Button, Skeleton } from 'antd'
 import { DashboardAlerts } from './components/DashboardAlerts'
-import { DashboardCharts } from './components/DashboardCharts'
 import { DashboardContentRankings } from './components/DashboardContentRankings'
 import { DashboardMetricCards } from './components/DashboardMetricCards'
 import { DashboardRecentTabs } from './components/DashboardRecentTabs'
 import { DashboardStatusHeader } from './components/DashboardStatusHeader'
 import { useDashboardOverview } from './hooks/useDashboardOverview'
 import styles from './DashboardPage.module.less'
+
+const DashboardCharts = lazy(() =>
+  import('./components/DashboardCharts').then((module) => ({ default: module.DashboardCharts })),
+)
 
 function DashboardPage() {
   const { data, loading, error, refreshing, refresh } = useDashboardOverview()
@@ -53,7 +57,14 @@ function DashboardPage() {
         <Alert type="warning" showIcon message="部分数据降级" description="部分模块暂时无法读取，页面已展示可用数据。" />
       ) : null}
       <DashboardMetricCards overview={data} />
-      <DashboardCharts distribution={data.runs.status_distribution} trend={data.runs.daily_trend} />
+      <Suspense fallback={
+        <section className={styles.chartGrid} aria-label="图表加载中">
+          <Skeleton active className={styles.panel} paragraph={{ rows: 5 }} />
+          <Skeleton active className={styles.panel} paragraph={{ rows: 5 }} />
+        </section>
+      }>
+        <DashboardCharts distribution={data.runs.status_distribution} trend={data.runs.daily_trend} />
+      </Suspense>
       <DashboardContentRankings rankings={data.content.rankings} updatedAt={data.content.rankings_updated_at} />
       <section className={styles.workGrid}>
         <DashboardRecentTabs overview={data} />
