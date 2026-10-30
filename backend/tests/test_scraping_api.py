@@ -44,6 +44,14 @@ def test_get_and_put_scraping_config(client, admin_user, tmp_path, monkeypatch) 
         "metatube_url": "",
         "metatube_token": "",
         "metatube_token_configured": False,
+        "jellyfin_base_url": "",
+        "jellyfin_api_key": "",
+        "jellyfin_api_key_configured": False,
+        "jellyfin_auto_refresh_enabled": False,
+        "jellyfin_watch_sync_enabled": False,
+        "jellyfin_watch_sync_schedule_type": "daily",
+        "jellyfin_watch_sync_time_of_day": "03:00",
+        "jellyfin_watch_sync_weekdays": [],
     }
 
     put_response = client.put(

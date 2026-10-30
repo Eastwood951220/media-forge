@@ -3,6 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     Date,
@@ -37,6 +38,7 @@ class Movie(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Index("idx_movies_actors_gin", "actors", postgresql_using="gin"),
         Index("idx_movies_tags_gin", "tags", postgresql_using="gin"),
         Index("idx_movies_storage_summary_gin", "storage_summary", postgresql_using="gin"),
+        Index("idx_movies_jellyfin_watch_status", "jellyfin_watch_status"),
         UniqueConstraint("code", name="uq_movies_code"),
         UniqueConstraint("source_url", name="uq_movies_source_url"),
     )
@@ -61,6 +63,9 @@ class Movie(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     scraping_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     scraping_folder: Mapped[str | None] = mapped_column(Text, nullable=True)
     scraping_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    jellyfin_item_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    jellyfin_watch_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    jellyfin_playback_position_ticks: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     magnets: Mapped[list["MovieMagnet"]] = relationship(
         back_populates="movie",

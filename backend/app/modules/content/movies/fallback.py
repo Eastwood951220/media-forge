@@ -57,4 +57,6 @@ def movie_matches(movie: Movie, filters: MovieListFilters) -> bool:
         return False
     if filters.scraping_status and movie.scraping_status != filters.scraping_status:
         return False
+    if filters.jellyfin_watch_status and movie.jellyfin_watch_status != filters.jellyfin_watch_status:
+        return False
     return True

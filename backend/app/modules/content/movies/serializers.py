@@ -75,6 +75,7 @@ def serialize_movie(
     storage_location_map: dict[str, list[str]] | None = None,
     include_raw_detail: bool = True,
     include_source_task_url_ids: bool = True,
+    jellyfin_snapshot_valid: bool = True,
 ) -> dict:
     """Serialize a movie.
 
@@ -107,6 +108,9 @@ def serialize_movie(
         "scraping_status": movie.scraping_status,
         "scraping_folder": movie.scraping_folder or "",
         "scraping_checked_at": movie.scraping_checked_at.isoformat() if movie.scraping_checked_at else None,
+        "jellyfin_item_id": movie.jellyfin_item_id if jellyfin_snapshot_valid else None,
+        "jellyfin_watch_status": movie.jellyfin_watch_status if jellyfin_snapshot_valid else None,
+        "jellyfin_playback_position_ticks": movie.jellyfin_playback_position_ticks if jellyfin_snapshot_valid else None,
         "created_at": movie.created_at.isoformat() if movie.created_at else None,
         "updated_at": movie.updated_at.isoformat() if movie.updated_at else None,
     }

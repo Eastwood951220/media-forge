@@ -19,6 +19,9 @@ from backend.app.modules.content.movies.queries import (
 from backend.app.modules.content.movies.schemas import MovieDeleteRequest, MovieMagnetRefreshRequest, MovieStorageSyncRequest
 from backend.app.modules.content.movies.serializers import build_movie_storage_location_map, serialize_movie
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
+from backend.app.models.jellyfin_sync import JellyfinSyncState
+from backend.app.modules.jellyfin.sync import config_fingerprint
+from backend.app.modules.scraping.config import ScrapingConfigService
 from backend.app.modules.content.movies.storage_sync_api import (
     sync_movies_from_request,
     sync_single_movie_from_cd2,
@@ -79,7 +82,16 @@ def list_movies(
     created_at_to: str | None = Query(default=None),
     storage_status: str | None = Query(default=None),
     scraping_status: str | None = Query(default=None),
+    jellyfin_watch_status: str | None = Query(default=None),
 ) -> dict:
+    sync_state = db.get(JellyfinSyncState, 1)
+    jellyfin_snapshot_valid = (
+        sync_state is None
+        or sync_state.config_fingerprint is None
+        or sync_state.config_fingerprint == config_fingerprint(ScrapingConfigService().get_raw_config())
+    )
+    if jellyfin_watch_status and not jellyfin_snapshot_valid:
+        return paginated(rows=[], total=0)
     search_text = search or keyword
     rows, total = list_movies_page(
         db,
@@ -106,6 +118,7 @@ def list_movies(
             created_at_to=created_at_to,
             storage_status=storage_status,
             scraping_status=scraping_status,
+            jellyfin_watch_status=jellyfin_watch_status,
         ),
         sort_by=sort_by,
         sort_order=sort_order,
@@ -124,6 +137,7 @@ def list_movies(
                 storage_location_map=storage_location_map,
                 include_raw_detail=False,
                 include_source_task_url_ids=False,
+                jellyfin_snapshot_valid=jellyfin_snapshot_valid,
             )
             for movie in rows
         ],

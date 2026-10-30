@@ -1,8 +1,19 @@
 from backend.app.modules.scraping.config import ScrapingConfigService
+from backend.app.modules.jellyfin.client import JellyfinError
 
 
 def test_jellyfin_api_requires_authentication(client) -> None:
     assert client.get("/api/jellyfin/libraries").status_code == 401
+
+
+def test_watch_sync_reports_jellyfin_failure_as_bad_gateway(client, auth_headers, monkeypatch) -> None:
+    class UnavailableClient:
+        def get_root_user_id(self):
+            raise JellyfinError("Jellyfin HTTP 503")
+
+    monkeypatch.setattr("backend.app.modules.jellyfin.router.configured_client", lambda: UnavailableClient())
+    response = client.post("/api/jellyfin/watch/sync", headers=auth_headers)
+    assert response.status_code == 502
 
 
 def test_jellyfin_config_masks_key_and_preserves_it_on_empty_update(tmp_path) -> None:

@@ -135,6 +135,8 @@ def build_movie_list_statement(
         )
     if filters.scraping_status:
         conditions.append(Movie.scraping_status == filters.scraping_status)
+    if filters.jellyfin_watch_status:
+        conditions.append(Movie.jellyfin_watch_status == filters.jellyfin_watch_status)
 
     # PostgreSQL array conditions
     if dialect_name == "postgresql":

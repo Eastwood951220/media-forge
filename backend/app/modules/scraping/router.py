@@ -36,7 +36,10 @@ def update_scraping_config(
     _current_user: CurrentUser,
 ) -> dict:
     try:
-        return success(data=ScrapingConfigService().update_config(body))
+        result = ScrapingConfigService().update_config(body)
+        from backend.app.modules.jellyfin.scheduler import jellyfin_watch_scheduler
+        jellyfin_watch_scheduler.configure()
+        return success(data=result)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

@@ -17,6 +17,7 @@ from backend.app.models.crawler_schedule import (
 from backend.app.models.scraping_task import ScrapingTask, ScrapingTaskItem
 from backend.app.models.storage_task import StorageMainTask, StorageSubTask
 from backend.app.models.user import User
+from backend.app.models.jellyfin_sync import JellyfinSyncState
 
 __all__ = [
     "User",
@@ -36,4 +37,5 @@ __all__ = [
     "StorageSubTask",
     "ScrapingTask",
     "ScrapingTaskItem",
+    "JellyfinSyncState",
 ]

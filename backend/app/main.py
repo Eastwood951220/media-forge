@@ -37,6 +37,7 @@ from backend.app.modules.health.router import router as health_router
 from backend.app.modules.init.router import router as init_router
 from backend.app.modules.scraping.router import router as scraping_router
 from backend.app.modules.jellyfin.router import router as jellyfin_router
+from backend.app.modules.jellyfin.scheduler import jellyfin_watch_scheduler
 from backend.app.models.scraping_task import ScrapingTask
 from backend.app.modules.scraping.tasks.worker import (
     cleanup_interrupted_scraping_tasks,
@@ -138,6 +139,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         crawler_schedule_scheduler.start()
         crawler_schedule_scheduler.load_enabled_schedules()
         backup_scheduler.start()
+        jellyfin_watch_scheduler.start()
     else:
         logger.warning("Backend not initialized — only init endpoints available.")
 
@@ -147,6 +149,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     event_bus.close()
     crawler_schedule_scheduler.shutdown()
     backup_scheduler.shutdown()
+    jellyfin_watch_scheduler.shutdown()
     close_redis()
     if runtime_config_exists():
         close_postgres()
