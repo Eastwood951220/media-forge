@@ -28,8 +28,8 @@ const savedConfig = {
   trigger_delay_seconds: 30,
   scrape_root: '/mnt/media',
   media_root: '/media',
-  metadata_sources: ['javbus', 'fanza'],
-  metatube_url: '',
+  metadata_sources: ['metatube:JavBus', 'metatube:FANZA'],
+  metatube_url: 'http://127.0.0.1:2048',
   metatube_token: '',
   metatube_token_configured: false,
 }
@@ -77,6 +77,7 @@ describe('ScrapingConfigPage', () => {
 
     expect(await screen.findByDisplayValue('https://example.com')).toBeInTheDocument()
     expect(screen.getByText('已配置: ************1234')).toBeInTheDocument()
+    expect(screen.queryByText(/直连/)).not.toBeInTheDocument()
   })
 
   it('does not send an untouched api key when saving', async () => {
@@ -150,11 +151,11 @@ describe('ScrapingConfigPage', () => {
   it('saves reordered metadata sources', async () => {
     renderPage()
     await screen.findByDisplayValue('/mnt/media')
-    fireEvent.click(screen.getByRole('button', { name: '下移 JavBus（直连）' }))
+    fireEvent.click(await screen.findByRole('button', { name: '下移 JavBus（MetaTube）' }))
     fireEvent.click(screen.getByRole('button', { name: '保存配置' }))
     await waitFor(() => expect(updateScrapingConfig).toHaveBeenCalled())
     const payload = vi.mocked(updateScrapingConfig).mock.calls[0][0]
-    expect(payload.metadata_sources).toEqual(['fanza', 'javbus'])
+    expect(payload.metadata_sources).toEqual(['metatube:FANZA', 'metatube:JavBus'])
   })
 
   it('enables a MetaTube source as a third ordered source', async () => {
@@ -163,7 +164,7 @@ describe('ScrapingConfigPage', () => {
     fireEvent.click(await screen.findByRole('switch', { name: '启用 MGS（MetaTube）' }))
     fireEvent.click(screen.getByRole('button', { name: '保存配置' }))
     await waitFor(() => expect(updateScrapingConfig).toHaveBeenCalled())
-    expect(vi.mocked(updateScrapingConfig).mock.calls[0][0].metadata_sources).toEqual(['javbus', 'fanza', 'metatube:MGS'])
+    expect(vi.mocked(updateScrapingConfig).mock.calls[0][0].metadata_sources).toEqual(['metatube:JavBus', 'metatube:FANZA', 'metatube:MGS'])
   })
 
   it('runs a scan and shows the summary', async () => {

@@ -132,8 +132,12 @@ def run_task(task_id: uuid.UUID) -> None:
             task.started_at = datetime.now(timezone.utc)
         db.commit()
         publish_scraping_task_updated(task)
+        from backend.app.modules.scraping.config import normalize_metadata_sources
+
         config = dict(task.config_snapshot or {}) or get_scraping_config()
         runtime_config = get_scraping_config()
+        config["metadata_sources"] = normalize_metadata_sources(config.get("metadata_sources"))
+        config["metatube_url"] = config.get("metatube_url") or runtime_config.get("metatube_url", "")
         config["metatube_token"] = runtime_config.get("metatube_token", "")
 
         items = [item for item in task.items if item.status == "pending"]

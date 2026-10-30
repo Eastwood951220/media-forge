@@ -1,8 +1,12 @@
 from io import BytesIO
 from pathlib import Path
+from datetime import datetime, timezone
 
 import httpx
 from PIL import Image
+from backend.app.models.scraping_task import ScrapingTask, ScrapingTaskItem
+from backend.app.modules.scraping.tasks import item_runner
+from shared.database.models.content import Movie
 
 from backend.app.modules.scraping.metatube import (
     fetch_metatube_movie,
@@ -87,3 +91,29 @@ def test_artwork_keeps_metatube_image_roles_separate(tmp_path: Path) -> None:
     assert (tmp_path / "folder.jpg").read_bytes() == images["/v1/images/primary/FANZA/abc"]
     assert (tmp_path / "backdrop.jpg").read_bytes() == images["/v1/images/backdrop/FANZA/abc"]
     assert (tmp_path / "landscape.jpg").read_bytes() == images["/v1/images/thumb/FANZA/abc"]
+
+
+def test_metatube_miss_does_not_reuse_old_database_cover(db_session, admin_user, monkeypatch, tmp_path: Path) -> None:
+    movie = Movie(
+        code="ADN-784", cover="https://old.example/cover.jpg",
+        storage_summary={"storage_status": "stored", "locations": [{"target_folder": "/media/ADN-784"}]},
+    )
+    db_session.add(movie)
+    db_session.flush()
+    task = ScrapingTask(status="running", total_count=1, created_by=admin_user.id, queued_at=datetime.now(timezone.utc))
+    db_session.add(task)
+    db_session.flush()
+    item = ScrapingTaskItem(task_id=task.id, movie_id=movie.id, movie_code="ADN-784", status="pending")
+    db_session.add(item)
+    db_session.commit()
+    (tmp_path / "ADN-784").mkdir()
+
+    monkeypatch.setattr(item_runner, "fetch_by_priority", lambda *args, **kwargs: None)
+    item_runner.run_item(db_session, item, config={
+        "scrape_root": str(tmp_path), "media_root": "/media",
+        "metadata_sources": ["metatube:FANZA"], "metatube_url": "http://127.0.0.1:2048",
+    })
+
+    assert item.status == "failed"
+    assert item.error_message == "MetaTube 未找到该影片的元数据"
+    assert not (tmp_path / "ADN-784" / "folder.jpg").exists()

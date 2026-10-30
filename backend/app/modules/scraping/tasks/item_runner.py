@@ -121,7 +121,12 @@ def run_item(
 
     start_item_step(db, item, owner_id, "fetch_metadata", "获取元数据")
     sources = list(config.get("metadata_sources") or [])
-    if any(is_metatube_source(source) for source in sources):
+    uses_metatube = any(is_metatube_source(source) for source in sources)
+    if uses_metatube and not config.get("metatube_url"):
+        item.status = "failed"
+        item.error_message = "未配置 MetaTube Server 地址"
+        return
+    if uses_metatube:
         metadata = fetch_by_priority(
             movie.code or "", sources,
             metatube_url=str(config.get("metatube_url") or ""),
@@ -129,6 +134,10 @@ def run_item(
         )
     else:
         metadata = fetch_by_priority(movie.code or "", sources)
+    if uses_metatube and metadata is None:
+        item.status = "failed"
+        item.error_message = "MetaTube 未找到该影片的元数据"
+        return
     missing = not (
         movie.cover
         and list(movie.actors or [])

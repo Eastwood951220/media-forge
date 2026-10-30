@@ -9,6 +9,7 @@ export interface SourcePriorityListProps {
 }
 
 export default function SourcePriorityList({ sources, labels, availableSources, onChange }: SourcePriorityListProps) {
+  const labelFor = (source: string) => labels[source] ?? (source.startsWith('metatube:') ? `${source.slice(9)}（MetaTube）` : source)
   const move = (index: number, offset: number) => {
     const next = index + offset
     if (next < 0 || next >= sources.length) return
@@ -31,24 +32,24 @@ export default function SourcePriorityList({ sources, labels, availableSources, 
       {sources.map((source, index) => (
         <div key={source} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
           <Tag color="blue">{index + 1}</Tag>
-          <Typography.Text style={{ flex: 1 }}>{labels[source] ?? source}</Typography.Text>
+          <Typography.Text style={{ flex: 1 }}>{labelFor(source)}</Typography.Text>
           <Button
             size="small"
             icon={<ArrowUpOutlined />}
-            aria-label={`上移 ${labels[source] ?? source}`}
+            aria-label={`上移 ${labelFor(source)}`}
             disabled={index === 0}
             onClick={() => move(index, -1)}
           />
           <Button
             size="small"
             icon={<ArrowDownOutlined />}
-            aria-label={`下移 ${labels[source] ?? source}`}
+            aria-label={`下移 ${labelFor(source)}`}
             disabled={index === sources.length - 1}
             onClick={() => move(index, 1)}
           />
           <Switch
             checked
-            aria-label={`启用 ${labels[source] ?? source}`}
+            aria-label={`启用 ${labelFor(source)}`}
             onChange={(value) => toggle(source, value)}
           />
         </div>
@@ -56,10 +57,10 @@ export default function SourcePriorityList({ sources, labels, availableSources, 
       {availableSources.filter((source) => !sources.includes(source)).map((source) => (
         <div key={source} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
           <Tag color="default">-</Tag>
-          <Typography.Text type="secondary" style={{ flex: 1 }}>{labels[source] ?? source}</Typography.Text>
+          <Typography.Text type="secondary" style={{ flex: 1 }}>{labelFor(source)}</Typography.Text>
           <Switch
             checked={false}
-            aria-label={`启用 ${labels[source] ?? source}`}
+            aria-label={`启用 ${labelFor(source)}`}
             onChange={(value) => toggle(source, value)}
           />
         </div>

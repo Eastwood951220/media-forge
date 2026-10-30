@@ -40,7 +40,7 @@ def test_get_and_put_scraping_config(client, admin_user, tmp_path, monkeypatch) 
         "trigger_delay_seconds": 30,
         "scrape_root": "",
         "media_root": "/media",
-        "metadata_sources": ["javbus", "fanza"],
+        "metadata_sources": ["metatube:JavBus", "metatube:FANZA"],
         "metatube_url": "",
         "metatube_token": "",
         "metatube_token_configured": False,
@@ -74,10 +74,10 @@ def test_get_and_put_scraping_config(client, admin_user, tmp_path, monkeypatch) 
     reordered = client.put(
         "/api/scraping/config",
         headers=headers,
-        json={"scrape_root": str(tmp_path), "metadata_sources": ["fanza", "javbus"]},
+        json={"scrape_root": str(tmp_path), "metatube_url": "https://metatube.example", "metadata_sources": ["metatube:FANZA", "metatube:JavBus"]},
     )
     assert reordered.status_code == HTTPStatus.OK
-    assert reordered.json()["data"]["metadata_sources"] == ["fanza", "javbus"]
+    assert reordered.json()["data"]["metadata_sources"] == ["metatube:FANZA", "metatube:JavBus"]
     assert reordered.json()["data"]["scrape_root"] == str(tmp_path)
 
 

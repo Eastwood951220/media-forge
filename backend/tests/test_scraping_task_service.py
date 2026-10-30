@@ -19,7 +19,7 @@ def _movie(db, code: str, *, stored: bool = True) -> Movie:
 
 
 def _config() -> dict:
-    return {"scrape_root": "/tmp/media", "media_root": "/media", "metadata_sources": ["javdb", "javbus"]}
+    return {"scrape_root": "/tmp/media", "media_root": "/media", "metadata_sources": ["javdb", "javbus"], "metatube_url": "http://127.0.0.1:2048"}
 
 
 def test_create_task_dedupes_movies_and_starts_queued(db_session, admin_user) -> None:
@@ -31,9 +31,17 @@ def test_create_task_dedupes_movies_and_starts_queued(db_session, admin_user) ->
     assert task.status == "queued"
     assert task.total_count == 1
     assert task.created_by == admin_user.id
-    assert task.config_snapshot["metadata_sources"] == ["javdb", "javbus"]
+    assert task.config_snapshot["metadata_sources"] == ["metatube:JavBus"]
     items = db_session.query(ScrapingTaskItem).filter_by(task_id=task.id).all()
     assert [item.status for item in items] == ["pending"]
+
+
+def test_create_task_requires_metatube_server(db_session, admin_user) -> None:
+    movie = _movie(db_session, "ADN-784")
+    config = _config()
+    config["metatube_url"] = ""
+    with pytest.raises(ValueError, match="MetaTube Server 地址"):
+        ScrapingTaskService(db_session).create_task([movie.id], admin_user.id, config=config)
 
 
 def test_create_task_rejects_unknown_movie(db_session, admin_user) -> None:

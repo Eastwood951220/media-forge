@@ -15,7 +15,6 @@ from backend.app.modules.scraping.schemas import (
     ScrapingConfigResponse,
     ScrapingConfigUpdate,
 )
-from backend.app.modules.scraping.sources import SOURCE_REGISTRY
 from backend.app.modules.scraping.metatube import is_metatube_source
 from shared.runtime_config import RuntimeConfigPaths
 
@@ -94,15 +93,24 @@ def _normalize_scrape_root(value: str | None) -> str:
     return str(path)
 
 
+def normalize_metadata_sources(items: object) -> list[str]:
+    if not isinstance(items, list):
+        return list(DEFAULT_METADATA_SOURCES)
+    legacy = {"javbus": "metatube:JavBus", "fanza": "metatube:FANZA"}
+    sources = []
+    for item in items:
+        source = legacy.get(str(item), str(item))
+        if is_metatube_source(source) and source not in sources:
+            sources.append(source)
+    return sources or list(DEFAULT_METADATA_SOURCES)
+
+
 def _parse_metadata_sources(raw: object) -> list[str]:
     try:
         parsed = json.loads(str(raw or ""))
     except (TypeError, ValueError):
         return list(DEFAULT_METADATA_SOURCES)
-    if not isinstance(parsed, list):
-        return list(DEFAULT_METADATA_SOURCES)
-    sources = [str(item) for item in parsed if str(item) in SOURCE_REGISTRY or is_metatube_source(str(item))]
-    return sources or list(DEFAULT_METADATA_SOURCES)
+    return normalize_metadata_sources(parsed)
 
 
 def _safe_media_root(raw: object) -> str:
@@ -168,7 +176,7 @@ class ScrapingConfigService:
             incoming["media_root"] = _normalize_media_root(incoming.get("media_root"))
         if "metadata_sources" in incoming:
             sources = [str(item) for item in (incoming.get("metadata_sources") or [])]
-            unknown = [item for item in sources if item not in SOURCE_REGISTRY and not is_metatube_source(item)]
+            unknown = [item for item in sources if not is_metatube_source(item)]
             if unknown:
                 raise ValueError(f"不支持的元数据源: {', '.join(unknown)}")
             if not sources:
@@ -185,7 +193,7 @@ class ScrapingConfigService:
 
         merged = dict(current)
         merged.update(incoming)
-        if any(is_metatube_source(source) for source in merged["metadata_sources"]) and not merged.get("metatube_url"):
+        if "metadata_sources" in incoming and not merged.get("metatube_url"):
             raise ValueError("启用 MetaTube 来源前请配置 MetaTube Server 地址")
         validated = ScrapingConfig(**merged).model_dump()
         self._write_config(validated)

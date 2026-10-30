@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from backend.app.models.scraping_task import ScrapingTask, ScrapingTaskItem
+from backend.app.modules.scraping.config import normalize_metadata_sources
 from backend.app.modules.scraping.tasks.events import publish_scraping_item_updated, publish_scraping_task_updated
 from backend.app.modules.scraping.tasks.repository import ScrapingTaskRepository
 from backend.app.modules.scraping.tasks.progress import append_item_log
@@ -31,6 +32,8 @@ class ScrapingTaskService:
             raise ValueError("至少选择一部电影")
         if len(movie_ids) > MAX_TASK_ITEMS:
             raise ValueError(f"单个任务最多 {MAX_TASK_ITEMS} 部电影")
+        if not config.get("metatube_url"):
+            raise ValueError("请先配置 MetaTube Server 地址")
 
         deduped: list[uuid.UUID] = []
         for movie_id in movie_ids:
@@ -52,7 +55,7 @@ class ScrapingTaskService:
             config_snapshot={
                 "scrape_root": config.get("scrape_root", ""),
                 "media_root": config.get("media_root", "/media"),
-                "metadata_sources": list(config.get("metadata_sources") or []),
+                "metadata_sources": normalize_metadata_sources(config.get("metadata_sources")),
                 "metatube_url": config.get("metatube_url", ""),
             },
         )

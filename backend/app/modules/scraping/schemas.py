@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 DEFAULT_BASE_URL = "http://192.168.0.36:12333"
 DEFAULT_MEDIA_ROOT = "/media"
-DEFAULT_METADATA_SOURCES = ["javbus", "fanza"]
+DEFAULT_METADATA_SOURCES = ["metatube:JavBus", "metatube:FANZA"]
 
 
 class ScrapingConfig(BaseModel):

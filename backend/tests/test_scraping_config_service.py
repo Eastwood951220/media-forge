@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.modules.scraping.config import ScrapingConfigService
+from backend.app.modules.scraping.config import ScrapingConfigService, normalize_metadata_sources
 from backend.app.modules.scraping.schemas import ScrapingConfigUpdate
 
 
@@ -19,7 +19,7 @@ def test_defaults_without_config_file(tmp_path: Path) -> None:
         "trigger_delay_seconds": 30,
         "scrape_root": "",
         "media_root": "/media",
-        "metadata_sources": ["javbus", "fanza"],
+        "metadata_sources": ["metatube:JavBus", "metatube:FANZA"],
         "metatube_url": "",
         "metatube_token": "",
         "metatube_token_configured": False,
@@ -113,15 +113,16 @@ def test_metadata_sources_round_trip_and_fallback(tmp_path: Path) -> None:
         ScrapingConfigUpdate(
             scrape_root=str(tmp_path),
             media_root="/media/",
-            metadata_sources=["fanza", "javbus"],
+            metatube_url="https://metatube.example",
+            metadata_sources=["metatube:FANZA", "metatube:JavBus"],
         )
     )
 
     assert public["scrape_root"] == str(tmp_path)
     assert public["media_root"] == "/media"
-    assert public["metadata_sources"] == ["fanza", "javbus"]
+    assert public["metadata_sources"] == ["metatube:FANZA", "metatube:JavBus"]
     text = (tmp_path / "scraping.conf").read_text(encoding="utf-8")
-    assert 'metadata_sources=["fanza", "javbus"]' in text
+    assert 'metadata_sources=["metatube:FANZA", "metatube:JavBus"]' in text
 
 
 def test_invalid_metadata_sources_are_rejected(tmp_path: Path) -> None:
@@ -136,7 +137,7 @@ def test_invalid_persisted_metadata_sources_fall_back(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     config = _service(tmp_path).get_public_config()
-    assert config["metadata_sources"] == ["javbus", "fanza"]
+    assert config["metadata_sources"] == ["metatube:JavBus", "metatube:FANZA"]
     assert config["media_root"] == "/media"
 
 
@@ -144,7 +145,20 @@ def test_saved_javdb_source_is_disabled_without_losing_other_sources(tmp_path: P
     (tmp_path / "scraping.conf").write_text(
         'metadata_sources=["javdb", "javbus", "fanza"]\n', encoding="utf-8",
     )
-    assert _service(tmp_path).get_raw_config()["metadata_sources"] == ["javbus", "fanza"]
+    assert _service(tmp_path).get_raw_config()["metadata_sources"] == ["metatube:JavBus", "metatube:FANZA"]
+
+
+def test_legacy_task_sources_migrate_without_direct_javdb() -> None:
+    assert normalize_metadata_sources(["javdb", "fanza", "javbus", "metatube:FANZA"]) == [
+        "metatube:FANZA", "metatube:JavBus",
+    ]
+
+
+def test_direct_source_cannot_be_saved(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="不支持的元数据源"):
+        _service(tmp_path).update_config(ScrapingConfigUpdate(
+            metatube_url="http://127.0.0.1:2048", metadata_sources=["javbus"],
+        ))
 
 
 def test_metatube_connection_and_token_round_trip(tmp_path: Path) -> None:
@@ -152,7 +166,7 @@ def test_metatube_connection_and_token_round_trip(tmp_path: Path) -> None:
     public = service.update_config(ScrapingConfigUpdate(
         metatube_url="https://metatube.example/",
         metatube_token="secret-token-1234",
-        metadata_sources=["metatube:FANZA", "javbus"],
+        metadata_sources=["metatube:FANZA", "metatube:JavBus"],
     ))
     assert public["metatube_url"] == "https://metatube.example"
     assert public["metatube_token"] == "************1234"

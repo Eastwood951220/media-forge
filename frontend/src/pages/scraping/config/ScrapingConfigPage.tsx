@@ -53,7 +53,7 @@ export default function ScrapingConfigPage() {
   const [running, setRunning] = useState(false)
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false)
   const [maskedApiKey, setMaskedApiKey] = useState('')
-  const [sources, setSources] = useState<string[]>(['javbus', 'fanza'])
+  const [sources, setSources] = useState<string[]>(['metatube:JavBus', 'metatube:FANZA'])
   const [metatubeProviders, setMetatubeProviders] = useState<string[]>([])
   const [metatubeError, setMetatubeError] = useState(false)
   const [metatubeLoading, setMetatubeLoading] = useState(false)
@@ -317,10 +317,8 @@ export default function ScrapingConfigPage() {
                   <Form.Item label="元数据源优先级" className={styles.fieldSpan2}>
                     <SourcePriorityList
                       sources={sources}
-                      availableSources={['javbus', 'fanza', ...metatubeProviders.map((name) => `metatube:${name}`)]}
+                      availableSources={metatubeProviders.map((name) => `metatube:${name}`)}
                       labels={{
-                        javbus: 'JavBus（直连）',
-                        fanza: 'FANZA（直连）',
                         ...Object.fromEntries(metatubeProviders.map((name) => [`metatube:${name}`, `${name}（MetaTube）`])),
                       }}
                       onChange={setSources}
