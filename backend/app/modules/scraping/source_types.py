@@ -19,3 +19,6 @@ class SourceMetadata:
     backdrop_url: str | None = None
     landscape_url: str | None = None
     preview_urls: list[str] = field(default_factory=list)
+    primary_image_url: str | None = None
+    thumb_image_url: str | None = None
+    backdrop_image_url: str | None = None

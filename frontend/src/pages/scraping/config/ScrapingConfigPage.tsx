@@ -8,6 +8,7 @@ import {
   Input,
   Spin,
   Tag,
+  Typography,
 } from 'antd'
 import {
   ApiOutlined,
@@ -18,6 +19,7 @@ import {
 } from '@ant-design/icons'
 import {
   getScrapingConfig,
+  listMetatubeProviders,
   runScrapingScan,
   runScrapingStrm,
   updateScrapingConfig,
@@ -37,6 +39,8 @@ type FormValues = {
   directory_id: number
   trigger_delay_seconds: number
   scrape_root: string
+  metatube_url: string
+  metatube_token?: string
 }
 
 const DEFAULT_BASE_URL = 'http://192.168.0.36:12333'
@@ -49,7 +53,11 @@ export default function ScrapingConfigPage() {
   const [running, setRunning] = useState(false)
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false)
   const [maskedApiKey, setMaskedApiKey] = useState('')
-  const [sources, setSources] = useState<string[]>(['javdb', 'javbus'])
+  const [sources, setSources] = useState<string[]>(['javbus', 'fanza'])
+  const [metatubeProviders, setMetatubeProviders] = useState<string[]>([])
+  const [metatubeError, setMetatubeError] = useState(false)
+  const [metatubeLoading, setMetatubeLoading] = useState(false)
+  const [metatubeTokenConfigured, setMetatubeTokenConfigured] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [scanSummary, setScanSummary] = useState<ScrapingScanSummary | null>(null)
 
@@ -61,24 +69,40 @@ export default function ScrapingConfigPage() {
         directory_id: config.directory_id ?? undefined,
         trigger_delay_seconds: config.trigger_delay_seconds,
         scrape_root: config.scrape_root,
+        metatube_url: config.metatube_url,
+        metatube_token: '',
       })
       setApiKeyConfigured(config.api_key_configured)
       setMaskedApiKey(config.api_key)
       setSources(config.metadata_sources ?? [])
+      setMetatubeTokenConfigured(config.metatube_token_configured)
     },
     [form],
   )
+
+  const loadProviders = useCallback(async () => {
+    setMetatubeLoading(true)
+    try {
+      setMetatubeProviders(await listMetatubeProviders())
+      setMetatubeError(false)
+    } catch {
+      setMetatubeError(true)
+    } finally {
+      setMetatubeLoading(false)
+    }
+  }, [])
 
   const loadConfig = useCallback(async () => {
     setLoading(true)
     try {
       applyConfig(await getScrapingConfig())
+      void loadProviders()
     } catch (error: unknown) {
       message.error(getErrorMessage(error))
     } finally {
       setLoading(false)
     }
-  }, [applyConfig, message])
+  }, [applyConfig, loadProviders, message])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial config load on mount is intentional.
@@ -92,9 +116,13 @@ export default function ScrapingConfigPage() {
       trigger_delay_seconds: values.trigger_delay_seconds,
       scrape_root: values.scrape_root,
       metadata_sources: sources,
+      metatube_url: values.metatube_url,
     }
     if (values.api_key?.trim()) {
       payload.api_key = values.api_key.trim()
+    }
+    if (values.metatube_token?.trim()) {
+      payload.metatube_token = values.metatube_token.trim()
     }
     return payload
   }
@@ -102,6 +130,7 @@ export default function ScrapingConfigPage() {
   const persist = async (values: FormValues): Promise<ScrapingConfig> => {
     const updated = await updateScrapingConfig(buildPayload(values))
     applyConfig(updated)
+    void loadProviders()
     return updated
   }
 
@@ -214,6 +243,34 @@ export default function ScrapingConfigPage() {
               <Card
                 title={
                   <span className={styles.sectionTitle}>
+                    <ApiOutlined />
+                    MetaTube Server
+                  </span>
+                }
+                className={styles.formCard}
+              >
+                <div className={styles.fieldGrid}>
+                  <Form.Item
+                    name="metatube_url"
+                    label="MetaTube Server 地址"
+                    extra="保存后读取该服务当前启用的影片来源。"
+                    rules={[{ type: 'url', warningOnly: false, message: '请输入有效的服务地址' }]}
+                  >
+                    <Input placeholder="http://metatube-server:8080" />
+                  </Form.Item>
+                  <Form.Item label="MetaTube Token">
+                    <Form.Item name="metatube_token" noStyle>
+                      <Input.Password placeholder={metatubeTokenConfigured ? '已配置，留空保持不变' : '未启用鉴权可留空'} />
+                    </Form.Item>
+                  </Form.Item>
+                </div>
+                {metatubeError && <Alert type="warning" showIcon title="暂时无法读取 MetaTube 来源，请检查服务地址和连接。" />}
+                {metatubeLoading && <Typography.Text type="secondary">正在读取 MetaTube 影片来源…</Typography.Text>}
+              </Card>
+
+              <Card
+                title={
+                  <span className={styles.sectionTitle}>
                     <ClockCircleOutlined />
                     自动触发
                   </span>
@@ -260,7 +317,12 @@ export default function ScrapingConfigPage() {
                   <Form.Item label="元数据源优先级" className={styles.fieldSpan2}>
                     <SourcePriorityList
                       sources={sources}
-                      labels={{ javdb: 'JavDB', javbus: 'JavBus', fanza: 'FANZA' }}
+                      availableSources={['javbus', 'fanza', ...metatubeProviders.map((name) => `metatube:${name}`)]}
+                      labels={{
+                        javbus: 'JavBus（直连）',
+                        fanza: 'FANZA（直连）',
+                        ...Object.fromEntries(metatubeProviders.map((name) => [`metatube:${name}`, `${name}（MetaTube）`])),
+                      }}
                       onChange={setSources}
                     />
                   </Form.Item>

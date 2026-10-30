@@ -53,6 +53,7 @@ class ScrapingTaskService:
                 "scrape_root": config.get("scrape_root", ""),
                 "media_root": config.get("media_root", "/media"),
                 "metadata_sources": list(config.get("metadata_sources") or []),
+                "metatube_url": config.get("metatube_url", ""),
             },
         )
         self.db.add(task)

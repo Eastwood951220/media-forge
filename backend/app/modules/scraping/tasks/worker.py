@@ -133,6 +133,8 @@ def run_task(task_id: uuid.UUID) -> None:
         db.commit()
         publish_scraping_task_updated(task)
         config = dict(task.config_snapshot or {}) or get_scraping_config()
+        runtime_config = get_scraping_config()
+        config["metatube_token"] = runtime_config.get("metatube_token", "")
 
         items = [item for item in task.items if item.status == "pending"]
         cancelled = False

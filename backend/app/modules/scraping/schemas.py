@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 DEFAULT_BASE_URL = "http://192.168.0.36:12333"
 DEFAULT_MEDIA_ROOT = "/media"
-DEFAULT_METADATA_SOURCES = ["javdb", "javbus"]
+DEFAULT_METADATA_SOURCES = ["javbus", "fanza"]
 
 
 class ScrapingConfig(BaseModel):
@@ -17,6 +17,8 @@ class ScrapingConfig(BaseModel):
     scrape_root: str = ""
     media_root: str = DEFAULT_MEDIA_ROOT
     metadata_sources: list[str] = Field(default_factory=lambda: list(DEFAULT_METADATA_SOURCES))
+    metatube_url: str = ""
+    metatube_token: str = ""
 
 
 class ScrapingConfigUpdate(BaseModel):
@@ -29,8 +31,12 @@ class ScrapingConfigUpdate(BaseModel):
     scrape_root: str | None = None
     media_root: str | None = None
     metadata_sources: list[str] | None = None
+    metatube_url: str | None = None
+    metatube_token: str | None = None
 
 
 class ScrapingConfigResponse(ScrapingConfig):
     api_key: str = ""
     api_key_configured: bool = False
+    metatube_token: str = ""
+    metatube_token_configured: bool = False

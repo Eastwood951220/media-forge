@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ScrapingConfigPage from '../ScrapingConfigPage'
 import {
   getScrapingConfig,
+  listMetatubeProviders,
   listScrapingDirectories,
   runScrapingScan,
   runScrapingStrm,
@@ -16,6 +17,7 @@ vi.mock('@/api/scraping/scrapingConfig', () => ({
   runScrapingStrm: vi.fn(),
   runScrapingScan: vi.fn(),
   listScrapingDirectories: vi.fn(),
+  listMetatubeProviders: vi.fn(),
 }))
 
 const savedConfig = {
@@ -26,7 +28,10 @@ const savedConfig = {
   trigger_delay_seconds: 30,
   scrape_root: '/mnt/media',
   media_root: '/media',
-  metadata_sources: ['javdb', 'javbus'],
+  metadata_sources: ['javbus', 'fanza'],
+  metatube_url: '',
+  metatube_token: '',
+  metatube_token_configured: false,
 }
 
 function renderPage() {
@@ -41,6 +46,7 @@ describe('ScrapingConfigPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getScrapingConfig).mockResolvedValue(savedConfig)
+    vi.mocked(listMetatubeProviders).mockResolvedValue(['FANZA', 'JavBus', 'MGS'])
     vi.mocked(updateScrapingConfig).mockResolvedValue(savedConfig)
     vi.mocked(runScrapingStrm).mockResolvedValue({
       success: true,
@@ -144,20 +150,20 @@ describe('ScrapingConfigPage', () => {
   it('saves reordered metadata sources', async () => {
     renderPage()
     await screen.findByDisplayValue('/mnt/media')
-    fireEvent.click(screen.getByRole('button', { name: '下移 JavDB' }))
+    fireEvent.click(screen.getByRole('button', { name: '下移 JavBus（直连）' }))
     fireEvent.click(screen.getByRole('button', { name: '保存配置' }))
     await waitFor(() => expect(updateScrapingConfig).toHaveBeenCalled())
     const payload = vi.mocked(updateScrapingConfig).mock.calls[0][0]
-    expect(payload.metadata_sources).toEqual(['javbus', 'javdb'])
+    expect(payload.metadata_sources).toEqual(['fanza', 'javbus'])
   })
 
-  it('enables FANZA as a third ordered source', async () => {
+  it('enables a MetaTube source as a third ordered source', async () => {
     renderPage()
     await screen.findByDisplayValue('/mnt/media')
-    fireEvent.click(screen.getByRole('switch', { name: '启用 FANZA' }))
+    fireEvent.click(await screen.findByRole('switch', { name: '启用 MGS（MetaTube）' }))
     fireEvent.click(screen.getByRole('button', { name: '保存配置' }))
     await waitFor(() => expect(updateScrapingConfig).toHaveBeenCalled())
-    expect(vi.mocked(updateScrapingConfig).mock.calls[0][0].metadata_sources).toEqual(['javdb', 'javbus', 'fanza'])
+    expect(vi.mocked(updateScrapingConfig).mock.calls[0][0].metadata_sources).toEqual(['javbus', 'fanza', 'metatube:MGS'])
   })
 
   it('runs a scan and shows the summary', async () => {

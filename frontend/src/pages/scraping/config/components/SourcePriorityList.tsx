@@ -4,12 +4,11 @@ import { ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons'
 export interface SourcePriorityListProps {
   sources: string[]
   labels: Record<string, string>
+  availableSources: string[]
   onChange: (sources: string[]) => void
 }
 
-const ALL_SOURCES = ['javdb', 'javbus', 'fanza']
-
-export default function SourcePriorityList({ sources, labels, onChange }: SourcePriorityListProps) {
+export default function SourcePriorityList({ sources, labels, availableSources, onChange }: SourcePriorityListProps) {
   const move = (index: number, offset: number) => {
     const next = index + offset
     if (next < 0 || next >= sources.length) return
@@ -28,7 +27,7 @@ export default function SourcePriorityList({ sources, labels, onChange }: Source
   }
 
   return (
-    <Space orientation="vertical" style={{ width: '100%' }}>
+    <Space orientation="vertical" style={{ width: '100%', maxHeight: 420, overflowY: 'auto' }}>
       {sources.map((source, index) => (
         <div key={source} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
           <Tag color="blue">{index + 1}</Tag>
@@ -54,7 +53,7 @@ export default function SourcePriorityList({ sources, labels, onChange }: Source
           />
         </div>
       ))}
-      {ALL_SOURCES.filter((source) => !sources.includes(source)).map((source) => (
+      {availableSources.filter((source) => !sources.includes(source)).map((source) => (
         <div key={source} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
           <Tag color="default">-</Tag>
           <Typography.Text type="secondary" style={{ flex: 1 }}>{labels[source] ?? source}</Typography.Text>

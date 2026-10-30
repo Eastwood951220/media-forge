@@ -40,7 +40,10 @@ def test_get_and_put_scraping_config(client, admin_user, tmp_path, monkeypatch) 
         "trigger_delay_seconds": 30,
         "scrape_root": "",
         "media_root": "/media",
-        "metadata_sources": ["javdb", "javbus"],
+        "metadata_sources": ["javbus", "fanza"],
+        "metatube_url": "",
+        "metatube_token": "",
+        "metatube_token_configured": False,
     }
 
     put_response = client.put(
@@ -71,10 +74,10 @@ def test_get_and_put_scraping_config(client, admin_user, tmp_path, monkeypatch) 
     reordered = client.put(
         "/api/scraping/config",
         headers=headers,
-        json={"scrape_root": str(tmp_path), "metadata_sources": ["javbus", "javdb"]},
+        json={"scrape_root": str(tmp_path), "metadata_sources": ["fanza", "javbus"]},
     )
     assert reordered.status_code == HTTPStatus.OK
-    assert reordered.json()["data"]["metadata_sources"] == ["javbus", "javdb"]
+    assert reordered.json()["data"]["metadata_sources"] == ["fanza", "javbus"]
     assert reordered.json()["data"]["scrape_root"] == str(tmp_path)
 
 
@@ -87,6 +90,17 @@ def test_put_rejects_unknown_metadata_source(client, admin_user, tmp_path, monke
         json={"metadata_sources": ["unknown"]},
     )
     assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_metatube_providers_endpoint_returns_server_sources(client, admin_user, tmp_path, monkeypatch) -> None:
+    from backend.app.modules.scraping import router
+
+    monkeypatch.setenv("APP_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "scraping.conf").write_text("metatube_url=https://metatube.example\n", encoding="utf-8")
+    monkeypatch.setattr(router, "list_metatube_providers", lambda url: ["FANZA", "MGS"])
+    response = client.get("/api/scraping/metatube/providers", headers=_auth_headers(client, admin_user))
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["data"] == ["FANZA", "MGS"]
 
 
 def test_put_rejects_invalid_base_url(client, admin_user, tmp_path, monkeypatch) -> None:

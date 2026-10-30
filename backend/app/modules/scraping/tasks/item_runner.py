@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from backend.app.models.scraping_task import ScrapingTaskItem
 from backend.app.modules.content.movies.storage_status import normalized_movie_storage_status
 from backend.app.modules.scraping.images import write_artwork
+from backend.app.modules.scraping.metatube import is_metatube_source, write_metatube_artwork
 from backend.app.modules.scraping.nfo import write_movie_nfo
 from backend.app.modules.scraping.paths import (
     cloud_to_local,
@@ -119,7 +120,15 @@ def run_item(
         return
 
     start_item_step(db, item, owner_id, "fetch_metadata", "获取元数据")
-    metadata = fetch_by_priority(movie.code or "", list(config.get("metadata_sources") or []))
+    sources = list(config.get("metadata_sources") or [])
+    if any(is_metatube_source(source) for source in sources):
+        metadata = fetch_by_priority(
+            movie.code or "", sources,
+            metatube_url=str(config.get("metatube_url") or ""),
+            metatube_token=str(config.get("metatube_token") or ""),
+        )
+    else:
+        metadata = fetch_by_priority(movie.code or "", sources)
     missing = not (
         movie.cover
         and list(movie.actors or [])
@@ -148,7 +157,7 @@ def run_item(
     previews = list(metadata.preview_urls) if metadata is not None else []
     if not previews and metadata is not None:
         previews = [url for url in (metadata.backdrop_url, metadata.landscape_url) if url]
-    artwork = write_artwork(
+    artwork = write_metatube_artwork(folder, metadata, transport=transport) if metadata and metadata.primary_image_url else write_artwork(
         folder,
         cover_url=movie.cover,
         source_cover_url=metadata.cover_url if metadata is not None else None,

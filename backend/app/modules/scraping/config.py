@@ -16,6 +16,7 @@ from backend.app.modules.scraping.schemas import (
     ScrapingConfigUpdate,
 )
 from backend.app.modules.scraping.sources import SOURCE_REGISTRY
+from backend.app.modules.scraping.metatube import is_metatube_source
 from shared.runtime_config import RuntimeConfigPaths
 
 
@@ -100,7 +101,7 @@ def _parse_metadata_sources(raw: object) -> list[str]:
         return list(DEFAULT_METADATA_SOURCES)
     if not isinstance(parsed, list):
         return list(DEFAULT_METADATA_SOURCES)
-    sources = [str(item) for item in parsed if str(item) in SOURCE_REGISTRY]
+    sources = [str(item) for item in parsed if str(item) in SOURCE_REGISTRY or is_metatube_source(str(item))]
     return sources or list(DEFAULT_METADATA_SOURCES)
 
 
@@ -136,6 +137,8 @@ class ScrapingConfigService:
         values["scrape_root"] = str(parsed.get("scrape_root") or "").strip()
         values["media_root"] = _safe_media_root(parsed.get("media_root"))
         values["metadata_sources"] = _parse_metadata_sources(parsed.get("metadata_sources"))
+        values["metatube_url"] = str(parsed.get("metatube_url") or "").strip()
+        values["metatube_token"] = str(parsed.get("metatube_token") or "")
         try:
             return ScrapingConfig(**values).model_dump()
         except ValidationError:
@@ -157,24 +160,33 @@ class ScrapingConfigService:
             incoming.pop("trigger_delay_seconds", None)
         if "base_url" in incoming:
             incoming["base_url"] = _normalize_base_url(str(incoming.get("base_url") or ""))
+        if "metatube_url" in incoming:
+            incoming["metatube_url"] = _normalize_base_url(str(incoming.get("metatube_url") or ""))
         if "scrape_root" in incoming:
             incoming["scrape_root"] = _normalize_scrape_root(incoming.get("scrape_root"))
         if "media_root" in incoming:
             incoming["media_root"] = _normalize_media_root(incoming.get("media_root"))
         if "metadata_sources" in incoming:
             sources = [str(item) for item in (incoming.get("metadata_sources") or [])]
-            unknown = [item for item in sources if item not in SOURCE_REGISTRY]
+            unknown = [item for item in sources if item not in SOURCE_REGISTRY and not is_metatube_source(item)]
             if unknown:
                 raise ValueError(f"不支持的元数据源: {', '.join(unknown)}")
             if not sources:
                 raise ValueError("元数据源不能为空")
+            if len(sources) != len(set(sources)):
+                raise ValueError("元数据源不能重复")
             incoming["metadata_sources"] = sources
         if "api_key" in incoming:
             key = str(incoming.get("api_key") or "")
             incoming["api_key"] = current.get("api_key", "") if not key or is_masked_token(key) else key
+        if "metatube_token" in incoming:
+            token = str(incoming.get("metatube_token") or "")
+            incoming["metatube_token"] = current.get("metatube_token", "") if not token or is_masked_token(token) else token
 
         merged = dict(current)
         merged.update(incoming)
+        if any(is_metatube_source(source) for source in merged["metadata_sources"]) and not merged.get("metatube_url"):
+            raise ValueError("启用 MetaTube 来源前请配置 MetaTube Server 地址")
         validated = ScrapingConfig(**merged).model_dump()
         self._write_config(validated)
         return self._public_config(validated)
@@ -184,6 +196,9 @@ class ScrapingConfigService:
         public = dict(config)
         public["api_key"] = mask_token(raw_key)
         public["api_key_configured"] = bool(raw_key)
+        raw_metatube_token = str(config.get("metatube_token") or "")
+        public["metatube_token"] = mask_token(raw_metatube_token)
+        public["metatube_token_configured"] = bool(raw_metatube_token)
         return ScrapingConfigResponse(**public).model_dump()
 
     def _write_config(self, data: dict[str, Any]) -> None:

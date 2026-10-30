@@ -15,6 +15,7 @@ from scraper.spiders.javdb.javdb_parser import parse_search_page as parse_javdb_
 
 from backend.app.modules.scraping.paths import normalize_code
 from backend.app.modules.scraping.source_types import SourceMetadata
+from backend.app.modules.scraping.metatube import fetch_metatube_movie, is_metatube_source
 
 logger = logging.getLogger(__name__)
 
@@ -175,12 +176,10 @@ from backend.app.modules.scraping.fanza import FanzaAdapter
 
 
 SOURCE_REGISTRY: dict[str, SourceAdapter] = {
-    "javdb": JavdbAdapter(),
     "javbus": JavbusAdapter(),
     "fanza": FanzaAdapter(),
 }
 SOURCE_LABELS = {
-    "javdb": "JavDB",
     "javbus": "JavBus",
     "fanza": "FANZA",
 }
@@ -193,9 +192,16 @@ def fetch_with_source(source: str, code: str) -> SourceMetadata | None:
     return adapter.fetch_by_code(code)
 
 
-def fetch_by_priority(code: str, sources: list[str]) -> SourceMetadata | None:
+def fetch_by_priority(
+    code: str, sources: list[str], *, metatube_url: str = "", metatube_token: str = "",
+) -> SourceMetadata | None:
     for source in sources:
-        metadata = fetch_with_source(source, code)
+        if is_metatube_source(source):
+            metadata = fetch_metatube_movie(
+                code, source.partition(":")[2], base_url=metatube_url, token=metatube_token,
+            )
+        else:
+            metadata = fetch_with_source(source, code)
         if metadata is not None:
             return metadata
     return None

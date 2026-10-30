@@ -19,7 +19,10 @@ def test_defaults_without_config_file(tmp_path: Path) -> None:
         "trigger_delay_seconds": 30,
         "scrape_root": "",
         "media_root": "/media",
-        "metadata_sources": ["javdb", "javbus"],
+        "metadata_sources": ["javbus", "fanza"],
+        "metatube_url": "",
+        "metatube_token": "",
+        "metatube_token_configured": False,
     }
 
 
@@ -110,15 +113,15 @@ def test_metadata_sources_round_trip_and_fallback(tmp_path: Path) -> None:
         ScrapingConfigUpdate(
             scrape_root=str(tmp_path),
             media_root="/media/",
-            metadata_sources=["javbus", "javdb"],
+            metadata_sources=["fanza", "javbus"],
         )
     )
 
     assert public["scrape_root"] == str(tmp_path)
     assert public["media_root"] == "/media"
-    assert public["metadata_sources"] == ["javbus", "javdb"]
+    assert public["metadata_sources"] == ["fanza", "javbus"]
     text = (tmp_path / "scraping.conf").read_text(encoding="utf-8")
-    assert 'metadata_sources=["javbus", "javdb"]' in text
+    assert 'metadata_sources=["fanza", "javbus"]' in text
 
 
 def test_invalid_metadata_sources_are_rejected(tmp_path: Path) -> None:
@@ -133,8 +136,35 @@ def test_invalid_persisted_metadata_sources_fall_back(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     config = _service(tmp_path).get_public_config()
-    assert config["metadata_sources"] == ["javdb", "javbus"]
+    assert config["metadata_sources"] == ["javbus", "fanza"]
     assert config["media_root"] == "/media"
+
+
+def test_saved_javdb_source_is_disabled_without_losing_other_sources(tmp_path: Path) -> None:
+    (tmp_path / "scraping.conf").write_text(
+        'metadata_sources=["javdb", "javbus", "fanza"]\n', encoding="utf-8",
+    )
+    assert _service(tmp_path).get_raw_config()["metadata_sources"] == ["javbus", "fanza"]
+
+
+def test_metatube_connection_and_token_round_trip(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    public = service.update_config(ScrapingConfigUpdate(
+        metatube_url="https://metatube.example/",
+        metatube_token="secret-token-1234",
+        metadata_sources=["metatube:FANZA", "javbus"],
+    ))
+    assert public["metatube_url"] == "https://metatube.example"
+    assert public["metatube_token"] == "************1234"
+    assert public["metatube_token_configured"] is True
+    assert service.get_raw_config()["metatube_token"] == "secret-token-1234"
+    service.update_config(ScrapingConfigUpdate(metatube_token="************1234"))
+    assert service.get_raw_config()["metatube_token"] == "secret-token-1234"
+
+
+def test_metatube_source_requires_server_address(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="MetaTube Server 地址"):
+        _service(tmp_path).update_config(ScrapingConfigUpdate(metadata_sources=["metatube:FANZA"]))
 
 
 def test_scrape_root_must_be_an_existing_directory(tmp_path: Path) -> None:

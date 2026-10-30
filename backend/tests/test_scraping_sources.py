@@ -18,8 +18,7 @@ class _FakeFetcher:
 
 
 def test_registry_contains_selectable_metadata_sources() -> None:
-    assert set(SOURCE_REGISTRY) == {"javdb", "javbus", "fanza"}
-    assert SOURCE_LABELS["javdb"]
+    assert set(SOURCE_REGISTRY) == {"javbus", "fanza"}
     assert SOURCE_LABELS["javbus"]
     assert SOURCE_LABELS["fanza"] == "FANZA"
 

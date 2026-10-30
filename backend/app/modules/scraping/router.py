@@ -11,6 +11,7 @@ from backend.app.modules.scraping.config import (
     validate_run_config,
     validate_scrape_root,
 )
+from backend.app.modules.scraping.metatube import list_metatube_providers
 from backend.app.modules.scraping.scan import scan_directory, schedule_scan_after_strm
 from backend.app.modules.scraping.schemas import ScrapingConfigUpdate
 from backend.app.modules.scraping.strm import run_strm_generation
@@ -38,6 +39,17 @@ def update_scraping_config(
         return success(data=ScrapingConfigService().update_config(body))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/metatube/providers")
+def get_metatube_providers(_current_user: CurrentUser) -> dict:
+    config = ScrapingConfigService().get_raw_config()
+    if not config.get("metatube_url"):
+        return success(data=[])
+    try:
+        return success(data=list_metatube_providers(config["metatube_url"]))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="无法读取 MetaTube 影片来源") from exc
 
 
 @router.get("/directories")

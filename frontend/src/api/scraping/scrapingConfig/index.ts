@@ -22,6 +22,10 @@ export function getScrapingConfig(): Promise<ScrapingConfig> {
   return request.get<ScrapingConfig>(`${BASE_URL}/config`)
 }
 
+export function listMetatubeProviders(): Promise<string[]> {
+  return request.get<string[]>(`${BASE_URL}/metatube/providers`, undefined, { showError: false })
+}
+
 export function updateScrapingConfig(data: ScrapingConfigUpdate): Promise<ScrapingConfig> {
   return request.put<ScrapingConfig>(`${BASE_URL}/config`, data)
 }

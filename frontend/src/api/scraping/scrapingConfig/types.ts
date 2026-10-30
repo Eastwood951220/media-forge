@@ -7,6 +7,9 @@ export interface ScrapingConfig {
   scrape_root: string
   media_root: string
   metadata_sources: string[]
+  metatube_url: string
+  metatube_token: string
+  metatube_token_configured: boolean
 }
 
 export interface ScrapingConfigUpdate {
@@ -17,6 +20,8 @@ export interface ScrapingConfigUpdate {
   scrape_root?: string
   media_root?: string
   metadata_sources?: string[]
+  metatube_url?: string
+  metatube_token?: string
 }
 
 export interface ScrapingRunResult {
