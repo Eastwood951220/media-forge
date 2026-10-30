@@ -21,17 +21,29 @@ class NasDeleteResult:
 
 
 def resolve_nas_movie_folder(movie: Movie, config: Mapping[str, Any]) -> Path | None:
-    if movie.scraping_status != "scraped":
-        return None
     cloud_folder = str(movie.scraping_folder or "")
     media_root = str(config.get("media_root") or "/media")
     local_root = Path(str(config.get("scrape_root") or ""))
-    if not cloud_folder.startswith("/") or not media_root.startswith("/") or not local_root.is_absolute() or not local_root.is_dir():
+    if not media_root.startswith("/") or not local_root.is_absolute() or not local_root.is_dir():
         raise UnsafeNasMovieFolder("刮削目录映射不可用")
-    try:
-        relative = PurePosixPath(cloud_folder).relative_to(PurePosixPath(media_root))
-    except ValueError as exc:
-        raise UnsafeNasMovieFolder("影片刮削目录不在媒体库根目录内") from exc
+    if cloud_folder:
+        if not cloud_folder.startswith("/"):
+            raise UnsafeNasMovieFolder("影片刮削目录不在媒体库根目录内")
+        try:
+            relative = PurePosixPath(cloud_folder).relative_to(PurePosixPath(media_root))
+        except ValueError as exc:
+            raise UnsafeNasMovieFolder("影片刮削目录不在媒体库根目录内") from exc
+    else:
+        code = normalize_code(movie.code or "")
+        candidates = [
+            path.parent for path in local_root.rglob("*.strm")
+            if normalize_code(path.stem) == code and normalize_code(path.parent.name) == code
+        ] if code else []
+        if len(candidates) > 1:
+            raise UnsafeNasMovieFolder("找到多个同番号 STRM 文件夹，无法确定删除目标")
+        if not candidates:
+            return None
+        relative = PurePosixPath(*candidates[0].relative_to(local_root).parts)
     if str(relative) == "." or any(part in {"..", "."} for part in relative.parts):
         raise UnsafeNasMovieFolder("不能删除刮削根目录或其上层目录")
     target = local_root.joinpath(*relative.parts)

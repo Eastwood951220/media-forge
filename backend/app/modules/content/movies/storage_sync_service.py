@@ -62,6 +62,7 @@ def select_movies_for_storage_sync(
             created_at_to=filters.get("created_at_to"),
             storage_status=filters.get("storage_status"),
             scraping_status=filters.get("scraping_status"),
+            jellyfin_watch_status=filters.get("jellyfin_watch_status"),
         ),
         sort_by="created_at",
         sort_order=-1,

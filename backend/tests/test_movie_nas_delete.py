@@ -30,6 +30,18 @@ def test_deletes_exact_strm_parent_folder_and_keeps_actor_folder(tmp_path: Path)
     assert target.parent.is_dir()
 
 
+def test_deletes_strm_parent_even_before_scraping(tmp_path: Path) -> None:
+    root = tmp_path / "日本"
+    folder = root / "愛那あい" / "CJOD-496-C"
+    folder.mkdir(parents=True)
+    (folder / "CJOD-496-C.strm").write_text("url", encoding="utf-8")
+    movie = Movie(code="CJOD-496-C", source_name="test", scraping_status="not_scraped")
+    config = {"scrape_root": str(root), "media_root": "/media"}
+    assert resolve_nas_movie_folder(movie, config) == folder
+    assert delete_nas_movie_folders([movie], config).deleted_folders == [str(folder)]
+    assert not folder.exists()
+
+
 def test_rejects_symlink_or_root_escape_before_deleting(tmp_path: Path) -> None:
     root = tmp_path / "media"
     outside = tmp_path / "outside" / "CJOD-496-C"

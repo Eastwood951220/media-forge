@@ -90,6 +90,20 @@ def test_movie_list_filters_jellyfin_status(client, auth_headers, db_session) ->
     assert response.json()["rows"][0]["jellyfin_watch_status"] == "played"
 
 
+def test_storage_sync_selection_respects_jellyfin_filter(db_session) -> None:
+    from backend.app.modules.content.movies.storage_sync_service import select_movies_for_storage_sync
+
+    played = _movie(db_session, "A-001", "/media/A-001")
+    other = _movie(db_session, "B-002", "/media/B-002")
+    played.jellyfin_watch_status = "played"
+    other.jellyfin_watch_status = "unplayed"
+    db_session.commit()
+    selected = select_movies_for_storage_sync(
+        db_session, movie_ids=None, filters={"jellyfin_watch_status": "played"},
+    )
+    assert [movie.id for movie in selected] == [played.id]
+
+
 def test_duplicate_local_folder_does_not_assign_watch_state(db_session) -> None:
     first = _movie(db_session, "A-001", "/media/shared")
     second = _movie(db_session, "B-002", "/media/shared")
