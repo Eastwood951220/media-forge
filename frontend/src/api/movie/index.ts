@@ -51,6 +51,7 @@ export interface MovieQueryParams {
   created_at_to?: string
   storage_status?: string
   scraping_status?: string
+  jellyfin_watch_status?: string
 }
 
 export function fetchMovies(params: MovieQueryParams): Promise<MovieListResponse> {

@@ -2,7 +2,7 @@ import {useState, useCallback, useEffect} from "react";
 import {App, Drawer, List, Switch, Button, Space, Typography, Input, InputNumber, Select} from "antd";
 import type {FilterItemConfig} from "@/api/movie";
 import {updateMovieFilterConfig} from "@/api/movie";
-import {MOVIE_FILTER_CONFIG_ITEMS as filterConfigItems, MOVIE_SCRAPING_STATUS_OPTIONS, MOVIE_STORAGE_STATUS_OPTIONS} from "../constants";
+import {JELLYFIN_WATCH_STATUS_OPTIONS, MOVIE_FILTER_CONFIG_ITEMS as filterConfigItems, MOVIE_SCRAPING_STATUS_OPTIONS, MOVIE_STORAGE_STATUS_OPTIONS} from "../constants";
 import styles from "../MovieListPage.module.less";
 
 interface FilterConfigDrawerProps {
@@ -25,6 +25,9 @@ function DefaultValueInput({filterKey, value, onChange}: {filterKey: string; val
     }
     if (filterKey === "scrapingStatus") {
         return <Select size="small" className={styles.filterConfigSelect} placeholder="默认值" allowClear value={value as string} onChange={(v) => onChange(v)} options={MOVIE_SCRAPING_STATUS_OPTIONS} />;
+    }
+    if (filterKey === "jellyfinWatchStatus") {
+        return <Select size="small" className={styles.filterConfigSelect} placeholder="默认值" allowClear value={value as string} onChange={(v) => onChange(v)} options={JELLYFIN_WATCH_STATUS_OPTIONS} />;
     }
     if (filterKey === "sortBy") {
         return <Select size="small" className={styles.filterConfigSortSelect} placeholder="默认排序" allowClear value={value as string} onChange={(v) => onChange(v)} options={[

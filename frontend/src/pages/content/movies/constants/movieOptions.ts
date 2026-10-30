@@ -20,3 +20,10 @@ export const MOVIE_SCRAPING_STATUS_OPTIONS: SelectOption[] = [
     {value: "scraped", label: "已刮削"},
     {value: "not_scraped", label: "未刮削"},
 ];
+
+export const JELLYFIN_WATCH_STATUS_OPTIONS: SelectOption[] = [
+    {value: "played", label: "已观看"},
+    {value: "unplayed", label: "未观看"},
+    {value: "in_progress", label: "未看完"},
+    {value: "not_in_library", label: "未入 Jellyfin 库"},
+];

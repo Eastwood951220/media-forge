@@ -44,6 +44,7 @@ const INITIAL_FILTER_STATE: MovieFilterState = {
   selectedSeriesNot: [],
   storageStatus: undefined,
   scrapingStatus: undefined,
+  jellyfinWatchStatus: undefined,
   releaseDateFrom: null,
   releaseDateTo: null,
   createdAtFrom: null,

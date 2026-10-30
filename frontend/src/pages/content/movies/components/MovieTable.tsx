@@ -4,6 +4,7 @@ import type { Movie } from '@/api/movie/types'
 import { BlurredImage } from '@/components/BlurredImage'
 import ResponsiveActions, { type ResponsiveAction } from '@/components/ResponsiveActions'
 import styles from '../MovieListPage.module.less'
+import { JELLYFIN_WATCH_STATUS_OPTIONS } from '../constants'
 
 export interface MovieColumnsOptions {
   onViewDetail: (id: string) => void
@@ -134,6 +135,17 @@ export function createMovieColumns({ onViewDetail, onPush, onDelete, onCd2Sync, 
         if (record.scraping_status === 'scraped') return <Tag color="success">已刮削</Tag>
         if (record.scraping_status === 'not_scraped') return <Tag>未刮削</Tag>
         return <span>-</span>
+      },
+    },
+    {
+      title: 'Jellyfin 观看状态',
+      dataIndex: 'jellyfin_watch_status',
+      key: 'jellyfin_watch_status',
+      width: 150,
+      render: (value: Movie['jellyfin_watch_status']) => {
+        const label = JELLYFIN_WATCH_STATUS_OPTIONS.find((option) => option.value === value)?.label
+        if (!label) return <span>-</span>
+        return <Tag color={value === 'played' ? 'success' : value === 'in_progress' ? 'processing' : 'default'}>{label}</Tag>
       },
     },
     {

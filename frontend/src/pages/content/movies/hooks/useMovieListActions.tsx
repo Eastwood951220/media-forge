@@ -52,7 +52,7 @@ export function useMovieListActions(args: {
             />
           </div>
           <Typography.Text type="danger" className={styles.deleteWarning}>
-            删除云存储会删除影片对应的番号文件夹，不会只删除单个视频文件。
+            删除云存储会同时删除云端番号文件夹及 NAS 上对应的 STRM 上层文件夹；已刮削的元数据也会一并删除。
           </Typography.Text>
         </div>
       ),
@@ -65,7 +65,9 @@ export function useMovieListActions(args: {
           movie_ids: movies.map((movie) => movie.id),
           mode: selectedMode,
         })
-        message.success(`删除成功：数据库 ${result.deleted_movies} 部，云存储 ${result.cloud_deleted_folders.length} 个文件夹`)
+        const failed = result.cloud_failed_folders.length + result.nas_failed_folders.length
+        if (failed) message.warning(`部分删除失败：云端 ${result.cloud_failed_folders.length}，NAS ${result.nas_failed_folders.length}`)
+        else message.success(`删除成功：数据库 ${result.deleted_movies} 部，云存储 ${result.cloud_deleted_folders.length} 个文件夹，NAS ${result.nas_deleted_folders.length} 个文件夹`)
         list.setSelectedRowKeys([])
         list.reload()
       },

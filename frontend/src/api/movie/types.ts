@@ -1,4 +1,5 @@
 export type MovieStorageStatus = 'not_stored' | 'storing' | 'stored'
+export type JellyfinWatchStatus = 'played' | 'unplayed' | 'in_progress' | 'not_in_library'
 
 export type MovieDeleteMode = 'database_only' | 'cloud_only' | 'database_and_cloud'
 
@@ -9,6 +10,9 @@ export interface MovieDeleteResult {
   cloud_deleted_folders: string[]
   cloud_missing_folders: string[]
   cloud_failed_folders: Array<Record<string, unknown>>
+  nas_deleted_folders: string[]
+  nas_missing_folders: string[]
+  nas_failed_folders: Array<Record<string, unknown>>
 }
 
 export interface MovieMagnet {
@@ -63,6 +67,9 @@ export interface Movie {
   scraping_status?: 'scraped' | 'not_scraped' | null
   scraping_folder?: string
   scraping_checked_at?: string | null
+  jellyfin_item_id?: string | null
+  jellyfin_watch_status?: JellyfinWatchStatus | null
+  jellyfin_playback_position_ticks?: number | null
   storage_summary: {
     last_status?: MovieStorageStatus
     storage_status?: MovieStorageStatus
@@ -97,7 +104,7 @@ export interface SelectOption<T = string> {
 export type MovieFilterField =
   | 'actors' | 'tags' | 'director' | 'maker' | 'series'
   | 'actorsNot' | 'tagsNot' | 'directorNot' | 'makerNot' | 'seriesNot'
-  | 'storageStatus' | 'scrapingStatus' | 'ratingMin' | 'ratingMax'
+  | 'storageStatus' | 'scrapingStatus' | 'jellyfinWatchStatus' | 'ratingMin' | 'ratingMax'
   | 'actorsCountMin' | 'actorsCountMax'
   | 'releaseDateFrom' | 'releaseDateTo'
   | 'createdAtFrom' | 'createdAtTo' | 'sortBy'

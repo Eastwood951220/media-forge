@@ -28,6 +28,14 @@ const movie: Movie = {
 }
 
 describe('MovieTable columns', () => {
+  it('renders synced Jellyfin watch state', () => {
+    const columns = createMovieColumns({ onViewDetail: vi.fn() })
+    const column = columns.find((item) => item.key === 'jellyfin_watch_status')
+    expect(column).toBeDefined()
+    render(<>{column?.render?.('played', { ...movie, jellyfin_watch_status: 'played' }, 0)}</>)
+    expect(screen.getByText('已观看')).toBeInTheDocument()
+  })
+
   it('renders a compact movie cover image in the list', () => {
     const columns = createMovieColumns({ onViewDetail: vi.fn() })
     const coverColumn = columns.find((column) => column.key === 'cover')

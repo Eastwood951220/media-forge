@@ -145,6 +145,11 @@ function MovieListPage() {
               </Button>
             )}
             {list.selectedRowKeys.length > 0 && (
+              <Button danger size="small" onClick={() => confirmDeleteMovies(list.data.items.filter((movie) => list.selectedRowKeys.includes(movie._id) && movie.jellyfin_watch_status === 'played'))} disabled={!list.data.items.some((movie) => list.selectedRowKeys.includes(movie._id) && movie.jellyfin_watch_status === 'played')}>
+                批量删除已观看
+              </Button>
+            )}
+            {list.selectedRowKeys.length > 0 && (
               <Button size="small" icon={<SyncOutlined />} onClick={actions.handleBulkRefreshMagnets}>
                 批量更新磁力
               </Button>

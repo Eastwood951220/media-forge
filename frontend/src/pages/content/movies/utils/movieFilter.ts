@@ -20,6 +20,7 @@ export interface MovieFilterState {
     selectedSeriesNot: string[];
     storageStatus?: string;
     scrapingStatus?: string;
+    jellyfinWatchStatus?: string;
     releaseDateFrom: Dayjs | null;
     releaseDateTo: Dayjs | null;
     createdAtFrom: Dayjs | null;
@@ -49,6 +50,7 @@ export interface MovieFilterParams {
     created_at_to?: string;
     storage_status?: string;
     scraping_status?: string;
+    jellyfin_watch_status?: string;
 }
 
 function joinValues(values: string[]): string | undefined {
@@ -79,6 +81,7 @@ export function buildMovieFilterParams(state: MovieFilterState): MovieFilterPara
         created_at_to: state.createdAtTo?.format("YYYY-MM-DD"),
         storage_status: state.storageStatus,
         scraping_status: state.scrapingStatus,
+        jellyfin_watch_status: state.jellyfinWatchStatus,
     };
 }
 
@@ -133,6 +136,9 @@ export function buildMovieFilterDefaultState(config: MovieFilterConfig | undefin
                 break;
             case "scrapingStatus":
                 defaults.scrapingStatus = typeof defaultValue === "string" ? defaultValue : undefined;
+                break;
+            case "jellyfinWatchStatus":
+                defaults.jellyfinWatchStatus = typeof defaultValue === "string" ? defaultValue : undefined;
                 break;
             case "ratingMin":
                 defaults.ratingMin = typeof defaultValue === "number" ? defaultValue : undefined;

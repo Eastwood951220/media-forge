@@ -3,7 +3,7 @@ import {Input, Select, InputNumber, DatePicker, Button, Space} from "antd";
 import {SearchOutlined, ReloadOutlined, SettingOutlined} from "@ant-design/icons";
 import type {MovieFilters} from "../hooks/useMovieFilters";
 import type {MovieFilterConfig, MovieFilterField} from "@/api/movie/types";
-import {MOVIE_SCRAPING_STATUS_OPTIONS} from "../constants";
+import {JELLYFIN_WATCH_STATUS_OPTIONS, MOVIE_SCRAPING_STATUS_OPTIONS} from "../constants";
 import styles from "../MovieListPage.module.less";
 
 // Module-level constant — defines all filter items with their default order
@@ -20,6 +20,7 @@ const FILTER_ITEMS: {key: MovieFilterField; label: string; defaultOrder: number}
     {key: "seriesNot", label: "排除系列", defaultOrder: 9},
     {key: "storageStatus", label: "存储状态", defaultOrder: 10},
     {key: "scrapingStatus", label: "刮削状态", defaultOrder: 11},
+    {key: "jellyfinWatchStatus", label: "Jellyfin 观看状态", defaultOrder: 21},
     {key: "ratingMin", label: "最低评分", defaultOrder: 12},
     {key: "ratingMax", label: "最高评分", defaultOrder: 13},
     {key: "actorsCountMin", label: "最少演员", defaultOrder: 14},
@@ -56,7 +57,7 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
 
     const {search, selectedTask, selectedActors, selectedActorsNot, selectedTags, selectedTagsNot,
         selectedDirectors, selectedDirectorsNot, selectedMakers, selectedMakersNot,
-        selectedSeries, selectedSeriesNot, storageStatus, scrapingStatus,
+        selectedSeries, selectedSeriesNot, storageStatus, scrapingStatus, jellyfinWatchStatus,
         ratingMin, ratingMax, actorsCountMin, actorsCountMax,
         releaseDateFrom, releaseDateTo, createdAtFrom, createdAtTo,
     } = form;
@@ -83,6 +84,7 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
             {value: "stored", label: "已存储"},
         ]} />,
         scrapingStatus: <Select className={styles.filterSelect} value={scrapingStatus} onChange={(v) => patchForm({scrapingStatus: v})} placeholder="刮削状态筛选" allowClear options={MOVIE_SCRAPING_STATUS_OPTIONS} />,
+        jellyfinWatchStatus: <Select className={styles.filterSelect} value={jellyfinWatchStatus} onChange={(v) => patchForm({jellyfinWatchStatus: v})} placeholder="Jellyfin 观看状态筛选" allowClear options={JELLYFIN_WATCH_STATUS_OPTIONS} />,
         ratingMin: <InputNumber className={styles.filterNumber} placeholder="最低评分" min={0} max={5} step={0.1} value={ratingMin} onChange={(v) => patchForm({ratingMin: v ?? undefined})} />,
         ratingMax: <InputNumber className={styles.filterNumber} placeholder="最高评分" min={0} max={5} step={0.1} value={ratingMax} onChange={(v) => patchForm({ratingMax: v ?? undefined})} />,
         actorsCountMin: <InputNumber className={styles.filterNumber} placeholder="最少演员" min={0} value={actorsCountMin} onChange={(v) => patchForm({actorsCountMin: v ?? undefined})} />,
