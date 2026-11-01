@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
@@ -11,6 +12,7 @@ from typing import Any, Mapping
 from sqlalchemy.orm import Session
 
 from backend.app.models.jellyfin_sync import JellyfinSyncState
+from backend.app.modules.scraping.paths import normalize_code
 from shared.database.models.content import Movie
 
 _sync_lock = threading.Lock()
@@ -50,6 +52,10 @@ def _folder_key(path: str) -> str | None:
     return str(normalized.parent if normalized.suffix else normalized)
 
 
+def _folder_suffix(path: str) -> tuple[str, ...]:
+    return PurePosixPath(path).parts[-2:]
+
+
 def sync_jellyfin_watch_state(
     db: Session,
     client: Any,
@@ -85,25 +91,44 @@ def _sync_locked(db: Session, client: Any, *, page_size: int, fingerprint: str |
             if not rows or start >= total:
                 break
         by_folder: dict[str, list[dict]] = {}
+        by_suffix: dict[tuple[str, ...], list[dict]] = {}
+        by_code: dict[str, list[dict]] = {}
         for item in items:
             key = _folder_key(str(item.get("Path") or ""))
             if key:
                 by_folder.setdefault(key, []).append(item)
+                by_suffix.setdefault(_folder_suffix(key), []).append(item)
+                code = normalize_code(PurePosixPath(key).name)
+                if code:
+                    by_code.setdefault(code, []).append(item)
         movies = db.query(Movie).all()
         local_folder_counts: dict[str, int] = {}
+        local_suffix_counts: Counter[tuple[str, ...]] = Counter()
+        local_code_counts = Counter(normalize_code(movie.code or "") for movie in movies)
         for movie in movies:
             key = str(PurePosixPath(movie.scraping_folder or ""))
             if movie.scraping_folder:
                 local_folder_counts[key] = local_folder_counts.get(key, 0) + 1
+                local_suffix_counts[_folder_suffix(key)] += 1
         matched = ambiguous = 0
         for movie in movies:
             key = str(PurePosixPath(movie.scraping_folder or ""))
-            candidates = by_folder.get(key, [])
-            if len(candidates) != 1 or local_folder_counts.get(key, 0) > 1:
+            candidates = by_folder.get(key, []) if movie.scraping_folder else []
+            duplicate_local = local_folder_counts.get(key, 0) > 1
+            if not candidates and not duplicate_local and movie.scraping_folder:
+                suffix = _folder_suffix(key)
+                candidates = by_suffix.get(suffix, [])
+                duplicate_local = local_suffix_counts[suffix] > 1
+            if not candidates and not duplicate_local:
+                code = normalize_code(movie.code or "")
+                if code:
+                    candidates = by_code.get(code, [])
+                    duplicate_local = local_code_counts[code] > 1
+            if len(candidates) != 1 or duplicate_local:
                 movie.jellyfin_item_id = None
                 movie.jellyfin_playback_position_ticks = None
-                movie.jellyfin_watch_status = "not_in_library" if not candidates and local_folder_counts.get(key, 0) <= 1 else None
-                ambiguous += bool(candidates) or local_folder_counts.get(key, 0) > 1
+                movie.jellyfin_watch_status = None if candidates or duplicate_local else "not_in_library"
+                ambiguous += bool(candidates) or duplicate_local
                 continue
             item = candidates[0]
             user_data = item.get("UserData") or {}

@@ -51,6 +51,48 @@ def test_sync_maps_four_states_by_path_and_pages(db_session) -> None:
     assert result.matched_count == 3
 
 
+def test_sync_matches_same_movie_across_different_mount_roots(db_session) -> None:
+    movie = _movie(db_session, "A-001", "/vol1/media/actor/A-001")
+    client = FakeJellyfin({0: {"Items": [
+        _item("jf-a", "/media/actor/A-001/A-001.strm", played=True),
+    ], "TotalRecordCount": 1}})
+
+    result = sync_jellyfin_watch_state(db_session, client)
+
+    db_session.refresh(movie)
+    assert movie.jellyfin_item_id == "jf-a"
+    assert movie.jellyfin_watch_status == "played"
+    assert result.matched_count == 1
+
+
+def test_sync_matches_unique_code_without_scraping_folder(db_session) -> None:
+    movie = _movie(db_session, "A-001", None)
+    client = FakeJellyfin({0: {"Items": [
+        _item("jf-a", "/media/actor/A-001/A-001.strm", position=500),
+    ], "TotalRecordCount": 1}})
+
+    sync_jellyfin_watch_state(db_session, client)
+
+    db_session.refresh(movie)
+    assert movie.jellyfin_item_id == "jf-a"
+    assert movie.jellyfin_watch_status == "in_progress"
+
+
+def test_sync_keeps_duplicate_code_matches_unknown(db_session) -> None:
+    movie = _movie(db_session, "A-001", "/vol1/media/actor/A-001")
+    client = FakeJellyfin({0: {"Items": [
+        _item("first", "/media/other/A-001/one.strm", played=True),
+        _item("second", "/media/another/A-001/two.strm"),
+    ], "TotalRecordCount": 2}})
+
+    result = sync_jellyfin_watch_state(db_session, client)
+
+    db_session.refresh(movie)
+    assert movie.jellyfin_item_id is None
+    assert movie.jellyfin_watch_status is None
+    assert result.ambiguous_count == 1
+
+
 def test_sync_leaves_ambiguous_movie_unknown(db_session) -> None:
     movie = _movie(db_session, "A-001", "/media/A-001")
     client = FakeJellyfin({0: {"Items": [
