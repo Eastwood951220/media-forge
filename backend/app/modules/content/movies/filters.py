@@ -30,6 +30,8 @@ class MovieListFilters:
     storage_status: str | None = None
     scraping_status: str | None = None
     jellyfin_watch_status: str | None = None
+    jellyfin_last_played_from: str | None = None
+    jellyfin_last_played_to: str | None = None
 
 
 def split_csv(value: str | None) -> list[str]:

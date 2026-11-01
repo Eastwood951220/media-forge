@@ -111,6 +111,8 @@ def serialize_movie(
         "jellyfin_item_id": movie.jellyfin_item_id if jellyfin_snapshot_valid else None,
         "jellyfin_watch_status": movie.jellyfin_watch_status if jellyfin_snapshot_valid else None,
         "jellyfin_playback_position_ticks": movie.jellyfin_playback_position_ticks if jellyfin_snapshot_valid else None,
+        "jellyfin_last_played_at": movie.jellyfin_last_played_at.isoformat() if jellyfin_snapshot_valid and movie.jellyfin_last_played_at else None,
+        "jellyfin_play_count": movie.jellyfin_play_count if jellyfin_snapshot_valid else None,
         "created_at": movie.created_at.isoformat() if movie.created_at else None,
         "updated_at": movie.updated_at.isoformat() if movie.updated_at else None,
     }

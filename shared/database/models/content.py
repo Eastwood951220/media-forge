@@ -39,6 +39,8 @@ class Movie(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Index("idx_movies_tags_gin", "tags", postgresql_using="gin"),
         Index("idx_movies_storage_summary_gin", "storage_summary", postgresql_using="gin"),
         Index("idx_movies_jellyfin_watch_status", "jellyfin_watch_status"),
+        Index("idx_movies_jellyfin_last_played_at", "jellyfin_last_played_at"),
+        Index("idx_movies_jellyfin_play_count", "jellyfin_play_count"),
         UniqueConstraint("code", name="uq_movies_code"),
         UniqueConstraint("source_url", name="uq_movies_source_url"),
     )
@@ -66,6 +68,8 @@ class Movie(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     jellyfin_item_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     jellyfin_watch_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
     jellyfin_playback_position_ticks: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    jellyfin_last_played_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    jellyfin_play_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     magnets: Mapped[list["MovieMagnet"]] = relationship(
         back_populates="movie",

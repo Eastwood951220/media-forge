@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timezone
 
 from backend.app.modules.jellyfin.sync import sync_jellyfin_watch_state
 from backend.app.models.jellyfin_sync import JellyfinSyncState
@@ -78,6 +79,38 @@ def test_sync_matches_unique_code_without_scraping_folder(db_session) -> None:
     assert movie.jellyfin_watch_status == "in_progress"
 
 
+def test_sync_records_last_played_and_play_count(db_session) -> None:
+    movie = _movie(db_session, "A-001", "/media/A-001")
+    client = FakeJellyfin({0: {"Items": [{
+        "Id": "jf-a", "Path": "/media/A-001/A-001.strm",
+        "UserData": {
+            "Played": True,
+            "PlaybackPositionTicks": 0,
+            "LastPlayedDate": "2026-10-31T02:03:04Z",
+            "PlayCount": 3,
+        },
+    }], "TotalRecordCount": 1}})
+
+    sync_jellyfin_watch_state(db_session, client)
+
+    db_session.refresh(movie)
+    assert movie.jellyfin_last_played_at.replace(tzinfo=timezone.utc) == datetime(2026, 10, 31, 2, 3, 4, tzinfo=timezone.utc)
+    assert movie.jellyfin_play_count == 3
+
+
+def test_sync_clears_watch_details_when_item_disappears(db_session) -> None:
+    movie = _movie(db_session, "A-001", "/media/A-001")
+    movie.jellyfin_last_played_at = datetime(2026, 10, 31, 2, 3, 4)
+    movie.jellyfin_play_count = 3
+    db_session.commit()
+
+    sync_jellyfin_watch_state(db_session, FakeJellyfin({0: {"Items": [], "TotalRecordCount": 0}}))
+
+    db_session.refresh(movie)
+    assert movie.jellyfin_last_played_at is None
+    assert movie.jellyfin_play_count is None
+
+
 def test_sync_keeps_duplicate_code_matches_unknown(db_session) -> None:
     movie = _movie(db_session, "A-001", "/vol1/media/actor/A-001")
     client = FakeJellyfin({0: {"Items": [
@@ -130,6 +163,30 @@ def test_movie_list_filters_jellyfin_status(client, auth_headers, db_session) ->
     assert response.status_code == 200
     assert [row["code"] for row in response.json()["rows"]] == ["A-001"]
     assert response.json()["rows"][0]["jellyfin_watch_status"] == "played"
+
+
+def test_movie_list_filters_last_played_date_and_sorts_play_count(client, auth_headers, db_session) -> None:
+    recent = _movie(db_session, "A-001", "/media/A-001")
+    older = _movie(db_session, "B-002", "/media/B-002")
+    missing = _movie(db_session, "C-003", None)
+    recent.jellyfin_last_played_at = datetime(2026, 10, 31, 12, 0, tzinfo=timezone.utc)
+    recent.jellyfin_play_count = 2
+    older.jellyfin_last_played_at = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
+    older.jellyfin_play_count = 5
+    db_session.commit()
+
+    filtered = client.get("/api/content/movies", params={
+        "jellyfin_last_played_from": "2026-10-30",
+        "jellyfin_last_played_to": "2026-11-01",
+    }, headers=auth_headers)
+    assert [row["code"] for row in filtered.json()["rows"]] == [recent.code]
+    assert filtered.json()["rows"][0]["jellyfin_play_count"] == 2
+    assert filtered.json()["rows"][0]["jellyfin_last_played_at"].startswith("2026-10-31")
+
+    sorted_response = client.get("/api/content/movies", params={
+        "sort_by": "jellyfin_play_count", "sort_order": -1,
+    }, headers=auth_headers)
+    assert [row["code"] for row in sorted_response.json()["rows"]] == [older.code, recent.code, missing.code]
 
 
 def test_storage_sync_selection_respects_jellyfin_filter(db_session) -> None:

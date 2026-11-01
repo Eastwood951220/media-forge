@@ -19,6 +19,7 @@ ALLOWED_SORT_FIELDS = {
     "source_name": Movie.source_name,
     "release_date": Movie.release_date,
     "rating": Movie.rating,
+    "jellyfin_play_count": Movie.jellyfin_play_count,
 }
 
 
@@ -115,6 +116,13 @@ def build_movie_list_statement(
     if created_to is not None:
         conditions.append(func.date(Movie.created_at) <= created_to.isoformat())
 
+    last_played_from = _parse_datetime_date(filters.jellyfin_last_played_from)
+    last_played_to = _parse_datetime_date(filters.jellyfin_last_played_to)
+    if last_played_from is not None:
+        conditions.append(func.date(Movie.jellyfin_last_played_at) >= last_played_from.isoformat())
+    if last_played_to is not None:
+        conditions.append(func.date(Movie.jellyfin_last_played_at) <= last_played_to.isoformat())
+
     for value in split_csv(filters.director):
         conditions.append(Movie.director == value)
     for value in split_csv(filters.director_not):
@@ -165,6 +173,8 @@ def build_movie_list_statement(
     normalized_sort_order = normalize_sort_order(sort_order)
     sort_column = ALLOWED_SORT_FIELDS.get(sort_by, Movie.created_at)
     order_expression = sort_column.asc() if normalized_sort_order == 1 else sort_column.desc()
+    if sort_by == "jellyfin_play_count":
+        order_expression = order_expression.nulls_last()
     return stmt.order_by(order_expression)
 
 

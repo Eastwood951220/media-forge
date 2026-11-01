@@ -56,6 +56,16 @@ def _folder_suffix(path: str) -> tuple[str, ...]:
     return PurePosixPath(path).parts[-2:]
 
 
+def _last_played_at(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
 def sync_jellyfin_watch_state(
     db: Session,
     client: Any,
@@ -127,6 +137,8 @@ def _sync_locked(db: Session, client: Any, *, page_size: int, fingerprint: str |
             if len(candidates) != 1 or duplicate_local:
                 movie.jellyfin_item_id = None
                 movie.jellyfin_playback_position_ticks = None
+                movie.jellyfin_last_played_at = None
+                movie.jellyfin_play_count = None
                 movie.jellyfin_watch_status = None if candidates or duplicate_local else "not_in_library"
                 ambiguous += bool(candidates) or duplicate_local
                 continue
@@ -135,6 +147,8 @@ def _sync_locked(db: Session, client: Any, *, page_size: int, fingerprint: str |
             position = int(user_data.get("PlaybackPositionTicks") or 0)
             movie.jellyfin_item_id = str(item["Id"])
             movie.jellyfin_playback_position_ticks = position
+            movie.jellyfin_last_played_at = _last_played_at(user_data.get("LastPlayedDate"))
+            movie.jellyfin_play_count = int(user_data.get("PlayCount") or 0)
             movie.jellyfin_watch_status = (
                 "played" if user_data.get("Played") else
                 "in_progress" if position > 0 else "unplayed"

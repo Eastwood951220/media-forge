@@ -86,6 +86,8 @@ def list_movies(
     storage_status: str | None = Query(default=None),
     scraping_status: str | None = Query(default=None),
     jellyfin_watch_status: str | None = Query(default=None),
+    jellyfin_last_played_from: str | None = Query(default=None),
+    jellyfin_last_played_to: str | None = Query(default=None),
 ) -> dict:
     sync_state = db.get(JellyfinSyncState, 1)
     jellyfin_snapshot_valid = (
@@ -93,7 +95,7 @@ def list_movies(
         or sync_state.config_fingerprint is None
         or sync_state.config_fingerprint == config_fingerprint(ScrapingConfigService().get_raw_config())
     )
-    if jellyfin_watch_status and not jellyfin_snapshot_valid:
+    if (jellyfin_watch_status or jellyfin_last_played_from or jellyfin_last_played_to) and not jellyfin_snapshot_valid:
         return paginated(rows=[], total=0)
     search_text = search or keyword
     rows, total = list_movies_page(
@@ -122,6 +124,8 @@ def list_movies(
             storage_status=storage_status,
             scraping_status=scraping_status,
             jellyfin_watch_status=jellyfin_watch_status,
+            jellyfin_last_played_from=jellyfin_last_played_from,
+            jellyfin_last_played_to=jellyfin_last_played_to,
         ),
         sort_by=sort_by,
         sort_order=sort_order,

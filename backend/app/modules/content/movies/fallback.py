@@ -53,6 +53,10 @@ def movie_matches(movie: Movie, filters: MovieListFilters) -> bool:
         return False
     if filters.created_at_to and (movie.created_at is None or movie.created_at.date().isoformat() > filters.created_at_to):
         return False
+    if filters.jellyfin_last_played_from and (movie.jellyfin_last_played_at is None or movie.jellyfin_last_played_at.date().isoformat() < filters.jellyfin_last_played_from):
+        return False
+    if filters.jellyfin_last_played_to and (movie.jellyfin_last_played_at is None or movie.jellyfin_last_played_at.date().isoformat() > filters.jellyfin_last_played_to):
+        return False
     if filters.storage_status and normalized_movie_storage_status(movie) != filters.storage_status:
         return False
     if filters.scraping_status and movie.scraping_status != filters.scraping_status:
