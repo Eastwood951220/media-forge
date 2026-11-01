@@ -15,6 +15,8 @@ export const MOVIE_FILTER_FIELD = {
     RELEASE_DATE_TO: "releaseDateTo",
     CREATED_AT_FROM: "createdAtFrom",
     CREATED_AT_TO: "createdAtTo",
+    JELLYFIN_LAST_PLAYED_FROM: "jellyfinLastPlayedFrom",
+    JELLYFIN_LAST_PLAYED_TO: "jellyfinLastPlayedTo",
     SORT_BY: "sortBy",
 } as const;
 
@@ -41,4 +43,6 @@ export const MOVIE_FILTER_CONFIG_ITEMS = [
     {key: "createdAtFrom" as const, label: "入库开始日期", defaultOrder: 18},
     {key: "createdAtTo" as const, label: "入库结束日期", defaultOrder: 19},
     {key: "sortBy" as const, label: "排序", defaultOrder: 20},
+    {key: "jellyfinLastPlayedFrom" as const, label: "最近观看开始", defaultOrder: 22},
+    {key: "jellyfinLastPlayedTo" as const, label: "最近观看结束", defaultOrder: 23},
 ];

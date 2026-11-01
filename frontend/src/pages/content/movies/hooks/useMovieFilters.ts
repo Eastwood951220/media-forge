@@ -49,6 +49,8 @@ const INITIAL_FILTER_STATE: MovieFilterState = {
   releaseDateTo: null,
   createdAtFrom: null,
   createdAtTo: null,
+  jellyfinLastPlayedFrom: null,
+  jellyfinLastPlayedTo: null,
 }
 
 function filterReducer(state: MovieFilterState, action: FilterAction): MovieFilterState {

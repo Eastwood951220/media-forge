@@ -36,6 +36,18 @@ describe('MovieTable columns', () => {
     expect(screen.getByText('已观看')).toBeInTheDocument()
   })
 
+  it('shows last played time and play count in the movie list', () => {
+    const columns = createMovieColumns({ onViewDetail: vi.fn() })
+    const lastPlayed = columns.find((item) => item.key === 'jellyfin_last_played_at')
+    const playCount = columns.find((item) => item.key === 'jellyfin_play_count')
+
+    expect(lastPlayed).toBeDefined()
+    expect(playCount).toBeDefined()
+    render(<><span>{String(lastPlayed?.render?.('2026-10-31T02:03:04+00:00', movie, 0))}</span><span>{String(playCount?.render?.(3, movie, 0))}</span></>)
+    expect(screen.getByText(/2026/)).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
+  })
+
   it('renders a compact movie cover image in the list', () => {
     const columns = createMovieColumns({ onViewDetail: vi.fn() })
     const coverColumn = columns.find((column) => column.key === 'cover')

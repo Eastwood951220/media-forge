@@ -21,6 +21,8 @@ const FILTER_ITEMS: {key: MovieFilterField; label: string; defaultOrder: number}
     {key: "storageStatus", label: "存储状态", defaultOrder: 10},
     {key: "scrapingStatus", label: "刮削状态", defaultOrder: 11},
     {key: "jellyfinWatchStatus", label: "Jellyfin 观看状态", defaultOrder: 21},
+    {key: "jellyfinLastPlayedFrom", label: "最近观看开始", defaultOrder: 22},
+    {key: "jellyfinLastPlayedTo", label: "最近观看结束", defaultOrder: 23},
     {key: "ratingMin", label: "最低评分", defaultOrder: 12},
     {key: "ratingMax", label: "最高评分", defaultOrder: 13},
     {key: "actorsCountMin", label: "最少演员", defaultOrder: 14},
@@ -33,7 +35,11 @@ const FILTER_ITEMS: {key: MovieFilterField; label: string; defaultOrder: number}
 ];
 
 // Date picker keys that are rendered as paired groups
-const DATE_PICKER_KEYS: MovieFilterField[] = ["releaseDateFrom", "releaseDateTo", "createdAtFrom", "createdAtTo"];
+const DATE_PICKER_GROUPS: MovieFilterField[][] = [
+    ["releaseDateFrom", "releaseDateTo"],
+    ["createdAtFrom", "createdAtTo"],
+    ["jellyfinLastPlayedFrom", "jellyfinLastPlayedTo"],
+];
 
 export interface MovieFilterBarProps {
     filters: Omit<MovieFilters, "requestParams">;
@@ -60,6 +66,7 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
         selectedSeries, selectedSeriesNot, storageStatus, scrapingStatus, jellyfinWatchStatus,
         ratingMin, ratingMax, actorsCountMin, actorsCountMax,
         releaseDateFrom, releaseDateTo, createdAtFrom, createdAtTo,
+        jellyfinLastPlayedFrom, jellyfinLastPlayedTo,
     } = form;
 
     const {sortBy, sortOrder, onChange: onSortChange} = sort;
@@ -93,11 +100,14 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
         releaseDateTo: <DatePicker placeholder="发行结束" value={releaseDateTo} onChange={(v) => patchForm({releaseDateTo: v})} className={styles.filterDate} />,
         createdAtFrom: <DatePicker placeholder="入库开始" value={createdAtFrom} onChange={(v) => patchForm({createdAtFrom: v})} className={styles.filterDate} />,
         createdAtTo: <DatePicker placeholder="入库结束" value={createdAtTo} onChange={(v) => patchForm({createdAtTo: v})} className={styles.filterDate} />,
+        jellyfinLastPlayedFrom: <DatePicker placeholder="最近观看开始" value={jellyfinLastPlayedFrom} onChange={(v) => patchForm({jellyfinLastPlayedFrom: v})} className={styles.filterDate} />,
+        jellyfinLastPlayedTo: <DatePicker placeholder="最近观看结束" value={jellyfinLastPlayedTo} onChange={(v) => patchForm({jellyfinLastPlayedTo: v})} className={styles.filterDate} />,
         sortBy: <Select className={styles.filterSort} value={`${sortBy}:${sortOrder}`} onChange={(v) => { const [by, order] = v.split(":"); onSortChange(by, Number(order)); }} options={[
             {value: "code:1", label: "番号 ↑"}, {value: "code:-1", label: "番号 ↓"},
             {value: "release_date:-1", label: "发行日期 ↓"}, {value: "release_date:1", label: "发行日期 ↑"},
             {value: "rating:-1", label: "评分 ↓"}, {value: "rating:1", label: "评分 ↑"},
             {value: "created_at:-1", label: "抓取时间 ↓"}, {value: "created_at:1", label: "抓取时间 ↑"},
+            {value: "jellyfin_play_count:-1", label: "观看次数 ↓"}, {value: "jellyfin_play_count:1", label: "观看次数 ↑"},
         ]} />,
     };
 
@@ -110,9 +120,7 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
         })
         .filter((item) => filterConfig?.[item.key]?.visible !== false);
 
-    // Check date picker pair visibility for grouped rendering
-    const releaseDateVisible = filterConfig?.["releaseDateFrom"]?.visible !== false || filterConfig?.["releaseDateTo"]?.visible !== false;
-    const createdAtVisible = filterConfig?.["createdAtFrom"]?.visible !== false || filterConfig?.["createdAtTo"]?.visible !== false;
+    const visibleKeys = new Set(sortedItems.map((item) => item.key));
 
     return (
         <Space vertical className={styles.filterBar} data-testid="movie-filter-bar" size={8}>
@@ -136,17 +144,14 @@ export default function MovieFilterBar({filters, sort, filterConfig, onSearch, o
                     onPressEnter={onSearch}
                     allowClear
                 />
-                {sortedItems
-                    .filter((item) => !DATE_PICKER_KEYS.includes(item.key))
-                    .map((item) => <React.Fragment key={item.key}>{filterRenderers[item.key]}</React.Fragment>)}
-                {releaseDateVisible && <Space size={4}>
-                    {filterConfig?.["releaseDateFrom"]?.visible !== false && filterRenderers["releaseDateFrom"]}
-                    {filterConfig?.["releaseDateTo"]?.visible !== false && filterRenderers["releaseDateTo"]}
-                </Space>}
-                {createdAtVisible && <Space size={4}>
-                    {filterConfig?.["createdAtFrom"]?.visible !== false && filterRenderers["createdAtFrom"]}
-                    {filterConfig?.["createdAtTo"]?.visible !== false && filterRenderers["createdAtTo"]}
-                </Space>}
+                {sortedItems.map((item) => {
+                    const group = DATE_PICKER_GROUPS.find((keys) => keys.includes(item.key));
+                    if (!group) return <React.Fragment key={item.key}>{filterRenderers[item.key]}</React.Fragment>;
+                    if (item.key !== sortedItems.find((candidate) => group.includes(candidate.key))?.key) return null;
+                    return <Space key={group[0]} size={4}>
+                        {group.filter((key) => visibleKeys.has(key)).map((key) => <React.Fragment key={key}>{filterRenderers[key]}</React.Fragment>)}
+                    </Space>;
+                })}
                 <Space size={6} className={styles.filterActions}>
                     <Button type="primary" icon={<SearchOutlined/>} onClick={onSearch}>搜索</Button>
                     <Button icon={<ReloadOutlined/>} onClick={onReset}>刷新</Button>

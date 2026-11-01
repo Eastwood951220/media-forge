@@ -70,6 +70,8 @@ export interface Movie {
   jellyfin_item_id?: string | null
   jellyfin_watch_status?: JellyfinWatchStatus | null
   jellyfin_playback_position_ticks?: number | null
+  jellyfin_last_played_at?: string | null
+  jellyfin_play_count?: number | null
   storage_summary: {
     last_status?: MovieStorageStatus
     storage_status?: MovieStorageStatus
@@ -107,7 +109,8 @@ export type MovieFilterField =
   | 'storageStatus' | 'scrapingStatus' | 'jellyfinWatchStatus' | 'ratingMin' | 'ratingMax'
   | 'actorsCountMin' | 'actorsCountMax'
   | 'releaseDateFrom' | 'releaseDateTo'
-  | 'createdAtFrom' | 'createdAtTo' | 'sortBy'
+  | 'createdAtFrom' | 'createdAtTo'
+  | 'jellyfinLastPlayedFrom' | 'jellyfinLastPlayedTo' | 'sortBy'
 
 export interface MovieFilterConfigValue {
   visible: boolean

@@ -54,6 +54,8 @@ export interface MovieQueryParams {
   storage_status?: string
   scraping_status?: string
   jellyfin_watch_status?: string
+  jellyfin_last_played_from?: string
+  jellyfin_last_played_to?: string
 }
 
 export function fetchMovies(params: MovieQueryParams): Promise<MovieListResponse> {

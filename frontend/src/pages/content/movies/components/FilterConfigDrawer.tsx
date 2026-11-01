@@ -1,5 +1,6 @@
 import {useState, useCallback, useEffect} from "react";
-import {App, Drawer, List, Switch, Button, Space, Typography, Input, InputNumber, Select} from "antd";
+import {App, Drawer, List, Switch, Button, Space, Typography, Input, InputNumber, Select, DatePicker} from "antd";
+import dayjs from "dayjs";
 import type {FilterItemConfig} from "@/api/movie";
 import {updateMovieFilterConfig} from "@/api/movie";
 import {JELLYFIN_WATCH_STATUS_OPTIONS, MOVIE_FILTER_CONFIG_ITEMS as filterConfigItems, MOVIE_SCRAPING_STATUS_OPTIONS, MOVIE_STORAGE_STATUS_OPTIONS} from "../constants";
@@ -29,11 +30,16 @@ function DefaultValueInput({filterKey, value, onChange}: {filterKey: string; val
     if (filterKey === "jellyfinWatchStatus") {
         return <Select size="small" className={styles.filterConfigSelect} placeholder="默认值" allowClear value={value as string} onChange={(v) => onChange(v)} options={JELLYFIN_WATCH_STATUS_OPTIONS} />;
     }
+    if (filterKey === "jellyfinLastPlayedFrom" || filterKey === "jellyfinLastPlayedTo") {
+        const date = typeof value === "string" ? dayjs(value) : null;
+        return <DatePicker size="small" className={styles.filterConfigInput} placeholder="默认日期" allowClear value={date?.isValid() ? date : null} onChange={(v) => onChange(v?.format("YYYY-MM-DD"))} />;
+    }
     if (filterKey === "sortBy") {
         return <Select size="small" className={styles.filterConfigSortSelect} placeholder="默认排序" allowClear value={value as string} onChange={(v) => onChange(v)} options={[
             {value: "code:1", label: "番号 ↑"}, {value: "code:-1", label: "番号 ↓"},
             {value: "release_date:-1", label: "发行日期 ↓"}, {value: "rating:-1", label: "评分 ↓"},
             {value: "created_at:-1", label: "抓取时间 ↓"}, {value: "created_at:1", label: "抓取时间 ↑"},
+            {value: "jellyfin_play_count:-1", label: "观看次数 ↓"}, {value: "jellyfin_play_count:1", label: "观看次数 ↑"},
         ]} />;
     }
     return null;

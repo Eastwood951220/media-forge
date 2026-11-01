@@ -1,4 +1,5 @@
 import type {Dayjs} from "dayjs";
+import dayjs from "dayjs";
 import type { MovieFilterConfig } from "@/api/movie/types";
 
 export interface MovieFilterState {
@@ -25,6 +26,8 @@ export interface MovieFilterState {
     releaseDateTo: Dayjs | null;
     createdAtFrom: Dayjs | null;
     createdAtTo: Dayjs | null;
+    jellyfinLastPlayedFrom: Dayjs | null;
+    jellyfinLastPlayedTo: Dayjs | null;
 }
 
 export interface MovieFilterParams {
@@ -51,6 +54,8 @@ export interface MovieFilterParams {
     storage_status?: string;
     scraping_status?: string;
     jellyfin_watch_status?: string;
+    jellyfin_last_played_from?: string;
+    jellyfin_last_played_to?: string;
 }
 
 function joinValues(values: string[]): string | undefined {
@@ -82,6 +87,8 @@ export function buildMovieFilterParams(state: MovieFilterState): MovieFilterPara
         storage_status: state.storageStatus,
         scraping_status: state.scrapingStatus,
         jellyfin_watch_status: state.jellyfinWatchStatus,
+        jellyfin_last_played_from: state.jellyfinLastPlayedFrom?.format("YYYY-MM-DD"),
+        jellyfin_last_played_to: state.jellyfinLastPlayedTo?.format("YYYY-MM-DD"),
     };
 }
 
@@ -156,6 +163,12 @@ export function buildMovieFilterDefaultState(config: MovieFilterConfig | undefin
             case "releaseDateTo":
             case "createdAtFrom":
             case "createdAtTo":
+                break;
+            case "jellyfinLastPlayedFrom":
+            case "jellyfinLastPlayedTo":
+                if (value.visible !== false && typeof defaultValue === "string" && dayjs(defaultValue).isValid()) {
+                    defaults[key] = dayjs(defaultValue);
+                }
                 break;
         }
     }
