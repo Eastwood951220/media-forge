@@ -9,6 +9,7 @@ export type PageActionBackgroundDeps = {
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
   settings: () => Promise<PageActionSettings | null>
   openTab: (url: string) => Promise<unknown>
+  logger?: Pick<Console, 'error'>
 }
 
 type BackendEnvelope = {
@@ -118,7 +119,22 @@ export async function handlePageActionMessage<T = unknown>(
       },
       ...(contract.body ? { body: JSON.stringify(contract.body) } : {}),
     })
-  } catch {
+  } catch (error) {
+    let origin = 'invalid_backend_url'
+    try {
+      origin = new URL(baseUrl).origin
+    } catch {
+      // Keep the configured URL out of diagnostics when it is malformed.
+    }
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    const logger = deps.logger ?? console
+    logger.error(
+      '[Media Forge page action] fetch failed',
+      message.type,
+      origin,
+      contract.path,
+      safeMessage(detail, settings.token, 'unknown error'),
+    )
     return {
       ok: false,
       error: { code: 'network_error', message: '无法连接 Media Forge 服务' },

@@ -60,7 +60,10 @@ describe('handlePageActionMessage', () => {
   })
 
   it('maps transport failures without exposing the thrown error', async () => {
-    const runtime = deps(vi.fn().mockRejectedValue(new Error('agt_secret network detail')))
+    const runtime = {
+      ...deps(vi.fn().mockRejectedValue(new Error('agt_secret network detail'))),
+      logger: { error: vi.fn() },
+    }
 
     const result = await handlePageActionMessage({ type: 'page_action.list_tasks' }, runtime)
 
@@ -69,6 +72,13 @@ describe('handlePageActionMessage', () => {
       error: { code: 'network_error', message: '无法连接 Media Forge 服务' },
     })
     expect(JSON.stringify(result)).not.toContain('agt_secret')
+    expect(runtime.logger.error).toHaveBeenCalledWith(
+      '[Media Forge page action] fetch failed',
+      'page_action.list_tasks',
+      'http://mf.test',
+      '/api/crawler/agent/page-actions/tasks',
+      'Error: [REDACTED] network detail',
+    )
   })
 
   it('maps a duplicate-name backend response to a business error', async () => {
