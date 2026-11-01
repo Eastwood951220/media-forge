@@ -4,11 +4,13 @@ import pytest
 from backend.app.modules.jellyfin.client import JellyfinClient, JellyfinError
 
 
-def test_client_reads_libraries_and_root_with_header_key() -> None:
+def test_client_reads_libraries_and_root_with_supported_authorization() -> None:
     requests = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
+        if request.headers.get("Authorization") != 'MediaBrowser Token="secret-key"':
+            return httpx.Response(401)
         if request.url.path == "/Library/VirtualFolders":
             return httpx.Response(200, json=[{"Name": "日本", "ItemId": "lib-1", "Locations": ["/media"]}])
         if request.url.path == "/Users":
@@ -18,7 +20,7 @@ def test_client_reads_libraries_and_root_with_header_key() -> None:
     client = JellyfinClient("http://jellyfin:8096/", "secret-key", transport=httpx.MockTransport(handler))
     assert client.get_virtual_folders()[0]["ItemId"] == "lib-1"
     assert client.get_root_user_id() == "user-1"
-    assert all(req.headers["X-Emby-Token"] == "secret-key" for req in requests)
+    assert all(req.headers["Authorization"] == 'MediaBrowser Token="secret-key"' for req in requests)
     assert all("secret-key" not in str(req.url) for req in requests)
 
 

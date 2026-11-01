@@ -28,7 +28,7 @@ class JellyfinClient:
                 base_url=self.base_url,
                 timeout=30,
                 transport=self.transport,
-                headers={"X-Emby-Token": self.api_key},
+                headers={"Authorization": f'MediaBrowser Token="{self.api_key}"'},
             ) as client:
                 response = client.request(method, path, params=params)
                 response.raise_for_status()
