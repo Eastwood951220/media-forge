@@ -67,6 +67,9 @@ if (!popup.includes('chrome.runtime.sendMessage') || !popup.includes('openOption
 
 const distBackground = readFileSync(resolve(root, 'dist/background.js'), 'utf8')
 const distContent = readFileSync(resolve(root, 'dist/content.js'), 'utf8')
+if (/^\s*import(?:\s|\{|\*|["'])/m.test(distContent)) {
+  throw new Error('built content.js must be self-contained for manifest content_scripts')
+}
 const requiredStrings = [
   'agent.task_request',
   'protocol_version',

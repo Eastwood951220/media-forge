@@ -1,6 +1,7 @@
 import { mountPageActions } from './pageActions/controller'
 import { extractPageContext } from './pageActions/pageContext'
 import type { PageActionMessage, PageActionResponse } from './pageActions/types'
+import { sendPageActionMessage } from './pageActions/messageBridge'
 
 export type PageSnapshot = {
   page_kind: 'list' | 'detail'
@@ -60,7 +61,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 const pageActionDeps = {
   sendMessage: (message: PageActionMessage) =>
-    chrome.runtime.sendMessage(message) as Promise<PageActionResponse<unknown>>,
+    sendPageActionMessage(
+      message,
+      (request) => chrome.runtime.sendMessage(request) as Promise<PageActionResponse<unknown>>,
+    ),
 }
 
 let pageActionTimer: ReturnType<typeof setTimeout> | null = null

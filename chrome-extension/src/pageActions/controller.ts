@@ -6,6 +6,7 @@ import type {
   PageActionTaskChoice,
 } from './types'
 import { createPageActionUi } from './ui'
+import { logPageActionFailure } from './messageBridge'
 import type { PageActionKind, PageActionModal, PageActionUi } from './ui'
 
 export type PageActionDeps = {
@@ -38,7 +39,8 @@ async function loadTaskChoices(
     } else {
       ui.showError(modal, errorMessage(response))
     }
-  } catch {
+  } catch (error) {
+    logPageActionFailure('page_action.list_tasks', error)
     ui.showError(modal, '无法加载任务列表，请确认扩展后台正在运行')
   }
 }
@@ -97,7 +99,8 @@ function bindModalWorkflow(
         const field = response.error.code === 'duplicate_task_name' ? 'name' : undefined
         ui.showError(modal, errorMessage(response), field)
       }
-    }).catch(() => {
+    }).catch((error: unknown) => {
+      logPageActionFailure(message.type, error)
       ui.showError(modal, '无法连接扩展后台，请重新加载扩展后再试')
     }).finally(() => {
       busy = false

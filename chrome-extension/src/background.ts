@@ -8,6 +8,7 @@ import {
 import type { AgentClientDeps, AgentSettings } from './agentClient'
 import { handlePageActionMessage } from './pageActions/backgroundApi'
 import { isPageActionMessage } from './pageActions/types'
+import { respondToPageActionMessage } from './pageActions/backgroundBridge'
 
 const AGENT_WAKE_ALARM = 'media_forge_agent_wake'
 const AGENT_WAKE_PERIOD_MINUTES = 10
@@ -132,13 +133,17 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (isPageActionMessage(message)) {
-    void handlePageActionMessage(message, {
-      fetch: globalThis.fetch,
-      settings,
-      openTab: async (url) => {
-        await chrome.tabs.create({ url, active: false })
-      },
-    }).then(sendResponse)
+    void respondToPageActionMessage(
+      message,
+      (request) => handlePageActionMessage(request, {
+        fetch: globalThis.fetch,
+        settings,
+        openTab: async (url) => {
+          await chrome.tabs.create({ url, active: false })
+        },
+      }),
+      sendResponse,
+    )
     return true
   }
   if (message?.type !== 'agent_settings_saved' && message?.type !== 'agent_reconnect_requested') {
