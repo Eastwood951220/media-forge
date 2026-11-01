@@ -130,18 +130,20 @@ describe('ConfigPage Agent mode', () => {
     })
   })
 
-  it('shows Chrome Agent card with offline status', async () => {
+  it('keeps Chrome Agent task creation available in static request mode', async () => {
     renderPage()
 
-    const chromeLabels = await screen.findAllByText('Chrome Agent')
-    expect(chromeLabels.length).toBeGreaterThanOrEqual(2)
+    expect(await screen.findByText('静态请求模式下仍可通过 Chrome 扩展创建任务；爬取由后端静态请求执行。')).toBeInTheDocument()
+    expect(screen.getAllByText('Chrome Agent').length).toBeGreaterThanOrEqual(2)
     expect(await screen.findByText('离线')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '生成 Agent Token' })).toBeInTheDocument()
   })
 
   it('tests cookie from config page', async () => {
     renderPage()
 
     expect(await screen.findByText('爬取参数')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Cookie 检测' }))
     await userEvent.click(screen.getByText('测试 Cookie'))
 
     await waitFor(() => {

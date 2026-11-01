@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -57,7 +58,7 @@ export default function ConfigPage() {
 
   return (
     <>
-      <div className={`${styles.configLayout} ${isAgentMode ? '' : styles.configLayoutFull}`}>
+      <div className={styles.configLayout}>
         <div className={styles.configLeft}>
           <Form form={form} layout="vertical" onFinish={handleSaveConfig}>
             <Card
@@ -134,7 +135,7 @@ export default function ConfigPage() {
               <Form.Item
                 name="JAVDB_FETCH_MODE"
                 label="JavDB 请求模式"
-                tooltip="静态请求使用后端 HTTP；Agent 模式通过 Chrome 插件采集页面片段到后端解析"
+                tooltip="静态请求使用后端 HTTP；Agent 模式通过 Chrome 插件采集页面片段。两种模式均可通过扩展创建任务"
               >
                 <Segmented
                   block
@@ -160,13 +161,19 @@ export default function ConfigPage() {
           </Form>
         </div>
 
-        {isAgentMode && (
-          <div className={styles.configRight}>
-            <Card title="Chrome Agent" className={`${styles.formCard} ${styles.agentCard}`}>
-              <AgentHealthCard />
-            </Card>
-          </div>
-        )}
+        <div className={styles.configRight}>
+          <Card title="Chrome Agent" className={`${styles.formCard} ${styles.agentCard}`}>
+            {!isAgentMode && (
+              <Alert
+                className={styles.agentModeHint}
+                type="info"
+                showIcon
+                title="静态请求模式下仍可通过 Chrome 扩展创建任务；爬取由后端静态请求执行。"
+              />
+            )}
+            <AgentHealthCard />
+          </Card>
+        </div>
       </div>
       <CookieConfigDrawer open={cookieDrawerOpen} onClose={() => setCookieDrawerOpen(false)} />
     </>

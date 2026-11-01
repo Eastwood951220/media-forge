@@ -5,10 +5,6 @@
   align-items: stretch;
 }
 
-.configLayoutFull {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .configLeft,
 .configRight {
   min-width: 0;
@@ -45,9 +41,14 @@
 
   :global(.ant-card-body) {
     display: flex;
+    flex-direction: column;
     flex: 1;
     min-height: 0;
   }
+}
+
+.agentModeHint {
+  margin-bottom: 16px;
 }
 
 // Form Sections
