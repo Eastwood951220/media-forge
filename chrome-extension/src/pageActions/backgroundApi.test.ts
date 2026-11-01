@@ -23,6 +23,22 @@ function deps(fetch = vi.fn()) {
 }
 
 describe('handlePageActionMessage', () => {
+  it('calls native fetch with the service worker as receiver', async () => {
+    const runtime = {
+      ...deps(),
+      fetch: function (this: typeof globalThis): Promise<Response> {
+        if (this !== globalThis) throw new TypeError('Illegal invocation')
+        return Promise.resolve(jsonResponse({ code: 200, msg: 'success', data: [] }))
+      },
+      logger: { error: vi.fn() },
+    }
+
+    const result = await handlePageActionMessage({ type: 'page_action.list_tasks' }, runtime)
+
+    expect(result).toEqual({ ok: true, data: [] })
+    expect(runtime.logger.error).not.toHaveBeenCalled()
+  })
+
   it('rejects unknown messages that only share the page-action prefix', () => {
     expect(isPageActionMessage({ type: 'page_action.unknown' })).toBe(false)
   })

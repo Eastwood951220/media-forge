@@ -111,7 +111,7 @@ export async function handlePageActionMessage<T = unknown>(
   const contract = requestContract(message)
   let response: Response
   try {
-    response = await deps.fetch(`${baseUrl}${contract.path}`, {
+    response = await deps.fetch.call(globalThis, `${baseUrl}${contract.path}`, {
       method: contract.method,
       headers: {
         Authorization: `Bearer ${settings.token}`,
