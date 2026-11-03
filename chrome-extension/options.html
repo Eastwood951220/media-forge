@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <title>Media Forge JavDB Agent</title>
@@ -17,9 +17,12 @@
 
       main {
         box-sizing: border-box;
-        max-width: 560px;
-        min-height: 100vh;
-        padding: 24px;
+        max-width: 640px;
+        margin: 32px auto;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        min-height: auto;
+        padding: 28px;
       }
 
       h1 {
@@ -131,6 +134,10 @@
           color: #94a3b8;
         }
       }
+      button.ant-btn { font-weight: 600; }
+      input.ant-input { height: 42px; }
+      .status-card, .section { box-shadow: 0 4px 18px rgba(15, 23, 42, .04); }
+      button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
     </style>
   </head>
   <body>

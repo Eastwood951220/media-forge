@@ -70,6 +70,9 @@ const distContent = readFileSync(resolve(root, 'dist/content.js'), 'utf8')
 if (/^\s*import(?:\s|\{|\*|["'])/m.test(distContent)) {
   throw new Error('built content.js must be self-contained for manifest content_scripts')
 }
+if (/process\.env/.test(distContent)) {
+  throw new Error('content script must not depend on Node process.env')
+}
 const requiredStrings = [
   'agent.task_request',
   'protocol_version',

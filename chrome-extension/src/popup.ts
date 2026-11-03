@@ -1,3 +1,6 @@
+import { enhanceControls } from './ui/enhance'
+enhanceControls()
+
 import type { AgentLocalDiagnostic, AgentLocalStatus } from './protocol'
 
 const version = document.querySelector<HTMLElement>('#version')

@@ -1,3 +1,4 @@
+import { mountTaskSelect, type TaskSelectMount } from '../ui/taskSelect'
 import type { PageContext } from './pageContext'
 import type { PageActionRunResult, PageActionTaskChoice } from './types'
 
@@ -13,6 +14,7 @@ export type PageActionModal = {
   error: HTMLElement
   nameError: HTMLElement | null
   result: HTMLElement
+  selector?: TaskSelectMount
   openRunButton: HTMLButtonElement
 }
 
@@ -43,9 +45,9 @@ const STYLES = `
     min-height: 44px; border: 1px solid rgba(15, 23, 42, .12); border-radius: 12px;
     padding: 10px 14px; display: flex; align-items: center; gap: 9px;
     color: #fff; background: #2563eb; box-shadow: 0 8px 24px rgba(15, 23, 42, .22);
-    font-weight: 700; text-align: left;
+    font-weight: 600; text-align: left;
   }
-  .mf-action.secondary { background: #0f766e; }
+  .mf-action.secondary { background: #fff; color: #2563eb; border-color: #bfdbfe; }
   button:hover:not(:disabled) { filter: brightness(1.06); }
   button:focus-visible, input:focus-visible, select:focus-visible {
     outline: 3px solid #f59e0b; outline-offset: 2px;
@@ -59,7 +61,7 @@ const STYLES = `
   }
   .mf-dialog {
     width: min(520px, 100%); max-height: min(720px, calc(100vh - 40px)); overflow: auto;
-    border-radius: 16px; padding: 22px; background: #fff; color: #172033;
+    border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px; background: #fff; color: #172033;
     box-shadow: 0 24px 64px rgba(15, 23, 42, .32);
   }
   .mf-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
@@ -70,7 +72,7 @@ const STYLES = `
   .mf-url { color: #475569; overflow-wrap: anywhere; font-size: 13px; }
   .mf-field { display: grid; gap: 6px; margin-top: 14px; }
   label { font-weight: 700; }
-  input, select {
+  input:not(.ant-select-input), select {
     width: 100%; min-height: 44px; border: 1px solid #94a3b8; border-radius: 9px;
     padding: 9px 11px; color: #172033; background: #fff;
   }
@@ -153,6 +155,7 @@ export function createPageActionUi(context: PageContext): PageActionUi {
   let invokingButton: HTMLElement | null = null
 
   const closeModal = () => {
+    activeModal?.selector?.destroy()
     root.querySelector('.mf-backdrop')?.remove()
     activeModal = null
     const restore = invokingButton
@@ -197,6 +200,7 @@ export function createPageActionUi(context: PageContext): PageActionUi {
     const form = document.createElement('form')
     form.noValidate = true
     let taskSelect: HTMLSelectElement | null = null
+    let selector: TaskSelectMount | undefined
     let nameInput: HTMLInputElement | null = null
     let nameError: HTMLElement | null = null
 
@@ -227,14 +231,18 @@ export function createPageActionUi(context: PageContext): PageActionUi {
       label.htmlFor = 'mf-task-id'
       label.textContent = '选择任务'
       taskSelect = document.createElement('select')
-      taskSelect.id = 'mf-task-id'
+      taskSelect.hidden = true
+      taskSelect.tabIndex = -1
+      taskSelect.id = 'mf-task-value'
       taskSelect.name = 'task-id'
       taskSelect.disabled = true
       const loading = document.createElement('option')
       loading.textContent = '正在加载任务…'
       loading.value = ''
       taskSelect.append(loading)
-      field.append(label, taskSelect)
+      const selectHost = document.createElement('div')
+      field.append(label, taskSelect, selectHost)
+      selector = mountTaskSelect(selectHost, root, taskSelect, closeModal)
       form.append(field)
     }
 
@@ -303,6 +311,7 @@ export function createPageActionUi(context: PageContext): PageActionUi {
       if (event.target === backdrop) closeModal()
     })
     dialog.addEventListener('keydown', (event) => {
+      if (event.defaultPrevented) return
       if (event.key === 'Escape') {
         event.preventDefault()
         closeModal()
@@ -327,6 +336,7 @@ export function createPageActionUi(context: PageContext): PageActionUi {
       dialog,
       form,
       taskSelect,
+      selector,
       nameInput,
       submitButton,
       error,
@@ -352,12 +362,14 @@ export function createPageActionUi(context: PageContext): PageActionUi {
       modal.taskSelect.append(option)
     }
     modal.taskSelect.disabled = choices.length === 0
+    modal.selector?.update(choices)
     if (!choices.length) {
       modal.error.textContent = '暂无已启用任务，请先在 Media Forge 中创建或启用任务。'
     }
   }
 
   const setBusy = (modal: PageActionModal, busy: boolean) => {
+    modal.selector?.setBusy(busy)
     modal.form.setAttribute('aria-busy', String(busy))
     modal.submitButton.disabled = busy
     modal.submitButton.textContent = busy ? '正在提交…' : '确认并开始'

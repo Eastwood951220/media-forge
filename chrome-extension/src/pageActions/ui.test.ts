@@ -241,7 +241,7 @@ describe('JavDB page-action UI', () => {
     submit.focus()
     dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
     expect(mount.root.activeElement).toBe(close)
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }))
     await tick()
 
     expect(mount.root.querySelector('[role="dialog"]')).toBeNull()
@@ -262,4 +262,67 @@ describe('JavDB page-action UI', () => {
     expect(JSON.stringify(messages)).not.toContain('agt_')
     expect(mount.root.textContent).not.toContain('agt_')
   })
+})
+
+describe('searchable task selection', () => {
+  it('provides an editable combobox after tasks load', async () => {
+    const mount = mountPageActions(detailContext, {
+      sendMessage: vi.fn(async () => ok([{ id: 'one', name: 'Alpha task' }])),
+    })!
+    click(mount.root, '[data-action="temporary"]')
+    await tick()
+    expect(mount.root.querySelector('input[role="combobox"]')).not.toBeNull()
+    mount.destroy()
+  })
+})
+
+describe('task search interactions', () => {
+  it('filters names and submits the selected task through the existing protocol', async () => {
+    const sendMessage = vi.fn(async (message: PageActionMessage) => message.type === 'page_action.list_tasks'
+      ? ok([{ id: 'one', name: 'Alpha task' }, { id: 'two', name: 'Beta task' }])
+      : ok(runResult()))
+    const mount = mountPageActions(detailContext, { sendMessage })!
+    click(mount.root, '[data-action="temporary"]')
+    await tick()
+    const input = mount.root.querySelector<HTMLInputElement>('input[role="combobox"]')!
+    input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    await tick()
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    setter.call(input, 'BETA')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    await tick()
+    setter.call(input, 'no such task')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    await tick()
+    expect(mount.root.textContent).toContain('没有匹配的任务')
+    setter.call(input, 'BETA')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    await tick()
+    const options = [...mount.root.querySelectorAll<HTMLElement>('.ant-select-item-option')]
+    expect(options.map(option => option.textContent)).toEqual(['Beta task'])
+    options[0].click()
+    await tick()
+    mount.root.querySelector<HTMLFormElement>('form')!.requestSubmit()
+    await tick()
+    expect(sendMessage).toHaveBeenCalledWith({ type: 'page_action.temporary_run', taskId: 'two', detailUrl: detailContext.url })
+    mount.destroy()
+  })
+})
+
+it('closes the task dropdown before dismissing the dialog with Escape', async () => {
+  const mount = mountPageActions(detailContext, {
+    sendMessage: vi.fn(async () => ok([{ id: 'one', name: 'Alpha' }])),
+  })!
+  click(mount.root, '[data-action="temporary"]')
+  await tick()
+  const input = mount.root.querySelector<HTMLInputElement>('input[role="combobox"]')!
+  input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+  await tick()
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }))
+  await tick()
+  expect(mount.root.querySelector('[role="dialog"]')).not.toBeNull()
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }))
+  await tick()
+  expect(mount.root.querySelector('[role="dialog"]')).toBeNull()
+  mount.destroy()
 })
