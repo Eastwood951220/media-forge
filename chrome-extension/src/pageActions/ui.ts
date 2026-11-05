@@ -70,7 +70,7 @@ const STYLES = `
   .mf-context { margin: 16px 0; padding: 12px; border-radius: 10px; background: #f8fafc; }
   .mf-context strong { display: block; margin-bottom: 4px; }
   .mf-url { color: #475569; overflow-wrap: anywhere; font-size: 13px; }
-  .mf-field { display: grid; gap: 6px; margin-top: 14px; }
+  .mf-field { display: grid; gap: 8px; margin-top: 14px; }
   label { font-weight: 700; }
   input:not(.ant-select-input), select {
     width: 100%; min-height: 44px; border: 1px solid #94a3b8; border-radius: 9px;
