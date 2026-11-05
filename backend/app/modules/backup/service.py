@@ -187,6 +187,14 @@ class BackupService:
                 if job_id is not None:
                     backup_job_registry.mark_running(job_id, phase="config")
                 stats = restore_config(zip_file, include_sensitive_in_archive=inspected.include_sensitive)
+                # Refresh only after the corresponding configuration writes
+                # succeeded, so running timers observe the restored database.
+                if "backup" in stats.changed_config_namespaces:
+                    from backend.app.modules.backup.scheduler import backup_scheduler
+                    backup_scheduler.refresh()
+                if "jellyfin" in stats.changed_config_namespaces:
+                    from backend.app.modules.jellyfin.scheduler import jellyfin_watch_scheduler
+                    jellyfin_watch_scheduler.configure()
                 result["config"] = stats_to_dict(stats)
                 partial = partial or bool(stats.errors)
         if partial:

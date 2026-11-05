@@ -17,7 +17,6 @@ from backend.app.models.crawler_schedule import CrawlerSchedule, CrawlerSchedule
 from backend.app.modules.backup.format import read_jsonl
 from backend.app.modules.content.movies.filter_sync import sync_movie_filters
 from backend.app.modules.crawler.schedules.service import calculate_next_run_at
-from scraper.config import settings as scraper_settings
 from shared.database.models.content import (
     ActressProfile,
     ActressTag,
@@ -36,6 +35,7 @@ class RestoreStats:
     conflicts: int = 0
     errors: int = 0
     conflict_samples: list[dict[str, Any]] = field(default_factory=list)
+    changed_config_namespaces: set[str] = field(default_factory=set)
 
 
 def stats_to_dict(stats: RestoreStats) -> dict[str, int]:
@@ -672,17 +672,65 @@ def restore_config(zip_file: ZipFile, include_sensitive_in_archive: bool) -> Res
         except Exception:
             stats.errors += 1
 
-    if include_sensitive_in_archive and "config/javdb_cookies.json" in archive_names:
+    if "config/scraping_config.json" in archive_names:
+        from backend.app.modules.scraping.config import ScrapingConfigService
+        from backend.app.modules.scraping.schemas import ScrapingConfigUpdate
+        from shared.settings_store import SECRET_KEYS
+
         try:
-            text = read_text(zip_file, "config/javdb_cookies.json")
-            cookie_path = Path(scraper_settings.COOKIE_DIR) / "javdb_cookies.json"
-            cookie_path.parent.mkdir(parents=True, exist_ok=True)
-            temp_path = cookie_path.with_name(f"{cookie_path.name}.tmp")
-            temp_path.write_text(text, encoding="utf-8")
-            temp_path.replace(cookie_path)
+            payload = json.loads(read_text(zip_file, "config/scraping_config.json"))
+            if not isinstance(payload, dict):
+                raise ValueError("Invalid scraping configuration")
+            if not include_sensitive_in_archive:
+                payload = {key: value for key, value in payload.items() if key not in SECRET_KEYS.get("scraping", set())}
+            service = ScrapingConfigService()
+            current = service.get_raw_config()
+            # A full snapshot includes defaults that may not be explicitly
+            # configured (e.g. default MetaTube sources without a server URL).
+            # Only apply actual changes through the normal partial validator.
+            changed = {key: value for key, value in payload.items() if current.get(key) != value}
+            service.update_config(ScrapingConfigUpdate(**changed))
+            restored = service.get_raw_config()
+            if any(key.startswith("jellyfin_") and restored.get(key) != current.get(key) for key in changed):
+                stats.changed_config_namespaces.add("jellyfin")
             stats.updated += 1
         except Exception:
             stats.errors += 1
+
+    if "config/backup_config.json" in archive_names:
+        from backend.app.modules.backup.config import BackupConfigService
+        from backend.app.modules.backup.schemas import BackupConfigUpdate
+
+        try:
+            payload = json.loads(read_text(zip_file, "config/backup_config.json"))
+            if not isinstance(payload, dict):
+                raise ValueError("Invalid backup configuration")
+            service = BackupConfigService()
+            current = service.get_config().model_dump()
+            restored = service.update_config(BackupConfigUpdate(**payload)).model_dump()
+            if restored != current:
+                stats.changed_config_namespaces.add("backup")
+            stats.updated += 1
+        except Exception:
+            stats.errors += 1
+
+    if include_sensitive_in_archive:
+        from shared.settings_cookies import COOKIE_FILES, normalize_cookies, write_cookies
+        from backend.app.modules.crawler.config.schemas import CookiesConfig
+
+        for filename, (_key, domain) in COOKIE_FILES.items():
+            arcname = f"config/{filename}"
+            if arcname not in archive_names:
+                continue
+            try:
+                payload = json.loads(read_text(zip_file, arcname))
+                if not isinstance(payload, (dict, list)):
+                    raise ValueError("Invalid cookie configuration")
+                cookies = CookiesConfig(cookies=normalize_cookies(payload, domain))
+                write_cookies([cookie.model_dump() for cookie in cookies.cookies], filename=filename)
+                stats.updated += 1
+            except Exception:
+                stats.errors += 1
     return stats
 
 

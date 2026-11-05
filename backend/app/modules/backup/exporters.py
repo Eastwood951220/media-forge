@@ -17,7 +17,10 @@ from backend.app.modules.backup.format import write_jsonl
 from backend.app.modules.content.movies.filter_config import read_movie_filter_config
 from backend.app.modules.crawler.config.conf_reader import read_crawler_config_dict
 from backend.app.modules.storage.config.service import StorageConfigService
-from scraper.config import settings as scraper_settings
+from backend.app.modules.scraping.config import ScrapingConfigService
+from backend.app.modules.backup.config import BackupConfigService
+from shared.settings_cookies import COOKIE_FILES, read_cookies
+from shared.settings_store import SECRET_KEYS
 from shared.database.models.content import (
     ActressTag,
     Movie,
@@ -217,15 +220,22 @@ def export_config_files(
         json.dumps(filter_config, ensure_ascii=False, indent=2).encode("utf-8"),
     )
 
-    storage_config = StorageConfigService().get_raw_config()
-    if not include_sensitive:
-        storage_config = {key: value for key, value in storage_config.items() if key != "api_token"}
-    zip_file.writestr(
-        "config/storage_config.json",
-        json.dumps(storage_config, ensure_ascii=False, indent=2).encode("utf-8"),
-    )
+    configurations = {
+        "storage": StorageConfigService().get_raw_config(),
+        "scraping": ScrapingConfigService().get_raw_config(),
+        "backup": BackupConfigService().get_config().model_dump(),
+    }
+    for namespace, config in configurations.items():
+        if not include_sensitive:
+            config = {key: value for key, value in config.items() if key not in SECRET_KEYS.get(namespace, set())}
+        zip_file.writestr(
+            f"config/{namespace}_config.json",
+            json.dumps(config, ensure_ascii=False, indent=2).encode("utf-8"),
+        )
 
     if include_sensitive:
-        cookie_path = Path(scraper_settings.COOKIE_DIR) / "javdb_cookies.json"
-        if cookie_path.is_file():
-            zip_file.write(cookie_path, "config/javdb_cookies.json")
+        for filename in COOKIE_FILES:
+            zip_file.writestr(
+                f"config/{filename}",
+                json.dumps(read_cookies(filename=filename), ensure_ascii=False, indent=2).encode("utf-8"),
+            )
