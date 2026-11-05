@@ -403,3 +403,28 @@ Agent 领取超时（`AGENT_CLAIM_TIMEOUT_SECONDS`，默认 10 秒）与执行�
 3. "领取超时"表示 WebSocket 已连接但扩展未请求任务。
 4. "执行超时"表示扩展已领取任务但未在 `SECURITY_WAIT_SECONDS` 内完成页面加载/采集。
 5. 打开运行的 Chrome Agent 执行时间线，查看最后一个完成的阶段与稳定错误码。
+
+### 业务配置存储
+
+业务配置统一保存于 PostgreSQL 的 `application_settings` 表，以 `namespace + key`
+唯一标识配置项，值采用 JSONB。范围包括爬虫、存储、刮削/MetaTube/Jellyfin、自动备份、
+电影列表查询区域（显示/顺序/默认值）和各站点 Cookie。
+
+数据库与 Redis 连接仍使用 `database.conf`、`redis.conf`；Chrome 插件的后端地址与 Token
+仍保存在浏览器中。媒体文件、索引和备份文件本身不进入配置表。
+
+应用首次运行新版时，会在启动 worker 和调度器前创建配置表并事务性导入旧业务配置文件。
+数据库现有值优先，成功后记录迁移完成标记，后续启动不再读取这些旧文件；原文件保留，
+但不再作为修改入口。迁移失败会阻止业务启动并报告错误，数据库故障也不会回退旧文件。
+结构迁移另提供 Alembic revision `20261105_0001`，可执行 `cd backend && alembic upgrade head`。
+
+原有配置 API 保持兼容，同时提供统一接口（均需登录）：
+
+- `GET /api/settings/{namespace}`：查询配置，敏感项脱敏。
+- `PUT /api/settings/{namespace}`：局部更新，复用现有字段和业务校验。
+- `POST /api/settings/{namespace}/secrets/{key}`：按需查看已保存的敏感值，响应禁止缓存。
+
+支持的 namespace 为 `crawler`、`storage`、`scraping`、`backup`、`movie_filters`、
+`crawler_cookies`。Cookie 普通查询只返回配置状态，原值通过敏感项接口获取。
+配置备份包含以上业务分组并兼容旧 ZIP；未勾选敏感信息时排除所有密钥和 Cookie，
+恢复省略的密钥会保留数据库中的现值。数据库/Redis 启动连接信息不包含在业务配置备份中。
