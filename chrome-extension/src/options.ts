@@ -1,3 +1,4 @@
+import { formatDateTime } from './ui/dateTime'
 import { enhanceControls } from './ui/enhance'
 enhanceControls()
 
@@ -16,7 +17,7 @@ function renderStatus(status: AgentLocalStatus) {
     connectionStatus.textContent = `${status.phase}: ${status.message}`
   }
   if (statusUpdatedAt) {
-    statusUpdatedAt.textContent = status.updatedAt ? `updated at ${status.updatedAt}` : '-'
+    statusUpdatedAt.textContent = `更新时间：${formatDateTime(status.updatedAt)}`
   }
 }
 

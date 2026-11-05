@@ -1,3 +1,4 @@
+import { formatDateTime } from './ui/dateTime'
 import { enhanceControls } from './ui/enhance'
 enhanceControls()
 
@@ -29,23 +30,6 @@ const statusLabels: Record<AgentLocalStatus['phase'], string> = {
 let cachedStatus: AgentLocalStatus | null = null
 let cachedDiagnostics: AgentLocalDiagnostic[] = []
 
-function formatRelative(value: string | null | undefined): string {
-  if (!value) return '-'
-  const timestamp = Date.parse(value)
-  if (Number.isNaN(timestamp)) return '-'
-  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  return `${hours}h ago`
-}
-
-function formatTime(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString()
-}
-
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -74,7 +58,7 @@ function renderStatus(status: AgentLocalStatus | null) {
 
   if (statusLabel) statusLabel.textContent = statusLabels[status.phase] ?? status.phase
   if (statusMessage) statusMessage.textContent = status.message
-  if (updatedAt) updatedAt.textContent = formatRelative(status.updatedAt)
+  if (updatedAt) updatedAt.textContent = formatDateTime(status.updatedAt)
   if (statusDot) {
     statusDot.className = `dot status-${status.phase}`
   }
@@ -97,7 +81,7 @@ function renderDiagnostics(ring: AgentLocalDiagnostic[]) {
     const messageClass = entry.level === 'error' ? 'diagnostic-message error-text' : 'diagnostic-message'
     return `
       <div class="diagnostic">
-        <div class="diagnostic-meta">${escapeHtml(formatTime(entry.timestamp))} · ${escapeHtml(entry.level)} · ${escapeHtml(entry.code)}</div>
+        <div class="diagnostic-meta">${escapeHtml(formatDateTime(entry.timestamp))} · ${escapeHtml(entry.level)} · ${escapeHtml(entry.code)}</div>
         <div class="${messageClass}">${escapeHtml(entry.message)}</div>
       </div>
     `

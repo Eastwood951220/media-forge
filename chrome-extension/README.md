@@ -9,3 +9,7 @@ avoid clipping. Closing the dialog unmounts the selector and removes its popup c
 
 `pnpm build` builds popup/background entries first, then bundles `content.js` as a
 self-contained IIFE: manifest content scripts cannot import shared React chunks.
+
+All displayed timestamps (configuration status, popup status and diagnostic entries)
+use local device time in `YYYY-MM-DD HH:mm:ss` format. Missing or invalid times
+show `-`. Stored timestamps and copied diagnostic JSON retain their ISO format.
