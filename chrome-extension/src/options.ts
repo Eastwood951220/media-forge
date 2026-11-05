@@ -1,6 +1,6 @@
 import { formatDateTime } from './ui/dateTime'
 import { enhanceControls } from './ui/enhance'
-enhanceControls()
+const controls = enhanceControls()
 
 import type { AgentLocalDiagnostic, AgentLocalStatus } from './protocol'
 
@@ -39,8 +39,8 @@ chrome.storage.onChanged.addListener((changes) => {
 })
 
 chrome.storage.sync.get(['backendUrl', 'token']).then((data) => {
-  if (backendUrl) backendUrl.value = String(data.backendUrl ?? '')
-  if (token) token.value = String(data.token ?? '')
+  controls.setValue('backendUrl', String(data.backendUrl ?? ''))
+  controls.setValue('token', String(data.token ?? ''))
 })
 
 load()
