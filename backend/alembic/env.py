@@ -10,6 +10,7 @@ _project_root = str(Path(__file__).resolve().parent.parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+from shared.database.models.application_setting import ApplicationSetting  # noqa: F401
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask  # noqa: F401
 from backend.app.models.crawl_task import CrawlTask, CrawlTaskUrl  # noqa: F401
 from backend.app.models.user import User  # noqa: F401

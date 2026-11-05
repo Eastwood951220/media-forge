@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 APPLICATION_MODEL_MODULES = (
+    "shared.database.models.application_setting",
     "backend.app.models.user",
     "backend.app.models.crawl_task",
     "backend.app.models.crawl_run",

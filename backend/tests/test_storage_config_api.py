@@ -175,7 +175,9 @@ def test_storage_config_api_get_and_update_uses_success_envelope(
     assert data["grpc_host"] == "127.0.0.1:19798"
     assert data["api_token"] == "************1234"
     assert data["api_token_configured"] is True
-    assert (tmp_path / "storage.conf").exists()
+    from shared.settings_store import SettingsStore
+    assert SettingsStore().read("storage")["api_token"] == "secret-token-1234"
+    assert not (tmp_path / "storage.conf").exists()
 
 
 def test_storage_config_api_returns_400_for_invalid_range(

@@ -182,6 +182,8 @@ def test_write_runtime_config_writes_storage_section(tmp_path) -> None:
         database_file=tmp_path / "database.conf",
         redis_file=tmp_path / "redis.conf",
         storage_file=tmp_path / "storage.conf",
+        storage_index_file=tmp_path / "storage_index.jsonl",
+        storage_index_meta_file=tmp_path / "storage_index.meta.json",
     )
 
     write_runtime_config({"storage": {"enabled": "true", "grpc_host": "192.168.31.10:9798"}}, paths)
@@ -191,12 +193,14 @@ def test_write_runtime_config_writes_storage_section(tmp_path) -> None:
     assert "grpc_host=192.168.31.10:9798\n" in text
 
 
-def test_read_runtime_config_reads_storage_file(tmp_path) -> None:
+def test_read_runtime_config_excludes_business_storage_settings(tmp_path) -> None:
     paths = RuntimeConfigPaths(
         config_dir=tmp_path,
         database_file=tmp_path / "database.conf",
         redis_file=tmp_path / "redis.conf",
         storage_file=tmp_path / "storage.conf",
+        storage_index_file=tmp_path / "storage_index.jsonl",
+        storage_index_meta_file=tmp_path / "storage_index.meta.json",
     )
     (tmp_path / "database.conf").write_text("DB_HOST=localhost\n", encoding="utf-8")
     (tmp_path / "redis.conf").write_text("REDIS_HOST=localhost\n", encoding="utf-8")
@@ -208,16 +212,18 @@ def test_read_runtime_config_reads_storage_file(tmp_path) -> None:
 
     assert result["DB_HOST"] == "localhost"
     assert result["REDIS_HOST"] == "localhost"
-    assert result["STORAGE_ENABLED"] == "true"
-    assert result["STORAGE_HOST"] == "192.168.31.10"
+    assert "STORAGE_ENABLED" not in result
+    assert "STORAGE_HOST" not in result
 
 
-def test_runtime_config_exists_requires_storage_file(tmp_path) -> None:
+def test_runtime_config_exists_requires_only_database_and_redis(tmp_path) -> None:
     paths = RuntimeConfigPaths(
         config_dir=tmp_path,
         database_file=tmp_path / "database.conf",
         redis_file=tmp_path / "redis.conf",
         storage_file=tmp_path / "storage.conf",
+        storage_index_file=tmp_path / "storage_index.jsonl",
+        storage_index_meta_file=tmp_path / "storage_index.meta.json",
     )
 
     assert runtime_config_exists(paths) is False

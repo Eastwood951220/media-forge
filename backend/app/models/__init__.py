@@ -1,3 +1,4 @@
+from shared.database.models.application_setting import ApplicationSetting
 """Backend SQLAlchemy models."""
 
 from backend.app.models.crawl_run import CrawlRun, CrawlRunDetailTask

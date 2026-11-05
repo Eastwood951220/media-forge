@@ -28,7 +28,7 @@ def test_load_browser_cookies_preserves_browser_export_rows(monkeypatch, tmp_pat
     ]
     (cookie_dir / "javdb_cookies.json").write_text(json.dumps(rows), encoding="utf-8")
 
-    cookies = CookieManager("javdb_cookies.json").load_browser_cookies()
+    cookies = CookieManager("javdb_cookies.json", filepath=cookie_dir / "javdb_cookies.json").load_browser_cookies()
 
     assert cookies == rows[:2]
 
@@ -42,7 +42,7 @@ def test_load_browser_cookies_converts_flat_dict_to_browser_rows(monkeypatch, tm
         encoding="utf-8",
     )
 
-    cookies = CookieManager("javdb_cookies.json").load_browser_cookies()
+    cookies = CookieManager("javdb_cookies.json", filepath=cookie_dir / "javdb_cookies.json").load_browser_cookies()
 
     assert cookies == [
         {"name": "_jdb_session", "value": "secret", "domain": "javdb.com", "path": "/"},
@@ -53,4 +53,4 @@ def test_load_browser_cookies_converts_flat_dict_to_browser_rows(monkeypatch, tm
 def test_load_browser_cookies_returns_empty_for_missing_file(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("scraper.cookies.cookie_manager.COOKIE_DIR", tmp_path / "cookies")
 
-    assert CookieManager("javdb_cookies.json").load_browser_cookies() == []
+    assert CookieManager("javdb_cookies.json", filepath=tmp_path / "cookies" / "javdb_cookies.json").load_browser_cookies() == []

@@ -1,9 +1,9 @@
-import json
+from shared.settings_cookies import read_cookies
 
 from backend.app.modules.crawler.agent.cookie_sync import AgentCookie, sync_javdb_cookies
 
 
-def test_sync_javdb_cookies_writes_only_javdb_domains(monkeypatch, tmp_path) -> None:
+def test_sync_javdb_cookies_persists_only_javdb_domains(monkeypatch, tmp_path) -> None:
     cookie_dir = tmp_path / "cookies"
     monkeypatch.setattr("scraper.config.settings.COOKIE_DIR", cookie_dir)
 
@@ -14,7 +14,8 @@ def test_sync_javdb_cookies_writes_only_javdb_domains(monkeypatch, tmp_path) -> 
 
     assert result.accepted == 1
     assert result.rejected == 1
-    saved = json.loads((cookie_dir / "javdb_cookies.json").read_text(encoding="utf-8"))
+    assert not (cookie_dir / "javdb_cookies.json").exists()
+    saved = read_cookies()
     assert saved[0]["name"] == "cf_clearance"
     assert saved[0]["value"] == "ok"
 

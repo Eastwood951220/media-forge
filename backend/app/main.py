@@ -1,3 +1,4 @@
+from backend.app.core.business_settings import initialize_business_settings
 import logging
 import sys
 from collections.abc import AsyncGenerator
@@ -92,6 +93,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
     if connect_or_repair_postgres():
         logger.info("PostgreSQL connected.")
+        initialize_business_settings()
 
         # Cleanup interrupted crawler runs on startup
         factory = get_session_factory()
@@ -197,6 +199,8 @@ app.include_router(storage_index_router)
 app.include_router(storage_tasks_router)
 app.include_router(scraping_router)
 app.include_router(jellyfin_router)
+from backend.app.modules.settings.router import router as settings_router
+app.include_router(settings_router)
 
 
 def configure_frontend(

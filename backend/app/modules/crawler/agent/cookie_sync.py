@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 from scraper.config import settings as scraper_paths
+from shared.settings_cookies import write_cookies
 
 JAVDB_COOKIE_FILE = "javdb_cookies.json"
 
@@ -48,12 +48,7 @@ def sync_javdb_cookies(cookies: list[AgentCookie]) -> CookieSyncResult:
             continue
         accepted_rows.append(cookie.model_dump())
 
-    path = _cookie_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(accepted_rows, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_cookies(accepted_rows)
     return CookieSyncResult(
         accepted=len(accepted_rows),
         rejected=rejected,

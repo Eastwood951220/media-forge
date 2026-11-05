@@ -8,6 +8,7 @@ from dotenv import dotenv_values
 
 from backend.app.modules.backup.schemas import BackupConfig, BackupConfigUpdate
 from shared.runtime_config import PROJECT_ROOT
+from shared.settings_store import SettingsStore
 
 
 def _coerce_conf_value(value: str) -> Any:
@@ -47,18 +48,14 @@ def _serialize_conf_value(value: Any) -> str:
 
 
 class BackupConfigService:
-    """Read and write automatic backup settings in dotenv style.
-
-    Values are stored in ``data/configs/backup.conf`` and written one key per
-    line so the file stays diff-friendly. Tests may pass explicit paths so no
-    repository state is touched.
-    """
+    """Database-backed backup settings; explicit paths are legacy import adapters."""
 
     def __init__(
         self,
         config_file: Path | None = None,
         project_root: Path | None = None,
     ) -> None:
+        self._legacy_file = config_file is not None or project_root is not None
         root = project_root or PROJECT_ROOT
         self.config_file = config_file or root / "data" / "configs" / "backup.conf"
         self.project_root = root
@@ -69,6 +66,9 @@ class BackupConfigService:
 
     def get_config(self) -> BackupConfig:
         defaults = BackupConfig(backup_dir=str(self.default_backup_dir)).model_dump()
+        if not self._legacy_file:
+            defaults.update(SettingsStore().read("backup"))
+            return BackupConfig(**defaults)
         if not self.config_file.exists():
             return BackupConfig(**defaults)
         parsed = dotenv_values(self.config_file)
@@ -83,7 +83,14 @@ class BackupConfigService:
         merged = dict(current)
         merged.update(incoming)
         config = BackupConfig(**merged)
-        self._write_config(config)
+        if self._legacy_file:
+            self._write_config(config)
+        else:
+            values = config.model_dump()
+            changed = {key: values[key] for key in incoming}
+            if "schedule_type" in incoming:
+                changed.update(weekdays=values["weekdays"], monthdays=values["monthdays"])
+            SettingsStore().write("backup", changed)
         return config
 
     def _write_config(self, config: BackupConfig) -> None:

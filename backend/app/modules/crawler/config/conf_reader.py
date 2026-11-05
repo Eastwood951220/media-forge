@@ -80,7 +80,11 @@ def read_crawler_conf_values(base_dir: Path | None = None) -> dict[str, str]:
 
 def read_crawler_config_dict(base_dir: Path | None = None) -> dict[str, int | float | str]:
     defaults = asdict(DEFAULT_CRAWLER_CONFIG)
-    persisted = read_crawler_conf_values(base_dir)
+    if base_dir is None:
+        from shared.settings_store import SettingsStore
+        persisted = SettingsStore().read("crawler")
+    else:
+        persisted = read_crawler_conf_values(base_dir)
     result: dict[str, int | float | str] = {}
     for key in CONFIG_KEYS:
         raw_value = persisted.get(key)
@@ -95,7 +99,7 @@ def read_crawler_config_dict(base_dir: Path | None = None) -> dict[str, int | fl
             mode = str(raw_value).strip().lower()
             result[key] = mode if mode in VALID_JAVDB_AGENT_PARSE_MODES else defaults[key]
             continue
-        coerced = _coerce_value(raw_value)
+        coerced = _coerce_value(str(raw_value))
         if key in {"MAX_LIST_PAGES", "LIST_MAX_WORKERS", "DETAIL_MAX_WORKERS", "REQUEST_TIMEOUT", "INCREMENTAL_EXIST_THRESHOLD"}:
             try:
                 result[key] = int(coerced)
@@ -126,6 +130,10 @@ def _serialize_value(value: Any) -> str:
 
 
 def write_crawler_config(updated: dict[str, object], base_dir: Path | None = None) -> None:
+    if base_dir is None:
+        from shared.settings_store import SettingsStore
+        SettingsStore().write("crawler", {key: value for key, value in updated.items() if key in CONFIG_KEYS})
+        return
     path = crawler_conf_path(base_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     existing_lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []

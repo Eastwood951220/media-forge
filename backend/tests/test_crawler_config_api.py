@@ -101,8 +101,9 @@ def test_cookies_config_reads_and_writes_browser_export_array(
 
     assert put_response.status_code == HTTPStatus.OK
     cookie_file = cookie_dir / "javdb_cookies.json"
-    assert cookie_file.exists()
-    assert json.loads(cookie_file.read_text(encoding="utf-8")) == payload["cookies"]
+    assert not cookie_file.exists()
+    from shared.settings_cookies import read_cookies
+    assert read_cookies() == payload["cookies"]
 
     get_response = client.get("/api/crawler/config/cookies", headers=headers)
 
@@ -119,10 +120,8 @@ def test_cookies_config_converts_old_flat_dict(
     cookie_dir = tmp_path / "data" / "cookies"
     cookie_dir.mkdir(parents=True)
     monkeypatch.setattr(settings, "COOKIE_DIR", cookie_dir)
-    (cookie_dir / "javdb_cookies.json").write_text(
-        json.dumps({"session": "abc123"}),
-        encoding="utf-8",
-    )
+    from shared.settings_store import SettingsStore
+    SettingsStore().write("crawler_cookies", {"cookies": {"session": "abc123"}})
 
     response = client.get(
         "/api/crawler/config/cookies",
@@ -148,7 +147,7 @@ def test_cookies_config_converts_old_flat_dict(
     ]
 
 
-def test_update_crawler_config_persists_to_conf_file_after_restart(
+def test_update_crawler_config_persists_in_database_without_rewriting_legacy_file(
     client: TestClient,
     admin_user,
     monkeypatch,
@@ -177,9 +176,11 @@ def test_update_crawler_config_persists_to_conf_file_after_restart(
 
     assert response.status_code == HTTPStatus.OK
     persisted = conf_file.read_text(encoding="utf-8")
-    assert "MAX_LIST_PAGES=17\n" in persisted
-    assert "REQUEST_TIMEOUT=46\n" in persisted
-    assert "UNCHANGED_VALUE=keep-me\n" in persisted
+    assert persisted == "REQUEST_TIMEOUT=30\nUNCHANGED_VALUE=keep-me\n"
+    from shared.settings_store import SettingsStore
+    stored = SettingsStore().read("crawler")
+    assert stored["MAX_LIST_PAGES"] == 17
+    assert stored["REQUEST_TIMEOUT"] == 46
 
     get_response = client.get(
         "/api/crawler/config",

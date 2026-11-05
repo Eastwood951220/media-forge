@@ -151,6 +151,8 @@ class ScrapingConfigService:
     """Read and write scraping settings in a dotenv style file."""
 
     def __init__(self, config_file: Path | None = None) -> None:
+        from shared.settings_store import SettingsStore
+        self.store = SettingsStore() if config_file is None else None
         if config_file is None:
             config_file = RuntimeConfigPaths.from_env().config_dir / "scraping.conf"
         self.config_file = config_file
@@ -160,6 +162,8 @@ class ScrapingConfigService:
 
     def get_raw_config(self) -> dict[str, Any]:
         defaults = ScrapingConfig().model_dump()
+        if self.store is not None:
+            return ScrapingConfig(**{**defaults, **self.store.read("scraping")}).model_dump()
         if not self.config_file.exists():
             return defaults
 
@@ -236,7 +240,7 @@ class ScrapingConfigService:
             raise ValueError("启用 MetaTube 来源前请配置 MetaTube Server 地址")
         validated = ScrapingConfig(**merged).model_dump()
         _validate_jellyfin_schedule(validated)
-        self._write_config(validated)
+        self._write_config(validated if self.store is None else {key: validated[key] for key in incoming if key in validated})
         return self._public_config(validated)
 
     def _public_config(self, config: dict[str, Any]) -> dict[str, Any]:
@@ -253,6 +257,9 @@ class ScrapingConfigService:
         return ScrapingConfigResponse(**public).model_dump()
 
     def _write_config(self, data: dict[str, Any]) -> None:
+        if self.store is not None:
+            self.store.write("scraping", data)
+            return
         self.config_file.parent.mkdir(parents=True, exist_ok=True)
         body = "".join(
             f"{key}={_serialize_value(value) if not isinstance(value, list) else json.dumps(value, ensure_ascii=False)}\n"

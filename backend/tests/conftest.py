@@ -161,3 +161,9 @@ def isolated_cache(monkeypatch) -> None:
     """Give each test a private cache instead of the shared Redis database."""
     client = InMemoryRedis()
     monkeypatch.setattr("backend.app.core.cache.get_redis", lambda: client)
+
+
+@pytest.fixture(autouse=True)
+def settings_database(monkeypatch):
+    monkeypatch.setattr("shared.settings_store.get_session_factory", lambda: TestingSessionLocal)
+    monkeypatch.setattr("backend.app.main.initialize_business_settings", lambda: None)

@@ -16,10 +16,10 @@ def build_site_fetcher(
     source: str = "javdb",
     runtime_config: CrawlerRuntimeConfig | None = None,
 ) -> ScraplingFetcher:
-    active_config = runtime_config or read_crawler_runtime_config()
     site_config = SITE_CONFIGS.get(source)
     if site_config is None:
         raise ValueError(f"不支持的站点来源: {source}")
+    active_config = runtime_config or read_crawler_runtime_config()
     cookie_manager = CookieManager(site_config["cookie_file"])
     return ScraplingFetcher(
         headers=site_config["headers"],

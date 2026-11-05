@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -15,6 +14,7 @@ from scraper.config.sites import JAVDB_SITE
 from scraper.core.security import detect_access_state
 from scraper.fetchers.site_fetcher import build_site_fetcher
 from shared.schemas.common import success
+from shared.settings_cookies import read_cookies, write_cookies
 
 router = APIRouter(prefix="/api/crawler/config", tags=["crawler-config"])
 
@@ -39,36 +39,12 @@ def update_config(body: ConfigUpdate, _current_user: CurrentUser) -> dict:
 
 @router.get("/cookies")
 def get_cookies_config(_current_user: CurrentUser) -> dict:
-    filepath = _cookie_path()
-    if not filepath.exists():
-        return success(data=CookiesConfig(cookies=[]).model_dump())
-
-    try:
-        with filepath.open("r", encoding="utf-8") as file:
-            data = json.load(file)
-    except (json.JSONDecodeError, OSError):
-        return success(data=CookiesConfig(cookies=[]).model_dump())
-
-    if isinstance(data, list):
-        return success(data=CookiesConfig(cookies=data).model_dump())
-
-    if isinstance(data, dict):
-        cookies_list = [
-            {"name": key, "value": value, "domain": "javdb.com", "path": "/"}
-            for key, value in data.items()
-        ]
-        return success(data=CookiesConfig(cookies=cookies_list).model_dump())
-
-    return success(data=CookiesConfig(cookies=[]).model_dump())
+    return success(data=CookiesConfig(cookies=read_cookies()).model_dump())
 
 
 @router.put("/cookies")
 def update_cookies_config(body: CookiesConfig, _current_user: CurrentUser) -> dict:
-    filepath = _cookie_path()
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-    cookies_list = [cookie.model_dump() for cookie in body.cookies]
-    with filepath.open("w", encoding="utf-8") as file:
-        json.dump(cookies_list, file, ensure_ascii=False, indent=2)
+    write_cookies([cookie.model_dump() for cookie in body.cookies])
     return success(data=body.model_dump())
 
 

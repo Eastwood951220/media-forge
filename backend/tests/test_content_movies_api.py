@@ -106,7 +106,7 @@ def test_get_movie_detail_includes_magnets(client: TestClient, admin_user) -> No
     assert data["magnets"][0]["magnet_url"].startswith("magnet:")
 
 
-def test_movie_filter_config_persists_to_json_file(client: TestClient, admin_user, monkeypatch, tmp_path) -> None:
+def test_movie_filter_config_persists_to_database(client: TestClient, admin_user, monkeypatch, tmp_path) -> None:
     headers = auth_headers(client, admin_user)
     config_path = tmp_path / "movie_filter_config.json"
     monkeypatch.setattr(filter_config, "FILTER_CONFIG_PATH", config_path)
@@ -128,7 +128,7 @@ def test_movie_filter_config_persists_to_json_file(client: TestClient, admin_use
 
     loaded = client.get("/api/content/movies/filter-config", headers=headers)
     assert loaded.json()["data"]["filters"] == payload["filters"]
-    assert config_path.exists()
+    assert not config_path.exists()
 
 
 def test_movie_filter_options(client: TestClient, admin_user) -> None:
@@ -592,7 +592,10 @@ def test_delete_movies_database_only_api_deletes_selected_movies(client: TestCli
     assert client.get(f"/api/content/movies/{movie_id}", headers=headers).status_code == HTTPStatus.NOT_FOUND
 
 
-def test_delete_movies_cloud_only_api_deletes_cloud_folders_and_keeps_movie(client: TestClient, admin_user, monkeypatch) -> None:
+def test_delete_movies_cloud_only_api_deletes_cloud_folders_and_keeps_movie(client: TestClient, admin_user, monkeypatch, tmp_path) -> None:
+    from shared.settings_store import SettingsStore
+    # The API always checks the NAS mapping; do not rely on a developer's local scraping.conf.
+    SettingsStore().write("scraping", {"scrape_root": str(tmp_path), "media_root": "/media"})
     headers = auth_headers(client, admin_user)
     session = TestingSessionLocal()
     movie = Movie(
@@ -661,7 +664,7 @@ def test_delete_movies_cloud_only_api_deletes_cloud_folders_and_keeps_movie(clie
         headers=headers,
     )
 
-    assert response.status_code == HTTPStatus.OK
+    assert response.status_code == HTTPStatus.OK, response.text
     assert deleted == ["/Movies/A/DEL-CLOUD-001"]
     detail = client.get(f"/api/content/movies/{movie_id}", headers=headers).json()["data"]
     assert detail["storage_status"] == "not_stored"

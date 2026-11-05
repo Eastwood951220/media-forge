@@ -77,6 +77,8 @@ class StorageConfigService:
         provider_factory: CloudDriveClientFactory | None = None,
         gateway_class: type[CloudDrive2Gateway] | None = None,
     ) -> None:
+        from shared.settings_store import SettingsStore
+        self.store = SettingsStore() if paths is None else None
         self.paths = paths or RuntimeConfigPaths.from_env()
         self.provider_factory = provider_factory or CloudDriveClientFactory()
         self.gateway_class = gateway_class or CloudDrive2Gateway
@@ -107,7 +109,7 @@ class StorageConfigService:
         merged.update(incoming)
         validated = StorageConfig(**merged).model_dump()
         self._validate_ranges(validated)
-        self._write_config(validated)
+        self._write_config(validated if self.store is None else {key: validated[key] for key in incoming if key in validated})
         return self._public_config(validated)
 
     def test_connection(self) -> StorageTestResult:
@@ -150,6 +152,9 @@ class StorageConfigService:
 
     def _load_raw_config(self) -> dict[str, Any]:
         data = StorageConfig().model_dump()
+        if self.store is not None:
+            data.update(self.store.read("storage"))
+            return StorageConfig(**data).model_dump()
         if not self.config_file.exists():
             return data
         parsed = dotenv_values(self.config_file)
@@ -161,6 +166,9 @@ class StorageConfigService:
         return normalized
 
     def _write_config(self, data: dict[str, Any]) -> None:
+        if self.store is not None:
+            self.store.write("storage", data)
+            return
         self.config_file.parent.mkdir(parents=True, exist_ok=True)
         body = "".join(f"{key}={_serialize_conf_value(value)}\n" for key, value in data.items())
         temp_path = self.config_file.with_suffix(self.config_file.suffix + ".tmp")

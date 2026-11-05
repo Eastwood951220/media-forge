@@ -73,7 +73,6 @@ def read_runtime_config(paths: RuntimeConfigPaths | None = None) -> dict[str, st
     values: dict[str, str] = {}
     values.update(_read_env_file(active_paths.database_file))
     values.update(_read_env_file(active_paths.redis_file))
-    values.update(_read_env_file(active_paths.storage_file))
     return values
 
 
