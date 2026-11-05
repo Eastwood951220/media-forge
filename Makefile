@@ -15,12 +15,22 @@ DATA_DIR ?= $(CURDIR)/data
 OUTPUT_DIR ?= $(CURDIR)/output
 ARM64_TAR ?= $(OUTPUT_DIR)/media-forge-linux-arm64.tar
 AMD64_TAR ?= $(OUTPUT_DIR)/media-forge-linux-amd64.tar
+EXTENSION_ZIP ?= $(OUTPUT_DIR)/media-forge-chrome-extension.zip
 DOCKER_BUILD_ARGS ?= --build-arg NODE_BASE_IMAGE=$(NODE_BASE_IMAGE) --build-arg PYTHON_BASE_IMAGE=$(PYTHON_BASE_IMAGE) --build-arg APT_MIRROR=$(APT_MIRROR) --build-arg PLAYWRIGHT_DOWNLOAD_HOST=$(PLAYWRIGHT_DOWNLOAD_HOST) --build-arg PIP_INDEX_URL=$(PIP_INDEX_URL)
 
-.PHONY: frontend-build docker-build docker-build-arm64 docker-build-amd64 docker-save-arm64 docker-save-amd64 docker-run docker-stop output-dir
+.PHONY: chrome-extension-build chrome-extension-package frontend-build docker-build docker-build-arm64 docker-build-amd64 docker-save-arm64 docker-save-amd64 docker-run docker-stop output-dir
 
 frontend-build:
 	cd frontend && CI=true pnpm install --frozen-lockfile && pnpm run build
+
+chrome-extension-build:
+	cd chrome-extension && CI=true pnpm install --frozen-lockfile && pnpm typecheck && pnpm build && node scripts/verify-agent-extension.mjs
+
+chrome-extension-package: chrome-extension-build output-dir
+	mkdir -p "$(dir $(abspath $(EXTENSION_ZIP)))"
+	rm -f "$(abspath $(EXTENSION_ZIP))"
+	cd chrome-extension/dist && zip -q -r "$(abspath $(EXTENSION_ZIP))" . -x '*.DS_Store'
+	@echo "Chrome extension zip written to $(abspath $(EXTENSION_ZIP))"
 
 docker-build:
 	docker buildx build --platform linux/amd64 --load $(DOCKER_BUILD_ARGS) -t $(IMAGE):$(IMAGE_TAG) .

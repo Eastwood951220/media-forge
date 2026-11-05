@@ -369,7 +369,16 @@ pnpm install
 pnpm build
 ```
 
+也可以从仓库根目录一键构建、校验并打包扩展：
+
+```bash
+make chrome-extension-package
+```
+
+生成 `output/media-forge-chrome-extension.zip`，解压后即可通过 Chrome 的“加载已解压的扩展”加载。ZIP 根目录直接包含 `manifest.json`。可通过 `OUTPUT_DIR` 或 `EXTENSION_ZIP` 自定义输出位置；仅构建可运行 `make chrome-extension-build`。
+
 安装：
+
 1. 打开 `chrome://extensions`
 2. 启用开发者模式
 3. 加载已解压的扩展，选择 `chrome-extension/dist`
