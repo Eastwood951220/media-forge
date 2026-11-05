@@ -17,12 +17,13 @@ import {
 } from '@ant-design/icons'
 import {
   fetchStorageConfig,
+  revealStorageToken,
   testStorageConnection,
   updateStorageConfig,
   type StorageConfig,
   type StorageTestResult,
 } from '@/api/storage/storageConfig'
-import { FullWidthNumberInput } from '@/components/common'
+import { FullWidthNumberInput, SavedSecretInput } from '@/components/common'
 import SectionTitle from './components/SectionTitle'
 import SelectTags from './components/SelectTags'
 import TestResultCard from './components/TestResultCard'
@@ -110,7 +111,9 @@ export default function StorageConfigPage() {
               <Form.Item className={styles.fieldSpan2} label="API Token">
                 <div className={styles.tokenStack}>
                   {maskedToken && <Tag color="blue">当前已配置: {maskedToken}</Tag>}
-                  <Input.Password
+                  <SavedSecretInput
+                    configured={!!maskedToken}
+                    loadSavedValue={revealStorageToken}
                     placeholder="输入新的 API Token（留空则不修改）"
                     value={tokenInput}
                     onChange={(event) => setTokenInput(event.target.value)}

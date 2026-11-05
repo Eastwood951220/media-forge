@@ -19,6 +19,7 @@ import {
 } from '@ant-design/icons'
 import {
   getScrapingConfig,
+  revealScrapingSecret,
   listMetatubeProviders,
   runScrapingScan,
   runScrapingStrm,
@@ -27,7 +28,7 @@ import {
   type ScrapingConfigUpdate,
   type ScrapingScanSummary,
 } from '@/api/scraping/scrapingConfig'
-import { FullWidthNumberInput } from '@/components/common'
+import { FullWidthNumberInput, SavedSecretInput } from '@/components/common'
 import DirectoryPathInput from './components/DirectoryPathInput'
 import SourcePriorityList from './components/SourcePriorityList'
 import JellyfinConfigSection from './components/JellyfinConfigSection'
@@ -261,7 +262,7 @@ export default function ScrapingConfigPage() {
                           },
                         ]}
                       >
-                        <Input.Password placeholder="留空保持不变" />
+                        <SavedSecretInput configured={apiKeyConfigured} loadSavedValue={() => revealScrapingSecret('api_key')} placeholder="留空保持不变" />
                       </Form.Item>
                     </div>
                   </Form.Item>
@@ -296,7 +297,7 @@ export default function ScrapingConfigPage() {
                   </Form.Item>
                   <Form.Item label="MetaTube Token">
                     <Form.Item name="metatube_token" noStyle>
-                      <Input.Password placeholder={metatubeTokenConfigured ? '已配置，留空保持不变' : '未启用鉴权可留空'} />
+                      <SavedSecretInput configured={metatubeTokenConfigured} loadSavedValue={() => revealScrapingSecret('metatube_token')} placeholder={metatubeTokenConfigured ? '已配置，留空保持不变' : '未启用鉴权可留空'} />
                     </Form.Item>
                   </Form.Item>
                 </div>

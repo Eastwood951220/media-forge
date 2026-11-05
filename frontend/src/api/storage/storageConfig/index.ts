@@ -16,3 +16,7 @@ export function updateStorageConfig(data: StorageConfigUpdate): Promise<StorageC
 export function testStorageConnection(): Promise<StorageTestResult> {
   return request.post<StorageTestResult>(`${BASE_URL}/test`)
 }
+
+export function revealStorageToken(): Promise<{ value: string }> {
+  return request.post<{ value: string }>(`${BASE_URL}/secret`, undefined, { isRepeatSubmit: false, showError: false })
+}

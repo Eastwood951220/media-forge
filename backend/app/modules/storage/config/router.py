@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from backend.app.core.dependencies import CurrentUser, get_storage_config_service
 from backend.app.modules.storage.config.schemas import StorageConfigUpdate
@@ -14,6 +14,16 @@ def get_storage_config(
     service: StorageConfigService = Depends(get_storage_config_service),
 ) -> dict:
     return success(data=service.get_config())
+
+
+@router.post("/secret")
+def reveal_storage_token(
+    response: Response,
+    _current_user: CurrentUser,
+    service: StorageConfigService = Depends(get_storage_config_service),
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    return success(data={"value": str(service.get_raw_config().get("api_token") or "")})
 
 
 @router.put("")

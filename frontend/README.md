@@ -243,3 +243,9 @@ Before shipping frontend changes, run at least:
 npm run build
 npm test
 ```
+
+Configuration secret fields in storage and scraping use `SavedSecretInput`.
+The eye control requests the persisted value through an authenticated, non-cacheable
+API. Revealed values are separate from form edits, so viewing does not overwrite
+configuration on save. Storage API Token, scraping API Key, MetaTube Token and
+Jellyfin API Key support this. Agent tokens stored only as hashes cannot be recovered.

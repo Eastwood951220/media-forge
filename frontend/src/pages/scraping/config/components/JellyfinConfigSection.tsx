@@ -1,3 +1,5 @@
+import { SavedSecretInput } from '@/components/common'
+import { revealScrapingSecret } from '@/api/scraping/scrapingConfig'
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, App, Button, Card, Checkbox, Form, Input, Segmented, Space, Switch, Tag, Typography } from 'antd'
 import {
@@ -73,7 +75,7 @@ export default function JellyfinConfigSection({ configured, maskedKey, save }: P
       </Form.Item>
       <Form.Item label="Jellyfin API Key">
         {configured && <Typography.Text>Jellyfin API Key 已配置: {maskedKey}</Typography.Text>}
-        <Form.Item name="jellyfin_api_key" noStyle><Input.Password placeholder="留空保持不变" /></Form.Item>
+        <Form.Item name="jellyfin_api_key" noStyle><SavedSecretInput configured={configured} loadSavedValue={() => revealScrapingSecret('jellyfin_api_key')} placeholder="留空保持不变" /></Form.Item>
       </Form.Item>
       <Form.Item name="jellyfin_auto_refresh_enabled" label="生成或删除 STRM 后自动刷新影视库" valuePropName="checked"><Switch /></Form.Item>
       <Form.Item name="jellyfin_watch_sync_enabled" label="定时同步观看状态" valuePropName="checked"><Switch /></Form.Item>

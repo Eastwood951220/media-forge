@@ -51,3 +51,7 @@ export function listScrapingDirectories(
     { showError: false },
   )
 }
+
+export function revealScrapingSecret(field: 'api_key' | 'metatube_token' | 'jellyfin_api_key'): Promise<{ value: string }> {
+  return request.post<{ value: string }>(`${BASE_URL}/config/secrets/${field}`, undefined, { isRepeatSubmit: false, showError: false })
+}

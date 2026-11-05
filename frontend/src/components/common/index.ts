@@ -9,3 +9,4 @@ export {
   type VirtualLogListProps,
 } from './VirtualLogList'
 export { FullWidthNumberInput } from './FullWidthNumberInput'
+export { SavedSecretInput } from './SavedSecretInput'

@@ -1,7 +1,8 @@
 import uuid
+from typing import Literal
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.dependencies import CurrentUser, get_db
@@ -28,6 +29,16 @@ router = APIRouter(prefix="/api/scraping", tags=["scraping"])
 @router.get("/config")
 def get_scraping_config(_current_user: CurrentUser) -> dict:
     return success(data=ScrapingConfigService().get_public_config())
+
+
+@router.post("/config/secrets/{field}")
+def reveal_scraping_secret(
+    field: Literal["api_key", "metatube_token", "jellyfin_api_key"],
+    response: Response,
+    _current_user: CurrentUser,
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    return success(data={"value": str(ScrapingConfigService().get_raw_config().get(field) or "")})
 
 
 @router.put("/config")
