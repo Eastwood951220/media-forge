@@ -14,6 +14,5 @@ All displayed timestamps (configuration status, popup status and diagnostic entr
 use local device time in `YYYY-MM-DD HH:mm:ss` format. Missing or invalid times
 show `-`. Stored timestamps and copied diagnostic JSON retain their ISO format.
 
-Password/Token fields in the extension configuration use a visibility toggle and a
-copy button. Saved values remain available when switching visibility; clipboard
-failures select the field for manual copying.
+Password/Token fields in the extension configuration use a visibility toggle.
+Saved and edited values remain available when switching visibility.
